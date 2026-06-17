@@ -1,0 +1,83 @@
+# Vector store backend. sqlite_vec keeps one DB file per member under `store.path`
+# (default tools/corpus/data/vectors/). The qdrant block below is retained only as
+# a migration reference — the daemon is no longer required at runtime.
+store:
+  backend: sqlite_vec
+  # path: /custom/vectors   # optional; defaults to tools/corpus/data/vectors/
+
+qdrant:
+  host: localhost
+  port: 6333
+  collection: akita-corpus
+
+embedding:
+  provider: ollama
+  model: nomic-embed-text
+  base_url: http://localhost:11434/v1
+  vector_size: 768
+  batch_size: 50
+
+watcher:
+  debounce_seconds: 2
+  ignore_patterns:
+    - "*.tmp"
+    - "*.swp"
+    - ".DS_Store"
+    - "__pycache__"
+
+sources:
+  calibre-summaries:
+    path: /Users/candide/media/Livres
+    pattern: "**/chapter_summaries/*.txt"
+    recursive: true
+    chunking:
+      method: semantic
+      max_tokens: 512
+      overlap_tokens: 50
+    metadata:
+      source_type: book
+      extract_from_path:
+        book_title: parent.parent.name
+        book_id: "parent.parent.name.re:\\((\\d+)\\)$"
+        chapter: stem
+
+  calibre-chapters:
+    path: /Users/candide/media/Livres
+    pattern: "**/chapters/*.txt"
+    recursive: true
+    chunking:
+      method: fixed
+      max_tokens: 1024
+      overlap_tokens: 128
+    metadata:
+      source_type: book
+      extract_from_path:
+        book_title: parent.parent.name
+        book_id: "parent.parent.name.re:\\((\\d+)\\)$"
+        chapter: stem
+
+  journal-thoughts:
+    path: /Users/candide/perso/workspaces/akita/journals/thoughts
+    pattern: "**/*.md"
+    recursive: true
+    chunking:
+      method: paragraph
+      max_tokens: 256
+      overlap_tokens: 0
+    metadata:
+      source_type: thought
+      extract_from_path:
+        date: stem
+
+  research-dossiers:
+    path: /Users/candide/perso/workspaces/akita/research/dossiers
+    pattern: "**/*.md"
+    recursive: true
+    chunking:
+      method: heading
+      max_tokens: 1024
+      overlap_tokens: 100
+    metadata:
+      source_type: dossier
+      extract_from_frontmatter: true
+

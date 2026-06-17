@@ -1,0 +1,1 @@
+"""Akita corpus indexer package."""
