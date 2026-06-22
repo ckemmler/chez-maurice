@@ -202,7 +202,7 @@ class SqliteVecStore:
                 cur = conn.execute(
                     "INSERT OR REPLACE INTO chunks(chunk_id, unit_key, unit_hash, source_type, payload) "
                     "VALUES (?, ?, ?, ?, ?)",
-                    (chunk_id, unit_key, unit_hash, payload.get("source_type"), json.dumps(payload, ensure_ascii=False)),
+                    (chunk_id, unit_key, unit_hash, payload.get("source_type"), json.dumps(payload, ensure_ascii=False, default=str)),
                 )
                 rowid = cur.lastrowid
                 conn.execute(

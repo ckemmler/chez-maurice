@@ -37,24 +37,24 @@ def _split_extractor(expr: str) -> list[str]:
     return parts
 
 
+def apply_path_extractor(path: Path, expr: str) -> str:
+    """Evaluate a single path-extractor expression (e.g. 'parent.parent.name')."""
+    node: Any = path
+    for part in _split_extractor(expr):
+        if part == "name":
+            node = node.name
+        elif part == "stem":
+            node = node.stem
+        elif part == "parent":
+            node = node.parent
+        elif part.startswith("re:"):
+            pattern = part[3:]
+            match = re.search(pattern, str(node))
+            node = match.group(1) if match else str(node)
+        else:
+            raise ValueError(f"Unsupported path extractor component: {part}")
+    return str(node)
+
+
 def apply_path_extractors(path: Path, extractors: Dict[str, str]) -> Dict[str, str]:
-    payload: Dict[str, str] = {}
-    current = path
-    for key, expr in extractors.items():
-        parts = _split_extractor(expr)
-        node: Any = current
-        for part in parts:
-            if part == "name":
-                node = node.name
-            elif part == "stem":
-                node = node.stem
-            elif part == "parent":
-                node = node.parent
-            elif part.startswith("re:"):
-                pattern = part[3:]
-                match = re.search(pattern, str(node))
-                node = match.group(1) if match else str(node)
-            else:
-                raise ValueError(f"Unsupported path extractor component: {part}")
-        payload[key] = str(node)
-    return payload
+    return {key: apply_path_extractor(path, expr) for key, expr in extractors.items()}

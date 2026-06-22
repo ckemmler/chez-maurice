@@ -76,6 +76,15 @@ class SourceConfig(BaseModel):
     recursive: bool = True
     chunking: ChunkingConfig
     metadata: MetadataConfig
+    # Optional path-extractor expression (same grammar as metadata.extract_from_path)
+    # that derives the owning member from a file's path, so per-member sources
+    # (e.g. garden notes under web/gardens/<member>/...) route to that member's DB.
+    # When unset, indexing falls back to member_id_var / the shared _default.db pool.
+    member_from_path: Optional[str] = None
+    # How to turn the member_from_path value into a vector-store member id.
+    # "garden_username": treat it as a maurice.db users.username and resolve to the
+    # user's UUID (the key the per-member DBs are named by). Unset: use it verbatim.
+    member_lookup: Optional[str] = None
 
     @field_validator("path", mode="before")
     @classmethod

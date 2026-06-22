@@ -12,6 +12,7 @@ from .config import CorpusConfig, SourceConfig
 from .embedder import Embedder
 from .store import make_store
 from .processor import process_file, remove_file
+from .utils import apply_path_extractor
 from .hash_store import HashStore
 from datetime import datetime, timezone
 
@@ -39,6 +40,8 @@ class CorpusOrchestrator:
         self.logger = logging.getLogger(__name__)
         self.ignore_patterns = config.watcher.ignore_patterns
         self.conversations = MauriceConversations()
+        # slug -> member UUID, resolved from maurice.db for member_lookup sources.
+        self._member_uuid_cache: Dict[str, Optional[str]] = {}
         data_dir = Path(__file__).resolve().parents[1] / "data"
         self.import_history = ImportHistoryStore(data_dir / "import_history.db")
         self.archive_importer = ChatArchiveImporter()  # writes maurice.db conversations
@@ -134,8 +137,47 @@ class CorpusOrchestrator:
             return {"conversations": 1, "chunks_written": written}
         return await self.conversations.reconcile_all(store=self.indexer, embedder=self.embedder)
 
+    def _resolve_member_uuid(self, slug: str) -> Optional[str]:
+        """Map a garden username to its maurice.db user UUID (the per-member DB key)."""
+        if slug in self._member_uuid_cache:
+            return self._member_uuid_cache[slug]
+        uuid: Optional[str] = None
+        try:
+            import sqlite3
+
+            from .conversations import default_db_path
+
+            db = default_db_path()
+            if db.exists():
+                con = sqlite3.connect(f"file:{db}?mode=ro", uri=True)
+                row = con.execute("SELECT id FROM users WHERE username = ?", (slug,)).fetchone()
+                con.close()
+                if row and row[0]:
+                    uuid = str(row[0])
+        except Exception as exc:  # noqa: BLE001
+            self.logger.warning("member uuid lookup failed for %r: %s", slug, exc)
+        self._member_uuid_cache[slug] = uuid
+        return uuid
+
+    def _member_for(self, cfg: SourceConfig, path: Path) -> Optional[str]:
+        """Derive the owning member id from a file path for per-member sources."""
+        if not cfg.member_from_path:
+            return None
+        try:
+            raw = apply_path_extractor(path, cfg.member_from_path)
+        except Exception as exc:  # noqa: BLE001 — bad path shape shouldn't crash indexing
+            self.logger.warning("member_from_path failed for %s: %s", path, exc)
+            return None
+        if cfg.member_lookup == "garden_username":
+            return self._resolve_member_uuid(raw)
+        return raw
+
     async def index_file(self, path: Path, source_name: str, source_config: SourceConfig) -> None:
         if self._should_ignore(path) or not self._matches_source(source_config, path):
+            return
+        member_id = self._member_for(source_config, path)
+        if source_config.member_from_path and not member_id:
+            self.logger.warning("Skipping %s: could not resolve owning member", path)
             return
         try:
             written = await process_file(
@@ -145,6 +187,7 @@ class CorpusOrchestrator:
                 self.embedder,
                 self.indexer,
                 self.hash_store,
+                member_id=member_id,
             )
             if written:
                 self.logger.info("Indexed %s (%s)", path, source_name)
@@ -154,6 +197,22 @@ class CorpusOrchestrator:
             self.logger.warning("File disappeared before indexing: %s", path)
         except Exception as exc:  # noqa: BLE001
             self.logger.error("Failed to index %s: %s", path, exc)
+
+    async def index_single(self, source_name: str, path: Path) -> None:
+        """Index one file under a named source (push hook for create/update)."""
+        source = self.config.sources.get(source_name)
+        if source is not None:
+            await self.index_file(path, source_name, source)
+
+    def remove_single(self, source_name: str, path: Path) -> None:
+        """Drop one file's chunks under a named source (push hook for delete)."""
+        source = self.config.sources.get(source_name)
+        if source is None:
+            return
+        member_id = self._member_for(source, path)
+        if source.member_from_path and not member_id:
+            return
+        remove_file(path, self.indexer, self.hash_store, member_id=member_id)
 
     async def initial_index(self, sources: Optional[List[str]] = None) -> None:
         names = sources or list(self.config.sources.keys())
@@ -182,7 +241,10 @@ class CorpusOrchestrator:
                     if self._should_ignore(path) or not self._matches_source(cfg, path):
                         return
                     if event_type == "deleted":
-                        remove_file(path, self.indexer, self.hash_store)
+                        member_id = self._member_for(cfg, path)
+                        if cfg.member_from_path and not member_id:
+                            return
+                        remove_file(path, self.indexer, self.hash_store, member_id=member_id)
                         return
 
                     async def run() -> None:

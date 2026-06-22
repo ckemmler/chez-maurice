@@ -5,7 +5,7 @@ from __future__ import annotations
 import hashlib
 import asyncio
 from pathlib import Path
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 from .chunker import Chunk, paragraph_chunks, fixed_chunks, heading_chunks, semantic_chunks
 from .config import SourceConfig
@@ -45,6 +45,7 @@ async def process_file(
     embedder: Embedder,
     indexer: VectorStore,
     hash_store: HashStore | None = None,
+    member_id: Optional[str] = None,
 ) -> int:
     if not file_path.exists() or not file_path.is_file():
         raise FileNotFoundError(file_path)
@@ -77,7 +78,7 @@ async def process_file(
 
     vectors = await embedder.embed_batch(chunk.text for chunk in chunks)
 
-    await asyncio.to_thread(indexer.delete_unit, unit_key=str(file_path))
+    await asyncio.to_thread(indexer.delete_unit, unit_key=str(file_path), member_id=member_id)
 
     def _upsert() -> int:
         return indexer.upsert(
@@ -87,6 +88,7 @@ async def process_file(
             vectors=vectors.vectors,
             base_metadata=base_metadata,
             embedding_model=vectors.model,
+            member_id=member_id,
         )
 
     written = await asyncio.to_thread(_upsert)
@@ -95,8 +97,13 @@ async def process_file(
     return written
 
 
-def remove_file(file_path: Path, indexer: VectorStore, hash_store: HashStore | None = None) -> None:
-    indexer.delete_unit(unit_key=str(file_path))
+def remove_file(
+    file_path: Path,
+    indexer: VectorStore,
+    hash_store: HashStore | None = None,
+    member_id: Optional[str] = None,
+) -> None:
+    indexer.delete_unit(unit_key=str(file_path), member_id=member_id)
     if hash_store:
         hash_store.delete(file_path)
 

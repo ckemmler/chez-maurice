@@ -81,3 +81,23 @@ sources:
       source_type: dossier
       extract_from_frontmatter: true
 
+  # Per-member garden notes: web/gardens/<member>/notes/<locale>/<slug>.md.
+  # member_from_path routes each note's embeddings into <member>.db. Fiches and
+  # other garden content live outside notes/, so the pattern excludes them.
+  garden-notes:
+    path: ${MAURICE_GARDENS_DIR:-/Users/candide/perso/workspaces/maurice/web/gardens}
+    pattern: "*/notes/*/*.md"
+    recursive: true
+    member_from_path: parent.parent.parent.name
+    member_lookup: garden_username
+    chunking:
+      method: semantic
+      max_tokens: 512
+      overlap_tokens: 50
+    metadata:
+      source_type: note
+      extract_from_frontmatter: true
+      extract_from_path:
+        locale: parent.name
+        slug: stem
+
