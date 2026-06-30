@@ -425,3 +425,25 @@ p{margin:0;text-wrap:pretty;}
 .gc-note{display:flex;align-items:center;gap:8px;margin-top:4px;padding:9px 12px;border:1px dashed var(--line-2);border-radius:10px;font-size:12px;color:var(--ink-2);background:var(--paper-2);}
 .gc-note svg{width:15px;height:15px;color:var(--ochre-deep);flex:0 0 auto;}
 .gc-note b{font-weight:600;}
+
+/* ============================================================
+   "Source on GitHub" corner ribbon (top-right). Ink/paper to match
+   the site rather than the classic green. Hidden on narrow screens
+   where it would collide with the nav.
+   ============================================================ */
+.gh-ribbon{
+  position:fixed; top:0; right:0; z-index:60;
+  width:152px; height:152px; overflow:hidden; pointer-events:none;
+}
+.gh-ribbon span{
+  position:absolute; right:-50px; top:34px; width:200px;
+  display:flex; align-items:center; justify-content:center; gap:7px;
+  padding:7px 0; transform:rotate(45deg); pointer-events:auto;
+  background:var(--ink); color:var(--paper);
+  font-family:var(--mono); font-size:11px; letter-spacing:.03em;
+  box-shadow:0 8px 20px -8px rgba(27,26,23,.55);
+  transition:background .16s ease;
+}
+.gh-ribbon span svg{width:14px; height:14px; flex:0 0 auto;}
+.gh-ribbon:hover span{background:#000;}
+@media (max-width:820px){ .gh-ribbon{display:none;} }

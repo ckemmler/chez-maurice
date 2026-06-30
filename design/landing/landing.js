@@ -42,7 +42,7 @@
   // Download links. Fill these in as artifacts go live.
   // `mac` and `ios` use the SAME TestFlight public link — one multiplatform app
   // record serves iPhone, iPad and Mac.
-  var TESTFLIGHT = ''; // e.g. 'https://testflight.apple.com/join/XXXXXXXX'
+  var TESTFLIGHT = 'https://testflight.apple.com/join/kepD6jFb'; // one link serves iPhone, iPad + Mac
   var DOWNLOADS = {
     server: 'https://www.chezmaurice.eu/ChezMaurice.pkg', // clean notarized --public build (secrets excluded)
     mac: TESTFLIGHT,
