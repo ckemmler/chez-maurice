@@ -1,0 +1,220 @@
+import { Hono } from "hono";
+import { getArticleRecommendations, getDistinctTrackIds, getDistinctMediaTypes } from "../services/recommendations";
+import { getBriefingTopicNames } from "../services/dossiers";
+
+const articles = new Hono();
+
+articles.get("/", (c) => {
+  const memberId = c.get("userId") as string;
+  if (!memberId) return c.json({ error: "Authentication required" }, 401);
+
+  const trackId = c.req.query("track") || "";
+  const month = c.req.query("month") || "";
+  const mediaType = c.req.query("type") || "";
+  const sort = c.req.query("sort") === "asc" ? "asc" as const : "desc" as const;
+
+  const recs = getArticleRecommendations(memberId, {
+    trackId: trackId || undefined,
+    month: month || undefined,
+    mediaType: mediaType || undefined,
+    sortOrder: sort,
+    limit: 200,
+  });
+  const trackIds = getDistinctTrackIds(memberId, "article");
+  const mediaTypes = getDistinctMediaTypes(memberId);
+  const topicNames = getBriefingTopicNames(memberId);
+
+  // Group by URL: same URL across tracks → show once with multiple track badges
+  const byUrl = new Map<string, { rec: typeof recs[0]; tracks: Set<string> }>();
+  for (const rec of recs) {
+    if (byUrl.has(rec.url)) {
+      byUrl.get(rec.url)!.tracks.add(rec.track_id);
+    } else {
+      byUrl.set(rec.url, { rec, tracks: new Set([rec.track_id]) });
+    }
+  }
+
+  const mediaTypeIcons: Record<string, string> = { article: "article", video: "video", podcast: "podcast" };
+  const cards = [...byUrl.values()].map(({ rec, tracks }) => {
+    const domain = new URL(rec.url).hostname.replace("www.", "");
+    const trackBadges = [...tracks].map(t =>
+      `<span class="track-pill${trackId === t ? ' has-report' : ''}">${escapeHtml(topicNames[t] || t)}</span>`
+    ).join(" ");
+    const mt = (rec as any).media_type || "article";
+    const typeBadge = mt !== "article" ? `<span class="media-type-pill media-type-${escapeHtml(mt)}">${escapeHtml(mediaTypeIcons[mt] || mt)}</span>` : "";
+    const img = rec.og_image
+      ? `<img src="/reports/img?url=${encodeURIComponent(rec.og_image)}" alt="" class="rec-card-img" loading="lazy" />`
+      : "";
+    return `<a class="rec-card" href="${escapeHtml(rec.url)}" target="_blank" rel="noopener">
+      ${img}
+      <div class="rec-card-body">
+        <div class="rec-card-title">${escapeHtml(rec.og_title || rec.title)}</div>
+        <div class="rec-card-summary">${escapeHtml(rec.summary || rec.og_description || "")}</div>
+        <div class="rec-card-meta">
+          ${typeBadge}
+          <span class="rec-card-domain">${escapeHtml(domain)}</span>
+          ${trackBadges}
+          <span class="rec-card-date">${escapeHtml(rec.recommended_at?.slice(0, 10) || "")}</span>
+        </div>
+      </div>
+    </a>`;
+  }).join("\n");
+
+  const trackOptions = trackIds.map(t =>
+    `<option value="${escapeHtml(t)}"${trackId === t ? " selected" : ""}>${escapeHtml(topicNames[t] || t)}</option>`
+  ).join("");
+
+  const typeLabels: Record<string, string> = { article: "Articles", video: "Videos", podcast: "Podcasts" };
+  const typeOptions = mediaTypes.map(t =>
+    `<option value="${escapeHtml(t)}"${mediaType === t ? " selected" : ""}>${escapeHtml(typeLabels[t] || t)}</option>`
+  ).join("");
+
+  const filterBar = `<form method="get" class="filter-bar">
+    <label>
+      <span class="filter-label">Type</span>
+      <select name="type">
+        <option value="">All types</option>
+        ${typeOptions}
+      </select>
+    </label>
+    <label>
+      <span class="filter-label">Topic</span>
+      <select name="track">
+        <option value="">All topics</option>
+        ${trackOptions}
+      </select>
+    </label>
+    <label>
+      <span class="filter-label">Month</span>
+      ${monthPickerHtml(month)}
+    </label>
+    <label>
+      <span class="filter-label">Sort</span>
+      <select name="sort">
+        <option value="desc"${sort === "desc" ? " selected" : ""}>Newest first</option>
+        <option value="asc"${sort === "asc" ? " selected" : ""}>Oldest first</option>
+      </select>
+    </label>
+    <button type="submit">Filter</button>
+  </form>`;
+
+  return c.html(`<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Article Recommendations — Akita Research</title>
+  <link rel="stylesheet" href="/reports/styles.css" />
+  <style>${articlesPageCss()}</style>
+</head>
+<body>
+  <nav class="report-nav"><div class="report-nav-inner">
+    <div class="report-nav-crumbs">
+      <a href="/dossiers">Dossiers</a> <span class="sep">/</span>
+      <span class="current">Articles</span>
+    </div>
+    <div class="report-nav-links">
+      <a href="/books">Books</a>
+      <a href="/dossiers">Dossiers</a>
+    </div>
+  </div></nav>
+  <div class="page">
+    <div class="page-inner">
+      <h1>Article Recommendations</h1>
+      ${filterBar}
+      <div class="rec-cards">${cards}</div>
+    </div>
+    <footer class="page-footer">Generated by Akita Research Pipeline</footer>
+  </div>
+  ${monthPickerScript()}
+</body>
+</html>`);
+});
+
+function unescapeHtml(text: string): string {
+  return text
+    .replace(/&#039;/g, "'")
+    .replace(/&#x27;/g, "'")
+    .replace(/&quot;/g, '"')
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&amp;/g, "&")
+    .replace(/&#(\d+);/g, (_, n) => String.fromCharCode(Number(n)))
+    .replace(/&#x([0-9a-fA-F]+);/g, (_, h) => String.fromCharCode(parseInt(h, 16)));
+}
+
+function escapeHtml(text: string): string {
+  return unescapeHtml(text).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+
+function monthPickerHtml(currentMonth: string): string {
+  const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  const [selYear, selMon] = currentMonth ? currentMonth.split("-") : ["", ""];
+  const monthOpts = months.map((m, i) => {
+    const val = String(i + 1).padStart(2, "0");
+    return `<option value="${val}"${val === selMon ? " selected" : ""}>${m}</option>`;
+  }).join("");
+  const now = new Date().getFullYear();
+  const yearOpts = Array.from({length: now - 2023}, (_, i) => now - i)
+    .map(y => `<option value="${y}"${String(y) === selYear ? " selected" : ""}>${y}</option>`)
+    .join("");
+  return `<span class="month-picker">
+    <select class="mp-month"><option value="">Any month</option>${monthOpts}</select>
+    <select class="mp-year"><option value="">Any year</option>${yearOpts}</select>
+    <input type="hidden" name="month" value="${escapeHtml(currentMonth)}" />
+  </span>`;
+}
+
+function monthPickerScript(): string {
+  return `<script>
+document.querySelectorAll('.month-picker').forEach(picker => {
+  const ms = picker.querySelector('.mp-month');
+  const ys = picker.querySelector('.mp-year');
+  const hidden = picker.querySelector('input[type="hidden"]');
+  function sync() {
+    const m = ms.value, y = ys.value;
+    hidden.value = (m && y) ? y + '-' + m : '';
+  }
+  ms.addEventListener('change', sync);
+  ys.addEventListener('change', sync);
+});
+</script>`;
+}
+
+function articlesPageCss(): string {
+  return `
+.filter-bar { display: flex; flex-wrap: wrap; gap: 1rem; align-items: flex-end; margin-top: 1.5rem; padding: 1rem 1.25rem;
+  background: var(--paper-warm); border: 1px solid var(--paper-rule); border-radius: 12px; }
+.filter-bar label { display: flex; flex-direction: column; gap: 0.25rem; }
+.filter-label { font-family: var(--font-sans); font-size: var(--step--2); font-weight: 600; color: var(--ink-muted); text-transform: uppercase; letter-spacing: 0.04em; }
+.filter-bar select, .filter-bar input[type="month"] { font-family: var(--font-sans); font-size: var(--step--1); padding: 0.35em 0.6em;
+  border: 1px solid var(--paper-rule); border-radius: 6px; background: var(--paper); color: var(--ink); }
+.month-picker { display: flex; gap: 0.25rem; }
+.month-picker select { font-family: var(--font-sans); font-size: var(--step--1); padding: 0.35em 0.6em;
+  border: 1px solid var(--paper-rule); border-radius: 6px; background: var(--paper); color: var(--ink); }
+.filter-bar button { font-family: var(--font-sans); font-size: var(--step--1); font-weight: 600; padding: 0.4em 1em;
+  border: 1px solid var(--accent); border-radius: 6px; background: var(--accent); color: #fff; cursor: pointer; }
+.filter-bar button:hover { opacity: 0.9; }
+.rec-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 1.5rem; margin-top: 2rem; }
+.rec-card { display: flex; flex-direction: column; background: var(--paper-warm); border: 1px solid var(--paper-rule);
+  border-radius: 12px; overflow: hidden; text-decoration: none; color: inherit; transition: border-color 0.15s, box-shadow 0.15s; }
+.rec-card:hover { border-color: var(--accent); box-shadow: 0 4px 16px rgba(0,0,0,0.06); text-decoration: none; }
+.rec-card-img { width: 100%; height: 180px; object-fit: cover; }
+.rec-card-body { padding: 1rem 1.25rem; display: flex; flex-direction: column; gap: 0.5rem; flex: 1; }
+.rec-card-title { font-family: var(--font-sans); font-size: var(--step-0); font-weight: 600; color: var(--ink); }
+.rec-card-summary { font-size: var(--step--1); color: var(--ink-light); display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.rec-card-meta { display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: center; margin-top: auto; padding-top: 0.5rem; }
+.rec-card-domain { font-family: var(--font-sans); font-size: var(--step--2); color: var(--ink-muted); }
+.rec-card-date { font-family: var(--font-sans); font-size: var(--step--2); color: var(--ink-faint); margin-left: auto; }
+.media-type-pill { display: inline-block; font-family: var(--font-sans); font-size: var(--step--2); font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.06em; padding: 0.1em 0.4em; border-radius: 4px; }
+.media-type-video { background: #cc333320; color: #cc3333; }
+.media-type-podcast { background: #7b2d8e20; color: #7b2d8e; }
+@media (prefers-color-scheme: dark) {
+  .media-type-video { background: #ff555530; color: #ff7777; }
+  .media-type-podcast { background: #bb66dd30; color: #cc88ee; }
+}
+@media (max-width: 600px) { .rec-cards { grid-template-columns: 1fr; } .filter-bar { flex-direction: column; } }`;
+}
+
+export default articles;

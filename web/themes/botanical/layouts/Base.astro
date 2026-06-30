@@ -1,0 +1,196 @@
+---
+import "../global.css";
+import Nav from "@app/components/Nav.astro";
+import DevToolbar from "@app/components/DevToolbar.astro";
+import type { Locale } from "@app/i18n/config";
+import { t, localizedPath, getAlternatePath } from "@app/i18n/utils";
+import { gardenConfig } from "@app/lib/garden";
+
+interface Props {
+  title: string;
+  description?: string;
+  locale?: Locale;
+  alternatePath?: string | null;
+}
+
+const garden = gardenConfig();
+const { title, description, locale = "en", alternatePath: contentAlternatePath } = Astro.props;
+const siteTitle = garden.title;
+const fullTitle = title ? `${title} · ${siteTitle}` : siteTitle;
+// On a member garden, Astro.url.pathname carries the base (/g/<member>/…). But
+// the i18n utils, isHome checks, and Nav active-states all reason about base-less
+// logical paths — the middleware re-adds the base to rendered links. Feeding them
+// the base-prefixed path makes getAlternatePath misparse "/g/…" as a route segment
+// and double the base. Strip it here; no-op at the root build (BASE_URL === "/").
+const gardenBase = import.meta.env.BASE_URL.replace(/\/+$/, "");
+const rawPath = Astro.url.pathname;
+const currentPath = gardenBase && rawPath.startsWith(gardenBase)
+  ? rawPath.slice(gardenBase.length) || "/"
+  : rawPath;
+const cleanPath = currentPath.replace(/\.html$/, "");
+const isHome = cleanPath === "/" || cleanPath === "/index" || cleanPath === "/fr" || cleanPath === "/fr/";
+const alternateLocale = locale === "en" ? "fr" : "en";
+
+// contentAlternatePath === undefined → use default segment-based translation
+// contentAlternatePath === null → no translation exists
+// contentAlternatePath === string → use the provided path
+const alternatePath = contentAlternatePath === undefined
+  ? getAlternatePath(currentPath)
+  : contentAlternatePath;
+const alternateAvailable = alternatePath !== null;
+---
+
+<!doctype html>
+<html lang={locale} data-theme={Astro.locals.theme ?? "default"}>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="generator" content={Astro.generator} />
+    <meta name="api-base" content={`https://${Astro.url.hostname}:2077`} />
+    {description && <meta name="description" content={description} />}
+    <title>{fullTitle}</title>
+    <link rel="icon" type="image/x-icon" href="/favicon.ico" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
+    <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png" />
+    {alternateAvailable && alternatePath && (
+      <link rel="alternate" hreflang={alternateLocale} href={`${Astro.site?.origin ?? ""}${alternatePath}`} />
+    )}
+    <link rel="alternate" hreflang={locale} href={`${Astro.site?.origin ?? ""}${currentPath}`} />
+    <style is:inline>
+      .not-translated-notice { display: none; }
+      .not-translated-notice:target {
+        display: block;
+        background: var(--color-bg-alt);
+        border: 1px solid var(--color-border);
+        border-radius: 6px;
+        padding: 0.75rem 1rem;
+        margin-top: 1rem;
+        font-size: 0.9rem;
+        color: var(--color-text-muted);
+      }
+      body.hide-drafts [data-draft="true"] { display: none; }
+      body.hide-drafts section:has(li[data-draft="true"]):not(:has(li:not([data-draft="true"]))) { display: none; }
+      body.hide-drafts section:has(.moc-card[data-draft="true"]):not(:has(.moc-card:not([data-draft="true"]))) { display: none; }
+      .public-dot { color: #22c55e !important; font-size: 24px !important; line-height: 0 !important; text-decoration: none !important; margin-left: 2px !important; margin-bottom: 2px !important; }
+      .draft-empty-notice { display: none; }
+      html.dark {
+          --color-text: #e4ebd9;
+          --color-text-muted: #8a9a82;
+          --color-text-quiet: #b7c4a8;
+          --color-bg: #121911;
+          --color-bg-alt: #1c2419;
+          --color-border: #2d3a27;
+          --color-link: #97c47e;
+      }
+      html.dark body {
+        background: #121911 !important;
+        color: #e4ebd9 !important;
+      }
+      html.dark .icon-sun { display: inline-flex !important; }
+      html.dark .icon-moon { display: none !important; }
+      .icon-sun { display: none; }
+    </style>
+    <script is:inline>
+      // Prevent FOUC: apply dark mode before paint
+      (function() {
+        var saved = localStorage.getItem('isDarkMode');
+        var dark = saved === 'true' || (saved === null && window.matchMedia('(prefers-color-scheme: dark)').matches);
+        document.documentElement.classList.add(dark ? 'dark' : 'light');
+      })();
+      // Global toggle function called by onclick
+      function toggleDarkMode() {
+        var el = document.documentElement.classList;
+        var isDark = el.contains('dark');
+        el.remove('dark', 'light');
+        el.add(isDark ? 'light' : 'dark');
+        localStorage.setItem('isDarkMode', JSON.stringify(!isDark));
+      }
+    </script>
+  </head>
+  <body>
+    <div class="container">
+      <Nav locale={locale} currentPath={currentPath} isHome={isHome} alternatePath={alternateAvailable ? alternatePath : null} />
+
+      <div id="not-translated" class="not-translated-notice">
+        {t(locale, "content.notTranslated")}
+      </div>
+
+      <main>
+        <slot />
+      </main>
+
+      <footer class="site-footer">
+        <p>© {garden.name} {new Date().getFullYear()}</p>
+        <p class="made-with">
+          {t(locale, "site.footer.madeWith")} <span class="heart">❤</span>
+          <span class="dimmed"> · <a href={localizedPath(locale, "/milestones")}>{t(locale, "nav.history")}</a></span>
+        </p>
+      </footer>
+    </div>
+    {import.meta.env.DEV && <DevToolbar />}
+  </body>
+</html>
+
+<style>
+  body {
+    background: var(--color-bg);
+    color: var(--color-text);
+  }
+
+  .container {
+    max-width: var(--max-width);
+    margin: 0 auto;
+    padding: 0 1rem;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  main {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    padding-top: 1.5rem;
+  }
+
+  .site-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.5rem 0;
+    margin-top: 1rem;
+    font-family: var(--font-heading);
+    font-size: 0.875rem;
+    font-weight: 600;
+  }
+
+  .site-footer p {
+    margin: 0;
+  }
+
+  .made-with {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+  }
+
+  .heart {
+    color: red;
+  }
+
+  .dimmed {
+    opacity: 0.6;
+  }
+
+  .dimmed a {
+    color: var(--color-text);
+  }
+
+  @media (max-width: 640px) {
+    .site-footer {
+      flex-direction: column;
+      gap: 0.5rem;
+      text-align: center;
+    }
+  }
+</style>

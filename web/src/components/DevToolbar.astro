@@ -1,0 +1,652 @@
+---
+// Dev-only toolbar — only rendered when import.meta.env.DEV
+---
+
+<div id="dev-toolbar">
+  <label class="dev-switch" title="Toggle preview mode">
+    <span class="dev-switch-label">Preview</span>
+    <input type="checkbox" id="dev-preview" />
+    <span class="dev-switch-track"></span>
+  </label>
+  <label class="dev-switch" id="dev-public-wrap" title="Toggle public state" style="display:none">
+    <span class="dev-switch-label">Public</span>
+    <input type="checkbox" id="dev-public" />
+    <span class="dev-switch-track"></span>
+  </label>
+  <label class="dev-switch" id="dev-private-wrap" title="Toggle private state" style="display:none">
+    <span class="dev-switch-label">Private</span>
+    <input type="checkbox" id="dev-private" />
+    <span class="dev-switch-track"></span>
+  </label>
+  <button id="dev-translate" title="Translate content">Translate</button>
+  <button id="dev-share" style="display:none" title="Share to social">Share</button>
+  <span id="dev-status"></span>
+  <span class="dev-spacer"></span>
+  <button id="dev-delete" style="display:none" title="Delete this note">Delete</button>
+  <a id="dev-edit" style="display:none" title="Edit in external editor">Edit</a>
+</div>
+
+<!-- Share panel (floating above toolbar) -->
+<div id="dev-share-panel" style="display:none">
+  <div class="share-header">
+    <span>Share</span>
+    <button id="dev-share-close" title="Close">&times;</button>
+  </div>
+  <div class="share-section">
+    <label class="share-platform">
+      <input type="checkbox" id="share-twitter-cb" />
+      <span>Twitter/X</span>
+      <span id="share-twitter-check" class="share-check" style="display:none">&#10003;</span>
+    </label>
+    <textarea id="share-twitter-text" rows="4" maxlength="280"></textarea>
+    <div class="share-char-count"><span id="share-twitter-count">0</span>/280</div>
+  </div>
+  <div class="share-section">
+    <label class="share-platform">
+      <input type="checkbox" id="share-linkedin-cb" />
+      <span>LinkedIn</span>
+      <span id="share-linkedin-check" class="share-check" style="display:none">&#10003;</span>
+    </label>
+    <textarea id="share-linkedin-text" rows="4"></textarea>
+  </div>
+  <div id="share-image-preview" style="display:none">
+    <img id="share-image-thumb" alt="preview" />
+  </div>
+  <button id="dev-share-publish">Publish</button>
+</div>
+
+<style>
+  #dev-toolbar {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    display: none;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.4rem 1rem;
+    background: #1e1e2e;
+    color: #cdd6f4;
+    font-family: monospace;
+    font-size: 0.8rem;
+    z-index: 9999;
+    border-top: 1px solid #45475a;
+  }
+
+  @media (min-width: 769px) {
+    #dev-toolbar {
+      display: flex;
+    }
+  }
+
+  #dev-toolbar button {
+    background: #313244;
+    color: #cdd6f4;
+    border: 1px solid #45475a;
+    border-radius: 4px;
+    padding: 0.25rem 0.6rem;
+    cursor: pointer;
+    font-family: monospace;
+    font-size: 0.8rem;
+  }
+
+  #dev-toolbar button:hover {
+    background: #45475a;
+  }
+
+  #dev-toolbar button:disabled {
+    opacity: 0.5;
+    cursor: wait;
+  }
+
+  #dev-status {
+    margin-left: 0.5rem;
+    opacity: 0.7;
+  }
+
+  .dev-spacer {
+    flex: 1;
+  }
+
+  #dev-delete {
+    background: #45475a;
+    color: #f38ba8;
+    border: 1px solid #f38ba8;
+  }
+
+  #dev-delete:hover {
+    background: #f38ba8;
+    color: #1e1e2e;
+  }
+
+  #dev-edit {
+    background: #313244;
+    color: #cdd6f4;
+    border: 1px solid #45475a;
+    border-radius: 4px;
+    padding: 0.25rem 0.6rem;
+    cursor: pointer;
+    font-family: monospace;
+    font-size: 0.8rem;
+    text-decoration: none;
+  }
+
+  #dev-edit:hover {
+    background: #45475a;
+  }
+
+  /* iOS-style toggle switch */
+  .dev-switch {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    cursor: pointer;
+    user-select: none;
+  }
+
+  .dev-switch-label {
+    font-size: 0.8rem;
+  }
+
+  .dev-switch input {
+    display: none;
+  }
+
+  .dev-switch-track {
+    position: relative;
+    width: 32px;
+    height: 18px;
+    background: #45475a;
+    border-radius: 9px;
+    transition: background 0.2s;
+  }
+
+  .dev-switch-track::after {
+    content: "";
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 14px;
+    height: 14px;
+    background: #cdd6f4;
+    border-radius: 50%;
+    transition: transform 0.2s;
+  }
+
+  .dev-switch input:checked + .dev-switch-track {
+    background: #a6e3a1;
+  }
+
+  #dev-private-wrap input:checked + .dev-switch-track {
+    background: #fab387;
+  }
+
+  .dev-switch input:checked + .dev-switch-track::after {
+    transform: translateX(14px);
+  }
+
+  /* Share panel */
+  #dev-share-panel {
+    position: fixed;
+    bottom: 40px;
+    left: 1rem;
+    width: 380px;
+    max-width: calc(100vw - 2rem);
+    background: #1e1e2e;
+    border: 1px solid #45475a;
+    border-radius: 8px;
+    padding: 0.75rem;
+    z-index: 10000;
+    font-family: monospace;
+    font-size: 0.8rem;
+    color: #cdd6f4;
+    box-shadow: 0 -4px 16px rgba(0,0,0,0.4);
+  }
+
+  .share-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.5rem;
+    font-weight: bold;
+  }
+
+  .share-header button {
+    background: none;
+    border: none;
+    color: #cdd6f4;
+    font-size: 1.2rem;
+    cursor: pointer;
+    padding: 0 0.25rem;
+  }
+
+  .share-section {
+    margin-bottom: 0.5rem;
+  }
+
+  .share-platform {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    margin-bottom: 0.3rem;
+    cursor: pointer;
+  }
+
+  .share-platform input[type="checkbox"] {
+    accent-color: #a6e3a1;
+  }
+
+  .share-check {
+    color: #a6e3a1;
+    font-weight: bold;
+  }
+
+  #dev-share-panel textarea {
+    width: 100%;
+    background: #313244;
+    color: #cdd6f4;
+    border: 1px solid #45475a;
+    border-radius: 4px;
+    padding: 0.4rem;
+    font-family: monospace;
+    font-size: 0.75rem;
+    resize: vertical;
+    box-sizing: border-box;
+  }
+
+  .share-char-count {
+    text-align: right;
+    font-size: 0.7rem;
+    opacity: 0.6;
+  }
+
+  #share-image-preview {
+    margin-bottom: 0.5rem;
+  }
+
+  #share-image-thumb {
+    max-width: 80px;
+    max-height: 60px;
+    border-radius: 4px;
+    border: 1px solid #45475a;
+  }
+
+  #dev-share-publish {
+    width: 100%;
+    background: #a6e3a1;
+    color: #1e1e2e;
+    border: none;
+    border-radius: 4px;
+    padding: 0.4rem;
+    cursor: pointer;
+    font-family: monospace;
+    font-size: 0.8rem;
+    font-weight: bold;
+  }
+
+  #dev-share-publish:hover {
+    background: #94e2d5;
+  }
+
+  #dev-share-publish:disabled {
+    opacity: 0.5;
+    cursor: wait;
+  }
+</style>
+
+<script>
+  const translateBtn = document.getElementById("dev-translate") as HTMLButtonElement;
+  const status = document.getElementById("dev-status")!;
+
+  // --- Preview toggle ---
+  const previewInput = document.getElementById("dev-preview") as HTMLInputElement;
+  previewInput.checked = sessionStorage.getItem("preview") === "1";
+
+  previewInput.addEventListener("change", () => {
+    if (previewInput.checked) {
+      sessionStorage.setItem("preview", "1");
+      location.reload();
+    } else {
+      sessionStorage.removeItem("preview");
+      const url = new URL(location.href);
+      url.searchParams.delete("preview");
+      location.replace(url.toString());
+    }
+  });
+
+  // --- Public toggle ---
+  const publicWrap = document.getElementById("dev-public-wrap") as HTMLLabelElement;
+  const publicInput = document.getElementById("dev-public") as HTMLInputElement;
+
+  // Check public state on load
+  fetch("/_dev/public-state", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ path: location.pathname }),
+  }).then(async (res) => {
+    if (!res.ok) return; // not a content page — keep hidden
+    const data = await res.json();
+    publicInput.checked = data.public;
+    publicWrap.style.display = "";
+  });
+
+  publicInput.addEventListener("change", async () => {
+    publicInput.disabled = true;
+    status.textContent = "Toggling public…";
+    try {
+      const res = await fetch("/_dev/toggle-public", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ path: location.pathname }),
+      });
+      if (!res.ok) throw new Error("Failed to toggle public");
+      const data = await res.json();
+      status.textContent = `Public → ${data.public ? "on" : "off"}`;
+      // Don't reload — Astro HMR picks up the .md file change automatically
+    } catch (err) {
+      status.textContent = `Error: ${err}`;
+      publicInput.checked = !publicInput.checked; // revert
+    } finally {
+      publicInput.disabled = false;
+    }
+  });
+
+  // --- Private toggle (notes only) ---
+  const privateWrap = document.getElementById("dev-private-wrap") as HTMLLabelElement;
+  const privateInput = document.getElementById("dev-private") as HTMLInputElement;
+
+  fetch("/_dev/private-state", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ path: location.pathname }),
+  }).then(async (res) => {
+    if (!res.ok) return;
+    const { private: isPrivate } = await res.json();
+    privateInput.checked = isPrivate;
+    privateWrap.style.display = "";
+  });
+
+  privateInput.addEventListener("change", async () => {
+    privateInput.disabled = true;
+    status.textContent = "Toggling private…";
+    try {
+      const res = await fetch("/_dev/toggle-private", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ path: location.pathname }),
+      });
+      if (!res.ok) throw new Error("Failed to toggle private");
+      const { private: isPrivate } = await res.json();
+      status.textContent = `Private → ${isPrivate ? "on" : "off"}`;
+    } catch (err) {
+      status.textContent = `Error: ${err}`;
+      privateInput.checked = !privateInput.checked;
+    } finally {
+      privateInput.disabled = false;
+    }
+  });
+
+  // --- Delete note ---
+  const deleteBtn = document.getElementById("dev-delete") as HTMLButtonElement;
+  fetch("/_dev/content-path", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ path: location.pathname }),
+  }).then(async (res) => {
+    if (!res.ok) return;
+    const { contentPath } = await res.json();
+    // Only show for notes
+    if (!contentPath.startsWith("notes/")) return;
+    deleteBtn.style.display = "";
+  });
+
+  deleteBtn.addEventListener("click", async () => {
+    const title = document.querySelector("h1")?.textContent || location.pathname;
+    if (!confirm(`Delete "${title}"? This cannot be undone.`)) return;
+
+    deleteBtn.disabled = true;
+    status.textContent = "Deleting…";
+    try {
+      const res = await fetch("/_dev/delete-note", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ path: location.pathname }),
+      });
+      if (!res.ok) {
+        const { error } = await res.json();
+        throw new Error(error || "Failed to delete");
+      }
+      status.textContent = "Deleted";
+      // Navigate away — back to notes index or referrer
+      const locale = location.pathname.startsWith("/fr") ? "/fr" : "";
+      location.href = document.referrer || `${locale}/notes`;
+    } catch (err) {
+      status.textContent = `Error: ${err}`;
+      deleteBtn.disabled = false;
+    }
+  });
+
+  // --- Edit in external editor ---
+  const editLink = document.getElementById("dev-edit") as HTMLAnchorElement;
+  fetch("/_dev/content-path", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ path: location.pathname }),
+  }).then(async (res) => {
+    if (!res.ok) return;
+    const { contentPath } = await res.json();
+    const iOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+    editLink.href = iOS
+      ? `ia-writer://open?path=${encodeURIComponent("akita-content: /" + contentPath)}&edit=true`
+      : `obsidian://open?vault=content&file=${contentPath.replace(/\.md$/, "")}`;
+    editLink.style.display = "";
+  });
+
+  // --- Translate ---
+  translateBtn.addEventListener("click", async () => {
+    translateBtn.disabled = true;
+    status.textContent = "Translating…";
+
+    try {
+      const res = await fetch("/_dev/translate", { method: "POST" });
+      const reader = res.body?.getReader();
+      const decoder = new TextDecoder();
+      let last = "";
+
+      if (reader) {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          const text = decoder.decode(value);
+          // Extract the last data line for display
+          const lines = text.split("\n").filter((l) => l.startsWith("data: "));
+          if (lines.length) last = lines[lines.length - 1].replace("data: ", "");
+          status.textContent = last;
+        }
+      }
+
+      status.textContent = last || "Done";
+    } catch (err) {
+      status.textContent = `Error: ${err}`;
+    } finally {
+      translateBtn.disabled = false;
+    }
+  });
+
+  // --- Share to social ---
+  const shareBtn = document.getElementById("dev-share") as HTMLButtonElement;
+  const sharePanel = document.getElementById("dev-share-panel")!;
+  const shareCloseBtn = document.getElementById("dev-share-close") as HTMLButtonElement;
+  const twitterCb = document.getElementById("share-twitter-cb") as HTMLInputElement;
+  const linkedinCb = document.getElementById("share-linkedin-cb") as HTMLInputElement;
+  const twitterText = document.getElementById("share-twitter-text") as HTMLTextAreaElement;
+  const linkedinText = document.getElementById("share-linkedin-text") as HTMLTextAreaElement;
+  const twitterCount = document.getElementById("share-twitter-count")!;
+  const twitterCheck = document.getElementById("share-twitter-check")!;
+  const linkedinCheck = document.getElementById("share-linkedin-check")!;
+  const imagePreview = document.getElementById("share-image-preview")!;
+  const imageThumb = document.getElementById("share-image-thumb") as HTMLImageElement;
+  const publishBtn = document.getElementById("dev-share-publish") as HTMLButtonElement;
+
+  let socialState: any = null;
+
+  // Fetch social state on load
+  fetch("/_dev/social-state", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ path: location.pathname }),
+  }).then(async (res) => {
+    if (!res.ok) return;
+    socialState = await res.json();
+    if (!socialState.public) return; // Don't show for non-public items
+
+    shareBtn.style.display = "";
+
+    // Show checkmarks for already-shared platforms
+    if (socialState.shared_twitter) {
+      twitterCheck.style.display = "";
+      shareBtn.textContent = "Share \u2713";
+    }
+    if (socialState.shared_linkedin) {
+      linkedinCheck.style.display = "";
+      if (!socialState.shared_twitter) shareBtn.textContent = "Share \u2713";
+    }
+    if (socialState.shared_twitter && socialState.shared_linkedin) {
+      shareBtn.textContent = "Share \u2713\u2713";
+    }
+  });
+
+  shareBtn.addEventListener("click", () => {
+    if (!socialState) return;
+    const publicUrl = socialState.url;
+    const title = socialState.title || "";
+    const desc = socialState.description || "";
+
+    // Pre-fill Twitter text (truncated to 280)
+    const tweetDraft = `${title}\n\n${desc}\n\n${publicUrl}`;
+    twitterText.value = tweetDraft.slice(0, 280);
+    twitterCount.textContent = String(twitterText.value.length);
+
+    // Pre-fill LinkedIn text
+    linkedinText.value = `${title}\n\n${desc}\n\n${publicUrl}`;
+
+    // Checkboxes
+    twitterCb.checked = false;
+    linkedinCb.checked = false;
+
+    if (socialState.shared_twitter) {
+      twitterCb.checked = true;
+      twitterCb.disabled = true;
+      twitterText.disabled = true;
+    } else {
+      twitterCb.disabled = false;
+      twitterText.disabled = false;
+    }
+
+    if (socialState.shared_linkedin) {
+      linkedinCb.checked = true;
+      linkedinCb.disabled = true;
+      linkedinText.disabled = true;
+    } else {
+      linkedinCb.disabled = false;
+      linkedinText.disabled = false;
+    }
+
+    // Image preview
+    if (socialState.image) {
+      // image values are absolute (http(s) or root-relative /images/<owner>/…)
+      imageThumb.src =
+        socialState.image.startsWith("http") || socialState.image.startsWith("/")
+          ? socialState.image
+          : `/images/${socialState.image}`;
+      imagePreview.style.display = "";
+    } else {
+      imagePreview.style.display = "none";
+    }
+
+    sharePanel.style.display = sharePanel.style.display === "none" ? "" : "none";
+  });
+
+  shareCloseBtn.addEventListener("click", () => {
+    sharePanel.style.display = "none";
+  });
+
+  twitterText.addEventListener("input", () => {
+    twitterCount.textContent = String(twitterText.value.length);
+  });
+
+  publishBtn.addEventListener("click", async () => {
+    if (!socialState) return;
+
+    const platforms: string[] = [];
+    if (twitterCb.checked && !socialState.shared_twitter) platforms.push("twitter");
+    if (linkedinCb.checked && !socialState.shared_linkedin) platforms.push("linkedin");
+
+    if (platforms.length === 0) {
+      status.textContent = "No platform selected";
+      return;
+    }
+
+    publishBtn.disabled = true;
+    status.textContent = "Publishing…";
+
+    const imageUrl = socialState.image
+      ? (socialState.image.startsWith("http")
+          ? socialState.image
+          : `https://candide.me${socialState.image.startsWith("/") ? "" : "/"}${socialState.image}`)
+      : undefined;
+
+    for (const platform of platforms) {
+      const text = platform === "twitter" ? twitterText.value : linkedinText.value;
+
+      if (platform === "twitter") {
+        // Copy text to clipboard — user posts manually
+        await navigator.clipboard.writeText(text);
+        socialState.shared_twitter = true;
+        twitterCb.disabled = true;
+        twitterText.disabled = true;
+        twitterCheck.style.display = "";
+        status.textContent = "Copied to clipboard — paste on X";
+        continue;
+      }
+
+      try {
+        const res = await fetch("/_dev/social-publish", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            platform,
+            text,
+            image_url: imageUrl,
+            article_url: socialState.url,
+            content_path: socialState.content_path,
+          }),
+        });
+        const result = await res.json();
+        if (!res.ok || result.error) {
+          status.textContent = `${platform} error: ${result.error || "failed"}`;
+          continue;
+        }
+
+        socialState.shared_linkedin = true;
+        socialState.shared_linkedin_urn = result.post_urn;
+        linkedinCb.disabled = true;
+        linkedinText.disabled = true;
+        linkedinCheck.style.display = "";
+        status.textContent = `Published to ${platform}`;
+      } catch (err) {
+        status.textContent = `${platform} error: ${err}`;
+      }
+    }
+
+    // Update button label
+    if (socialState.shared_twitter && socialState.shared_linkedin) {
+      shareBtn.textContent = "Share \u2713\u2713";
+    } else if (socialState.shared_twitter || socialState.shared_linkedin) {
+      shareBtn.textContent = "Share \u2713";
+    }
+
+    publishBtn.disabled = false;
+  });
+
+</script>

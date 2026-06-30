@@ -1,0 +1,25 @@
+#!/bin/bash
+# preinstall — validate system requirements before installing Maurice
+set -euo pipefail
+
+MIN_MACOS=13
+MIN_DISK_MB=500
+
+# ── Check macOS version ──────────────────────────────────────────────────
+macos_version=$(sw_vers -productVersion 2>/dev/null || echo "0.0")
+major_version=$(echo "$macos_version" | cut -d. -f1)
+if [[ "$major_version" -lt "$MIN_MACOS" ]]; then
+  echo "ERROR: Chez Maurice requires macOS $MIN_MACOS (Ventura) or later."
+  echo "       Detected: macOS $macos_version"
+  exit 1
+fi
+
+# ── Check disk space ─────────────────────────────────────────────────────
+available_mb=$(df -m /usr/local 2>/dev/null | awk 'NR==2 {print $4}')
+if [[ -n "$available_mb" && "$available_mb" -lt "$MIN_DISK_MB" ]]; then
+  echo "ERROR: Insufficient disk space. Need ${MIN_DISK_MB}MB, have ${available_mb}MB."
+  exit 1
+fi
+
+echo "==> Pre-flight checks passed (macOS $macos_version, ${available_mb}MB available)."
+exit 0

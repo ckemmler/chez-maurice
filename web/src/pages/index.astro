@@ -1,0 +1,9 @@
+---
+// Garden-first landing: a "garden"-kind theme lands the home on the notes/garden
+// index; a "site"-kind theme (e.g. candide) keeps the composed hero home.
+import { themeKind } from "../lib/theme-registry";
+import Home from "../components/Home.astro";
+import NotesList from "../components/NotesList.astro";
+const isGarden = themeKind(Astro.locals.theme) === "garden";
+---
+{isGarden ? <NotesList locale="en" /> : <Home locale="en" />}

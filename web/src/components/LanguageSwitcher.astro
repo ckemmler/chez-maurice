@@ -1,0 +1,79 @@
+---
+import type { Locale } from "../i18n/config";
+import { getAlternatePath } from "../i18n/utils";
+
+interface Props {
+  locale: Locale;
+  currentPath: string;
+  alternatePath?: string | null;
+}
+
+const { locale, currentPath, alternatePath: contentAlternatePath } = Astro.props;
+// null means no translation exists → link to #not-translated
+// undefined means use default segment-based translation
+// string means use provided path
+const alternatePath = contentAlternatePath === null
+  ? "#not-translated"
+  : contentAlternatePath ?? getAlternatePath(currentPath);
+---
+
+<span class="switcher-group">
+  {contentAlternatePath !== null && (locale === "fr" ? (
+    <><a href={alternatePath} class="lang-link">en</a><span class="lang-sep">&nbsp;|&nbsp;</span><span class="lang-current">fr</span></>
+  ) : (
+    <><span class="lang-current">en</span><span class="lang-sep">&nbsp;|&nbsp;</span><a href={alternatePath} class="lang-link">fr</a></>
+  ))}
+
+  <button class="theme-toggle" aria-label="Toggle dark mode" onclick="toggleDarkMode()">
+    <svg class="icon-moon" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg>
+    <svg class="icon-sun" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg>
+  </button>
+</span>
+
+<style is:global>
+  .switcher-group {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-family: var(--font-sans);
+    font-size: 0.875rem;
+  }
+
+  .lang-current {
+    font-weight: 700;
+    color: var(--color-text);
+  }
+
+  .lang-sep {
+    color: var(--color-text-muted);
+    user-select: none;
+  }
+
+  .lang-link {
+    color: var(--color-text-muted);
+    text-decoration: none;
+    font-weight: 400;
+  }
+
+  .lang-link:hover {
+    color: var(--color-text);
+    text-decoration: none;
+  }
+
+  .theme-toggle {
+    display: inline-flex;
+    align-items: center;
+    -webkit-appearance: none;
+    appearance: none;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    color: var(--color-text-muted);
+    padding: 0;
+    margin-left: 0.25rem;
+  }
+
+  .theme-toggle:hover {
+    color: var(--color-text);
+  }
+</style>

@@ -1,0 +1,8 @@
+---
+// Shim → the active theme's layout, chosen per request (Astro.locals.theme set by
+// middleware). Falls back to default. Every page imports this; theming is now a
+// runtime choice (cookie / ?theme=) with no rebuild.
+import { resolveLayout } from "@app/lib/theme-registry";
+const Base = resolveLayout(Astro.locals.theme, "Base");
+---
+<Base {...Astro.props}><slot /></Base>

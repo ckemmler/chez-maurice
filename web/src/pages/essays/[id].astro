@@ -1,0 +1,24 @@
+---
+import EssayDetail from "../../components/EssayDetail.astro";
+import { getCollection } from "astro:content";
+import { isPublic } from "../../lib/flags";
+import { stripLocalePrefix } from "../../i18n/utils";
+
+export const prerender = process.env.WEB_SSR !== "1";
+
+export async function getStaticPaths() {
+  const essays = await getCollection("essays", ({ data }) => data.locale === "en" && (import.meta.env.DEV || isPublic(data)));
+  return essays.map((essay) => ({
+    params: { id: stripLocalePrefix(essay.id) },
+    props: { essay },
+  }));
+}
+
+let __props = Astro.props;
+if (!__props.essay) {
+  __props = (await getStaticPaths()).find((e) => e.params.id === Astro.params.id)?.props ?? {};
+}
+const { essay } = __props;
+if (!essay) return new Response("Not found", { status: 404 });
+---
+<EssayDetail essay={essay} locale="en" />

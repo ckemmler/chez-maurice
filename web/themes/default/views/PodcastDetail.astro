@@ -1,0 +1,133 @@
+---
+import Base from "@app/layouts/Base.astro";
+import Breadcrumb from "@app/components/Breadcrumb.astro";
+import type { Locale } from "@app/i18n/config";
+import { t, resourcePath, formatDate, stripLocalePrefix, formatShortDate } from "@app/i18n/utils";
+import { getAlternateContentPath } from "@app/i18n/translations";
+import { render, getCollection } from "astro:content";
+import { isPublic } from "@app/lib/flags";
+
+interface Props {
+  podcast: any;
+  locale?: Locale;
+}
+
+const { podcast, locale = "en" } = Astro.props;
+const { Content } = await render(podcast);
+const alternatePath = await getAlternateContentPath("podcasts", podcast.data.translationKey, locale);
+
+// Derive show slug from entry ID
+const showSlug = stripLocalePrefix(podcast.id);
+
+// Query episodes for this show
+const allEpisodes = await getCollection("podcasts", ({ data }) =>
+  data.show === showSlug && data.locale === locale && (import.meta.env.DEV || isPublic(data))
+);
+
+// Sort: season desc → episode_number desc → date desc
+const episodes = allEpisodes.sort((a, b) => {
+  const sa = a.data.season ?? 0;
+  const sb = b.data.season ?? 0;
+  if (sb !== sa) return sb - sa;
+  const ea = a.data.episode_number ?? 0;
+  const eb = b.data.episode_number ?? 0;
+  if (eb !== ea) return eb - ea;
+  return b.data.date_listened.valueOf() - a.data.date_listened.valueOf();
+});
+
+// Render episode bodies
+const renderedEpisodes = await Promise.all(
+  episodes.map(async (ep) => {
+    const { Content: EpContent } = await render(ep);
+    return { ep, EpContent };
+  })
+);
+---
+
+<Base title={podcast.data.title} locale={locale} alternatePath={alternatePath}>
+  <article>
+    <header>
+      {podcast.data.image && (
+        <img src={podcast.data.image} alt={podcast.data.title} class="cover-image" />
+      )}
+      <Breadcrumb locale={locale} resourceKey="podcasts" />
+      <h1 class="title">{podcast.data.title}</h1>
+      {podcast.data.host && <h2 class="intro">{podcast.data.host}</h2>}
+      <div class="post-date">
+        {formatDate(podcast.data.date_listened, locale, { year: "numeric", month: "long" })}
+        {podcast.data.url && (
+          <> · <a href={podcast.data.url} target="_blank" rel="noopener">{t(locale, "podcasts.listen")}</a></>
+        )}
+      </div>
+    </header>
+
+    <div class="body-text">
+      <Content />
+    </div>
+
+    {renderedEpisodes.length > 0 && (
+      <section class="episodes">
+        <h2>{t(locale, "podcasts.episodes")}</h2>
+        <ul class="episode-list">
+          {renderedEpisodes.map(({ ep, EpContent }) => (
+            <li class="episode-item">
+              <div class="episode-header">
+                {ep.data.episode_number != null && (
+                  <span class="episode-badge">#{ep.data.episode_number}</span>
+                )}
+                <span class="episode-title">{ep.data.episode_title || ep.data.title}</span>
+                <span class="text-muted text-sm"> · {formatShortDate(ep.data.date_listened, locale)}</span>
+              </div>
+              {ep.data.guests && ep.data.guests.length > 0 && (
+                <div class="episode-guests text-muted text-sm">
+                  {t(locale, "podcasts.with")} {ep.data.guests.join(", ")}
+                </div>
+              )}
+              <div class="episode-body">
+                <EpContent />
+              </div>
+            </li>
+          ))}
+        </ul>
+      </section>
+    )}
+
+    <footer>
+      <p><a href={resourcePath(locale, "podcasts")}>{t(locale, "podcasts.backToPodcasts")}</a></p>
+    </footer>
+  </article>
+</Base>
+
+<style>
+  article { max-width: 65ch; }
+  header { margin-bottom: var(--spacing-xl); }
+  .cover-image {
+    float: right;
+    max-width: 160px;
+    margin: 0 0 var(--spacing-md) var(--spacing-lg);
+    border-radius: 6px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+  }
+  @media (max-width: 480px) {
+    .cover-image {
+      float: none;
+      display: block;
+      margin: 0 auto var(--spacing-lg);
+      max-width: 200px;
+    }
+  }
+  .title { font-size: 3rem; font-weight: 600; margin-bottom: 0; line-height: 1.1; }
+  .intro { color: var(--color-text-quiet); font-family: var(--font-sans); font-size: 1.25rem; font-weight: 400; margin-top: 0.5rem; margin-bottom: 0.25rem; }
+  .body-text { margin-top: var(--spacing-lg); }
+  .episodes { margin-top: var(--spacing-xl); }
+  .episodes h2 { font-size: 1.5rem; margin-bottom: var(--spacing-lg); }
+  .episode-list { list-style: none; padding: 0; }
+  .episode-item { margin-bottom: var(--spacing-lg); padding-bottom: var(--spacing-lg); border-bottom: 1px solid var(--color-border); }
+  .episode-item:last-child { border-bottom: none; }
+  .episode-header { display: flex; align-items: baseline; gap: 0.5rem; flex-wrap: wrap; }
+  .episode-badge { background: var(--color-bg-subtle, #f0f0f0); padding: 0.1em 0.5em; border-radius: 4px; font-size: 0.85rem; font-weight: 600; }
+  .episode-title { font-size: 1.15rem; font-weight: 500; }
+  .episode-guests { margin-top: 0.25rem; }
+  .episode-body { margin-top: var(--spacing-sm); }
+  footer { margin-top: var(--spacing-xl); padding-top: var(--spacing-lg); border-top: 1px solid var(--color-border); }
+</style>

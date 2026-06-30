@@ -1,0 +1,70 @@
+# Hero Image Style Presets
+#
+# Each style defines a visual preamble that gets combined with a
+# per-MOC evocation to form the full image generation prompt.
+#
+# Full prompt structure:
+#   {preamble} evoking the essence of: {evocation}
+#
+# All preambles target 1536×512 (3:1 panoramic) for hero banners.
+# They share common constraints: no text, no logos, no faces.
+
+styles:
+  abstract:
+    label: Abstract / Geometric
+    preamble: >-
+      Abstract geometric composition, muted earth tones with one unexpected
+      accent color, fine grain texture like aged paper or risograph ink.
+      Organic flowing lines intersecting with sharp crystalline geometry,
+      layered translucent planes creating depth. Risograph print aesthetic
+      with slight misregistration. Luminous color fields bleeding into each
+      other at the edges. No text, no logos, no faces, no people.
+      Wide panoramic format, 3:1 aspect ratio.
+
+  illustrated:
+    label: Illustrated / Artistic
+    preamble: >-
+      Artistic illustration in muted watercolor and ink wash, visible
+      brushstrokes on textured handmade paper. Delicate confident linework
+      with soft washes of color that bleed naturally beyond their boundaries.
+      East Asian influenced brushwork — sumi-e economy of stroke meeting
+      Western watercolor warmth. Contemplative mood, dawn or dusk light.
+      No text, no logos, no faces, no people.
+      Wide panoramic format, 3:1 aspect ratio.
+
+  warm_modern:
+    label: Warm Modernist
+    preamble: >-
+      Minimalist composition with warm cream, ochre, and terracotta tones
+      on a soft off-white ground. Gentle geometric forms — arcs, circles,
+      overlapping rectangles — with subtle paper grain texture throughout.
+      One element of visual surprise: a single vivid accent shape or
+      confident brushstroke that breaks the calm. Mid-century modern
+      sensibility, like a Paul Klee sketch meets a Noguchi sculpture.
+      Quiet confidence, approachable warmth. No text, no logos, no faces,
+      no people. Wide panoramic format, 3:1 aspect ratio.
+
+  organic_min:
+    label: Organic Minimal
+    preamble: >-
+      Sparse elegant composition evoking natural materials — stone, raw
+      linen, aged paper, dried botanicals, weathered wood. Soft directional
+      light from a low angle casting long contemplative shadows. Japanese
+      wabi-sabi influence: beauty in imperfection, asymmetry, and the
+      passage of time. Muted palette of warm greys, sand, sage, and
+      one whisper of rust. Generous breathing space.
+      No text, no logos, no faces, no people.
+      Wide panoramic format, 3:1 aspect ratio.
+
+  graphic_edit:
+    label: Graphic Editorial
+    preamble: >-
+      Bold graphic composition with a strictly limited palette of 3 colors
+      maximum — one dominant, one secondary, one sharp accent. Strong
+      diagonal or asymmetric layout with decisive negative space. Inspired
+      by Swiss international poster design and Émigré magazine typography
+      era. Confident geometric shapes with subtle texture overlay — screen
+      print grain or offset lithography artifacts. Feels like a spread
+      from an ambitious independent design journal.
+      No text, no logos, no faces, no people.
+      Wide panoramic format, 3:1 aspect ratio.

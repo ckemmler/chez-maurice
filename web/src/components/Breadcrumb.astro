@@ -1,0 +1,35 @@
+---
+import type { Locale } from "../i18n/config";
+import { t, localizedPath, resourcePath } from "../i18n/utils";
+
+interface Props {
+  locale: Locale;
+  resourceKey: string;
+}
+
+const { locale, resourceKey } = Astro.props;
+---
+
+<nav class="breadcrumb">
+  <a href={localizedPath(locale, "/resources")}>{t(locale, "resources.title")}</a>
+  <span class="sep"> ‹ </span>
+  <a href={resourcePath(locale, resourceKey)}>{t(locale, `${resourceKey}.title`)}</a>
+</nav>
+
+<style>
+  .breadcrumb {
+    font-family: var(--font-heading);
+    font-size: 1rem;
+    margin-top: calc(-1 * var(--spacing-lg));
+    margin-bottom: calc(var(--spacing-xl) * 1.3);
+  }
+
+  .breadcrumb a {
+    color: var(--color-text);
+    text-decoration: none;
+  }
+
+  .breadcrumb a:hover {
+    text-decoration: underline;
+  }
+</style>

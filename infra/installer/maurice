@@ -1,0 +1,161 @@
+#!/bin/bash
+# maurice — CLI for managing Maurice services via launchd
+set -euo pipefail
+
+PLISTS=(
+  com.maurice.api
+  com.maurice.mcp-gateway
+)
+LAUNCH_AGENTS="$HOME/Library/LaunchAgents"
+LOG_DIR="$HOME/Library/Logs/Maurice"
+CONFIG_FILE="$HOME/.maurice/config.toml"
+
+# ── Config reader (simple TOML key=value) ────────────────────────────────
+
+_read_config() {
+  local section="$1" key="$2" default="$3"
+  if [[ ! -f "$CONFIG_FILE" ]]; then
+    echo "$default"
+    return
+  fi
+  local in_section=0
+  while IFS= read -r line; do
+    line="${line%%#*}"       # strip comments
+    line="${line// /}"       # strip spaces (crude)
+    [[ -z "$line" ]] && continue
+    if [[ "$line" == "[$section]" ]]; then
+      in_section=1
+      continue
+    elif [[ "$line" == "["* ]]; then
+      in_section=0
+      continue
+    fi
+    if [[ $in_section -eq 1 ]]; then
+      local k="${line%%=*}"
+      local v="${line#*=}"
+      v="${v%\"}" ; v="${v#\"}"   # strip quotes
+      v="${v%\'}" ; v="${v#\'}"
+      if [[ "$k" == "$key" ]]; then
+        echo "$v"
+        return
+      fi
+    fi
+  done < "$CONFIG_FILE"
+  echo "$default"
+}
+
+# ── Read ports from config ───────────────────────────────────────────────
+
+PORT_API=$(_read_config "ports" "api" "3001")
+PORT_MCP=$(_read_config "ports" "mcp-gateway" "8710")
+
+HEALTHZ_URLS=(
+  "http://localhost:${PORT_API}/healthz"
+  "http://localhost:${PORT_MCP}/healthz"
+)
+SERVICE_NAMES=(api mcp-gateway)
+
+usage() {
+  echo "Usage: maurice <command>"
+  echo ""
+  echo "Commands:"
+  echo "  start    Load and start all services"
+  echo "  stop     Unload and stop all services"
+  echo "  restart  Stop then start all services"
+  echo "  status   Check health of each service"
+  echo "  logs     Tail all service log files"
+  echo "  config   Print current configuration"
+  echo "  setup    Open admin setup in browser"
+  echo ""
+}
+
+cmd_start() {
+  mkdir -p "$LOG_DIR"
+  for plist in "${PLISTS[@]}"; do
+    local f="$LAUNCH_AGENTS/${plist}.plist"
+    if [[ -f "$f" ]]; then
+      launchctl load -w "$f" 2>/dev/null || true
+      echo "  loaded $plist"
+    else
+      echo "  SKIP $plist (plist not found)"
+    fi
+  done
+  echo "All services started."
+}
+
+cmd_stop() {
+  for plist in "${PLISTS[@]}"; do
+    local f="$LAUNCH_AGENTS/${plist}.plist"
+    if [[ -f "$f" ]]; then
+      launchctl unload "$f" 2>/dev/null || true
+      echo "  unloaded $plist"
+    fi
+  done
+  echo "All services stopped."
+}
+
+cmd_restart() {
+  cmd_stop
+  sleep 1
+  cmd_start
+}
+
+cmd_status() {
+  for i in "${!SERVICE_NAMES[@]}"; do
+    local name="${SERVICE_NAMES[$i]}"
+    local url="${HEALTHZ_URLS[$i]}"
+    if curl -sf --max-time 2 "$url" > /dev/null 2>&1; then
+      printf "  \033[32m●\033[0m %-15s OK\n" "$name"
+    else
+      printf "  \033[31m●\033[0m %-15s DOWN\n" "$name"
+    fi
+  done
+}
+
+cmd_logs() {
+  if [[ ! -d "$LOG_DIR" ]]; then
+    echo "No log directory found at $LOG_DIR"
+    exit 1
+  fi
+  tail -f "$LOG_DIR"/*.log
+}
+
+cmd_config() {
+  echo "Chez Maurice Configuration"
+  echo "=========================="
+  echo ""
+  if [[ -f "$CONFIG_FILE" ]]; then
+    echo "Config file: $CONFIG_FILE"
+    echo ""
+    cat "$CONFIG_FILE"
+  else
+    echo "Config file: (not found, using defaults)"
+  fi
+  echo ""
+  echo "Effective ports:"
+  echo "  api:         $PORT_API"
+  echo "  mcp-gateway: $PORT_MCP"
+  echo "  qdrant:      $PORT_QDRANT"
+}
+
+cmd_setup() {
+  local url="http://localhost:${PORT_API}/admin"
+  echo "Opening $url ..."
+  open "$url" 2>/dev/null || echo "Open $url in your browser."
+}
+
+case "${1:-}" in
+  start)   cmd_start ;;
+  stop)    cmd_stop ;;
+  restart) cmd_restart ;;
+  status)  cmd_status ;;
+  logs)    cmd_logs ;;
+  config)  cmd_config ;;
+  setup)   cmd_setup ;;
+  -h|--help|help|"") usage ;;
+  *)
+    echo "Unknown command: $1"
+    usage
+    exit 1
+    ;;
+esac

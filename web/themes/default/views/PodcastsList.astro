@@ -1,0 +1,87 @@
+---
+import Base from "@app/layouts/Base.astro";
+import type { Locale } from "@app/i18n/config";
+import { t, resourceItemPath, formatShortDate, stripLocalePrefix } from "@app/i18n/utils";
+import { getCollection } from "astro:content";
+import { isPublic } from "@app/lib/flags";
+
+interface Props {
+  locale?: Locale;
+}
+
+const { locale = "en" } = Astro.props;
+
+function isDraft(entry: { data: { flags?: string[] } }) {
+  return !isPublic(entry.data);
+}
+
+const podcasts = await getCollection("podcasts", ({ data }) => (import.meta.env.DEV || isPublic(data)) && data.locale === locale && !data.show)
+  .then((p) => p.sort((a, b) => b.data.date_listened.valueOf() - a.data.date_listened.valueOf()));
+
+const fiches = await getCollection("fiches", ({ data }) => data.locale === locale && data.resource_collection === "podcasts");
+const ficheByResourceId = new Map(fiches.map((f) => [f.data.resource_id, f]));
+const podcastSlugs = new Set(podcasts.map((p) => stripLocalePrefix(p.id)));
+const orphanFiches = fiches.filter((f) => !podcastSlugs.has(f.data.resource_id));
+---
+
+<Base title={t(locale, "podcasts.title")} description={t(locale, "podcasts.description")} locale={locale}>
+  <article class="prose">
+    <h1>{t(locale, "podcasts.title")}</h1>
+    <p class="text-muted">{t(locale, "podcasts.description")}</p>
+    <p class="draft-empty-notice text-muted">All items on this page are drafts.</p>
+
+    {podcasts.length > 0 ? (
+      <ul class="podcast-list">
+        {podcasts.map((podcast) => {
+          const fiche = ficheByResourceId.get(stripLocalePrefix(podcast.id));
+          return (
+            <li data-draft={isDraft(podcast) ? "true" : undefined}>
+              <a href={resourceItemPath(locale, "podcasts", podcast.id)}>{podcast.data.title}</a>{!isDraft(podcast) && <span class="public-dot">•</span>}
+              {fiche && <a href={`${locale === "fr" ? "/fr" : ""}/fiches/${fiche.id.replace(/\/(en|fr)\//, "/")}`} class="fiche-link">fiche</a>}
+              {podcast.data.host && <span class="text-muted"> — {podcast.data.host}</span>}
+              <span class="text-muted text-sm"> · {formatShortDate(podcast.data.date_listened, locale)}</span>
+              {podcast.data.url && (
+                <> · <a href={podcast.data.url} target="_blank" rel="noopener" class="text-sm">{t(locale, "podcasts.listen")}</a></>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+    ) : (
+      <p class="text-muted">{t(locale, "podcasts.noPodcastsYet")}</p>
+    )}
+
+    {orphanFiches.length > 0 && (
+      <section>
+        <h2>Fiches</h2>
+        <ul class="podcast-list">
+          {orphanFiches.map((fiche) => (
+            <li>
+              <a href={`${locale === "fr" ? "/fr" : ""}/fiches/${fiche.id.replace(/\/(en|fr)\//, "/")}`} class="fiche-link">{fiche.data.title}</a>
+              <span class="text-muted text-sm"> · {formatShortDate(fiche.data.date, locale)}</span>
+            </li>
+          ))}
+        </ul>
+      </section>
+    )}
+  </article>
+</Base>
+
+<style>
+  .podcast-list {
+    list-style: none;
+    padding: 0;
+  }
+
+  .podcast-list li {
+    margin-bottom: var(--spacing-md);
+    font-size: 1.05rem;
+  }
+
+  .podcast-list a {
+    font-size: 1.35rem;
+  }
+
+  :global(.prose .fiche-link) { color: #7c3aed; font-size: 0.9em; }
+  :global(.dark .prose .fiche-link) { color: #a78bfa; }
+</style>

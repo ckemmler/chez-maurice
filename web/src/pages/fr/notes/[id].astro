@@ -1,0 +1,26 @@
+---
+import NoteDetail from "../../../components/NoteDetail.astro";
+import { getCollection } from "astro:content";
+import { isPublic } from "../../../lib/flags";
+import { stripLocalePrefix } from "../../../i18n/utils";
+import { getNote } from "../../../lib/notes-fs";
+
+export const prerender = process.env.WEB_SSR !== "1";
+
+export async function getStaticPaths() {
+  const notes = await getCollection("notes", ({ data }) => data.locale === "fr" && (import.meta.env.DEV || isPublic(data)));
+  return notes.map((note) => ({
+    params: { id: stripLocalePrefix(note.id) },
+    props: { note },
+  }));
+}
+
+// Static build: note via props. SSR garden engine: read straight off disk.
+let note = Astro.props.note;
+if (!note) {
+  note = await getNote("fr", Astro.params.id);
+  if (note && !(import.meta.env.DEV || isPublic(note.data))) note = null;
+}
+if (!note) return new Response("Not found", { status: 404 });
+---
+<NoteDetail note={note} locale="fr" />

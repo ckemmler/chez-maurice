@@ -1,0 +1,14 @@
+---
+import Base from "../layouts/Base.astro";
+import { getCollection, render } from "astro:content";
+
+const locale = "en";
+const [page] = await getCollection("pages", ({ data }) => data.translationKey === "about" && data.locale === locale);
+const { Content } = page ? await render(page) : { Content: null };
+---
+
+<Base title={page?.data.title ?? "About"} description={page?.data.description} locale={locale} alternatePath="/fr/a-propos">
+  <article class="prose">
+    {Content ? <Content /> : <p>An about page hasn't been written yet.</p>}
+  </article>
+</Base>

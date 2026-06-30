@@ -1,0 +1,312 @@
+---
+import { hierarchy, tree as d3tree } from "d3-hierarchy";
+import { icons } from "lucide";
+import type { SubtreeNode } from "../lib/subtree-scan";
+
+interface Props {
+  data: SubtreeNode;
+  locale: string;
+  title: string;
+}
+
+const { data, locale, title } = Astro.props;
+
+// ── Layout computation ──
+
+const h = hierarchy(data, (d) => d.children);
+const nodeCount = h.descendants().length;
+
+const MAX_W = 800;      // max SVG width (px)
+const NODE_H = 28;
+const ROW_GAP = 50;      // vertical gap between depth levels
+const MIN_NODE_W = 80;   // minimum node pill width
+const MAX_NODE_W = 180;  // ideal node pill width
+const NODE_PAD = 12;     // horizontal padding inside pill
+const PAD = 16;          // SVG canvas padding
+
+// Step 1: run d3-tree with unit spacing to get relative positions
+const layout = d3tree<SubtreeNode>().nodeSize([1, NODE_H + ROW_GAP]);
+const root = layout(h);
+const allNodes = root.descendants();
+
+// Step 2: for each depth level, count how many nodes and compute optimal node width
+interface RowInfo { nodes: typeof allNodes; count: number; nodeW: number; gap: number; }
+const byDepth = new Map<number, typeof allNodes>();
+for (const n of allNodes) {
+  if (!byDepth.has(n.depth)) byDepth.set(n.depth, []);
+  byDepth.get(n.depth)!.push(n);
+}
+
+const rowInfo = new Map<number, RowInfo>();
+const usableW = MAX_W - PAD * 2;
+
+for (const [depth, rowNodes] of byDepth) {
+  const count = rowNodes.length;
+  const gap = Math.min(16, Math.max(4, Math.floor(usableW / count / 10)));
+  const totalGap = gap * (count - 1);
+  const nodeW = Math.max(MIN_NODE_W, Math.min(MAX_NODE_W, Math.floor((usableW - totalGap) / count)));
+  rowInfo.set(depth, { nodes: rowNodes, count, nodeW, gap });
+}
+
+// Step 3: assign x positions — distribute nodes evenly within usableW, centered
+// We position based on d3's x order (which preserves parent-child alignment)
+interface NodePos { x: number; y: number; w: number; }
+const positions = new Map<typeof allNodes[0], NodePos>();
+
+for (const [depth, info] of rowInfo) {
+  // Sort by d3 x to preserve tree order
+  const sorted = [...info.nodes].sort((a, b) => a.x - b.x);
+  const totalRowW = info.count * info.nodeW + (info.count - 1) * info.gap;
+  const startX = (usableW - totalRowW) / 2 + PAD;
+
+  sorted.forEach((n, i) => {
+    positions.set(n, {
+      x: startX + i * (info.nodeW + info.gap),
+      y: PAD + depth * (NODE_H + ROW_GAP),
+      w: info.nodeW,
+    });
+  });
+}
+
+const svgW = MAX_W;
+const maxDepth = Math.max(...byDepth.keys());
+const svgH = PAD * 2 + (maxDepth + 1) * NODE_H + maxDepth * ROW_GAP;
+
+// ── Helpers ──
+
+function pos(n: typeof allNodes[0]): NodePos {
+  return positions.get(n) ?? { x: 0, y: 0, w: MAX_NODE_W };
+}
+
+function truncate(s: string, maxChars: number): string {
+  return s.length > maxChars ? s.slice(0, maxChars - 1) + "…" : s;
+}
+
+function maxCharsForWidth(w: number, hasIcon: boolean): number {
+  const available = w - NODE_PAD * 2 - (hasIcon ? 18 : 0);
+  return Math.max(3, Math.floor(available / 6.5)); // ~6.5px per char at 12px font
+}
+
+function iconElements(name: string): string {
+  const pascal = name.replace(/(^|-)([a-z])/g, (_: string, __: string, c: string) => c.toUpperCase());
+  const iconNode = (icons as Record<string, [string, Record<string, string>][]>)[pascal];
+  if (!iconNode) return "";
+  return iconNode
+    .map(([tag, attrs]) => {
+      const attrStr = Object.entries(attrs)
+        .map(([k, v]) => `${k}="${v}"`)
+        .join(" ");
+      return `<${tag} ${attrStr}/>`;
+    })
+    .join("");
+}
+
+function edgePath(parent: typeof allNodes[0], child: typeof allNodes[0]): string {
+  const p = pos(parent);
+  const c = pos(child);
+  const x0 = p.x + p.w / 2;
+  const y0 = p.y + NODE_H;
+  const x1 = c.x + c.w / 2;
+  const y1 = c.y;
+  return `M ${x0},${y0} C ${x0},${(y0 + y1) / 2} ${x1},${(y0 + y1) / 2} ${x1},${y1}`;
+}
+
+// ── Build HTML fallback tree ──
+function buildList(node: SubtreeNode): string {
+  const cls = node.isMoc ? "subtree-item--moc" : node.missing ? "subtree-item--missing" : "";
+  const icon = node.icon
+    ? `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: -2px; margin-right: 4px;">${iconElements(node.icon)}</svg>`
+    : "";
+  const prefix = node.missing ? "? " : "";
+  let html = `<li class="subtree-item ${cls}">`;
+  html += `<a href="${node.url}">${icon}${prefix}${node.title}</a>`;
+  if (node.children.length > 0) {
+    html += `<ul class="subtree-list">`;
+    for (const child of node.children) html += buildList(child);
+    html += `</ul>`;
+  }
+  html += `</li>`;
+  return html;
+}
+
+const ariaLabel = locale === "fr"
+  ? `Arborescence de ${title} : ${nodeCount} nœuds`
+  : `Tree of ${title}: ${nodeCount} nodes`;
+---
+
+<div class="subtree-viz">
+  <!-- SVG tree (desktop) -->
+  <div class="subtree-svg">
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      width="100%"
+      height={svgH}
+      viewBox={`0 0 ${svgW} ${svgH}`}
+      role="figure"
+      aria-label={ariaLabel}
+      class="subtree-svg__canvas"
+    >
+      {/* Edges */}
+      {root.links().map((link) => (
+        <path
+          d={edgePath(link.source, link.target)}
+          fill="none"
+          stroke="currentColor"
+          opacity="0.15"
+          stroke-width="1.5"
+        />
+      ))}
+
+      {/* Nodes */}
+      {allNodes.map((n) => {
+        const p = pos(n);
+        const d = n.data;
+        const isRoot = n.depth === 0;
+        const hasIcon = d.isMoc && d.icon;
+        const iconOffset = hasIcon ? 18 : 0;
+        const textX = p.x + NODE_PAD + iconOffset;
+        const chars = maxCharsForWidth(p.w, !!hasIcon);
+        const strokeDash = d.missing ? "4" : undefined;
+        const fillColor = d.isMoc ? "var(--color-bg-alt, #f1f5f9)" : "var(--color-bg, #fff)";
+        const strokeColor = d.missing ? "var(--color-text-quiet, #94a3b8)" : "var(--color-border, #cbd5e1)";
+        const textColor = d.missing ? "var(--color-text-quiet, #94a3b8)" : "var(--color-text, #1e293b)";
+        const fontWeight = d.isMoc ? "600" : "400";
+        const strokeWidth = isRoot ? 2 : 1;
+
+        return (
+          <a href={d.url}>
+            <title>{d.title}</title>
+            <rect
+              x={p.x}
+              y={p.y}
+              width={p.w}
+              height={NODE_H}
+              rx="8"
+              fill={fillColor}
+              stroke={strokeColor}
+              stroke-width={strokeWidth}
+              stroke-dasharray={strokeDash}
+            />
+            {hasIcon && (
+              <g
+                transform={`translate(${p.x + 7}, ${p.y + 7})`}
+                fill="none"
+                stroke={textColor}
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <g transform="scale(0.583)">
+                  <Fragment set:html={iconElements(d.icon!)} />
+                </g>
+              </g>
+            )}
+            <text
+              x={textX}
+              y={p.y + NODE_H / 2 + 1}
+              dominant-baseline="middle"
+              fill={textColor}
+              font-size="11"
+              font-weight={fontWeight}
+              font-family="system-ui, sans-serif"
+            >
+              {d.missing ? "? " : ""}{truncate(d.title, chars)}
+            </text>
+          </a>
+        );
+      })}
+    </svg>
+  </div>
+
+  <!-- HTML fallback (mobile) -->
+  <nav class="subtree-fallback" aria-label={ariaLabel}>
+    <ul class="subtree-list subtree-list--root" set:html={buildList(data)} />
+  </nav>
+</div>
+
+<style>
+  .subtree-viz {
+    margin: 2rem 0;
+  }
+
+  .subtree-svg {
+    display: block;
+  }
+
+  .subtree-svg__canvas {
+    color: var(--color-text, #1e293b);
+    max-width: 100%;
+    height: auto;
+  }
+
+  .subtree-fallback {
+    display: none;
+  }
+
+  @media (max-width: 640px) {
+    .subtree-svg {
+      display: none;
+    }
+    .subtree-fallback {
+      display: block;
+    }
+  }
+
+  /* HTML tree styling */
+  .subtree-list {
+    list-style: none;
+    padding-left: 1.25rem;
+    margin: 0;
+    position: relative;
+  }
+
+  .subtree-list--root {
+    padding-left: 0;
+  }
+
+  .subtree-item {
+    position: relative;
+    padding: 0.2rem 0;
+  }
+
+  .subtree-list:not(.subtree-list--root) > .subtree-item::before {
+    content: "";
+    position: absolute;
+    left: -1rem;
+    top: 0;
+    height: 100%;
+    border-left: 1px solid var(--color-border, #cbd5e1);
+  }
+
+  .subtree-list:not(.subtree-list--root) > .subtree-item:last-child::before {
+    height: 0.85rem;
+  }
+
+  .subtree-list:not(.subtree-list--root) > .subtree-item::after {
+    content: "";
+    position: absolute;
+    left: -1rem;
+    top: 0.85rem;
+    width: 0.75rem;
+    border-top: 1px solid var(--color-border, #cbd5e1);
+  }
+
+  .subtree-item a {
+    text-decoration: none;
+    color: var(--color-text, #1e293b);
+    font-size: 0.9rem;
+  }
+
+  .subtree-item a:hover {
+    text-decoration: underline;
+  }
+
+  .subtree-item--moc > a {
+    font-weight: 600;
+  }
+
+  .subtree-item--missing > a {
+    color: var(--color-text-quiet, #94a3b8);
+    font-style: italic;
+  }
+</style>

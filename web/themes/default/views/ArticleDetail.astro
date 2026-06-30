@@ -1,0 +1,99 @@
+---
+import Base from "@app/layouts/Base.astro";
+import Breadcrumb from "@app/components/Breadcrumb.astro";
+import type { Locale } from "@app/i18n/config";
+import { t, resourcePath, formatDate } from "@app/i18n/utils";
+import { getAlternateContentPath } from "@app/i18n/translations";
+import { render } from "astro:content";
+
+interface Props {
+  article: any;
+  locale?: Locale;
+}
+
+const { article, locale = "en" } = Astro.props;
+const { Content } = await render(article);
+const alternatePath = await getAlternateContentPath("articles", article.data.translationKey, locale);
+---
+
+<Base title={article.data.title} locale={locale} alternatePath={alternatePath}>
+  <article class="prose">
+    <header>
+      {article.data.image && (
+        <img src={article.data.image} alt={article.data.title} class="cover-image" />
+      )}
+      <Breadcrumb locale={locale} resourceKey="articles" />
+      <h1>{article.data.title}</h1>
+      {article.data.author && <p class="author">{t(locale, "books.by")} {article.data.author}</p>}
+      <p class="meta text-muted text-sm">
+        <span>{article.data.source}</span>
+        <> · {t(locale, "articles.read")} {formatDate(article.data.date_read, locale, { year: "numeric", month: "long" })}</>
+        <> · <a href={article.data.url} target="_blank" rel="noopener">{t(locale, "articles.original")}</a></>
+      </p>
+      {article.data.tags.length > 0 && (
+        <p class="tags text-sm">
+          {article.data.tags.map((tag: string) => (
+            <span class="tag">{tag}</span>
+          ))}
+        </p>
+      )}
+    </header>
+
+    <Content />
+
+    <footer>
+      <p><a href={resourcePath(locale, "articles")}>{t(locale, "articles.backToArticles")}</a></p>
+    </footer>
+  </article>
+</Base>
+
+<style>
+  header {
+    margin-bottom: var(--spacing-xl);
+  }
+
+  .cover-image {
+    float: right;
+    max-width: 160px;
+    margin: 0 0 var(--spacing-md) var(--spacing-lg);
+    border-radius: 6px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+  }
+
+  @media (max-width: 480px) {
+    .cover-image {
+      float: none;
+      display: block;
+      margin: 0 auto var(--spacing-lg);
+      max-width: 200px;
+    }
+  }
+
+  header h1 {
+    margin-bottom: var(--spacing-xs);
+  }
+
+  .author {
+    font-style: italic;
+    color: var(--color-text-muted);
+    margin-bottom: var(--spacing-sm);
+  }
+
+  .tags {
+    margin-top: var(--spacing-sm);
+  }
+
+  .tag {
+    display: inline-block;
+    background: var(--color-bg-alt);
+    padding: 0.15em 0.5em;
+    border-radius: 3px;
+    margin-right: var(--spacing-xs);
+  }
+
+  footer {
+    margin-top: var(--spacing-xl);
+    padding-top: var(--spacing-lg);
+    border-top: 1px solid var(--color-border);
+  }
+</style>

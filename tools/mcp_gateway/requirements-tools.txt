@@ -1,0 +1,16 @@
+# Third-party deps for the gateway's sub-tools that ship NO pyproject.toml
+# (calendar, compte, contacts, garden, layouts, signals, social, tasks).
+# The gateway imports every sub-tool at startup, so these must be present for
+# it to boot. Discovered by AST-scanning those tools' imports.
+feedparser        # social (RSS/Atom)
+caldav            # calendar
+icalendar         # calendar
+pytz              # calendar
+vobject           # contacts (vCard)
+tweepy            # social (Twitter/X)
+pandas            # compte
+beautifulsoup4    # social (bs4)
+requests          # signals, social
+python-dateutil   # calendar, signals, social, tasks
+PyYAML            # layouts, tasks
+anthropic         # garden (generate_evocation, link_*_entities, …)

@@ -1,0 +1,114 @@
+---
+// Live "the garden is being edited" indicator, private mode only.
+//  - a discrete forever-progress gradient bar across the top whenever the garden
+//    MCP tool is actively writing any page;
+//  - a flashing dot, top-right, when the page you're viewing is the one being
+//    edited (route /notes/<slug> whose slug is in the active set).
+// Data comes from /garden-activity.json (SSR); gated to authed/private viewers
+// exactly like Nav's isAuthed check.
+const base = import.meta.env.BASE_URL.replace(/\/+$/, "");
+// Enable on the live private garden engines, which all run SSR (WEB_SSR=1) and
+// are auth-gated by the server proxy — so reaching the page already means you're
+// the authed member. This holds whether the engine runs under a /g/<member> base
+// or at a domain root (e.g. a household tunnel), which the old `base !== ""` check
+// missed. The public candide.me build is a static snapshot (WEB_SSR unset) → the
+// indicator stays off for anonymous visitors.
+const enabled = process.env.WEB_SSR === "1";
+---
+
+<div id="garden-activity-bar" class="garden-activity-bar" aria-hidden="true"></div>
+<div id="garden-activity-dot" class="garden-activity-dot" aria-hidden="true" title="This page is being edited"></div>
+
+<style>
+  .garden-activity-bar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 2.5px;
+    z-index: 9999;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.35s ease;
+    background-image: linear-gradient(
+      90deg,
+      transparent,
+      var(--color-link, #2563eb) 45%,
+      var(--color-link, #2563eb) 55%,
+      transparent
+    );
+    background-size: 45% 100%;
+    background-repeat: no-repeat;
+    animation: garden-activity-slide 1.4s linear infinite;
+  }
+  .garden-activity-bar.on {
+    opacity: 0.85;
+  }
+  @keyframes garden-activity-slide {
+    from { background-position: -45% 0; }
+    to   { background-position: 145% 0; }
+  }
+
+  .garden-activity-dot {
+    position: fixed;
+    top: 12px;
+    right: 12px;
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    z-index: 9999;
+    pointer-events: none;
+    background: var(--color-link, #2563eb);
+    opacity: 0;
+    transition: opacity 0.35s ease;
+  }
+  .garden-activity-dot.on {
+    opacity: 1;
+    animation: garden-activity-pulse 1.1s ease-in-out infinite;
+  }
+  @keyframes garden-activity-pulse {
+    0%, 100% { opacity: 1; }
+    50%      { opacity: 0.2; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .garden-activity-bar { animation: none; background-position: 50% 0; }
+    .garden-activity-dot.on { animation: none; }
+  }
+</style>
+
+<script is:inline define:vars={{ base, enabled }}>
+  (function () {
+    // Member-garden engine only (auth-gated by the server proxy). The public
+    // root build never enables this, and in preview mode we stay quiet.
+    var isPreview = sessionStorage.getItem('preview') === '1' ||
+      new URLSearchParams(location.search).has('preview');
+    if (!enabled || isPreview) return;
+
+    var bar = document.getElementById('garden-activity-bar');
+    var dot = document.getElementById('garden-activity-dot');
+    if (!bar || !dot) return;
+
+    function currentSlug() {
+      var p = location.pathname.replace(/\.html$/, '');
+      if (base && p.indexOf(base) === 0) p = p.slice(base.length);
+      var m = p.match(/\/notes\/([^\/]+)\/?$/);
+      return m ? decodeURIComponent(m[1]) : null;
+    }
+
+    var url = (base || '') + '/garden-activity.json';
+    async function tick() {
+      try {
+        var r = await fetch(url, { cache: 'no-store' });
+        if (!r.ok) return;
+        var d = await r.json();
+        bar.classList.toggle('on', !!d.active);
+        var slug = currentSlug();
+        var onPage = !!(slug && Array.isArray(d.pages) && d.pages.indexOf(slug) !== -1);
+        dot.classList.toggle('on', onPage);
+      } catch (e) { /* keep last state on a transient failure */ }
+    }
+    tick();
+    setInterval(tick, 2000);
+  })();
+</script>

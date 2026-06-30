@@ -1,0 +1,133 @@
+#!/bin/bash
+# postinstall — runs after .pkg installs files to /usr/local/lib/maurice
+set -euo pipefail
+
+INSTALL_DIR="/usr/local/lib/maurice"
+
+# ── Detect the real (non-root) user ──────────────────────────────────────
+REAL_USER="$USER"
+REAL_HOME="$HOME"
+if [[ "$REAL_HOME" == "/var/root" || -z "$REAL_HOME" ]]; then
+  REAL_USER=$(stat -f '%Su' /dev/console 2>/dev/null || echo "")
+  if [[ -n "$REAL_USER" && "$REAL_USER" != "root" ]]; then
+    REAL_HOME=$(dscl . -read "/Users/$REAL_USER" NFSHomeDirectory 2>/dev/null | awk '{print $2}')
+  fi
+fi
+if [[ -z "$REAL_HOME" || "$REAL_HOME" == "/var/root" ]]; then
+  echo "ERROR: Could not determine user home directory."
+  exit 1
+fi
+
+MAURICE_HOME="$REAL_HOME/.maurice"
+LAUNCH_AGENTS="$REAL_HOME/Library/LaunchAgents"
+LOG_DIR="$REAL_HOME/Library/Logs/Maurice"
+PLIST_DIR="$INSTALL_DIR/plists"
+
+# ── Create directory structure ───────────────────────────────────────────
+echo "==> Creating directories..."
+sudo -u "$REAL_USER" mkdir -p "$MAURICE_HOME"/{data,secrets,gardens}
+sudo -u "$REAL_USER" mkdir -p "$LAUNCH_AGENTS"
+sudo -u "$REAL_USER" mkdir -p "$LOG_DIR"
+
+# Fix ownership and permissions if dirs were created by a previous root-context install
+chown -R "$REAL_USER" "$MAURICE_HOME"
+chown -R "$REAL_USER" "$LOG_DIR"
+chmod 755 "$LOG_DIR"
+
+# Symlink logs into ~/.maurice (remove stale dir/symlink first)
+if [[ -d "$MAURICE_HOME/logs" && ! -L "$MAURICE_HOME/logs" ]]; then
+  rm -rf "$MAURICE_HOME/logs"
+fi
+sudo -u "$REAL_USER" ln -sfn "$LOG_DIR" "$MAURICE_HOME/logs"
+
+# ── Generate JWT secret if not exists ────────────────────────────────────
+JWT_KEY="$MAURICE_HOME/secrets/jwt.key"
+if [[ ! -f "$JWT_KEY" ]]; then
+  echo "==> Generating JWT secret..."
+  head -c 32 /dev/urandom | base64 > "$JWT_KEY"
+  chown "$REAL_USER" "$JWT_KEY"
+  chmod 0600 "$JWT_KEY"
+fi
+
+# ── Write default config.toml if not exists ──────────────────────────────
+CONFIG_FILE="$MAURICE_HOME/config.toml"
+if [[ ! -f "$CONFIG_FILE" ]]; then
+  echo "==> Writing default config..."
+  cat > "$CONFIG_FILE" <<TOML
+[general]
+timezone = "Europe/Paris"
+
+[paths]
+data_dir = "$REAL_HOME/.maurice/data"
+gardens_dir = "$REAL_HOME/.maurice/gardens"
+
+[ports]
+api = 3001
+mcp-gateway = 8710
+
+[secrets]
+# Required for the garden's LLM tools (image evocations, entity linking).
+anthropic_api_key = ""
+
+[deploy]
+# Optional — only for the garden deploy_site tool (public-site publishing).
+# site_url = "https://example.com"
+# script = "scripts/publish-web.sh"
+TOML
+  chown "$REAL_USER" "$CONFIG_FILE"
+fi
+
+# ── Install launchd plists (sed __HOME__ → real home) ────────────────────
+echo "==> Installing launchd plists..."
+for plist in "$PLIST_DIR"/com.maurice.*.plist; do
+  name=$(basename "$plist")
+  sed "s|__HOME__|$REAL_HOME|g" "$plist" > "$LAUNCH_AGENTS/$name"
+  chown "$REAL_USER" "$LAUNCH_AGENTS/$name"
+  echo "    $name"
+done
+
+# ── Symlink CLI ──────────────────────────────────────────────────────────
+echo "==> Symlink CLI to /usr/local/bin..."
+mkdir -p /usr/local/bin
+ln -sf "$INSTALL_DIR/bin/maurice" /usr/local/bin/maurice
+
+# ── Install Bun dependencies (server) ────────────────────────────────────
+echo "==> Installing Bun dependencies (server)..."
+if [[ -f "$INSTALL_DIR/server/package.json" ]]; then
+  cd "$INSTALL_DIR/server"
+  "$INSTALL_DIR/bin/bun" install --frozen-lockfile 2>/dev/null || "$INSTALL_DIR/bin/bun" install
+fi
+
+# ── Install Python dependencies (mcp-gateway) ────────────────────────────
+# The venv lives at mcp-gateway/venv (the gateway plist points at it); tool code
+# lives one level down at mcp-gateway/tools/. We install the gateway's own deps,
+# the shared sub-tool deps (requirements-tools.txt), and every bundled tool's
+# own requirements.txt (e.g. corpus). Per-tool installs are best-effort so one
+# tool's unavailable dep can't abort the whole install.
+GW_DIR="$INSTALL_DIR/mcp-gateway"
+GW_TOOLS="$GW_DIR/tools/mcp_gateway"
+if [[ -d "$GW_DIR/tools" ]]; then
+  echo "==> Installing Python dependencies (mcp-gateway)..."
+  cd "$GW_DIR"
+  python3 -m venv venv 2>/dev/null || true
+  PIP="$GW_DIR/venv/bin/pip"
+  "$PIP" install -q --upgrade pip >/dev/null 2>&1 || true
+  [[ -f "$GW_TOOLS/requirements.txt" ]] && "$PIP" install -q -r "$GW_TOOLS/requirements.txt"
+  [[ -f "$GW_TOOLS/requirements-tools.txt" ]] && "$PIP" install -q -r "$GW_TOOLS/requirements-tools.txt"
+  for req in "$GW_DIR"/tools/*/requirements.txt; do
+    [[ -f "$req" ]] || continue
+    [[ "$req" == "$GW_TOOLS/requirements.txt" ]] && continue
+    "$PIP" install -q -r "$req" || echo "    WARN: some deps in $req failed to install"
+  done
+fi
+
+# ── Load launchd services as the real user ───────────────────────────────
+echo "==> Loading launchd services..."
+REAL_UID=$(id -u "$REAL_USER")
+for plist in "$LAUNCH_AGENTS"/com.maurice.*.plist; do
+  launchctl asuser "$REAL_UID" launchctl load -w "$plist" 2>/dev/null || true
+done
+
+echo "==> Done. Opening admin..."
+sudo -u "$REAL_USER" open "http://localhost:3001/admin" 2>/dev/null || true
+echo "    Run 'maurice status' to verify."

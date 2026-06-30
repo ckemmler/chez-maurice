@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Maurice MCP — Authorize</title>
+    <style>
+        body { font-family: system-ui, sans-serif; max-width: 420px; margin: 60px auto; padding: 0 20px; background: #f5f5f5; color: #333; }
+        h1 { font-size: 1.4em; }
+        .card { background: #fff; border-radius: 8px; padding: 24px; box-shadow: 0 1px 3px rgba(0,0,0,0.12); }
+        label { display: block; margin-top: 16px; font-weight: 500; font-size: 0.9em; }
+        input[type="text"], input[type="password"] { width: 100%; padding: 8px; margin-top: 4px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; font-family: monospace; font-size: 0.9em; }
+        button { margin-top: 20px; width: 100%; padding: 10px; background: #2563eb; color: #fff; border: none; border-radius: 4px; font-size: 1em; cursor: pointer; }
+        button:hover { background: #1d4ed8; }
+        .client { font-size: 0.85em; color: #666; word-break: break-all; margin-top: 8px; }
+        .hint { font-size: 0.8em; color: #888; margin-top: 6px; }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <h1>Authorize MCP Access</h1>
+        <p class="client">Client: <strong>{{client_id}}</strong></p>
+        <!-- ERROR -->
+        <form method="POST" action="/authorize">
+            <input type="hidden" name="client_id" value="{{client_id}}">
+            <input type="hidden" name="redirect_uri" value="{{redirect_uri}}">
+            <input type="hidden" name="state" value="{{state}}">
+            <input type="hidden" name="scope" value="{{scope}}">
+            <input type="hidden" name="code_challenge" value="{{code_challenge}}">
+            <input type="hidden" name="code_challenge_method" value="{{code_challenge_method}}">
+            <label for="token">Your Maurice MCP token</label>
+            <input type="password" id="token" name="token" placeholder="maur_…" required autofocus>
+            <p class="hint">Find your token in the Maurice app under Settings → Claude / MCP.</p>
+            <button type="submit">Authorize</button>
+        </form>
+    </div>
+</body>
+</html>

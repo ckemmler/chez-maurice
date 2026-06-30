@@ -1,0 +1,113 @@
+name: Milestone Snapshot
+
+on:
+  push:
+    tags:
+      - 'milestone-*'
+
+jobs:
+  snapshot:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: akita-web/package-lock.json
+
+      - name: Install dependencies
+        working-directory: akita-web
+        run: npm ci
+
+      - name: Build site
+        working-directory: akita-web
+        run: npm run build
+
+      - name: Extract tag info
+        id: tag
+        run: |
+          TAG_NAME=${GITHUB_REF#refs/tags/}
+          # Get the tag message (annotation)
+          TAG_MESSAGE=$(git tag -l --format='%(contents)' "$TAG_NAME" | head -1)
+          TAG_DATE=$(date -u +%Y-%m-%d)
+
+          echo "tag_name=$TAG_NAME" >> $GITHUB_OUTPUT
+          echo "tag_date=$TAG_DATE" >> $GITHUB_OUTPUT
+          echo "tag_message=$TAG_MESSAGE" >> $GITHUB_OUTPUT
+
+      - name: Configure AWS CLI for R2
+        run: |
+          aws configure set aws_access_key_id ${{ secrets.CLOUDFLARE_R2_ACCESS_KEY_ID }}
+          aws configure set aws_secret_access_key ${{ secrets.CLOUDFLARE_R2_SECRET_ACCESS_KEY }}
+          aws configure set default.region auto
+
+      - name: Upload snapshot to R2
+        working-directory: akita-web
+        env:
+          R2_ENDPOINT: https://${{ secrets.CLOUDFLARE_ACCOUNT_ID }}.r2.cloudflarestorage.com
+        run: |
+          aws s3 sync dist/ s3://akita-web-snapshots/snapshots/${{ steps.tag.outputs.tag_name }}/ \
+            --endpoint-url "$R2_ENDPOINT"
+
+      - name: Update manifest
+        working-directory: akita-web
+        env:
+          R2_ENDPOINT: https://${{ secrets.CLOUDFLARE_ACCOUNT_ID }}.r2.cloudflarestorage.com
+          TAG_NAME: ${{ steps.tag.outputs.tag_name }}
+          TAG_DATE: ${{ steps.tag.outputs.tag_date }}
+          TAG_MESSAGE: ${{ steps.tag.outputs.tag_message }}
+        run: |
+          # Download existing manifest or create empty array
+          aws s3 cp s3://akita-web-snapshots/manifest.json manifest.json \
+            --endpoint-url "$R2_ENDPOINT" 2>/dev/null || echo '[]' > manifest.json
+
+          # Add new entry using jq
+          jq --arg tag "$TAG_NAME" \
+             --arg date "$TAG_DATE" \
+             --arg label "$TAG_MESSAGE" \
+             '. += [{"tag": $tag, "date": $date, "label": $label, "description": ""}]' \
+             manifest.json > manifest-updated.json
+
+          # Upload updated manifest
+          aws s3 cp manifest-updated.json s3://akita-web-snapshots/manifest.json \
+            --endpoint-url "$R2_ENDPOINT"
+
+      - name: Update local milestones.json
+        env:
+          TAG_NAME: ${{ steps.tag.outputs.tag_name }}
+          TAG_DATE: ${{ steps.tag.outputs.tag_date }}
+          TAG_MESSAGE: ${{ steps.tag.outputs.tag_message }}
+        run: |
+          cd akita-web
+          # Update local milestones.json to match manifest
+          jq --arg tag "$TAG_NAME" \
+             --arg date "$TAG_DATE" \
+             --arg label "$TAG_MESSAGE" \
+             '. += [{"tag": $tag, "date": $date, "label": $label, "description": ""}]' \
+             src/data/milestones.json > src/data/milestones-updated.json
+          mv src/data/milestones-updated.json src/data/milestones.json
+
+      - name: Commit milestones.json update
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add akita-web/src/data/milestones.json
+          git commit -m "Update milestones.json for ${{ steps.tag.outputs.tag_name }}" || echo "No changes to commit"
+          git push origin HEAD:main
+
+      - name: Summary
+        run: |
+          echo "## Milestone Snapshot Created" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **Tag:** ${{ steps.tag.outputs.tag_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Date:** ${{ steps.tag.outputs.tag_date }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Label:** ${{ steps.tag.outputs.tag_message }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Snapshot uploaded to R2 and manifest updated." >> $GITHUB_STEP_SUMMARY

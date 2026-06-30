@@ -1,0 +1,526 @@
+---
+import type { Locale } from "../i18n/config";
+import { t, localizedPath } from "../i18n/utils";
+import LanguageSwitcher from "./LanguageSwitcher.astro";
+import SearchWidget from "./SearchWidget.astro";
+import GardenActivity from "./GardenActivity.astro";
+
+interface Props {
+  locale: Locale;
+  currentPath: string;
+  isHome?: boolean;
+  alternatePath?: string | null;
+}
+
+const { locale, currentPath, isHome = false, alternatePath } = Astro.props;
+
+import { getCollection } from "astro:content";
+import { isPublic, isEncrypted } from "../lib/flags";
+import { listNotes } from "../lib/notes-fs";
+import { gardenConfig, gardenInitials } from "../lib/garden";
+
+// CommandPalette (the ⌘K exploration menu) is a private feature overlaid from
+// the maurice-web repo. Resolve it lazily so the public build works when the
+// file is absent: import.meta.glob tolerates zero matches (a static import
+// would fail to resolve). Kept below the imports — executable code at the very
+// top of the frontmatter trips an Astro codegen glitch (stray `i;`).
+const _paletteLoaders = import.meta.glob("./CommandPalette.astro");
+const _loadPalette = _paletteLoaders["./CommandPalette.astro"];
+const CommandPalette = _loadPalette ? ((await _loadPalette()) as any).default : null;
+
+const garden = gardenConfig();
+
+const blogPosts = await getCollection("blog", ({ data }) => data.locale === locale && (import.meta.env.DEV || isPublic(data)));
+const hasBlog = blogPosts.length > 0;
+const blogAllDrafts = hasBlog && blogPosts.every((p) => !isPublic(p.data));
+
+const essayPosts = await getCollection("essays", ({ data }) => data.locale === locale && (import.meta.env.DEV || isPublic(data)));
+const hasEssays = essayPosts.length > 0;
+const essaysAllDrafts = hasEssays && essayPosts.every((p) => !isPublic(p.data));
+
+const allResourceCollections = ["books", "articles", "podcasts", "movies", "series", "people"] as const;
+let hasResources = false;
+let resourcesAllDrafts = true;
+for (const col of allResourceCollections) {
+  const items = await getCollection(col, ({ data }) => (data as any).locale === locale && (import.meta.env.DEV || isPublic(data as any)));
+  if (items.length > 0) {
+    hasResources = true;
+    if (items.some((i) => isPublic(i.data as any))) {
+      resourcesAllDrafts = false;
+    }
+  }
+}
+if (!hasResources) resourcesAllDrafts = false;
+
+// Read notes from disk (not the content layer) so the nav never blanks out when
+// the glob-loader store momentarily collapses during a burst of MCP edits.
+const noteEntries = listNotes(locale).filter(
+  (n) => !isEncrypted(n.data) && (import.meta.env.DEV || isPublic(n.data)),
+);
+const hasNotes = noteEntries.length > 0;
+const notesAllDrafts = hasNotes && noteEntries.every((n) => !isPublic(n.data));
+
+// Only surface About when an about page has actually been written — a fresh
+// garden shouldn't show a nav item pointing at a placeholder.
+const aboutPages = await getCollection("pages", ({ data }) => (data as any).translationKey === "about" && (data as any).locale === locale);
+const hasAbout = aboutPages.length > 0;
+
+const navItems = [
+  ...(hasBlog ? [{ key: "nav.blog", path: "/blog", allDrafts: blogAllDrafts }] : []),
+  ...(hasEssays ? [{ key: "nav.essays", path: "/essays", allDrafts: essaysAllDrafts }] : []),
+  ...(hasNotes ? [{ key: "nav.notes", path: "/notes", allDrafts: notesAllDrafts }] : []),
+  ...(hasResources ? [{ key: "nav.resources", path: "/resources", allDrafts: resourcesAllDrafts }] : []),
+  ...(hasAbout ? [{ key: "nav.about", path: "/about", allDrafts: false }] : []),
+];
+
+function isActive(itemPath: string): boolean {
+  const href = localizedPath(locale, itemPath);
+  const clean = currentPath.replace(/\.html$/, "");
+  return clean === href || clean.startsWith(href + "/");
+}
+---
+
+<GardenActivity />
+
+<!-- Desktop header -->
+<header class="site-header site-header--desktop">
+  {!isHome && (
+    <div class="avatar-wrap">
+      <a href={localizedPath(locale, "/")} class="avatar-link" aria-label="Home" id="desktop-avatar">
+        {garden.avatar
+          ? <img src={garden.avatar} alt={garden.name} class="header-avatar" />
+          : <span class="header-avatar avatar-initials">{gardenInitials()}</span>}
+      </a>
+    </div>
+  )}
+  <nav class="nav-links">
+    {navItems.map((item) => (
+      <a href={localizedPath(locale, item.path)} class={isActive(item.path) ? "active" : ""} data-draft={item.allDrafts ? "true" : undefined}>
+        <span>{t(locale, item.key)}</span>
+      </a>
+    ))}
+    <SearchWidget locale={locale} />
+    <LanguageSwitcher locale={locale} currentPath={currentPath} alternatePath={alternatePath} />
+  </nav>
+</header>
+
+<!-- Mobile header -->
+<header class="site-header site-header--mobile">
+  <button class="mobile-hamburger" aria-label="Show menu" id="mobile-menu-open">
+    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" x2="20" y1="12" y2="12"/><line x1="4" x2="20" y1="6" y2="6"/><line x1="4" x2="20" y1="18" y2="18"/></svg>
+  </button>
+  <button class="mobile-avatar-btn" id="mobile-avatar-trigger" style="display:none;" aria-label="Open palette">
+    {garden.avatar
+      ? <img src={garden.avatar} alt="" class="header-avatar" />
+      : <span class="header-avatar avatar-initials">{gardenInitials()}</span>}
+  </button>
+</header>
+
+<!-- Mobile menu overlay (hidden by default) -->
+<div class="mobile-overlay" id="mobile-menu-overlay" style="display:none;">
+  <div class="mobile-overlay__inner">
+    <div class="mobile-overlay__close-row">
+      <button class="mobile-hamburger" aria-label="Hide menu" id="mobile-menu-close">
+        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+      </button>
+    </div>
+    <div class="mobile-overlay__content">
+      {!isHome && (
+        <a href={localizedPath(locale, "/")} aria-label="Home" id="mobile-avatar">
+          {garden.avatar
+            ? <img src={garden.avatar} alt={garden.name} class="mobile-overlay__avatar" />
+            : <span class="mobile-overlay__avatar avatar-initials">{gardenInitials()}</span>}
+        </a>
+      )}
+      <SearchWidget locale={locale} />
+      <nav class="mobile-overlay__nav">
+        {navItems.map((item) => (
+          <a href={localizedPath(locale, item.path)} class={isActive(item.path) ? "active" : ""} data-draft={item.allDrafts ? "true" : undefined}>
+            <span>{t(locale, item.key)}</span>
+          </a>
+        ))}
+      </nav>
+      <div class="mobile-overlay__controls">
+        <LanguageSwitcher locale={locale} currentPath={currentPath} alternatePath={alternatePath} />
+        <button class="theme-toggle" aria-label="Toggle dark mode" onclick="toggleDarkMode()">
+          <svg class="icon-moon" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg>
+          <svg class="icon-sun" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg>
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+{CommandPalette && <CommandPalette locale={locale} currentPath={currentPath} />}
+
+<script is:inline>
+  (function() {
+    var isPreview = new URLSearchParams(location.search).has('preview');
+    if (isPreview) sessionStorage.setItem('preview', '1');
+    if (sessionStorage.getItem('preview') === '1') isPreview = true;
+    var isAuthed = !isPreview && (
+      document.cookie.indexOf('CF_Authorization') !== -1
+      || location.hostname === 'localhost'
+      || location.hostname.endsWith('.ts.net')
+      || location.hostname.startsWith('192.168.')
+    );
+
+    // Preview mode: hide drafts (simulate unauthenticated visitor)
+    if (isPreview) {
+      document.body.classList.add('hide-drafts');
+
+      // After DOM is ready, check if page has only draft content → show 404
+      function checkDraftPage() {
+        var m = document.querySelector('main');
+        if (!m) return;
+        var draftItems = m.querySelectorAll('[data-draft="true"]');
+        var nonDraftItems = m.querySelectorAll('li:not([data-draft="true"]), a.moc-card:not([data-draft="true"])');
+        if (draftItems.length > 0 && nonDraftItems.length === 0) {
+          m.innerHTML = '<h1>Not found</h1><p style="color:var(--color-text-muted)">The page you\u2019re looking for doesn\u2019t exist.</p>';
+        }
+      }
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', checkDraftPage);
+      } else {
+        checkDraftPage();
+      }
+    }
+
+
+    // In preview mode, append ?preview to all internal links
+    if (isPreview) {
+      document.addEventListener('click', function(e) {
+        var link = e.target.closest('a');
+        if (!link || !link.href) return;
+        try {
+          var url = new URL(link.href);
+          if (url.origin === location.origin && !url.searchParams.has('preview')) {
+            url.searchParams.set('preview', '');
+            link.href = url.toString();
+          }
+        } catch(ex) {}
+      }, true);
+    }
+
+    // ── Private page marker ──
+    var privatePaths = ['/library', '/books', '/fiches', '/fr/fiches', '/research', '/briefings', '/signals', '/feeds', '/tasks', '/fr/reves'];
+    var path = location.pathname.replace(/\.html$/, '');
+    var isPrivate = privatePaths.some(function(p) { return path === p || path.startsWith(p + '/'); });
+    if (isPrivate) {
+      var mainEl = document.querySelector('main');
+      if (mainEl) mainEl.classList.add('private-page');
+    }
+
+    // ── Authenticated state: violet ring + palette ──
+    if (isAuthed) {
+      // Desktop: add violet ring, click opens palette
+      var desktopAvatar = document.getElementById('desktop-avatar');
+      if (desktopAvatar) {
+        desktopAvatar.querySelector('img').classList.add('avatar--authed');
+        desktopAvatar.addEventListener('click', function(e) {
+          e.preventDefault();
+          window.openPalette?.(false);
+        });
+      }
+
+      // Mobile: show avatar button, wire to palette
+      var mobileAvatarBtn = document.getElementById('mobile-avatar-trigger');
+      if (mobileAvatarBtn) {
+        mobileAvatarBtn.style.display = '';
+        mobileAvatarBtn.querySelector('img').classList.add('avatar--authed');
+        mobileAvatarBtn.addEventListener('click', function(e) {
+          e.preventDefault();
+          window.openPalette?.(false);
+        });
+      }
+
+      // Mobile overlay avatar: also add ring
+      var mobileAvatarImg = document.querySelector('#mobile-avatar img');
+      if (mobileAvatarImg) mobileAvatarImg.classList.add('avatar--authed');
+
+      // Home big avatar: wire to palette
+      var homeAvatar = document.querySelector('.hero-avatar img');
+      if (homeAvatar) {
+        homeAvatar.classList.add('avatar--authed');
+        homeAvatar.style.cursor = 'pointer';
+        homeAvatar.addEventListener('click', function(e) {
+          e.preventDefault();
+          window.openPalette?.(false);
+        });
+      }
+    }
+
+    // ── Triple-tap avatar to trigger login (when not authed) ──
+    if (!isAuthed) {
+      var tapCount = 0;
+      var tapTimer = null;
+
+      function handleTripleTap(e) {
+        tapCount++;
+        if (tapTimer) clearTimeout(tapTimer);
+        if (tapCount >= 3) {
+          tapCount = 0;
+          // Redirect to a protected page to trigger CF Access login
+          e.preventDefault();
+          window.location.href = '/research';
+          return;
+        }
+        tapTimer = setTimeout(function() { tapCount = 0; }, 600);
+      }
+
+      var desktopAv = document.getElementById('desktop-avatar');
+      var mobileAv = document.getElementById('mobile-avatar');
+      if (desktopAv) desktopAv.addEventListener('click', function(e) { e.preventDefault(); handleTripleTap(e); });
+      if (mobileAv) mobileAv.addEventListener('click', function(e) { e.preventDefault(); handleTripleTap(e); });
+
+      // Home big avatar triple-tap
+      var homeAv = document.querySelector('.hero-avatar img');
+      if (homeAv) {
+        homeAv.style.cursor = 'pointer';
+        homeAv.addEventListener('click', function(e) { handleTripleTap(e); });
+      }
+    }
+
+    // ── Mobile menu ──
+    function initMobileMenu() {
+      var overlay = document.getElementById('mobile-menu-overlay');
+      var openBtn = document.getElementById('mobile-menu-open');
+      var closeBtn = document.getElementById('mobile-menu-close');
+      if (!overlay || !openBtn || !closeBtn) return;
+
+      openBtn.addEventListener('click', function() {
+        overlay.style.display = 'block';
+        document.body.style.overflow = 'hidden';
+      });
+
+      closeBtn.addEventListener('click', function() {
+        overlay.style.display = 'none';
+        document.body.style.overflow = '';
+      });
+
+      var links = overlay.querySelectorAll('a');
+      for (var i = 0; i < links.length; i++) {
+        links[i].addEventListener('click', function() {
+          overlay.style.display = 'none';
+          document.body.style.overflow = '';
+        });
+      }
+    }
+
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', initMobileMenu);
+    } else {
+      initMobileMenu();
+    }
+  })();
+</script>
+
+<style is:global>
+  /* Desktop header */
+  .site-header--desktop {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 1rem 0;
+    font-family: var(--font-heading);
+  }
+
+  .site-header--mobile {
+    display: none;
+    align-items: center;
+    justify-content: space-between;
+    padding: 1rem 0;
+    font-family: var(--font-heading);
+  }
+
+  .avatar-wrap {
+    position: relative;
+    flex-shrink: 0;
+  }
+
+  .avatar-link {
+    flex-shrink: 0;
+  }
+
+  /* Initials fallback when a garden has no avatar image. Inherits size from
+     .header-avatar / .mobile-overlay__avatar. */
+  .avatar-initials {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    font-weight: 600;
+    background: var(--color-surface, #2a2622);
+    color: var(--color-text, #f0ebe2);
+    text-transform: uppercase;
+  }
+  .header-avatar.avatar-initials { font-size: 0.85rem; }
+  .mobile-overlay__avatar.avatar-initials { font-size: 2.5rem; }
+
+  .header-avatar {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    object-fit: cover;
+    transition: box-shadow 0.3s;
+  }
+
+  /* Violet ring when authenticated */
+  .avatar--authed {
+    box-shadow: 0 0 0 2px #7c3aed;
+    cursor: pointer;
+  }
+
+  .avatar--authed:hover {
+    box-shadow: 0 0 0 2px #7c3aed, 0 0 8px rgba(124, 58, 237, 0.3);
+  }
+
+  html.dark .avatar--authed {
+    box-shadow: 0 0 0 2px #a78bfa;
+  }
+
+  html.dark .avatar--authed:hover {
+    box-shadow: 0 0 0 2px #a78bfa, 0 0 8px rgba(167, 139, 250, 0.3);
+  }
+
+  /* Nav links */
+  .nav-links {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    font-size: 1.125rem;
+    font-weight: 600;
+    margin-left: auto;
+  }
+
+  .nav-links a {
+    color: var(--color-text);
+    text-decoration: none;
+  }
+
+  .nav-links > a:hover:not(.active) span {
+    border-bottom: 4px solid rgba(239, 68, 68, 0.3);
+    padding-bottom: 2px;
+  }
+
+  .nav-links > a.active span {
+    border-bottom: 4px solid #ef4444;
+    padding-bottom: 2px;
+  }
+
+  /* Hamburger button */
+  .mobile-hamburger {
+    display: inline-flex;
+    align-items: center;
+    -webkit-appearance: none;
+    appearance: none;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    color: var(--color-text);
+    padding: 0;
+  }
+
+  /* Mobile avatar button */
+  .mobile-avatar-btn {
+    -webkit-appearance: none;
+    appearance: none;
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 0;
+    line-height: 0;
+  }
+
+  /* Mobile overlay */
+  .mobile-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 100;
+    background: var(--color-bg);
+    color: var(--color-text);
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .mobile-overlay__inner {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 1rem;
+  }
+
+  .mobile-overlay__close-row {
+    display: flex;
+    justify-content: flex-end;
+    width: 100%;
+  }
+
+  .mobile-overlay__content {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1.5rem;
+    padding: 1rem 0 2rem;
+  }
+
+  .mobile-overlay__avatar {
+    width: 120px;
+    height: 120px;
+    border-radius: 50%;
+    object-fit: cover;
+    margin-bottom: 1rem;
+    transition: box-shadow 0.3s;
+  }
+
+  .mobile-overlay__nav {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1.5rem;
+    font-family: var(--font-heading);
+    font-size: 1.5rem;
+    font-weight: 600;
+  }
+
+  .mobile-overlay__nav a {
+    color: var(--color-text);
+    text-decoration: none;
+  }
+
+  .mobile-overlay__nav a.active span {
+    border-bottom: 4px solid #ef4444;
+    padding-bottom: 2px;
+  }
+
+  .mobile-overlay__controls {
+    margin-top: 1.5rem;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+  }
+
+  /* Private page — violet left border on main */
+  main.private-page {
+    border-left: 2px solid #7c3aed;
+    padding-left: 1.5rem;
+  }
+
+  html.dark main.private-page {
+    border-left-color: #a78bfa;
+  }
+
+  @media (max-width: 640px) {
+    .site-header--desktop {
+      display: none !important;
+    }
+
+    .site-header--mobile {
+      display: flex !important;
+    }
+
+    .private-page-marker ~ main {
+      padding-left: 1rem;
+    }
+  }
+</style>

@@ -1,0 +1,197 @@
+---
+import Base from "@app/layouts/Base.astro";
+import LucideIcon from "@app/components/LucideIcon.astro";
+import type { Locale } from "@app/i18n/config";
+import { t, localizedPath, formatShortDate, stripLocalePrefix } from "@app/i18n/utils";
+import { isPublic, isEncrypted, isMoc as isMocFlag } from "@app/lib/flags";
+import { listNotes } from "@app/lib/notes-fs";
+
+interface Props {
+  locale?: Locale;
+}
+
+const { locale = "en" } = Astro.props;
+
+const notes = listNotes(locale)
+  .filter((n) => import.meta.env.DEV || isPublic(n.data))
+  .sort((a, b) => b.data.date.valueOf() - a.data.date.valueOf());
+
+function isDraft(note: typeof notes[number]) {
+  return !isPublic(note.data);
+}
+
+function isPrivate(note: typeof notes[number]) {
+  return isEncrypted(note.data);
+}
+
+const allMocs = notes.filter((n) => isMocFlag(n.data));
+
+// Build set of slugs claimed as children by any MOC (wikilinks only — markdown links are cross-references)
+const WIKI_RE = /\[\[([a-z0-9-]+)(?:\|[^\]]+)?\]\]/g;
+const claimedSlugs = new Set<string>();
+for (const moc of allMocs) {
+  if (!moc.body) continue;
+  for (const m of moc.body.matchAll(WIKI_RE)) claimedSlugs.add(m[1]);
+}
+
+const mocs = allMocs.filter((m) => !claimedSlugs.has(stripLocalePrefix(m.id)));
+const recent = notes;
+---
+
+<Base title={t(locale, "notes.title")} description={t(locale, "notes.description")} locale={locale}>
+  <article class="prose">
+    <h1>{t(locale, "notes.title")}</h1>
+    <p class="text-muted">{t(locale, "notes.description")}</p>
+    <p class="draft-empty-notice text-muted">All items on this page are drafts.</p>
+
+    {notes.length > 0 ? (
+      <>
+        {mocs.length > 0 && (
+          <section>
+            <h2>{t(locale, "notes.categories")}</h2>
+            <div class="moc-grid">
+              {mocs.map((moc) => (
+                <a href={localizedPath(locale, `/notes/${stripLocalePrefix(moc.id)}`)} class="moc-card" data-draft={isDraft(moc) ? "true" : undefined}>
+                  {moc.data.image ? (
+                    <div class="moc-card__image" style={`background-image: url(${moc.data.image})`}></div>
+                  ) : moc.data.icon ? (
+                    <div class="moc-card__image moc-card__image--icon">
+                      <LucideIcon name={moc.data.icon} size={48} />
+                    </div>
+                  ) : (
+                    <div class="moc-card__image" style="background: linear-gradient(135deg, #1e293b, #475569)"></div>
+                  )}
+                  <div class="moc-card__body">
+                    <h3 class="moc-card__title">
+                      <svg class="moc-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></svg>
+                      <span class="moc-card__title-wrap">{moc.data.title}{!isDraft(moc) && <span class="public-dot">•</span>}{isPrivate(moc) && <svg class="private-lock" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>}</span>
+                    </h3>
+                    {moc.data.description && <p class="moc-card__desc">{moc.data.description}</p>}
+                  </div>
+                </a>
+              ))}
+            </div>
+          </section>
+        )}
+
+        <section>
+          <h2>{t(locale, "notes.recent")}</h2>
+          <ul class="note-list">
+            {recent.map((note) => (
+              <li data-draft={isDraft(note) ? "true" : undefined}>
+                <a href={localizedPath(locale, `/notes/${stripLocalePrefix(note.id)}`)}>
+                  {isMocFlag(note.data) && (
+                    <svg class="moc-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></svg>
+                  )}
+                  {note.data.title}</a>{!isDraft(note) && <span class="public-dot">•</span>}{isPrivate(note) && <svg class="private-lock" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>}
+                <span class="text-muted text-sm">
+                  {" "}— {formatShortDate(note.data.date, locale)}
+                </span>
+                {note.data.description && (
+                  <p class="text-muted text-sm">{note.data.description}</p>
+                )}
+              </li>
+            ))}
+          </ul>
+        </section>
+      </>
+    ) : (
+      <p class="text-muted">{t(locale, "notes.noNotesYet")}</p>
+    )}
+  </article>
+</Base>
+
+<style>
+  .moc-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: var(--spacing-lg);
+    margin-bottom: var(--spacing-xl);
+  }
+
+  .moc-card {
+    text-decoration: none;
+    color: var(--color-text);
+    border: 1px solid var(--color-border);
+    border-radius: 8px;
+    overflow: hidden;
+    transition: border-color 0.2s;
+  }
+
+  .moc-card:hover {
+    border-color: var(--color-text-quiet);
+  }
+
+  .moc-card__image {
+    height: 140px;
+    background-size: cover;
+    background-position: center;
+  }
+
+  .moc-card__image--icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(135deg, #1e293b, #475569);
+    color: rgba(255, 255, 255, 0.7);
+  }
+
+  .moc-card__body {
+    padding: var(--spacing-md);
+  }
+
+  .moc-card__title {
+    font-size: 1.2rem;
+    margin: 0 0 0.25rem;
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+  }
+
+  .moc-card__title-wrap {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+  }
+
+  .moc-card__desc {
+    font-size: 0.95rem;
+    color: var(--color-text-quiet);
+    margin: 0;
+  }
+
+  .moc-icon {
+    flex-shrink: 0;
+    opacity: 0.6;
+  }
+
+  .note-list {
+    list-style: none;
+    padding: 0;
+  }
+
+  .note-list li {
+    margin-bottom: var(--spacing-lg);
+  }
+
+  .note-list a {
+    font-size: 1.35rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+  }
+
+  .note-list span {
+    font-size: 1.05rem;
+  }
+
+  .note-list p {
+    font-size: 1.1rem;
+  }
+
+  .private-lock {
+    opacity: 0.4;
+    margin-left: 0.3rem;
+    vertical-align: middle;
+  }
+</style>

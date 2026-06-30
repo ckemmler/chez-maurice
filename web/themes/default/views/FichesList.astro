@@ -1,0 +1,69 @@
+---
+import Base from "@app/layouts/Base.astro";
+import type { Locale } from "@app/i18n/config";
+import { t, formatShortDate, localizedPath, resourceItemPath } from "@app/i18n/utils";
+import { getCollection } from "astro:content";
+
+interface Props {
+  locale?: Locale;
+}
+
+const { locale = "en" } = Astro.props;
+
+const fiches = await getCollection("fiches", ({ data }) => data.locale === locale)
+  .then((f) => f.sort((a, b) => b.data.date.valueOf() - a.data.date.valueOf()));
+
+const grouped = new Map<string, typeof fiches>();
+for (const fiche of fiches) {
+  let col = fiche.data.resource_collection;
+  // Split people into contacts (with carddav_uid) vs public figures
+  if (col === "people" && fiche.data.carddav_uid) {
+    col = "contacts";
+  }
+  if (!grouped.has(col)) grouped.set(col, []);
+  grouped.get(col)!.push(fiche);
+}
+
+const collectionLabels: Record<string, string> = {
+  books: t(locale, "resources.books"),
+  articles: t(locale, "resources.articles"),
+  movies: t(locale, "resources.movies"),
+  series: t(locale, "resources.series"),
+  podcasts: t(locale, "resources.podcasts"),
+  people: t(locale, "resources.people"),
+  contacts: "Contacts",
+};
+---
+
+<Base title={t(locale, "fiches.title")} description={t(locale, "fiches.description")} locale={locale}>
+  <article class="prose">
+    <h1>{t(locale, "fiches.title")}</h1>
+    <p class="text-muted">{t(locale, "fiches.description")}</p>
+
+    {fiches.length === 0 ? (
+      <p class="text-muted">{t(locale, "fiches.noFichesYet")}</p>
+    ) : (
+      [...grouped.entries()].map(([col, items]) => (
+        <section>
+          <h2>{collectionLabels[col] ?? col}</h2>
+          <ul class="fiche-list">
+            {items.map((fiche) => (
+              <li>
+                <a href={`${locale === "fr" ? "/fr" : ""}/fiches/${fiche.id.replace(/\/(en|fr)\//, "/")}`}>{fiche.data.title}</a>
+                <span class="text-muted text-sm"> · {formatShortDate(fiche.data.date, locale)}</span>
+                {fiche.data.tags.length > 0 && (
+                  <span class="text-muted text-sm"> · {fiche.data.tags.join(", ")}</span>
+                )}
+              </li>
+            ))}
+          </ul>
+        </section>
+      ))
+    )}
+  </article>
+</Base>
+
+<style>
+  .fiche-list { list-style: none; padding: 0; }
+  .fiche-list li { margin-bottom: var(--spacing-md); font-size: 1.05rem; }
+</style>

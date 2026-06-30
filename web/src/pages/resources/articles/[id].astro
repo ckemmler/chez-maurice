@@ -1,0 +1,24 @@
+---
+import ArticleDetail from "../../../components/ArticleDetail.astro";
+import { getCollection } from "astro:content";
+import { isPublic } from "../../../lib/flags";
+import { stripLocalePrefix } from "../../../i18n/utils";
+
+export const prerender = process.env.WEB_SSR !== "1";
+
+export async function getStaticPaths() {
+  const articles = await getCollection("articles", ({ data }) => import.meta.env.DEV || isPublic(data));
+  return articles.map((article) => ({
+    params: { id: stripLocalePrefix(article.id) },
+    props: { article },
+  }));
+}
+
+let __props = Astro.props;
+if (!__props.article) {
+  __props = (await getStaticPaths()).find((e) => e.params.id === Astro.params.id)?.props ?? {};
+}
+const { article } = __props;
+if (!article) return new Response("Not found", { status: 404 });
+---
+<ArticleDetail article={article} locale={article.data.locale} />

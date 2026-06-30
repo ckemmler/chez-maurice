@@ -1,0 +1,69 @@
+---
+import Base from "../../layouts/Base.astro";
+import { t } from "../../i18n/utils";
+import milestones from "../../data/milestones.json";
+
+const locale = "fr";
+
+const sortedMilestones = [...milestones].sort((a, b) =>
+  new Date(b.date).valueOf() - new Date(a.date).valueOf()
+);
+---
+
+<Base title={t(locale, "milestones.title")} description={t(locale, "milestones.description")} locale={locale}>
+  <article class="prose">
+    <h1>{t(locale, "milestones.title")}</h1>
+
+    <p>
+      Ce site évolue au fil du temps — pas seulement son contenu, mais aussi sa structure et son design.
+      À des moments significatifs, je préserve le site entier comme un jalon. Vous pouvez naviguer
+      vers n'importe quel jalon passé pour voir le site exactement tel qu'il était.
+    </p>
+
+    {sortedMilestones.length > 0 ? (
+      <ul class="milestone-list">
+        {sortedMilestones.map((milestone) => (
+          <li>
+            <a href={`/?t=${milestone.date}`} class="milestone-link">
+              <time datetime={milestone.date}>{milestone.date}</time>
+              <span class="label">{milestone.label}</span>
+            </a>
+            {milestone.description && (
+              <p class="description text-muted">{milestone.description}</p>
+            )}
+          </li>
+        ))}
+      </ul>
+    ) : (
+      <p class="text-muted">
+        Aucun jalon pour le moment. Le premier jalon sera créé au lancement du site.
+      </p>
+    )}
+
+    <section>
+      <h2>Comment ça marche</h2>
+
+      <p>
+        Lorsque vous visitez un jalon, la couche de routage du site sert la capture
+        préservée au lieu de la version en direct. Tout — pages, styles, navigation — reflète
+        ce moment dans le temps.
+      </p>
+
+      <p>
+        Pour quitter le mode voyage dans le temps et revenir au présent, cliquez sur la bannière en haut
+        de la page ou naviguez simplement vers le site sans paramètre de date.
+      </p>
+    </section>
+  </article>
+</Base>
+
+<style>
+  .milestone-list { list-style: none; padding: 0; }
+  .milestone-list li { margin-bottom: var(--spacing-lg); padding-bottom: var(--spacing-lg); border-bottom: 1px solid var(--color-border); }
+  .milestone-list li:last-child { border-bottom: none; }
+  .milestone-link { display: flex; align-items: baseline; gap: var(--spacing-md); text-decoration: none; }
+  .milestone-link time { font-family: var(--font-mono); font-size: 0.9rem; color: var(--color-text-muted); flex-shrink: 0; }
+  .milestone-link .label { font-weight: 500; color: var(--color-text); }
+  .milestone-link:hover .label { color: var(--color-accent); }
+  .description { margin-top: var(--spacing-sm); margin-bottom: 0; }
+</style>

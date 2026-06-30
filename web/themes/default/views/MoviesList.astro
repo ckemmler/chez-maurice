@@ -1,0 +1,78 @@
+---
+import Base from "@app/layouts/Base.astro";
+import type { Locale } from "@app/i18n/config";
+import { t, resourceItemPath, formatShortDate, stripLocalePrefix } from "@app/i18n/utils";
+import { getCollection } from "astro:content";
+import { isPublic } from "@app/lib/flags";
+
+interface Props {
+  locale?: Locale;
+}
+
+const { locale = "en" } = Astro.props;
+
+function isDraft(entry: { data: { flags?: string[] } }) {
+  return !isPublic(entry.data);
+}
+
+const movies = await getCollection("movies", ({ data }) => (import.meta.env.DEV || isPublic(data)) && data.locale === locale)
+  .then((m) => m.sort((a, b) => b.data.date_watched.valueOf() - a.data.date_watched.valueOf()));
+
+const fiches = await getCollection("fiches", ({ data }) => data.locale === locale && data.resource_collection === "movies");
+const ficheByResourceId = new Map(fiches.map((f) => [f.data.resource_id, f]));
+const movieSlugs = new Set(movies.map((m) => stripLocalePrefix(m.id)));
+const orphanFiches = fiches.filter((f) => !movieSlugs.has(f.data.resource_id));
+---
+
+<Base title={t(locale, "movies.title")} description={t(locale, "movies.description")} locale={locale}>
+  <article class="prose">
+    <h1>{t(locale, "movies.title")}</h1>
+    <p class="text-muted">{t(locale, "movies.description")}</p>
+    <p class="draft-empty-notice text-muted">All items on this page are drafts.</p>
+
+    {movies.length > 0 ? (
+      <ul class="movie-list">
+        {movies.map((movie) => {
+          const fiche = ficheByResourceId.get(stripLocalePrefix(movie.id));
+          return (
+            <li data-draft={isDraft(movie) ? "true" : undefined}>
+              <a href={resourceItemPath(locale, "movies", movie.id)} class="movie-title">{movie.data.title}</a>{!isDraft(movie) && <span class="public-dot">•</span>}
+              {fiche && <a href={`${locale === "fr" ? "/fr" : ""}/fiches/${fiche.id.replace(/\/(en|fr)\//, "/")}`} class="fiche-link">fiche</a>}
+              {movie.data.director && <span class="text-muted"> — {movie.data.director}</span>}
+              {movie.data.year && <span class="text-muted text-sm"> ({movie.data.year})</span>}
+              <span class="text-muted text-sm"> · {formatShortDate(movie.data.date_watched, locale)}</span>
+              {movie.data.rating && (
+                <span class="rating">{"★".repeat(movie.data.rating)}{"☆".repeat(5 - movie.data.rating)}</span>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+    ) : (
+      <p class="text-muted">{t(locale, "movies.noMoviesYet")}</p>
+    )}
+
+    {orphanFiches.length > 0 && (
+      <section>
+        <h2>Fiches</h2>
+        <ul class="movie-list">
+          {orphanFiches.map((fiche) => (
+            <li>
+              <a href={`${locale === "fr" ? "/fr" : ""}/fiches/${fiche.id.replace(/\/(en|fr)\//, "/")}`} class="fiche-link">{fiche.data.title}</a>
+              <span class="text-muted text-sm"> · {formatShortDate(fiche.data.date, locale)}</span>
+            </li>
+          ))}
+        </ul>
+      </section>
+    )}
+  </article>
+</Base>
+
+<style>
+  .movie-list { list-style: none; padding: 0; }
+  .movie-list li { margin-bottom: var(--spacing-md); font-size: 1.05rem; }
+  .movie-title { font-size: 1.35rem; }
+  .rating { display: inline-block; margin-left: var(--spacing-sm); color: #d4a017; letter-spacing: 1px; }
+  :global(.prose .fiche-link) { color: #7c3aed; font-size: 0.9em; }
+  :global(.dark .prose .fiche-link) { color: #a78bfa; }
+</style>

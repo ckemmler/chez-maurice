@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<installer-gui-script minSpecVersion="2">
+    <title>Chez Maurice</title>
+    <organization>com.maurice</organization>
+    <domains enable_localSystem="true"/>
+    <options customize="never" require-scripts="true" rootVolumeOnly="true" hostArchitectures="arm64"/>
+    <choices-outline>
+        <line choice="default">
+            <line choice="com.maurice.installer"/>
+        </line>
+    </choices-outline>
+    <choice id="default"/>
+    <choice id="com.maurice.installer" visible="false">
+        <pkg-ref id="com.maurice.installer"/>
+    </choice>
+    <pkg-ref id="com.maurice.installer"
+             version="0.1.0"
+             onConclusion="none">maurice-component.pkg</pkg-ref>
+</installer-gui-script>

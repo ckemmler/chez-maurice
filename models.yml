@@ -1,0 +1,22 @@
+models:
+  light: "claude-haiku-4-5-20251001"
+  standard: "claude-sonnet-4-5-20250929"
+  heavy: "claude-opus-4-6"
+
+model_assignments:
+  dossier_title: light
+  topic_tags: light
+  search_queries: light
+  git_descriptions: light
+  moc_evocations: light
+  translation: light
+  dossier_synthesis: standard
+  gap_analysis: standard
+  briefing_synthesis: standard
+  briefing_content: standard
+  media_curation: standard
+  signal_report: standard
+  resonance_queries: standard
+  resonance_filtering: standard
+  book_classification: standard
+  research_orchestration: standard

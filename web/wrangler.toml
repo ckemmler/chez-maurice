@@ -1,0 +1,12 @@
+# Cloudflare Pages configuration
+name = "akita-web"
+compatibility_date = "2024-01-01"
+
+# R2 bucket binding for snapshots
+[[r2_buckets]]
+binding = "SNAPSHOTS"
+bucket_name = "akita-web-snapshots"
+
+# For local development with wrangler pages dev
+[dev]
+port = 8788

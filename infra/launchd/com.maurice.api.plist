@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>Label</key>
+	<string>com.maurice.api</string>
+	<key>ProgramArguments</key>
+	<array>
+		<string>/usr/local/lib/maurice/bin/bun</string>
+		<string>run</string>
+		<string>/usr/local/lib/maurice/server/index.ts</string>
+	</array>
+	<key>WorkingDirectory</key>
+	<string>/usr/local/lib/maurice/server</string>
+	<key>EnvironmentVariables</key>
+	<dict>
+		<key>HOME</key>
+		<string>__HOME__</string>
+		<key>PORT</key>
+		<string>3001</string>
+		<key>MAURICE_CONFIG</key>
+		<string>__HOME__/.maurice/config.toml</string>
+		<key>MAURICE_GARDENS_DIR</key>
+		<string>__HOME__/.maurice/gardens</string>
+	</dict>
+	<key>RunAtLoad</key>
+	<true/>
+	<key>KeepAlive</key>
+	<true/>
+	<key>ThrottleInterval</key>
+	<integer>5</integer>
+	<key>ExitTimeOut</key>
+	<integer>10</integer>
+	<key>ProcessType</key>
+	<string>Background</string>
+	<key>StandardOutPath</key>
+	<string>__HOME__/Library/Logs/Maurice/api.log</string>
+	<key>StandardErrorPath</key>
+	<string>__HOME__/Library/Logs/Maurice/api.err.log</string>
+</dict>
+</plist>

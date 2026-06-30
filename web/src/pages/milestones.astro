@@ -1,0 +1,104 @@
+---
+import Base from "../layouts/Base.astro";
+import { t, localizedPath } from "../i18n/utils";
+import milestones from "../data/milestones.json";
+
+const locale = "en";
+
+// Sort milestones by date, most recent first
+const sortedMilestones = [...milestones].sort((a, b) =>
+  new Date(b.date).valueOf() - new Date(a.date).valueOf()
+);
+---
+
+<Base title={t(locale, "milestones.title")} description={t(locale, "milestones.description")} locale={locale}>
+  <article class="prose">
+    <h1>{t(locale, "milestones.title")}</h1>
+
+    <p>
+      This site evolves over time—not just its content, but its structure and design.
+      At significant moments, I preserve the entire site as a milestone. You can navigate
+      to any past milestone to see the site exactly as it was.
+    </p>
+
+    {sortedMilestones.length > 0 ? (
+      <ul class="milestone-list">
+        {sortedMilestones.map((milestone) => (
+          <li>
+            <a href={`/?t=${milestone.date}`} class="milestone-link">
+              <time datetime={milestone.date}>{milestone.date}</time>
+              <span class="label">{milestone.label}</span>
+            </a>
+            {milestone.description && (
+              <p class="description text-muted">{milestone.description}</p>
+            )}
+          </li>
+        ))}
+      </ul>
+    ) : (
+      <p class="text-muted">
+        No milestones yet. The first milestone will be created when the site launches.
+      </p>
+    )}
+
+    <section>
+      <h2>How It Works</h2>
+
+      <p>
+        When you visit a milestone, the site's routing layer serves the preserved
+        snapshot instead of the live version. Everything—pages, styles, navigation—reflects
+        that moment in time.
+      </p>
+
+      <p>
+        To exit time-travel mode and return to the present, click the banner at the top
+        of the page or simply navigate to the site without a date parameter.
+      </p>
+    </section>
+  </article>
+</Base>
+
+<style>
+  .milestone-list {
+    list-style: none;
+    padding: 0;
+  }
+
+  .milestone-list li {
+    margin-bottom: var(--spacing-lg);
+    padding-bottom: var(--spacing-lg);
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  .milestone-list li:last-child {
+    border-bottom: none;
+  }
+
+  .milestone-link {
+    display: flex;
+    align-items: baseline;
+    gap: var(--spacing-md);
+    text-decoration: none;
+  }
+
+  .milestone-link time {
+    font-family: var(--font-mono);
+    font-size: 0.9rem;
+    color: var(--color-text-muted);
+    flex-shrink: 0;
+  }
+
+  .milestone-link .label {
+    font-weight: 500;
+    color: var(--color-text);
+  }
+
+  .milestone-link:hover .label {
+    color: var(--color-accent);
+  }
+
+  .description {
+    margin-top: var(--spacing-sm);
+    margin-bottom: 0;
+  }
+</style>

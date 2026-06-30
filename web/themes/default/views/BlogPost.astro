@@ -1,0 +1,62 @@
+---
+import Base from "@app/layouts/Base.astro";
+import type { Locale } from "@app/i18n/config";
+import { t, localizedPath, formatFullDate } from "@app/i18n/utils";
+import { getAlternateContentPath } from "@app/i18n/translations";
+import { render } from "astro:content";
+
+interface Props {
+  post: any;
+  locale?: Locale;
+}
+
+const { post, locale = "en" } = Astro.props;
+const { Content } = await render(post);
+const alternatePath = await getAlternateContentPath("blog", post.data.translationKey, locale);
+---
+
+<Base title={post.data.title} description={post.data.description} locale={locale} alternatePath={alternatePath}>
+  <article>
+    <header>
+      <h1 class="title">{post.data.title}</h1>
+      <div class="post-date">
+        {formatFullDate(post.data.date, locale)}
+      </div>
+    </header>
+
+    <div class="body-text">
+      <Content />
+    </div>
+
+    <footer>
+      <p><a href={localizedPath(locale, "/blog")}>{t(locale, "blog.backToBlog")}</a></p>
+    </footer>
+  </article>
+</Base>
+
+<style>
+  article {
+    max-width: 65ch;
+  }
+
+  header {
+    margin-bottom: var(--spacing-xl);
+  }
+
+  .title {
+    font-size: 3rem;
+    font-weight: 600;
+    margin-bottom: 0;
+    line-height: 1.1;
+  }
+
+  .body-text {
+    margin-top: var(--spacing-lg);
+  }
+
+  footer {
+    margin-top: var(--spacing-xl);
+    padding-top: var(--spacing-lg);
+    border-top: 1px solid var(--color-border);
+  }
+</style>

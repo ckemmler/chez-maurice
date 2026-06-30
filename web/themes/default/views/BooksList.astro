@@ -1,0 +1,136 @@
+---
+import Base from "@app/layouts/Base.astro";
+import type { Locale } from "@app/i18n/config";
+import { t, resourceItemPath, formatShortDate, stripLocalePrefix } from "@app/i18n/utils";
+import { getCollection } from "astro:content";
+import { isPublic } from "@app/lib/flags";
+
+interface Props {
+  locale?: Locale;
+}
+
+const { locale = "en" } = Astro.props;
+
+const books = await getCollection("books", ({ data }) => (import.meta.env.DEV || isPublic(data)) && data.locale === locale)
+  .then((books) => books.sort((a, b) => b.data.date_read.valueOf() - a.data.date_read.valueOf()));
+
+function isDraft(entry: typeof books[number]) {
+  return !isPublic(entry.data);
+}
+
+const fiches = await getCollection("fiches", ({ data }) => data.locale === locale && data.resource_collection === "books");
+const ficheByResourceId = new Map(fiches.map((f) => [f.data.resource_id, f]));
+const bookSlugs = new Set(books.map((b) => stripLocalePrefix(b.id)));
+const orphanFiches = fiches.filter((f) => !bookSlugs.has(f.data.resource_id));
+
+const byStatus = {
+  reading: books.filter((b) => b.data.status === "reading"),
+  read: books.filter((b) => b.data.status === "read"),
+  abandoned: books.filter((b) => b.data.status === "abandoned"),
+};
+---
+
+<Base title={t(locale, "books.title")} description={t(locale, "books.description")} locale={locale}>
+  <article class="prose">
+    <h1>{t(locale, "books.title")}</h1>
+    <p class="text-muted">{t(locale, "books.description")}</p>
+    <p class="draft-empty-notice text-muted">All items on this page are drafts.</p>
+
+    {byStatus.reading.length > 0 && (
+      <section>
+        <h2>{t(locale, "books.currentlyReading")}</h2>
+        <ul class="book-list">
+          {byStatus.reading.map((book) => {
+            const fiche = ficheByResourceId.get(stripLocalePrefix(book.id));
+            return (
+              <li data-draft={isDraft(book) ? "true" : undefined}>
+                <a href={resourceItemPath(locale, "books", book.id)}>{book.data.title}</a>{!isDraft(book) && <span class="public-dot">•</span>}
+                {fiche && <a href={`${locale === "fr" ? "/fr" : ""}/fiches/${fiche.id.replace(/\/(en|fr)\//, "/")}`} class="fiche-link">fiche</a>}
+                <span class="text-muted"> {t(locale, "books.by")} {book.data.author}</span>
+              </li>
+            );
+          })}
+        </ul>
+      </section>
+    )}
+
+    {byStatus.read.length > 0 ? (
+      <ul class="book-list">
+        {byStatus.read.map((book) => {
+          const fiche = ficheByResourceId.get(stripLocalePrefix(book.id));
+          return (
+            <li data-draft={isDraft(book) ? "true" : undefined}>
+              <a href={resourceItemPath(locale, "books", book.id)}>{book.data.title}</a>{!isDraft(book) && <span class="public-dot">•</span>}
+              {fiche && <a href={`${locale === "fr" ? "/fr" : ""}/fiches/${fiche.id.replace(/\/(en|fr)\//, "/")}`} class="fiche-link">fiche</a>}
+              <span class="text-muted"> {t(locale, "books.by")} {book.data.author}</span>
+              <span class="text-muted text-sm"> — {formatShortDate(book.data.date_read, locale)}</span>
+              {book.data.rating && (
+                <span class="rating">{"★".repeat(book.data.rating)}{"☆".repeat(5 - book.data.rating)}</span>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+    ) : (
+      <p class="text-muted">{t(locale, "books.noBooksYet")}</p>
+    )}
+
+    {byStatus.abandoned.length > 0 && (
+      <section>
+        <h2>{t(locale, "books.abandoned")}</h2>
+        <ul class="book-list">
+          {byStatus.abandoned.map((book) => {
+            const fiche = ficheByResourceId.get(stripLocalePrefix(book.id));
+            return (
+              <li data-draft={isDraft(book) ? "true" : undefined}>
+                <a href={resourceItemPath(locale, "books", book.id)}>{book.data.title}</a>{!isDraft(book) && <span class="public-dot">•</span>}
+                {fiche && <a href={`${locale === "fr" ? "/fr" : ""}/fiches/${fiche.id.replace(/\/(en|fr)\//, "/")}`} class="fiche-link">fiche</a>}
+                <span class="text-muted"> {t(locale, "books.by")} {book.data.author}</span>
+              </li>
+            );
+          })}
+        </ul>
+      </section>
+    )}
+
+    {orphanFiches.length > 0 && (
+      <section>
+        <h2>Fiches</h2>
+        <ul class="book-list">
+          {orphanFiches.map((fiche) => (
+            <li>
+              <a href={`${locale === "fr" ? "/fr" : ""}/fiches/${fiche.id.replace(/\/(en|fr)\//, "/")}`} class="fiche-link">{fiche.data.title}</a>
+              <span class="text-muted text-sm"> · {formatShortDate(fiche.data.date, locale)}</span>
+            </li>
+          ))}
+        </ul>
+      </section>
+    )}
+  </article>
+</Base>
+
+<style>
+  .book-list {
+    list-style: none;
+    padding: 0;
+  }
+
+  .book-list li {
+    margin-bottom: var(--spacing-md);
+    font-size: 1.05rem;
+  }
+
+  .book-list a {
+    font-size: 1.35rem;
+  }
+
+  .rating {
+    display: inline-block;
+    margin-left: var(--spacing-sm);
+    color: #d4a017;
+    letter-spacing: 1px;
+  }
+
+  :global(.prose .fiche-link) { color: #7c3aed; font-size: 0.9em; }
+  :global(.dark .prose .fiche-link) { color: #a78bfa; }
+</style>

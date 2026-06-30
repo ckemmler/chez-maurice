@@ -1,0 +1,8 @@
+{
+  "id": "default",
+  "name": "Base",
+  "author": "Maurice",
+  "kind": "garden",
+  "hidden": true,
+  "description": "Internal base theme + shared fallback (hidden from the picker): a clean system-font garden whose views every theme inherits. Not a user-facing choice — themes override its tokens and inherit the rest."
+}

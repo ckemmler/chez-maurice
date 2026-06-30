@@ -1,0 +1,24 @@
+---
+import MovieDetail from "../../../components/MovieDetail.astro";
+import { getCollection } from "astro:content";
+import { isPublic } from "../../../lib/flags";
+import { stripLocalePrefix } from "../../../i18n/utils";
+
+export const prerender = process.env.WEB_SSR !== "1";
+
+export async function getStaticPaths() {
+  const movies = await getCollection("movies", ({ data }) => data.locale === "en" && (import.meta.env.DEV || isPublic(data)));
+  return movies.map((movie) => ({
+    params: { id: stripLocalePrefix(movie.id) },
+    props: { movie },
+  }));
+}
+
+let __props = Astro.props;
+if (!__props.movie) {
+  __props = (await getStaticPaths()).find((e) => e.params.id === Astro.params.id)?.props ?? {};
+}
+const { movie } = __props;
+if (!movie) return new Response("Not found", { status: 404 });
+---
+<MovieDetail movie={movie} locale="en" />

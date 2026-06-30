@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Privacy Policy — Chez Maurice</title>
+<meta name="description" content="How Chez Maurice handles your data: it doesn't. Maurice is self-hosted — your data lives on your own Mac." />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Spectral:ital,wght@0,400;0,500;0,600;1,400&family=Young+Serif&display=swap" rel="stylesheet" />
+<style>
+  :root { --ink:#1b1a17; --paper:#faf6ee; --rule:#e6ddcd; --muted:#6b6458; --oxblood:#7c2d2d; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--paper); color:var(--ink);
+    font:400 18px/1.65 "Spectral", Georgia, serif; -webkit-font-smoothing:antialiased; }
+  .wrap { max-width: 720px; margin: 0 auto; padding: 64px 22px 96px; }
+  h1 { font-family:"Young Serif", Georgia, serif; font-weight:400; font-size:2.4rem; line-height:1.1; margin:0 0 6px; }
+  h2 { font-family:"Young Serif", Georgia, serif; font-weight:400; font-size:1.4rem; margin:2.2em 0 .4em; }
+  .sub { color:var(--muted); font-style:italic; margin:0 0 2.4em; }
+  p, li { color:#2a2822; }
+  a { color:var(--oxblood); }
+  ul { padding-left: 1.2em; }
+  li { margin:.3em 0; }
+  hr { border:0; border-top:1px solid var(--rule); margin:2.4em 0; }
+  .back { display:inline-block; margin-bottom:2em; color:var(--muted); text-decoration:none; font-size:.95rem; }
+  .back:hover { color:var(--oxblood); }
+  footer { color:var(--muted); font-size:.9rem; margin-top:3em; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <a class="back" href="/">← Chez Maurice</a>
+  <h1>Privacy Policy</h1>
+  <p class="sub">Last updated: 23 June 2026</p>
+
+  <p><strong>The short version: Chez Maurice is self-hosted. Your data lives on
+  your own Mac, on a server you run. We do not operate a cloud, we do not collect
+  your data, and we have no access to it.</strong></p>
+
+  <h2>What the apps connect to</h2>
+  <p>The Chez Maurice apps (iPhone, iPad, Mac) talk to <em>one</em> place: the
+  Maurice server you choose to pair with, at the address you enter yourself
+  (typically your own Mac, over a private HTTPS connection). The apps do not send
+  your conversations, notes, files, or any personal content to chezmaurice.eu or
+  to any service operated by the developer.</p>
+
+  <h2>Data we collect</h2>
+  <p><strong>None.</strong> The apps contain no analytics, advertising, tracking,
+  or third-party telemetry SDKs. We receive no usage data, crash data, or personal
+  information from your use of the apps.</p>
+
+  <h2>Where your data lives</h2>
+  <ul>
+    <li><strong>On your server.</strong> Conversations, garden notes, files and
+      household settings are stored by the Maurice server on the machine you run
+      it on. You control it, back it up, and delete it.</li>
+    <li><strong>On your device.</strong> The app stores your pairing credentials
+      and preferences locally (in the system Keychain and app storage). They are
+      not transmitted to us.</li>
+  </ul>
+
+  <h2>Push notifications</h2>
+  <p>If you enable notifications, Apple issues your device a push token, which the
+  app registers with <em>your</em> server so it can send you notifications via
+  Apple Push Notification service (APNs). Delivery is handled by Apple under
+  <a href="https://www.apple.com/legal/privacy/">Apple’s privacy policy</a>. We do
+  not receive your token.</p>
+
+  <h2>AI model providers</h2>
+  <p>Maurice can run on a local, on-device model, or on a cloud model you
+  configure (for example Anthropic, OpenAI or Mistral). When you use a cloud
+  model, <em>your server</em> sends the relevant conversation content to that
+  provider to generate a response, under that provider’s own terms and privacy
+  policy. The choice of provider — including using none — is yours. The apps never
+  call a provider directly; everything goes through your server.</p>
+
+  <h2>Children</h2>
+  <p>Chez Maurice is a household tool intended to be set up by an adult. Any data
+  about household members lives only on the household’s own server, under that
+  household’s control.</p>
+
+  <h2>Your rights</h2>
+  <p>Because your data never leaves your control, you exercise your rights
+  directly: export or delete it on your own server at any time. There is no
+  account with us to close and no data of yours for us to return or erase.</p>
+
+  <h2>Changes</h2>
+  <p>If this policy changes, the updated version will be posted here with a new
+  date.</p>
+
+  <h2>Contact</h2>
+  <p>Questions: <a href="mailto:bonjour@chezmaurice.eu">bonjour@chezmaurice.eu</a>.</p>
+
+  <hr />
+  <p style="color:var(--muted);font-size:.95rem">Chez Maurice is open-source
+  software. The application source code is licensed separately (see the project
+  repository); this policy concerns how the software handles your data, not the
+  terms of the source code license.</p>
+
+  <footer>© 2026 Chez Maurice</footer>
+</div>
+</body>
+</html>

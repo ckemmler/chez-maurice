@@ -1,0 +1,201 @@
+---
+import Base from "@app/layouts/Base.astro";
+import Breadcrumb from "@app/components/Breadcrumb.astro";
+import type { Locale } from "@app/i18n/config";
+import { t, resourcePath, formatDate, stripLocalePrefix, formatShortDate } from "@app/i18n/utils";
+import { getAlternateContentPath } from "@app/i18n/translations";
+import { render, getCollection } from "astro:content";
+import { isPublic } from "@app/lib/flags";
+
+interface Props {
+  series: any;
+  locale?: Locale;
+}
+
+const { series, locale = "en" } = Astro.props;
+const { Content } = await render(series);
+const alternatePath = await getAlternateContentPath("series", series.data.translationKey, locale);
+
+// Derive show slug from entry ID
+const showSlug = stripLocalePrefix(series.id);
+
+// Query episodes for this show
+const allEpisodes = await getCollection("series", ({ data }) =>
+  data.show === showSlug && data.locale === locale && (import.meta.env.DEV || isPublic(data))
+);
+
+// Sort: season desc → episode_number desc → date desc
+const episodes = allEpisodes.sort((a, b) => {
+  const sa = a.data.season ?? 0;
+  const sb = b.data.season ?? 0;
+  if (sb !== sa) return sb - sa;
+  const ea = a.data.episode_number ?? 0;
+  const eb = b.data.episode_number ?? 0;
+  if (eb !== ea) return eb - ea;
+  return b.data.date_watched.valueOf() - a.data.date_watched.valueOf();
+});
+
+// Group episodes by season
+const seasonGroups = new Map<number | null, typeof episodes>();
+for (const ep of episodes) {
+  const s = ep.data.season ?? null;
+  if (!seasonGroups.has(s)) seasonGroups.set(s, []);
+  seasonGroups.get(s)!.push(ep);
+}
+// Sort season keys descending
+const sortedSeasons = [...seasonGroups.keys()].sort((a, b) => (b ?? 0) - (a ?? 0));
+
+// Render episode bodies
+const renderedEpisodes = new Map();
+await Promise.all(
+  episodes.map(async (ep) => {
+    const { Content: EpContent } = await render(ep);
+    renderedEpisodes.set(ep.id, EpContent);
+  })
+);
+---
+
+<Base title={series.data.title} locale={locale} alternatePath={alternatePath}>
+  <article>
+    {series.data.image && (
+      <div class="hero-image">
+        <img src={series.data.image} alt={series.data.title} />
+      </div>
+    )}
+    <header>
+      <Breadcrumb locale={locale} resourceKey="series" />
+      <h1 class="title">{series.data.title}</h1>
+      {series.data.platform && (
+        <h2 class="intro">{t(locale, "series.on")} {series.data.platform}</h2>
+      )}
+      <div class="post-date">
+        <span class="status">{series.data.status}</span>
+        {series.data.seasons_watched && (
+          <> · {series.data.seasons_watched} {t(locale, "series.seasons")}</>
+        )}
+        <> · {formatDate(series.data.date_watched, locale, { year: "numeric", month: "long" })}</>
+        {series.data.rating && (
+          <> · <span class="rating">{"★".repeat(series.data.rating)}{"☆".repeat(5 - series.data.rating)}</span></>
+        )}
+      </div>
+    </header>
+
+    <div class="body-text">
+      <Content />
+    </div>
+
+    {episodes.length > 0 && (
+      <section class="episodes">
+        <h2>{t(locale, "series.episodes")}</h2>
+        {sortedSeasons.map((seasonNum) => {
+          const seasonEps = seasonGroups.get(seasonNum)!;
+          return (
+            <>
+              {seasonNum != null && <h3 class="season-heading">Season {seasonNum}</h3>}
+              <ul class="episode-list">
+                {seasonEps.map((ep) => {
+                  const EpContent = renderedEpisodes.get(ep.id);
+                  return (
+                    <li class="episode-item">
+                      <div class="episode-header">
+                        {ep.data.episode_number != null && (
+                          <span class="episode-badge">E{ep.data.episode_number}</span>
+                        )}
+                        <span class="episode-title">{ep.data.episode_title || ep.data.title}</span>
+                        <span class="text-muted text-sm"> · {formatShortDate(ep.data.date_watched, locale)}</span>
+                        {ep.data.rating && (
+                          <span class="rating">{"★".repeat(ep.data.rating)}{"☆".repeat(5 - ep.data.rating)}</span>
+                        )}
+                      </div>
+                      <div class="episode-body">
+                        <EpContent />
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            </>
+          );
+        })}
+      </section>
+    )}
+
+    <footer>
+      <p><a href={resourcePath(locale, "series")}>{t(locale, "series.backToSeries")}</a></p>
+    </footer>
+  </article>
+</Base>
+
+<style>
+  article {
+    max-width: 65ch;
+  }
+
+  .hero-image {
+    margin-bottom: var(--spacing-xl);
+  }
+
+  .hero-image img {
+    width: 100%;
+    max-height: 400px;
+    object-fit: cover;
+    border-radius: 8px;
+  }
+
+  @media (max-width: 480px) {
+    .hero-image img {
+      max-height: 320px;
+    }
+  }
+
+  header {
+    margin-bottom: var(--spacing-xl);
+  }
+
+  .title {
+    font-size: 3rem;
+    font-weight: 600;
+    margin-bottom: 0;
+    line-height: 1.1;
+  }
+
+  .intro {
+    color: var(--color-text-quiet);
+    font-family: var(--font-sans);
+    font-size: 1.25rem;
+    font-weight: 400;
+    font-style: italic;
+    margin-top: 0.5rem;
+    margin-bottom: 0.25rem;
+  }
+
+  .status {
+    text-transform: capitalize;
+  }
+
+  .rating {
+    color: #d4a017;
+    letter-spacing: 1px;
+  }
+
+  .body-text {
+    margin-top: var(--spacing-lg);
+  }
+
+  .episodes { margin-top: var(--spacing-xl); }
+  .episodes h2 { font-size: 1.5rem; margin-bottom: var(--spacing-lg); }
+  .season-heading { font-size: 1.2rem; margin-top: var(--spacing-lg); margin-bottom: var(--spacing-md); color: var(--color-text-quiet); }
+  .episode-list { list-style: none; padding: 0; }
+  .episode-item { margin-bottom: var(--spacing-lg); padding-bottom: var(--spacing-lg); border-bottom: 1px solid var(--color-border); }
+  .episode-item:last-child { border-bottom: none; }
+  .episode-header { display: flex; align-items: baseline; gap: 0.5rem; flex-wrap: wrap; }
+  .episode-badge { background: var(--color-bg-subtle, #f0f0f0); padding: 0.1em 0.5em; border-radius: 4px; font-size: 0.85rem; font-weight: 600; }
+  .episode-title { font-size: 1.15rem; font-weight: 500; }
+  .episode-body { margin-top: var(--spacing-sm); }
+
+  footer {
+    margin-top: var(--spacing-xl);
+    padding-top: var(--spacing-lg);
+    border-top: 1px solid var(--color-border);
+  }
+</style>

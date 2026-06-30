@@ -1,0 +1,9 @@
+---
+// Garden-first landing (see src/pages/index.astro). "garden"-kind → notes index;
+// "site"-kind → hero home.
+import { themeKind } from "../../lib/theme-registry";
+import Home from "../../components/Home.astro";
+import NotesList from "../../components/NotesList.astro";
+const isGarden = themeKind(Astro.locals.theme) === "garden";
+---
+{isGarden ? <NotesList locale="fr" /> : <Home locale="fr" />}

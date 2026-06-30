@@ -1,0 +1,147 @@
+---
+import Base from "@app/layouts/Base.astro";
+import Breadcrumb from "@app/components/Breadcrumb.astro";
+import type { Locale } from "@app/i18n/config";
+import { t, resourcePath, formatDate, localizedPath, stripLocalePrefix } from "@app/i18n/utils";
+import { getAlternateContentPath } from "@app/i18n/translations";
+import { render, getCollection } from "astro:content";
+
+interface Props {
+  book: any;
+  locale?: Locale;
+}
+
+const { book, locale = "en" } = Astro.props;
+const { Content } = await render(book);
+const alternatePath = await getAlternateContentPath("books", book.data.translationKey, locale);
+
+const bookSlug = stripLocalePrefix(book.id);
+const fiches = await getCollection("fiches", ({ data }) =>
+  data.locale === locale && data.resource_collection === "books" && data.resource_id === bookSlug
+);
+const fiche = fiches.length > 0 ? fiches[0] : null;
+---
+
+<Base title={`${book.data.title} ${t(locale, "books.by")} ${book.data.author}`} locale={locale} alternatePath={alternatePath}>
+  <article>
+    <header>
+      {book.data.image && (
+        <img src={book.data.image} alt={book.data.title} class="cover-image" />
+      )}
+      <Breadcrumb locale={locale} resourceKey="books" />
+      <h1 class="title">{book.data.title}</h1>
+      <h2 class="intro">{t(locale, "books.by")} {book.data.author}</h2>
+      <div class="post-date">
+        <span class="status">{book.data.status}</span>
+        {book.data.status !== "reading" && (
+          <> · {formatDate(book.data.date_read, locale, { year: "numeric", month: "long" })}</>
+        )}
+        {book.data.rating && (
+          <> · <span class="rating">{"★".repeat(book.data.rating)}{"☆".repeat(5 - book.data.rating)}</span></>
+        )}
+      </div>
+      {fiche && (
+        <a href={`${locale === "fr" ? "/fr" : ""}/fiches/${fiche.id.replace(/\/(en|fr)\//, "/")}`} class="fiche-link">
+          Fiche
+        </a>
+      )}
+    </header>
+
+    <div class="body-text">
+      <Content />
+    </div>
+
+    <footer>
+      <p><a href={resourcePath(locale, "books")}>{t(locale, "books.backToBooks")}</a></p>
+    </footer>
+  </article>
+</Base>
+
+<style>
+  article {
+    max-width: 65ch;
+  }
+
+  header {
+    margin-bottom: var(--spacing-xl);
+  }
+
+  .cover-image {
+    float: right;
+    max-width: 160px;
+    margin: 0 0 var(--spacing-md) var(--spacing-lg);
+    border-radius: 6px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+  }
+
+  @media (max-width: 480px) {
+    .cover-image {
+      float: none;
+      display: block;
+      margin: 0 auto var(--spacing-lg);
+      max-width: 200px;
+    }
+  }
+
+  .title {
+    font-size: 3rem;
+    font-weight: 600;
+    margin-bottom: 0;
+    line-height: 1.1;
+  }
+
+  .intro {
+    color: var(--color-text-quiet);
+    font-family: var(--font-sans);
+    font-size: 1.25rem;
+    font-weight: 400;
+    font-style: italic;
+    margin-top: 0.5rem;
+    margin-bottom: 0.25rem;
+  }
+
+  .status {
+    text-transform: capitalize;
+  }
+
+  .rating {
+    color: #d4a017;
+    letter-spacing: 1px;
+  }
+
+  .fiche-link {
+    display: inline-block;
+    margin-top: 0.75rem;
+    padding: 0.35rem 0.9rem;
+    background: #7c3aed;
+    color: #fff;
+    font-size: 0.85rem;
+    font-weight: 500;
+    border-radius: 4px;
+    text-decoration: none;
+    letter-spacing: 0.02em;
+  }
+
+  .fiche-link:hover {
+    background: #6d28d9;
+  }
+
+  :global(.dark) .fiche-link {
+    background: #a78bfa;
+    color: #1a1a2e;
+  }
+
+  :global(.dark) .fiche-link:hover {
+    background: #8b5cf6;
+  }
+
+  .body-text {
+    margin-top: var(--spacing-lg);
+  }
+
+  footer {
+    margin-top: var(--spacing-xl);
+    padding-top: var(--spacing-lg);
+    border-top: 1px solid var(--color-border);
+  }
+</style>

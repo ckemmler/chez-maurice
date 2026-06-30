@@ -1,0 +1,345 @@
+---
+import type { Locale } from "../i18n/config";
+import { t } from "../i18n/utils";
+
+interface Props {
+  locale: Locale;
+}
+
+const { locale } = Astro.props;
+const placeholder = t(locale, "search.placeholder");
+const noResults = t(locale, "search.noResults");
+const indexUrl = locale === "fr" ? "/fr/search-index.json" : "/search-index.json";
+---
+
+<div class="search-widget" data-index-url={indexUrl} data-no-results={noResults}>
+  <button class="search-toggle" aria-label="Search" type="button">
+    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+  </button>
+  <div class="search-panel" style="display:none;">
+    <input type="text" class="search-input" placeholder={placeholder} autocomplete="off" />
+    <ul class="search-results"></ul>
+  </div>
+</div>
+
+<script is:inline>
+(function() {
+  if (window.__searchWidgetInit) return;
+  window.__searchWidgetInit = true;
+  function initSearch() {
+  var LABELS = {
+    en: { blog:'Blog', essays:'Essay', notes:'Note', books:'Book', articles:'Article', podcasts:'Podcast', movies:'Movie', series:'Series', people:'Person', fiches:'Fiche' },
+    fr: { blog:'Blog', essays:'Essai', notes:'Note', books:'Livre', articles:'Article', podcasts:'Podcast', movies:'Film', series:'Série', people:'Personne', fiches:'Fiche' }
+  };
+
+  document.querySelectorAll('.search-widget').forEach(function(widget) {
+    var toggle = widget.querySelector('.search-toggle');
+    var panel = widget.querySelector('.search-panel');
+    var input = widget.querySelector('.search-input');
+    var resultsList = widget.querySelector('.search-results');
+    var indexUrl = widget.dataset.indexUrl;
+    var noResultsText = widget.dataset.noResults;
+    var fuse = null;
+    var allEntries = null;
+    var activeIndex = -1;
+    var locale = indexUrl.startsWith('/fr/') ? 'fr' : 'en';
+    var labels = LABELS[locale] || LABELS.en;
+
+    function isAuthed() {
+      if (sessionStorage.getItem('preview') === '1') return false;
+      return document.cookie.indexOf('CF_Authorization') !== -1
+        || location.hostname === 'localhost'
+        || location.hostname.endsWith('.ts.net')
+        || location.hostname.startsWith('192.168.');
+    }
+
+    function open() {
+      panel.style.display = '';
+      input.focus();
+      if (!fuse) loadFuse();
+    }
+
+    function close() {
+      panel.style.display = 'none';
+      input.value = '';
+      resultsList.innerHTML = '';
+      activeIndex = -1;
+    }
+
+    function isOpen() {
+      return panel.style.display !== 'none';
+    }
+
+    toggle.addEventListener('click', function(e) {
+      e.stopPropagation();
+      isOpen() ? close() : open();
+    });
+
+    async function loadFuse() {
+      try {
+        var [mod, resp1, resp2] = await Promise.all([
+          import('https://esm.sh/fuse.js@7.1.0'),
+          fetch('/search-index.json'),
+          fetch('/fr/search-index.json')
+        ]);
+        var en = await resp1.json().catch(function() { return []; });
+        var fr = await resp2.json().catch(function() { return []; });
+        // Merge and deduplicate by url
+        var seen = {};
+        allEntries = en.concat(fr).filter(function(e) {
+          if (seen[e.url]) return false;
+          seen[e.url] = true;
+          return true;
+        });
+        var Fuse = mod.default || mod;
+        fuse = new Fuse(allEntries, {
+          keys: [
+            { name: 'title', weight: 0.4 },
+            { name: 'tags', weight: 0.2 },
+            { name: 'description', weight: 0.15 },
+            { name: 'author', weight: 0.15 }
+          ],
+          threshold: 0.4,
+          includeScore: true,
+        });
+        if (input.value.trim()) doSearch(input.value.trim());
+      } catch(err) {
+        console.error('Search init failed:', err);
+      }
+    }
+
+    function doSearch(query) {
+      if (!fuse) return;
+      activeIndex = -1;
+      if (!query) { resultsList.innerHTML = ''; return; }
+
+      var results = fuse.search(query, { limit: 10 });
+      var authed = isAuthed();
+
+      if (!authed) {
+        results = results.filter(function(r) { return r.item.public !== false; });
+      }
+
+      if (results.length === 0) {
+        resultsList.innerHTML = '<li class="search-no-results">' + noResultsText + '</li>';
+        return;
+      }
+
+      resultsList.innerHTML = results.map(function(r, i) {
+        var item = r.item;
+        var badge = '<span class="search-badge">' + (labels[item.collection] || item.collection) + '</span>';
+        var indicators = '';
+        if (!item.public) indicators += '<span class="search-draft">draft</span>';
+        if (item.private) indicators += '<span class="search-private">private</span>';
+        return '<li><a href="' + item.url + '" class="search-result" data-index="' + i + '">'
+          + '<span class="search-result-title">' + escapeHtml(item.title) + '</span>'
+          + '<span class="search-result-meta">' + badge + indicators + '</span>'
+          + '</a></li>';
+      }).join('');
+    }
+
+    function escapeHtml(s) {
+      var d = document.createElement('div');
+      d.textContent = s;
+      return d.innerHTML;
+    }
+
+    input.addEventListener('input', function() {
+      doSearch(input.value.trim());
+    });
+
+    // Keyboard navigation
+    input.addEventListener('keydown', function(e) {
+      var items = resultsList.querySelectorAll('a.search-result');
+      if (e.key === 'Escape') { close(); return; }
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        activeIndex = Math.min(activeIndex + 1, items.length - 1);
+        updateActive(items);
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        activeIndex = Math.max(activeIndex - 1, -1);
+        updateActive(items);
+      } else if (e.key === 'Enter' && activeIndex >= 0 && items[activeIndex]) {
+        e.preventDefault();
+        items[activeIndex].click();
+      }
+    });
+
+    function updateActive(items) {
+      items.forEach(function(el, i) {
+        el.classList.toggle('active', i === activeIndex);
+      });
+      if (activeIndex >= 0 && items[activeIndex]) {
+        items[activeIndex].scrollIntoView({ block: 'nearest' });
+      }
+    }
+
+    // Close on click outside
+    document.addEventListener('click', function(e) {
+      if (isOpen() && !widget.contains(e.target)) close();
+    });
+
+    // Close on Escape (global)
+    document.addEventListener('keydown', function(e) {
+      if (e.key === 'Escape' && isOpen()) close();
+    });
+  });
+  } // end initSearch
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initSearch);
+  } else {
+    initSearch();
+  }
+})();
+</script>
+
+<style is:global>
+  .search-widget {
+    position: relative;
+    display: flex;
+    align-items: center;
+  }
+
+  .search-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    color: var(--color-text);
+    padding: 4px;
+    border-radius: 4px;
+    transition: color 0.15s;
+  }
+
+  .search-toggle:hover {
+    color: var(--color-text-muted);
+  }
+
+  .search-panel {
+    position: absolute;
+    top: calc(100% + 8px);
+    right: 0;
+    width: 360px;
+    background: var(--color-bg);
+    border: 1px solid var(--color-border);
+    border-radius: 8px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+    z-index: 60;
+    overflow: hidden;
+  }
+
+  html.dark .search-panel {
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+  }
+
+  .search-input {
+    width: 100%;
+    padding: 0.625rem 0.75rem;
+    border: none;
+    border-bottom: 1px solid var(--color-border);
+    background: transparent;
+    color: var(--color-text);
+    font-family: var(--font-sans);
+    font-size: 0.9375rem;
+    outline: none;
+    box-sizing: border-box;
+  }
+
+  .search-input::placeholder {
+    color: var(--color-text-muted);
+  }
+
+  .search-results {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    max-height: 360px;
+    overflow-y: auto;
+  }
+
+  .search-result {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    padding: 0.5rem 0.75rem;
+    color: var(--color-text);
+    text-decoration: none;
+    transition: background 0.1s;
+  }
+
+  .search-result:hover,
+  .search-result.active {
+    background: var(--color-bg-alt);
+    text-decoration: none;
+  }
+
+  .search-result-title {
+    font-size: 0.875rem;
+    font-weight: 500;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    min-width: 0;
+  }
+
+  .search-result-meta {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    flex-shrink: 0;
+  }
+
+  .search-badge {
+    font-size: 0.6875rem;
+    font-weight: 600;
+    padding: 1px 6px;
+    border-radius: 4px;
+    background: var(--color-bg-alt);
+    color: var(--color-text-muted);
+    white-space: nowrap;
+  }
+
+  .search-draft {
+    font-size: 0.625rem;
+    color: var(--color-text-muted);
+    border: 1px dotted var(--color-text-muted);
+    padding: 0 4px;
+    border-radius: 3px;
+  }
+
+  .search-private {
+    font-size: 0.625rem;
+    color: #7c3aed;
+    border: 1px solid #7c3aed;
+    padding: 0 4px;
+    border-radius: 3px;
+  }
+
+  html.dark .search-private {
+    color: #a78bfa;
+    border-color: #a78bfa;
+  }
+
+  .search-no-results {
+    padding: 0.75rem;
+    color: var(--color-text-muted);
+    font-size: 0.875rem;
+    text-align: center;
+  }
+
+  /* Mobile: full-width panel */
+  @media (max-width: 640px) {
+    .search-panel {
+      position: fixed;
+      top: auto;
+      right: 1rem;
+      left: 1rem;
+      width: auto;
+    }
+  }
+</style>

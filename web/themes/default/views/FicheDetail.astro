@@ -1,0 +1,136 @@
+---
+import Base from "@app/layouts/Base.astro";
+import type { Locale } from "@app/i18n/config";
+import { t, localizedPath, resourceItemPath, formatFullDate } from "@app/i18n/utils";
+import { render } from "astro:content";
+import { marked } from "marked";
+import fs from "node:fs";
+import path from "node:path";
+
+interface Props {
+  fiche: any;
+  locale?: Locale;
+}
+
+const { fiche, locale = "en" } = Astro.props;
+const { Content } = await render(fiche);
+const resourceUrl = resourceItemPath(locale, fiche.data.resource_collection, fiche.data.resource_id);
+
+// Read fragments from _fragments/ directory next to the parent fiche
+const contentBase = path.join(process.cwd(), "src", "content");
+const parentDir = path.join(contentBase, fiche.id);
+const fragmentsDir = path.join(parentDir, "_fragments");
+
+interface Fragment { summary: string; html: string }
+
+function parseFragments(dir: string): Fragment[] {
+  if (!fs.existsSync(dir)) return [];
+  return fs.readdirSync(dir)
+    .filter(f => f.endsWith(".frag")).sort()
+    .map(f => {
+      const raw = fs.readFileSync(path.join(dir, f), "utf-8");
+      const m = raw.match(/^---\n([\s\S]*?)\n---\n?([\s\S]*)$/);
+      let summary = "", body = raw;
+      if (m) {
+        const sumLine = m[1].split("\n").find(l => l.startsWith("summary:"));
+        summary = sumLine?.replace(/^summary:\s*["']?|["']?\s*$/g, "") ?? "";
+        body = m[2];
+      }
+      return { summary, html: marked.parse(body.trim(), { async: false }) as string };
+    });
+}
+
+const fragments = parseFragments(fragmentsDir);
+---
+
+<Base title={fiche.data.title} locale={locale}>
+  <article>
+    <header>
+      <p class="back-link"><a href={localizedPath(locale, "/fiches")}>{t(locale, "fiches.backToFiches")}</a></p>
+      <h1 class="title">{fiche.data.title}</h1>
+      <p class="meta">
+        <a href={resourceUrl} class="resource-link">{fiche.data.resource_collection} / {fiche.data.resource_id}</a>
+        <span class="text-muted"> · {formatFullDate(fiche.data.date, locale)}</span>
+      </p>
+      {fiche.data.tags.length > 0 && (
+        <p class="tags text-muted">{fiche.data.tags.join(", ")}</p>
+      )}
+    </header>
+
+    <div class="body-text">
+      <Content />
+      {fragments.map(f => (
+        <details class="fragment">
+          <summary class="fragment__summary">{f.summary}</summary>
+          <div class="fragment__body" set:html={f.html} />
+        </details>
+      ))}
+    </div>
+  </article>
+</Base>
+
+<style>
+  article {
+    max-width: 65ch;
+  }
+
+  .back-link {
+    margin-bottom: var(--spacing-sm);
+  }
+
+  header {
+    margin-bottom: var(--spacing-xl);
+  }
+
+  .title {
+    font-size: 3rem;
+    font-weight: 600;
+    margin-bottom: 0;
+    line-height: 1.1;
+  }
+
+  .meta {
+    margin-top: 0.5rem;
+  }
+
+  .resource-link {
+    font-family: var(--font-mono, monospace);
+    font-size: 0.875rem;
+  }
+
+  .tags {
+    font-size: 0.875rem;
+    margin-top: 0.25rem;
+  }
+
+  .body-text {
+    margin-top: var(--spacing-lg);
+  }
+
+  .fragment {
+    border-left: 2px solid var(--color-border);
+    padding-left: 0.75rem;
+    margin: 1rem 0;
+  }
+  .fragment__summary {
+    cursor: pointer;
+    font-weight: 600;
+    font-family: var(--font-sans);
+    font-size: 0.95rem;
+    color: var(--color-text-quiet);
+    list-style: none;
+    display: flex;
+    align-items: center;
+    gap: 0.4em;
+  }
+  .fragment__summary::-webkit-details-marker { display: none; }
+  .fragment__summary::before {
+    content: "▸";
+    display: inline-block;
+    transition: transform 0.15s ease;
+  }
+  .fragment[open] > .fragment__summary::before {
+    transform: rotate(90deg);
+  }
+  .fragment__body { margin-top: 0.5rem; }
+</style>

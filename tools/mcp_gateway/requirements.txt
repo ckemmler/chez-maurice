@@ -1,0 +1,8 @@
+# Direct dependencies of the MCP gateway (server.py + oauth.py).
+# The gateway also imports the sub-tool servers at startup, whose own deps
+# come from the editable tool installs in scripts/install_repo_env.sh.
+mcp>=1.0
+starlette>=0.37
+uvicorn>=0.30
+httpx>=0.27
+tomli>=2.0; python_version < "3.11"   # shared.config_loader TOML fallback (system python3 may be 3.9)

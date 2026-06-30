@@ -1,0 +1,89 @@
+---
+import Base from "@app/layouts/Base.astro";
+import type { Locale } from "@app/i18n/config";
+import { t, localizedPath, formatShortDate, stripLocalePrefix } from "@app/i18n/utils";
+import { getCollection } from "astro:content";
+import { isPublic } from "@app/lib/flags";
+
+interface Props {
+  locale?: Locale;
+}
+
+const { locale = "en" } = Astro.props;
+
+const essays = await getCollection("essays", ({ id, data }) => (import.meta.env.DEV || isPublic(data)) && data.locale === locale)
+  .then((essays) => essays.sort((a, b) => b.data.date.valueOf() - a.data.date.valueOf()));
+
+function isDraft(essay: typeof essays[number]) {
+  return !isPublic(essay.data);
+}
+
+// Group by section
+const bySection = essays.reduce((acc, essay) => {
+  const section = essay.data.section;
+  if (!acc[section]) acc[section] = [];
+  acc[section].push(essay);
+  return acc;
+}, {} as Record<string, typeof essays>);
+
+const sections = Object.keys(bySection).sort();
+---
+
+<Base title={t(locale, "essays.title")} description={t(locale, "essays.description")} locale={locale}>
+  <article class="prose">
+    <h1>{t(locale, "essays.title")}</h1>
+    <p class="text-muted">{t(locale, "essays.description")}</p>
+    <p class="draft-empty-notice text-muted">All items on this page are drafts.</p>
+
+    {essays.length > 0 ? (
+      <>
+        {sections.map((section) => (
+          <section>
+            <h2>{section}</h2>
+            <ul class="essay-list">
+              {bySection[section].map((essay) => (
+                <li data-draft={isDraft(essay) ? "true" : undefined}>
+                  <a href={localizedPath(locale, `/essays/${stripLocalePrefix(essay.id)}`)}>{essay.data.title}</a>{!isDraft(essay) && <span class="public-dot">•</span>}
+                  <span class="text-muted text-sm">
+                    {" "}— {formatShortDate(essay.data.date, locale)}
+                    {essay.data.last_updated && (
+                      <> ({t(locale, "essays.updated")} {formatShortDate(essay.data.last_updated, locale)})</>
+                    )}
+                  </span>
+                  {essay.data.description && (
+                    <p class="text-muted text-sm">{essay.data.description}</p>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </section>
+        ))}
+      </>
+    ) : (
+      <p class="text-muted">{t(locale, "essays.noEssaysYet")}</p>
+    )}
+  </article>
+</Base>
+
+<style>
+  .essay-list {
+    list-style: none;
+    padding: 0;
+  }
+
+  .essay-list li {
+    margin-bottom: var(--spacing-lg);
+  }
+
+  .essay-list a {
+    font-size: 1.35rem;
+  }
+
+  .essay-list span {
+    font-size: 1.05rem;
+  }
+
+  .essay-list p {
+    font-size: 1.1rem;
+  }
+</style>

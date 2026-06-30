@@ -1,0 +1,427 @@
+/* ============================================================
+   Maurice — landing page styles
+   Warm parchment, Spectral serif display, boater-hat brand.
+   ============================================================ */
+
+:root{
+  --paper:#f1ece2;
+  --paper-2:#ebe4d6;
+  --card:#f8f4ec;
+  --card-2:#f3eee3;
+  --ink:#1b1a17;
+  --ink-2:#403d34;
+  --muted:#8a8475;
+  --muted-2:#b4ae9f;
+  --line:#dcd6c8;
+  --line-2:#cfc8b8;
+  --ochre:#cf7a12;
+  --ochre-deep:#a85d08;
+  --oxblood:#7c2d23;
+  --dark:#211f1a;
+  --dark-2:#2b281f;
+  --green:#2f7d54;
+
+  --serif:"Spectral",Georgia,"Times New Roman",serif;
+  --sans:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",system-ui,sans-serif;
+  --mono:ui-monospace,"SF Mono",Menlo,monospace;
+
+  --maxw:1180px;
+  --gut:24px;
+}
+
+*{box-sizing:border-box;}
+html{scroll-behavior:smooth;-webkit-text-size-adjust:100%;}
+body{
+  margin:0;background:var(--paper);color:var(--ink);
+  font-family:var(--sans);font-size:17px;line-height:1.6;
+  -webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;
+}
+img{max-width:100%;display:block;}
+a{color:inherit;text-decoration:none;}
+h1,h2,h3{margin:0;font-family:var(--serif);font-weight:600;letter-spacing:-.01em;line-height:1.06;}
+p{margin:0;text-wrap:pretty;}
+
+.wrap{max-width:var(--maxw);margin:0 auto;padding:0 var(--gut);}
+.eyebrow{
+  font-family:var(--mono);font-size:12.5px;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--ochre-deep);font-weight:600;margin-bottom:18px;
+}
+.section{padding:108px 0;}
+.section--alt{background:var(--paper-2);}
+.section-head{max-width:660px;margin:0 auto 64px;text-align:center;}
+.section-head.left{margin-left:0;text-align:left;}
+.section-head h2{font-size:clamp(30px,4.2vw,46px);}
+.section-head p{margin-top:18px;color:var(--ink-2);font-size:19px;}
+
+/* ---------- hat logomark (le melon — bowler) ---------- */
+.hatmark{width:1em;height:.74em;display:inline-block;vertical-align:-.06em;overflow:visible;}
+
+/* ---------- buttons ---------- */
+.btn{
+  display:inline-flex;align-items:center;gap:10px;justify-content:center;
+  font-family:var(--sans);font-size:16px;font-weight:600;letter-spacing:-.01em;
+  padding:14px 22px;border-radius:13px;border:1px solid transparent;cursor:pointer;
+  transition:transform .14s ease,background .16s ease,box-shadow .16s ease;white-space:nowrap;
+}
+.btn:active{transform:translateY(1px);}
+.btn-primary{background:var(--ink);color:var(--paper);box-shadow:0 8px 20px rgba(27,26,23,.16);}
+.btn-primary:hover{background:#000;box-shadow:0 12px 26px rgba(27,26,23,.22);}
+.btn-ghost{background:transparent;color:var(--ink);border-color:var(--line-2);}
+.btn-ghost:hover{background:var(--card);border-color:var(--muted-2);}
+.btn .ic{width:19px;height:19px;flex:0 0 auto;}
+.btn-sm{padding:10px 16px;font-size:14.5px;border-radius:11px;}
+
+/* ---------- nav ---------- */
+.nav{
+  position:sticky;top:0;z-index:50;background:rgba(241,236,226,.82);
+  backdrop-filter:saturate(140%) blur(12px);border-bottom:1px solid transparent;
+  transition:border-color .2s ease,background .2s ease;
+}
+.nav.scrolled{border-color:var(--line);background:rgba(241,236,226,.92);}
+.nav-in{display:flex;align-items:center;gap:24px;height:68px;}
+.brand{display:flex;align-items:center;gap:12px;font-family:"Young Serif",Georgia,serif;font-size:23px;font-weight:400;letter-spacing:-.01em;}
+.brand .hatmark{width:34px;height:25px;color:var(--ink);}
+.nav-links{display:flex;align-items:center;gap:30px;margin-left:14px;}
+.nav-links a{font-size:15px;color:var(--ink-2);font-weight:500;transition:color .15s ease;}
+.nav-links a:hover{color:var(--ink);}
+.nav-cta{margin-left:auto;display:flex;align-items:center;gap:12px;}
+.nav-toggle{display:none;}
+
+/* ---------- hero ---------- */
+.hero{padding:72px 0 96px;position:relative;overflow:hidden;}
+.hero-grid{display:grid;grid-template-columns:1.05fr .95fr;gap:56px;align-items:center;}
+.hero h1{font-size:clamp(40px,6vw,70px);letter-spacing:-.02em;}
+.hero h1 em{font-style:italic;color:var(--oxblood);}
+.hero-promise{margin-top:24px;font-family:var(--serif);font-size:clamp(22px,2.4vw,26px);line-height:1.32;font-weight:500;color:var(--ink);font-style:italic;max-width:24ch;}
+.hero-sub{margin-top:16px;font-size:18px;line-height:1.58;color:var(--ink-2);max-width:48ch;}
+.hero-cta{display:flex;flex-wrap:wrap;gap:14px;margin-top:36px;}
+.hero-micro{margin-top:22px;font-family:var(--mono);font-size:12.5px;color:var(--muted);letter-spacing:.02em;}
+.hero-micro b{color:var(--ink-2);font-weight:600;}
+
+/* soft paper texture accents */
+.hero::before{
+  content:"";position:absolute;right:-12%;top:-18%;width:46%;height:120%;
+  background:radial-gradient(closest-side,rgba(207,122,18,.10),transparent 70%);
+  pointer-events:none;
+}
+
+/* ---------- device: phone ---------- */
+.phone{
+  width:344px;border-radius:46px;background:#1b1a17;padding:11px;
+  box-shadow:0 40px 80px -24px rgba(27,26,23,.5),0 0 0 1px rgba(0,0,0,.06);
+  position:relative;
+}
+.phone-screen{
+  background:var(--paper);border-radius:36px;overflow:hidden;position:relative;
+  height:712px;display:flex;flex-direction:column;
+}
+.phone-notch{
+  position:absolute;left:50%;top:11px;transform:translateX(-50%);z-index:6;
+  width:108px;height:30px;background:#000;border-radius:16px;
+}
+.hero-phone{display:flex;justify-content:center;position:relative;}
+.hero-phone .phone{transform:rotate(1.4deg);}
+
+/* generic in-app chrome used by phone mockups */
+.sbar{height:50px;display:flex;align-items:center;padding:0 24px;flex:0 0 auto;}
+.sbar .t{font-weight:600;font-size:15px;}
+.sbar .r{margin-left:auto;display:flex;gap:6px;align-items:center;}
+.sbar .r svg{width:17px;color:var(--ink);}
+.batt{width:24px;height:12px;border:1.5px solid var(--ink);border-radius:3.5px;position:relative;display:flex;padding:1.5px;}
+.batt::after{content:"";position:absolute;right:-3px;top:3px;width:2px;height:5px;background:var(--ink);border-radius:0 1px 1px 0;}
+.batt i{background:var(--ink);border-radius:1px;width:75%;}
+
+.appbar{display:flex;align-items:center;gap:11px;padding:4px 16px 13px;border-bottom:1px solid rgba(0,0,0,.06);}
+.appbar .circ{width:38px;height:38px;border-radius:50%;border:1px solid var(--line);display:flex;align-items:center;justify-content:center;color:var(--ink-2);flex:0 0 auto;}
+.appbar .circ svg{width:17px;}
+.appbar .ttl{flex:1;min-width:0;}
+.appbar .ttl h4{margin:0;font-family:var(--serif);font-weight:600;font-size:18px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.appbar .ttl .meta{font-family:var(--mono);font-size:11px;color:var(--muted);margin-top:3px;}
+
+/* chat body */
+.chat{flex:1;overflow:hidden;padding:16px 18px;display:flex;flex-direction:column;gap:14px;}
+.bubble-u{align-self:flex-end;background:var(--ink);color:var(--paper);padding:11px 15px;border-radius:18px 18px 5px 18px;font-size:14.5px;max-width:80%;}
+.bubble-m{font-size:15px;line-height:1.5;color:var(--ink);}
+.bubble-m p{margin-bottom:10px;}
+.bubble-m .li{position:relative;padding-left:18px;margin-bottom:6px;}
+.bubble-m .li::before{content:"";position:absolute;left:4px;top:9px;width:5px;height:5px;border-radius:50%;background:var(--ink);}
+.kbd{font-family:var(--mono);font-size:.84em;background:var(--card-2);padding:1px 5px;border-radius:5px;}
+.datacard{border:1px solid var(--line);background:var(--card);border-radius:13px;padding:11px 13px;}
+.datacard .dc-h{font-family:var(--mono);font-size:10.5px;color:var(--ochre-deep);letter-spacing:.06em;margin-bottom:8px;text-transform:uppercase;}
+.datacard .dc-row{display:flex;justify-content:space-between;font-size:12.5px;padding:4px 0;border-top:1px solid var(--line);}
+.datacard .dc-row:first-of-type{border-top:0;}
+.datacard .dc-row span:last-child{font-family:var(--mono);color:var(--ink-2);}
+
+/* composer row inside phone */
+.composer{flex:0 0 auto;margin:8px 12px 14px;background:var(--card);border:1px solid rgba(0,0,0,.05);border-radius:24px;padding:13px 13px 9px;box-shadow:0 6px 18px rgba(40,36,28,.07);}
+.composer .ph{font-size:15px;color:var(--muted-2);font-weight:500;padding:2px 4px 12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.composer .tools{display:flex;align-items:center;gap:13px;}
+.composer .tools svg{width:18px;color:var(--muted);}
+.composer .sp{flex:1;}
+.pill{display:inline-flex;align-items:center;gap:5px;height:30px;padding:0 9px 0 11px;border-radius:16px;border:1px solid var(--line);background:var(--paper);font-size:12.5px;font-weight:600;color:var(--ink);}
+.pill svg{width:12px;color:var(--muted);}
+.hatbtn{width:38px;height:38px;border-radius:50%;border:1px solid var(--line);background:var(--paper);position:relative;display:flex;align-items:center;justify-content:center;flex:0 0 auto;}
+.hatbtn .hatmark{width:23px;height:17px;color:var(--ink);}
+.hatbtn .bdg{position:absolute;right:-2px;bottom:-2px;width:17px;height:17px;border-radius:50%;background:var(--ink);border:2px solid var(--card);display:flex;align-items:center;justify-content:center;}
+.hatbtn .bdg svg{width:9px;color:#fff;}
+
+/* ---------- spotlight rows ---------- */
+.spot{display:grid;grid-template-columns:1fr 1fr;gap:60px;align-items:center;}
+.spot + .spot{margin-top:104px;}
+.spot.flip .spot-media{order:2;}
+.spot-copy h3{font-size:clamp(26px,3.4vw,36px);}
+.spot-copy .eyebrow{margin-bottom:14px;}
+.spot-copy p{margin-top:18px;color:var(--ink-2);font-size:18px;}
+.spot-list{margin-top:22px;display:flex;flex-direction:column;gap:12px;}
+.spot-list .row{display:flex;gap:12px;align-items:flex-start;font-size:16px;color:var(--ink-2);}
+.spot-list .row svg{width:19px;height:19px;color:var(--ochre-deep);flex:0 0 auto;margin-top:2px;}
+.spot-media{display:flex;justify-content:center;}
+
+/* screenshot slot framing (easy to swap for real images) */
+.shot{
+  position:relative;border-radius:20px;background:var(--card);
+  border:1px solid var(--line);box-shadow:0 30px 60px -30px rgba(27,26,23,.4);
+  overflow:hidden;width:100%;
+}
+.shot-tag{
+  position:absolute;top:10px;right:10px;z-index:3;font-family:var(--mono);font-size:9.5px;
+  letter-spacing:.05em;color:var(--muted);background:rgba(248,244,236,.85);
+  border:1px dashed var(--line-2);border-radius:6px;padding:3px 7px;text-transform:uppercase;
+}
+
+/* composer mockup card */
+.cmp-card{padding:18px;}
+.cmp-card h5{margin:0 0 4px;font-family:var(--serif);font-size:17px;font-weight:600;}
+.cmp-card .cmp-sub{font-family:var(--mono);font-size:11px;color:var(--muted);margin-bottom:14px;}
+.cmp-item{display:flex;align-items:center;gap:11px;padding:10px 12px;border:1px solid var(--line);border-radius:12px;background:var(--paper);margin-bottom:9px;}
+.cmp-item .ico{width:30px;height:30px;border-radius:8px;display:flex;align-items:center;justify-content:center;flex:0 0 auto;color:#fff;}
+.cmp-item .ico svg{width:16px;}
+.cmp-item .nm{flex:1;min-width:0;}
+.cmp-item .nm b{font-size:14px;font-weight:600;display:block;}
+.cmp-item .nm span{font-size:11.5px;color:var(--muted);}
+.cmp-item .tok{font-family:var(--mono);font-size:11px;color:var(--ink-2);}
+.cmp-item.locked{background:var(--card-2);}
+.cmp-item.locked .lk{width:13px;color:var(--muted);}
+.budget{margin-top:14px;}
+.budget .bar{height:8px;border-radius:5px;background:var(--card-2);overflow:hidden;border:1px solid var(--line);}
+.budget .bar i{display:block;height:100%;width:54%;background:linear-gradient(90deg,var(--ochre),#e0982f);}
+.budget .lab{display:flex;justify-content:space-between;font-family:var(--mono);font-size:11px;color:var(--muted);margin-top:7px;}
+.budget .lab b{color:var(--ink-2);font-weight:600;}
+
+/* hats grid mockup */
+.hats-card{padding:20px;}
+.hats-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;}
+.hatcell{aspect-ratio:1;border-radius:14px;border:1px solid var(--line);background:var(--paper);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:7px;}
+.hatcell .hatmark{width:38px;height:28px;}
+.hatcell.sel{border-color:var(--ochre);box-shadow:0 0 0 2px rgba(207,122,18,.25);background:var(--card-2);}
+.hatcell .nm{font-size:10.5px;color:var(--muted);font-weight:600;}
+
+/* user picker mockup */
+.pick-card{padding:24px 20px;text-align:center;}
+.pick-card h5{font-family:var(--serif);font-size:20px;font-weight:600;margin:0 0 4px;}
+.pick-card .pk-sub{font-size:13px;color:var(--muted);margin-bottom:20px;}
+.pick-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:14px;}
+.member{display:flex;flex-direction:column;align-items:center;gap:9px;padding:16px 8px;border-radius:16px;border:1px solid transparent;}
+.member.active{border-color:var(--line);background:var(--paper);}
+.member .av{width:62px;height:62px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-family:var(--serif);font-size:25px;font-weight:600;color:#fff;}
+.member .mn{font-size:14px;font-weight:600;}
+.member .role{font-size:10.5px;color:var(--muted);font-family:var(--mono);}
+.pindots{display:flex;gap:9px;justify-content:center;margin-top:20px;}
+.pindots i{width:13px;height:13px;border-radius:50%;border:1.5px solid var(--muted-2);}
+.pindots i.on{background:var(--ink);border-color:var(--ink);}
+
+/* macOS window mockup */
+.mac{border-radius:14px;overflow:hidden;border:1px solid var(--line-2);background:var(--card);box-shadow:0 40px 80px -36px rgba(27,26,23,.5);width:100%;}
+.mac-bar{height:38px;display:flex;align-items:center;gap:8px;padding:0 14px;background:var(--card-2);border-bottom:1px solid var(--line);}
+.mac-bar .dot{width:12px;height:12px;border-radius:50%;}
+.mac-bar .r{background:#ec6a5e;}.mac-bar .y{background:#f3bf4f;}.mac-bar .g{background:#61c454;}
+.mac-bar .addr{margin-left:14px;font-family:var(--mono);font-size:11px;color:var(--muted);}
+.mac-body{display:flex;min-height:260px;}
+.mac-side{width:128px;border-right:1px solid var(--line);padding:14px 10px;background:var(--card-2);flex:0 0 auto;}
+.mac-side .grp{font-family:var(--mono);font-size:9.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin:14px 6px 7px;}
+.mac-side .grp:first-child{margin-top:0;}
+.mac-side .it{display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:8px;font-size:12.5px;color:var(--ink-2);}
+.mac-side .it.on{background:var(--ink);color:var(--paper);}
+.mac-side .it .hatmark{width:17px;height:13px;}
+.mac-side .it .d{width:8px;height:8px;border-radius:50%;flex:0 0 auto;}
+.mac-main{flex:1;padding:20px 22px;}
+
+/* ---------- feature grid ---------- */
+.fgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;}
+.fcard{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:26px 24px;transition:transform .16s ease,box-shadow .16s ease,border-color .16s ease;}
+.fcard:hover{transform:translateY(-3px);box-shadow:0 18px 36px -22px rgba(27,26,23,.4);border-color:var(--line-2);}
+.fcard .fi{width:44px;height:44px;border-radius:12px;background:var(--paper-2);border:1px solid var(--line);display:flex;align-items:center;justify-content:center;margin-bottom:18px;color:var(--oxblood);}
+.fcard .fi svg{width:22px;height:22px;}
+.fcard h4{font-family:var(--serif);font-size:21px;font-weight:600;margin:0 0 9px;}
+.fcard p{font-size:15px;color:var(--ink-2);line-height:1.55;}
+
+/* ---------- download ---------- */
+.dl-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:20px;margin-top:8px;}
+.dl-card{background:var(--card);border:1px solid var(--line);border-radius:20px;padding:30px 26px;display:flex;flex-direction:column;position:relative;}
+.dl-card.feat{border-color:var(--ink);box-shadow:0 24px 50px -30px rgba(27,26,23,.5);}
+.dl-tag{position:absolute;top:-12px;left:26px;background:var(--ink);color:var(--paper);font-family:var(--mono);font-size:10px;letter-spacing:.08em;text-transform:uppercase;padding:4px 10px;border-radius:8px;}
+.dl-tag.soon{background:var(--ochre-deep);}
+.btn.is-soon{opacity:.5;pointer-events:none;cursor:default;}
+.dl-ico{width:54px;height:54px;border-radius:14px;background:var(--paper-2);border:1px solid var(--line);display:flex;align-items:center;justify-content:center;margin-bottom:18px;color:var(--ink);}
+.dl-ico svg{width:28px;height:28px;}
+.dl-card h4{font-family:var(--serif);font-size:23px;font-weight:600;margin:0 0 7px;}
+.dl-card .req{font-family:var(--mono);font-size:11px;color:var(--ochre-deep);margin-bottom:12px;letter-spacing:.03em;}
+.dl-card p{font-size:15px;color:var(--ink-2);line-height:1.55;flex:1;}
+.dl-card .btn{margin-top:22px;width:100%;}
+.dl-meta{margin-top:12px;font-family:var(--mono);font-size:11px;color:var(--muted);text-align:center;}
+
+/* connect diagram */
+.connect{margin-top:64px;background:var(--card);border:1px solid var(--line);border-radius:20px;padding:34px;}
+.connect h4{font-family:var(--serif);font-size:22px;font-weight:600;text-align:center;margin:0 0 6px;}
+.connect .csub{text-align:center;color:var(--ink-2);font-size:15.5px;margin-bottom:30px;}
+.cflow{display:flex;align-items:center;justify-content:center;gap:18px;flex-wrap:wrap;}
+.cnode{display:flex;flex-direction:column;align-items:center;gap:10px;text-align:center;min-width:120px;}
+.cnode .cbox{width:74px;height:74px;border-radius:18px;background:var(--paper);border:1px solid var(--line-2);display:flex;align-items:center;justify-content:center;color:var(--ink);}
+.cnode .cbox svg{width:34px;height:34px;}
+.cnode .cl{font-size:13.5px;font-weight:600;}
+.cnode .cd{font-family:var(--mono);font-size:10.5px;color:var(--muted);}
+.carrow{display:flex;flex-direction:column;align-items:center;color:var(--muted);font-family:var(--mono);font-size:10px;}
+.carrow svg{width:38px;color:var(--line-2);}
+
+/* ---------- philosophy band ---------- */
+.philo{background:var(--dark);color:var(--paper);padding:104px 0;}
+.philo .wrap{max-width:840px;text-align:center;}
+.philo .eyebrow{color:#e0982f;}
+.philo blockquote{margin:0;font-family:var(--serif);font-size:clamp(26px,3.6vw,40px);line-height:1.28;font-weight:500;letter-spacing:-.01em;}
+.philo blockquote em{color:#e0982f;font-style:italic;}
+.philo .attrib{margin-top:28px;font-family:var(--mono);font-size:13px;color:var(--muted-2);letter-spacing:.02em;}
+
+/* why-a-mac note inside philosophy band */
+.philo-note{max-width:760px;margin:60px auto 0;text-align:left;border-top:1px solid rgba(255,255,255,.14);padding-top:42px;}
+.philo-note-h{font-family:var(--serif);font-size:clamp(22px,2.6vw,28px);font-weight:600;color:var(--paper);margin:0 0 20px;letter-spacing:-.01em;}
+.philo-note p{color:var(--muted-2);font-size:17px;line-height:1.64;}
+.philo-note p + p{margin-top:18px;}
+.philo-note p em{color:#e0982f;font-style:italic;}
+
+/* ---------- maker's note ---------- */
+.maker{background:var(--paper-2);padding:96px 0;}
+.maker .wrap{max-width:760px;}
+.maker .eyebrow{margin-bottom:22px;}
+.maker-note{font-family:var(--serif);font-size:clamp(21px,2.4vw,26px);line-height:1.5;color:var(--ink);font-weight:400;letter-spacing:-.005em;}
+.maker-sign{font-style:italic;color:var(--oxblood);white-space:nowrap;}
+.maker-strip{margin-top:32px;font-family:var(--mono);font-size:12.5px;color:var(--muted);letter-spacing:.02em;}
+.maker-strip a{color:var(--ochre-deep);font-weight:600;border-bottom:1px solid var(--line-2);transition:color .15s ease,border-color .15s ease;}
+.maker-strip a:hover{color:var(--ink);border-color:var(--muted-2);}
+
+/* ---------- footer ---------- */
+.foot{background:var(--dark-2);color:var(--muted-2);padding:64px 0 40px;}
+.foot-top{display:flex;justify-content:space-between;gap:40px;flex-wrap:wrap;padding-bottom:40px;border-bottom:1px solid rgba(255,255,255,.08);}
+.foot .brand{color:var(--paper);}
+.foot .brand .hatmark{color:var(--paper);}
+.foot-tag{margin-top:14px;font-size:14px;max-width:30ch;line-height:1.5;}
+.foot-cols{display:flex;gap:64px;flex-wrap:wrap;}
+.foot-col h6{margin:0 0 14px;font-family:var(--mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);font-weight:600;}
+.foot-col a{display:block;font-size:14.5px;color:var(--muted-2);margin-bottom:9px;transition:color .15s ease;}
+.foot-col a:hover{color:var(--paper);}
+.foot-bot{display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap;padding-top:28px;font-size:13px;color:var(--muted);}
+
+/* ---------- reveal (progressive enhancement: hidden only when JS arms it) ---------- */
+.reveal-ready .reveal{opacity:0;transform:translateY(18px);transition:opacity .7s cubic-bezier(.22,1,.36,1),transform .7s cubic-bezier(.22,1,.36,1);}
+.reveal.in{opacity:1;transform:none;}
+@media (prefers-reduced-motion:reduce){.reveal-ready .reveal{opacity:1;transform:none;transition:none;}}
+
+/* ---------- responsive ---------- */
+@media (max-width:1000px){
+  .hero-grid{grid-template-columns:1fr;gap:48px;}
+  .hero-phone{order:-1;}
+  .spot{grid-template-columns:1fr;gap:36px;}
+  .spot.flip .spot-media{order:0;}
+  .fgrid{grid-template-columns:repeat(2,1fr);}
+  .dl-grid{grid-template-columns:1fr;max-width:460px;margin:0 auto;}
+  .dl-card.feat{order:-1;}
+}
+@media (max-width:680px){
+  .section{padding:76px 0;}
+  .hero{padding:40px 0 64px;}
+  .hero-grid{gap:40px;}
+  .hero-phone{order:0;}
+  .hero-phone .phone{transform:rotate(1.4deg) scale(.86);transform-origin:top center;}
+  .nav-links{display:none;}
+  .nav-toggle{display:flex;}
+  .fgrid{grid-template-columns:1fr;}
+  .hats-grid{grid-template-columns:repeat(4,1fr);}
+  .foot-top{flex-direction:column;gap:32px;}
+  .cflow{flex-direction:column;}
+  .carrow svg{transform:rotate(90deg);}
+}
+
+/* ============================================================
+   Real screenshots overlay the CSS mockups (local addition).
+   Drop a PNG into screenshots/ and it covers the mockup beneath;
+   if the file is missing the <img> removes itself (onerror) so the
+   mockup keeps showing. Swapping needs no HTML edits — see
+   screenshots/README.md for each slot's filename + size.
+   ============================================================ */
+/* Phone hero: the screenshot fills the fixed-height phone screen (cover). */
+.phone-shot{
+  position:absolute;inset:0;width:100%;height:100%;display:block;
+  object-fit:cover;object-position:top center;background:var(--card);
+  z-index:5; /* below the notch (z-index:6), like a real screen */
+}
+/* Spotlight cards: a real screenshot defines the card's own height (no
+   over-crop), and the CSS mockup beneath is hidden. With no file the <img>
+   removes itself (onerror) and the mockup shows — so swapping still needs no
+   HTML edits, only that the screenshot matches the card's rough proportions. */
+.shot-img{display:block;width:100%;height:auto;border-radius:inherit;background:var(--card);}
+.shot.has-shot{padding:0;}
+.shot.has-shot .shot-tag{display:none;}
+.shot.has-shot > :not(.shot-img):not(.shot-tag){display:none;}
+
+/* ============================================================
+   Memory-loop graphic (spotlight 1): a written note ⇄ the context
+   tray, joined by a two-way arrow. Pure CSS — no screenshot — so it
+   reads the same on every platform. Cards balance because both are
+   .memcard; collapses to a column on narrow screens.
+   ============================================================ */
+.memloop{display:flex;align-items:center;gap:14px;width:100%;}
+.memcard{
+  margin:0;flex:1 1 0;min-width:0;
+  border:1px solid var(--line);border-radius:18px;background:var(--card);
+  box-shadow:0 30px 60px -30px rgba(27,26,23,.4);padding:16px;
+}
+.memcard figcaption{
+  margin-top:13px;font-family:var(--mono);font-size:10px;letter-spacing:.03em;
+  color:var(--muted);text-align:center;
+}
+.memnote-h{font-family:var(--mono);font-size:11px;color:var(--muted);display:flex;align-items:center;gap:7px;}
+.memnote-h .dot{width:8px;height:8px;border-radius:50%;background:#2f7d54;flex:0 0 auto;}
+.memnote-b{margin-top:12px;display:flex;flex-direction:column;gap:5px;font-size:12.5px;color:var(--ink-2);}
+.memnote-b b{font-family:var(--serif);font-size:13.5px;font-weight:600;margin-bottom:3px;}
+.memtray h5{margin:0 0 3px;font-family:var(--serif);font-size:15px;font-weight:600;}
+.memtray-sub{font-family:var(--mono);font-size:10.5px;color:var(--muted);margin-bottom:12px;}
+.memtray .cmp-item{margin-bottom:8px;}
+.memtray .cmp-item:last-of-type{margin-bottom:0;}
+.memloop-arrow{flex:0 0 auto;display:flex;flex-direction:column;align-items:center;gap:6px;color:var(--ochre-deep);}
+.memloop-arrow svg{width:38px;height:38px;}
+.memloop-lab{font-family:var(--mono);font-size:9px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);}
+@media (max-width:560px){
+  .memloop{flex-direction:column;}
+  .memloop-arrow{transform:rotate(90deg);}
+}
+
+/* ============================================================
+   Group-chat mockup (spotlight 2): several members in one thread,
+   Maurice summoned to answer and take notes. Pure CSS; a real
+   screenshots/group-chat.png overlays it when present.
+   ============================================================ */
+.gc-card{padding:16px;}
+.gc-head{margin-bottom:14px;}
+.gc-head h5{margin:0;font-family:var(--serif);font-size:16px;font-weight:600;}
+.gc-head .gc-sub{font-family:var(--mono);font-size:10.5px;color:var(--muted);}
+.gc-row{display:flex;gap:10px;margin-bottom:11px;align-items:flex-start;}
+.gc-av{width:26px;height:26px;border-radius:50%;color:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;flex:0 0 auto;}
+.gc-hat{background:var(--ink);}
+.gc-hat .hatmark{width:15px;height:11px;color:#fff;}
+.gc-b{background:var(--paper);border:1px solid var(--line);border-radius:12px;padding:8px 12px;font-size:13.5px;color:var(--ink);line-height:1.45;}
+.gc-b.mau{background:var(--card-2);}
+.gc-who{display:block;font-size:11px;font-weight:600;color:var(--muted);margin-bottom:2px;}
+.gc-summon{display:flex;align-items:center;justify-content:center;gap:7px;font-family:var(--mono);font-size:10.5px;letter-spacing:.02em;color:var(--muted);margin:2px 0 12px;}
+.gc-summon .hatmark{width:15px;height:11px;color:var(--ochre-deep);}
+.gc-note{display:flex;align-items:center;gap:8px;margin-top:4px;padding:9px 12px;border:1px dashed var(--line-2);border-radius:10px;font-size:12px;color:var(--ink-2);background:var(--paper-2);}
+.gc-note svg{width:15px;height:15px;color:var(--ochre-deep);flex:0 0 auto;}
+.gc-note b{font-weight:600;}

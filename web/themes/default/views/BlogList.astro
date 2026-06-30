@@ -1,0 +1,71 @@
+---
+import Base from "@app/layouts/Base.astro";
+import type { Locale } from "@app/i18n/config";
+import { t, localizedPath, formatDate, stripLocalePrefix } from "@app/i18n/utils";
+import { getCollection } from "astro:content";
+import { isPublic } from "@app/lib/flags";
+
+interface Props {
+  locale?: Locale;
+}
+
+const { locale = "en" } = Astro.props;
+
+const posts = await getCollection("blog", ({ id, data }) => (import.meta.env.DEV || isPublic(data)) && data.locale === locale)
+  .then((posts) => posts.sort((a, b) => b.data.date.valueOf() - a.data.date.valueOf()));
+
+function isDraft(post: typeof posts[number]) {
+  return !isPublic(post.data);
+}
+---
+
+<Base title={t(locale, "blog.title")} description={t(locale, "blog.description")} locale={locale}>
+  <article class="prose">
+    <h1>{t(locale, "blog.title")}</h1>
+    <p class="text-muted">{t(locale, "blog.description")}</p>
+    <p class="draft-empty-notice text-muted">All items on this page are drafts.</p>
+
+    {posts.length > 0 ? (
+      <ul class="post-list">
+        {posts.map((post) => (
+          <li data-draft={isDraft(post) ? "true" : undefined}>
+            <time datetime={post.data.date.toISOString()} class="text-muted text-sm">
+              {formatDate(post.data.date, locale, { year: "numeric", month: "short", day: "numeric" })}
+            </time>
+            <a href={localizedPath(locale, `/blog/${stripLocalePrefix(post.id)}`)}>{post.data.title}</a>{!isDraft(post) && <span class="public-dot">•</span>}
+            {post.data.description && (
+              <p class="text-muted text-sm">{post.data.description}</p>
+            )}
+          </li>
+        ))}
+      </ul>
+    ) : (
+      <p class="text-muted">{t(locale, "blog.noPostsYet")}</p>
+    )}
+  </article>
+</Base>
+
+<style>
+  .post-list {
+    list-style: none;
+    padding: 0;
+  }
+
+  .post-list li {
+    margin-bottom: var(--spacing-lg);
+  }
+
+  .post-list time {
+    display: block;
+    margin-bottom: var(--spacing-xs);
+    font-size: 1.05rem;
+  }
+
+  .post-list a {
+    font-size: 1.35rem;
+  }
+
+  .post-list p {
+    font-size: 1.1rem;
+  }
+</style>

@@ -1,0 +1,24 @@
+---
+import PersonDetail from "../../../components/PersonDetail.astro";
+import { getCollection } from "astro:content";
+import { isPublic } from "../../../lib/flags";
+import { stripLocalePrefix } from "../../../i18n/utils";
+
+export const prerender = process.env.WEB_SSR !== "1";
+
+export async function getStaticPaths() {
+  const people = await getCollection("people", ({ data }) => data.locale === "en" && (import.meta.env.DEV || isPublic(data)));
+  return people.map((person) => ({
+    params: { id: stripLocalePrefix(person.id) },
+    props: { person },
+  }));
+}
+
+let __props = Astro.props;
+if (!__props.person) {
+  __props = (await getStaticPaths()).find((e) => e.params.id === Astro.params.id)?.props ?? {};
+}
+const { person } = __props;
+if (!person) return new Response("Not found", { status: 404 });
+---
+<PersonDetail person={person} locale="en" />

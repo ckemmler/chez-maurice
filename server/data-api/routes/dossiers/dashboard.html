@@ -1,0 +1,665 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Dossiers — Chez Maurice</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      --font-serif: 'Iowan Old Style', 'Palatino Linotype', Palatino, Georgia, serif;
+      --font-mono: 'SF Mono', SFMono-Regular, ui-monospace, Menlo, Consolas, monospace;
+      --ink: #1a1a1a; --ink-light: #4a4a4a; --ink-muted: #6b6b6b; --ink-faint: #999;
+      --paper: #fafaf8; --paper-warm: #f5f3ef; --paper-rule: #e0ddd6;
+      --accent: #8b4513; --accent-light: #b8860b;
+      --link: #2c5282; --link-hover: #1a365d;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --ink: #e8e6e1; --ink-light: #bbb8b0; --ink-muted: #8a8780; --ink-faint: #6b6860;
+        --paper: #1a1915; --paper-warm: #22211c; --paper-rule: #3a3830;
+        --accent: #d4a064; --accent-light: #e0c080;
+        --link: #7bb0d4; --link-hover: #a0ccee;
+      }
+    }
+    html { font-size: 100%; -webkit-font-smoothing: antialiased; }
+    body { font-family: var(--font-sans); font-size: 0.9375rem; line-height: 1.5;
+      color: var(--ink); background: var(--paper); }
+
+    /* Layout */
+    .shell { max-width: 1100px; margin: 0 auto; padding: 2rem 2.5rem; }
+    header { display: flex; align-items: baseline; justify-content: space-between;
+      margin-bottom: 2rem; flex-wrap: wrap; gap: 1rem; }
+    header h1 { font-size: 1.75rem; letter-spacing: -0.03em; }
+    .nav-links { display: flex; gap: 0.5rem; }
+    .nav-links a { color: var(--ink-muted); text-decoration: none; font-size: 0.8125rem;
+      font-weight: 500; padding: 0.25rem 0.5rem; }
+    .nav-links a:hover { color: var(--ink); }
+
+    /* Tabs */
+    .tabs { display: flex; gap: 0; border-bottom: 1px solid var(--paper-rule);
+      margin-bottom: 1.5rem; }
+    .tab { padding: 0.5rem 1.25rem; font-weight: 600; font-size: 0.8125rem;
+      text-transform: uppercase; letter-spacing: 0.06em; color: var(--ink-muted);
+      border-bottom: 2px solid transparent; cursor: pointer; background: none;
+      border-top: none; border-left: none; border-right: none; }
+    .tab:hover { color: var(--ink); }
+    .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+    .tab-panel { display: none; }
+    .tab-panel.active { display: block; }
+
+    /* Cards */
+    .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+      gap: 1rem; margin-top: 1rem; }
+    .card { background: var(--paper-warm); border: 1px solid var(--paper-rule);
+      border-radius: 10px; padding: 1.25rem; text-decoration: none; color: inherit;
+      transition: border-color 0.15s; display: block; }
+    .card:hover { border-color: var(--accent); text-decoration: none; }
+    .card-title { font-weight: 600; font-size: 0.9375rem; margin-bottom: 0.25rem;
+      color: var(--ink); display: -webkit-box; -webkit-line-clamp: 3;
+      -webkit-box-orient: vertical; overflow: hidden; }
+    .card-meta { font-size: 0.75rem; color: var(--ink-muted); margin-bottom: 0.5rem; }
+    .card-excerpt { font-size: 0.8125rem; color: var(--ink-light); line-height: 1.45;
+      display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical;
+      overflow: hidden; }
+
+    /* Badges */
+    .badge { display: inline-block; font-size: 0.6875rem; font-weight: 700;
+      text-transform: uppercase; letter-spacing: 0.06em; padding: 0.1em 0.5em;
+      border-radius: 4px; }
+    .badge-dr { background: #2c528220; color: var(--link); }
+    .badge-briefing { background: #22763820; color: #227638; }
+    .badge-signal { background: #8b451320; color: var(--accent); }
+    .badge-complete { background: #22763820; color: #227638; }
+    .badge-running { background: #b8860b20; color: var(--accent-light); }
+    .badge-pending { background: #6b6b6b20; color: var(--ink-muted); }
+    .badge-failed { background: #cc000020; color: #cc0000; }
+    @media (prefers-color-scheme: dark) {
+      .badge-dr { background: #7bb0d430; }
+      .badge-briefing { background: #4abb7030; }
+      .badge-failed { background: #ff444430; color: #ff6666; }
+    }
+
+    /* Topic list */
+    .topic-row { display: flex; align-items: center; gap: 1rem; padding: 0.75rem 0;
+      border-bottom: 1px solid var(--paper-rule); }
+    .topic-row:last-child { border-bottom: none; }
+    .topic-name { font-weight: 600; flex: 1; }
+    .topic-format { font-size: 0.75rem; color: var(--ink-muted); }
+    .topic-active { font-size: 0.75rem; }
+
+    /* Schedule table */
+    table { width: 100%; border-collapse: collapse; font-size: 0.8125rem; margin-top: 1rem; }
+    th { text-align: left; font-weight: 600; color: var(--ink-muted); font-size: 0.75rem;
+      text-transform: uppercase; letter-spacing: 0.06em; padding: 0.5rem 0.75rem;
+      border-bottom: 1px solid var(--paper-rule); }
+    td { padding: 0.5rem 0.75rem; border-bottom: 1px solid var(--paper-rule); }
+
+    /* Loading / empty */
+    .empty { color: var(--ink-muted); font-size: 0.875rem; padding: 2rem 0;
+      text-align: center; }
+    .loading { color: var(--ink-faint); font-size: 0.8125rem; }
+
+    /* Forms */
+    .research-form { margin-bottom: 1.5rem; }
+    .research-form textarea { width: 100%; padding: 0.5rem 0.75rem; border: 1px solid var(--paper-rule);
+      border-radius: 6px; font-size: 0.875rem; background: var(--paper-warm);
+      color: var(--ink); font-family: var(--font-sans); resize: vertical; min-height: 4rem; }
+    .research-form-options { display: flex; gap: 1rem; margin-top: 0.75rem; flex-wrap: wrap;
+      align-items: center; }
+    .research-form-options label { font-size: 0.8125rem; color: var(--ink-light);
+      display: flex; align-items: center; gap: 0.3rem; cursor: pointer; }
+    .research-form-options select, .research-form-options input[type="text"] {
+      padding: 0.35rem 0.5rem; border: 1px solid var(--paper-rule);
+      border-radius: 6px; font-size: 0.8125rem; background: var(--paper-warm);
+      color: var(--ink); font-family: var(--font-sans); }
+    .research-form-options input[type="text"] { width: 14rem; }
+    .research-form-actions { display: flex; justify-content: flex-end; margin-top: 0.75rem; }
+    .btn { padding: 0.5rem 1rem; border: 1px solid var(--accent);
+      border-radius: 6px; background: var(--accent); color: var(--paper); font-weight: 600;
+      font-size: 0.8125rem; cursor: pointer; }
+    .btn:hover { opacity: 0.9; }
+    .btn-sm { padding: 0.25rem 0.6rem; font-size: 0.75rem; }
+    .btn-outline { background: transparent; color: var(--accent); }
+    .btn-outline:hover { background: var(--accent); color: var(--paper); }
+    .btn-danger { border-color: #cc0000; background: var(--paper-warm); color: #cc0000; }
+    .btn-danger:hover { background: #cc0000; color: var(--paper); }
+
+    /* Topic form */
+    .topic-form { background: var(--paper-warm); border: 1px solid var(--paper-rule);
+      border-radius: 10px; padding: 1.25rem; margin-bottom: 1.5rem; display: none; }
+    .topic-form.open { display: block; }
+    .topic-form label { display: block; font-size: 0.75rem; font-weight: 600;
+      color: var(--ink-muted); text-transform: uppercase; letter-spacing: 0.04em;
+      margin-bottom: 0.25rem; margin-top: 0.75rem; }
+    .topic-form label:first-child { margin-top: 0; }
+    .topic-form input, .topic-form textarea, .topic-form select {
+      width: 100%; padding: 0.5rem 0.75rem; border: 1px solid var(--paper-rule);
+      border-radius: 6px; font-size: 0.875rem; background: var(--paper);
+      color: var(--ink); font-family: var(--font-sans); }
+    .topic-form textarea { resize: vertical; min-height: 3rem; }
+    .topic-form-actions { display: flex; gap: 0.5rem; margin-top: 1rem; }
+
+    /* Topic row enhancements */
+    .topic-actions { display: flex; gap: 0.4rem; }
+
+    @media (max-width: 600px) {
+      .shell { padding: 1rem; }
+      .cards { grid-template-columns: 1fr; }
+      .research-form-options { flex-direction: column; align-items: flex-start; }
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <header>
+      <h1>Dossiers</h1>
+      <nav class="nav-links">
+        <a href="/articles">Articles</a>
+        <a href="/books">Books</a>
+      </nav>
+    </header>
+
+    <div class="tabs">
+      <button class="tab active" data-tab="research">Deep Research</button>
+      <button class="tab" data-tab="briefings">Briefings</button>
+      <button class="tab" data-tab="signals">Signal Reports</button>
+    </div>
+
+    <!-- Deep Research -->
+    <div id="tab-research" class="tab-panel active">
+      <form class="research-form" id="research-form">
+        <textarea id="research-input" rows="3" placeholder="Ask a research question..."></textarea>
+        <div class="research-form-options">
+          <label><input type="checkbox" id="rf-extract-articles" /> Extract article recommendations</label>
+          <label><input type="checkbox" id="rf-extract-books" /> Extract book recommendations</label>
+          <select id="rf-web-provider">
+            <option value="">Web search: Default</option>
+            <option value="perplexity">Perplexity</option>
+            <option value="tavily">Tavily</option>
+            <option value="duckduckgo">DuckDuckGo</option>
+          </select>
+          <select id="rf-llm-model">
+            <option value="">LLM: Default</option>
+            <option value="claude-sonnet-4-5-20250929">Claude Sonnet 4.5</option>
+            <option value="claude-opus-4-6">Claude Opus 4.6</option>
+            <option value="claude-haiku-4-5-20251001">Claude Haiku 4.5</option>
+            <option value="__custom__">Custom model...</option>
+          </select>
+          <input type="text" id="rf-llm-custom" placeholder="e.g. ollama/llama3" style="display:none;" />
+        </div>
+        <div class="research-form-actions">
+          <button class="btn" type="submit">Research</button>
+        </div>
+      </form>
+      <div id="research-list" class="cards">
+        <div class="empty loading">Loading...</div>
+      </div>
+    </div>
+
+    <!-- Briefings -->
+    <div id="tab-briefings" class="tab-panel">
+      <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:1rem;">
+        <h3>Topics</h3>
+        <div style="display:flex; gap:0.5rem;">
+          <button class="btn btn-sm btn-outline" onclick="generateAllBriefings()">Run All</button>
+          <button class="btn btn-sm" id="new-topic-btn" onclick="toggleTopicForm()">+ New Topic</button>
+        </div>
+      </div>
+
+      <div class="topic-form" id="topic-form">
+        <label>Name</label>
+        <input type="text" id="tf-name" placeholder="e.g. AI Development Tooling" />
+        <label>Description</label>
+        <textarea id="tf-desc" placeholder="What should this briefing cover?"></textarea>
+        <label>Recommendation Types</label>
+        <div style="display:flex; gap:1.5rem; margin-top:0.25rem;">
+          <label style="display:flex; align-items:center; gap:0.3rem; font-size:0.8125rem; color:var(--ink-light); cursor:pointer; margin:0; text-transform:none; letter-spacing:0;">
+            <input type="checkbox" id="tf-extract-articles" checked /> Articles
+          </label>
+          <label style="display:flex; align-items:center; gap:0.3rem; font-size:0.8125rem; color:var(--ink-light); cursor:pointer; margin:0; text-transform:none; letter-spacing:0;">
+            <input type="checkbox" id="tf-extract-videos" checked /> Videos
+          </label>
+          <label style="display:flex; align-items:center; gap:0.3rem; font-size:0.8125rem; color:var(--ink-light); cursor:pointer; margin:0; text-transform:none; letter-spacing:0;">
+            <input type="checkbox" id="tf-extract-podcasts" checked /> Podcasts
+          </label>
+        </div>
+        <label>Max Source Age (days)</label>
+        <input type="number" id="tf-max-age" value="7" min="1" style="width:6rem;" />
+        <label>Search Queries (one per line, optional — auto-generated if empty)</label>
+        <textarea id="tf-queries" placeholder="Leave empty to auto-generate from description&#10;Or add manual queries:&#10;AI code generation 2026&#10;LLM IDE integration"></textarea>
+        <label>Web Search Provider</label>
+        <select id="tf-web-provider">
+          <option value="">Default</option>
+          <option value="perplexity">Perplexity</option>
+          <option value="tavily">Tavily</option>
+          <option value="duckduckgo">DuckDuckGo</option>
+        </select>
+        <label>LLM Model</label>
+        <select id="tf-llm-model">
+          <option value="">Default</option>
+          <option value="claude-sonnet-4-5-20250929">Claude Sonnet 4.5</option>
+          <option value="claude-opus-4-6">Claude Opus 4.6</option>
+          <option value="claude-haiku-4-5-20251001">Claude Haiku 4.5</option>
+        </select>
+        <div class="topic-form-actions">
+          <button class="btn btn-sm" id="tf-submit-btn" onclick="submitTopic()">Create Topic</button>
+          <button class="btn btn-sm btn-outline" onclick="cancelTopicForm()">Cancel</button>
+        </div>
+      </div>
+
+      <div id="topics-list">
+        <div class="empty loading">Loading...</div>
+      </div>
+      <h3 style="margin-top:2rem; margin-bottom:1rem;">Recent Briefings</h3>
+      <div id="briefings-list" class="cards">
+        <div class="empty loading">Loading...</div>
+      </div>
+    </div>
+
+    <!-- Signal Reports -->
+    <div id="tab-signals" class="tab-panel">
+      <h3 style="margin-bottom:1rem;">Report History</h3>
+      <div id="signals-list" class="cards">
+        <div class="empty loading">Loading...</div>
+      </div>
+      <h3 style="margin-top:2rem; margin-bottom:1rem;">Schedules</h3>
+      <div id="schedules-table">
+        <div class="empty loading">Loading...</div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // ── Tab switching ──
+    document.querySelectorAll('.tab').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+        btn.classList.add('active');
+        document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
+      });
+    });
+
+    // ── Helpers ──
+    function escHtml(s) {
+      return (s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    }
+    function fmtDate(iso) {
+      if (!iso) return '';
+      const d = new Date(iso);
+      return d.toLocaleDateString('en-US', { year:'numeric', month:'short', day:'numeric' });
+    }
+    function typeBadge(type) {
+      const map = {
+        deep_research: ['DR', 'badge-dr'],
+        daily_briefing: ['Briefing', 'badge-briefing'],
+        periodic_signal_report: ['Signal', 'badge-signal'],
+      };
+      const [label, cls] = map[type] || [type, ''];
+      return '<span class="badge ' + cls + '">' + label + '</span>';
+    }
+    function statusBadge(status) {
+      return '<span class="badge badge-' + status + '">' + status + '</span>';
+    }
+
+    // ── Data loading ──
+
+    // Deep Research tab
+    function loadResearch() {
+      const container = document.getElementById('research-list');
+      Promise.all([
+        fetch('/api/v1/dossiers?type=deep_research&limit=30').then(r => r.json()),
+        fetch('/api/v1/research?limit=10').then(r => r.json()),
+      ]).then(([dossiersData, requestsData]) => {
+        const dossiers = dossiersData.dossiers || [];
+        const requests = requestsData.requests || [];
+
+        if (!dossiers.length && !requests.length) {
+          container.innerHTML = '<div class="empty">No deep research dossiers yet. Submit a research question above.</div>';
+          return;
+        }
+
+        let html = '';
+
+        // Show pending/running requests
+        requests.filter(r => r.status !== 'complete').forEach(r => {
+          html += '<div class="card">';
+          html += '<div class="card-title">' + escHtml(r.command) + '</div>';
+          html += '<div class="card-meta">' + statusBadge(r.status) + ' &middot; ' + fmtDate(r.created_at) + '</div>';
+          html += '</div>';
+        });
+
+        // Show dossiers
+        dossiers.forEach(d => {
+          html += '<div class="card" style="position:relative;">';
+          html += '<a href="/dossiers/' + d.id + '" target="_blank" style="text-decoration:none;color:inherit;">';
+          html += '<div class="card-title">' + escHtml(d.title) + '</div>';
+          html += '<div class="card-meta">' + fmtDate(d.created_at);
+          if (d.corpus_hits) html += ' &middot; ' + d.corpus_hits + ' corpus';
+          if (d.web_sources_used) html += ' &middot; ' + d.web_sources_used + ' web';
+          html += '</div>';
+          html += '</a>';
+          html += '<button class="btn btn-sm btn-danger" style="position:absolute;top:0.75rem;right:0.75rem;" onclick="deleteDossier(\'' + d.id + '\')">Delete</button>';
+          html += '</div>';
+        });
+
+        container.innerHTML = html;
+      }).catch(() => {
+        container.innerHTML = '<div class="empty">Failed to load research data.</div>';
+      });
+    }
+
+    // ── Topic form ──
+    let editingTopicId = null;
+
+    function toggleTopicForm() {
+      editingTopicId = null;
+      resetTopicForm();
+      document.getElementById('topic-form').classList.toggle('open');
+    }
+
+    function cancelTopicForm() {
+      editingTopicId = null;
+      resetTopicForm();
+      document.getElementById('topic-form').classList.remove('open');
+    }
+
+    function resetTopicForm() {
+      document.getElementById('tf-name').value = '';
+      document.getElementById('tf-desc').value = '';
+      document.getElementById('tf-extract-articles').checked = true;
+      document.getElementById('tf-extract-videos').checked = true;
+      document.getElementById('tf-extract-podcasts').checked = true;
+      document.getElementById('tf-max-age').value = '7';
+      document.getElementById('tf-queries').value = '';
+      document.getElementById('tf-web-provider').value = '';
+      document.getElementById('tf-llm-model').value = '';
+      document.getElementById('tf-submit-btn').textContent = 'Create Topic';
+    }
+
+    function editTopic(topic) {
+      editingTopicId = topic.id;
+      document.getElementById('tf-name').value = topic.name;
+      document.getElementById('tf-desc').value = topic.description;
+      document.getElementById('tf-extract-articles').checked = !!(topic.extract_articles ?? 1);
+      document.getElementById('tf-extract-videos').checked = !!(topic.extract_videos ?? 1);
+      document.getElementById('tf-extract-podcasts').checked = !!(topic.extract_podcasts ?? 1);
+      document.getElementById('tf-max-age').value = String(topic.max_age_days ?? 7);
+      document.getElementById('tf-queries').value = (topic.search_queries || []).join('\n');
+      document.getElementById('tf-web-provider').value = topic.web_provider || '';
+      document.getElementById('tf-llm-model').value = topic.llm_model || '';
+      document.getElementById('tf-submit-btn').textContent = 'Save';
+      document.getElementById('topic-form').classList.add('open');
+    }
+
+    function submitTopic() {
+      const name = document.getElementById('tf-name').value.trim();
+      const description = document.getElementById('tf-desc').value.trim();
+      const extractArticles = document.getElementById('tf-extract-articles').checked;
+      const extractVideos = document.getElementById('tf-extract-videos').checked;
+      const extractPodcasts = document.getElementById('tf-extract-podcasts').checked;
+      const maxAgeDays = parseInt(document.getElementById('tf-max-age').value, 10) || 7;
+      const queriesRaw = document.getElementById('tf-queries').value.trim();
+      const webProvider = document.getElementById('tf-web-provider').value || null;
+      const llmModel = document.getElementById('tf-llm-model').value || null;
+      if (!name || !description) { alert('Name and description are required.'); return; }
+      const searchQueries = queriesRaw ? queriesRaw.split('\n').map(q => q.trim()).filter(Boolean) : [];
+
+      const payload = { name, description, searchQueries, webProvider, llmModel,
+        extractArticles, extractVideos, extractPodcasts, maxAgeDays };
+
+      const url = editingTopicId
+        ? '/api/v1/briefing-topics/' + editingTopicId
+        : '/api/v1/briefing-topics';
+      const method = editingTopicId ? 'PUT' : 'POST';
+
+      fetch(url, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      }).then(r => r.json()).then(data => {
+        if (data.error) { alert('Error: ' + data.error); return; }
+        cancelTopicForm();
+        loadBriefings();
+      }).catch(() => alert('Failed to save topic.'));
+    }
+
+    function toggleTopic(id, active) {
+      fetch('/api/v1/briefing-topics/' + id, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ active }),
+      }).then(() => loadBriefings());
+    }
+
+    function purgeTopic(id, name) {
+      if (!confirm('Delete all recommendations for "' + name + '"?')) return;
+      fetch('/api/v1/briefing-topics/' + id + '/recommendations', { method: 'DELETE' })
+        .then(r => r.json())
+        .then(data => {
+          if (data.error) { alert('Error: ' + data.error); return; }
+          alert('Purged ' + data.purged + ' recommendations.');
+        })
+        .catch(() => alert('Failed to purge recommendations.'));
+    }
+
+    function deleteTopic(id) {
+      if (!confirm('Delete this topic?')) return;
+      fetch('/api/v1/briefing-topics/' + id, { method: 'DELETE' })
+        .then(() => loadBriefings());
+    }
+
+    function runBriefing(topicId) {
+      fetch('/api/v1/briefings/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ topicId }),
+      }).then(r => r.json()).then(data => {
+        if (data.error) { alert('Error: ' + data.error); return; }
+        alert('Briefing generation started (PID ' + data.pid + '). Refresh in a few minutes.');
+      }).catch(() => alert('Failed to start briefing generation.'));
+    }
+
+    function deleteDossier(id) {
+      if (!confirm('Permanently delete this dossier?')) return;
+      const deleteRecs = confirm('Also delete associated recommendations?');
+      const qs = deleteRecs ? '?deleteRecs=true' : '';
+      fetch('/api/v1/dossiers/' + id + qs, { method: 'DELETE' })
+        .then(r => r.json())
+        .then(data => {
+          if (data.error) { alert('Error: ' + data.error); return; }
+          loadResearch();
+          loadBriefings();
+          loadSignals();
+        })
+        .catch(() => alert('Failed to delete dossier.'));
+    }
+
+    function backfillBookCovers() {
+      fetch('/api/v1/books/backfill-metadata', { method: 'POST' })
+        .then(r => r.json())
+        .then(data => {
+          if (data.error) { alert('Error: ' + data.error); return; }
+          alert('Backfill started (PID ' + data.pid + '). Check logs for progress.');
+        })
+        .catch(() => alert('Failed to start backfill.'));
+    }
+
+    function generateAllBriefings() {
+      fetch('/api/v1/briefings/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+      }).then(r => r.json()).then(data => {
+        if (data.error) { alert('Error: ' + data.error); return; }
+        alert('Briefing generation started for all active topics (PID ' + data.pid + ').');
+      }).catch(() => alert('Failed to start briefing generation.'));
+    }
+
+    // Briefings tab
+    function loadBriefings() {
+      const topicsContainer = document.getElementById('topics-list');
+      const briefingsContainer = document.getElementById('briefings-list');
+
+      // Store topics globally so editTopic() can access them
+      fetch('/api/v1/briefing-topics').then(r => r.json()).then(data => {
+        const topics = data.topics || [];
+        window._topics = topics;
+        if (!topics.length) {
+          topicsContainer.innerHTML = '<div class="empty">No briefing topics yet. Create one above.</div>';
+          return;
+        }
+        let html = '';
+        topics.forEach((t, idx) => {
+          const isActive = t.active === 1 || t.active === true;
+          const types = [];
+          if (t.extract_articles) types.push('articles');
+          if (t.extract_videos) types.push('videos');
+          if (t.extract_podcasts) types.push('podcasts');
+          html += '<div class="topic-row">';
+          html += '<span class="topic-name">' + escHtml(t.name) + '</span>';
+          html += '<span class="topic-format">' + escHtml(types.join(', ') || 'none');
+          html += ' · ' + (t.max_age_days || 7) + 'd';
+          if (t.web_provider) html += ' · ' + escHtml(t.web_provider);
+          if (t.llm_model) html += ' · ' + escHtml(t.llm_model.split('-').slice(0,2).join(' '));
+          html += '</span>';
+          html += '<div class="topic-actions">';
+          html += '<button class="btn btn-sm btn-outline" onclick="editTopic(window._topics[' + idx + '])">Edit</button>';
+          html += '<button class="btn btn-sm btn-outline" onclick="runBriefing(\'' + t.id + '\')">Run</button>';
+          if (isActive) {
+            html += '<button class="btn btn-sm btn-outline" onclick="toggleTopic(\'' + t.id + '\', false)">Pause</button>';
+          } else {
+            html += '<button class="btn btn-sm btn-outline" onclick="toggleTopic(\'' + t.id + '\', true)">Activate</button>';
+          }
+          html += '<button class="btn btn-sm btn-danger" onclick="purgeTopic(\'' + t.id + '\', \'' + escHtml(t.name) + '\')">Purge</button>';
+          html += '<button class="btn btn-sm btn-danger" onclick="deleteTopic(\'' + t.id + '\')">Delete</button>';
+          html += '</div>';
+          html += '</div>';
+        });
+        topicsContainer.innerHTML = html;
+      }).catch(() => {
+        topicsContainer.innerHTML = '<div class="empty">Failed to load topics.</div>';
+      });
+
+      fetch('/api/v1/dossiers?type=daily_briefing&limit=20').then(r => r.json()).then(data => {
+        const dossiers = data.dossiers || [];
+        if (!dossiers.length) {
+          briefingsContainer.innerHTML = '<div class="empty">No briefings generated yet.</div>';
+          return;
+        }
+        let html = '';
+        dossiers.forEach(d => {
+          html += '<div class="card" style="position:relative;">';
+          html += '<a href="/dossiers/' + d.id + '" target="_blank" style="text-decoration:none;color:inherit;">';
+          html += '<div class="card-title">' + escHtml(d.title) + '</div>';
+          html += '<div class="card-meta">' + fmtDate(d.created_at) + '</div>';
+          html += '</a>';
+          html += '<button class="btn btn-sm btn-danger" style="position:absolute;top:0.75rem;right:0.75rem;" onclick="deleteDossier(\'' + d.id + '\')">Delete</button>';
+          html += '</div>';
+        });
+        briefingsContainer.innerHTML = html;
+      }).catch(() => {
+        briefingsContainer.innerHTML = '<div class="empty">Failed to load briefings.</div>';
+      });
+    }
+
+    // Signal Reports tab
+    function loadSignals() {
+      const signalsContainer = document.getElementById('signals-list');
+      const schedulesContainer = document.getElementById('schedules-table');
+
+      fetch('/api/v1/signal-reports?limit=20').then(r => r.json()).then(data => {
+        const reports = data.reports || [];
+        if (!reports.length) {
+          signalsContainer.innerHTML = '<div class="empty">No signal reports generated yet.</div>';
+          return;
+        }
+        let html = '';
+        reports.forEach(d => {
+          html += '<div class="card" style="position:relative;">';
+          html += '<a href="/dossiers/' + d.id + '" target="_blank" style="text-decoration:none;color:inherit;">';
+          html += '<div class="card-title">' + escHtml(d.title) + '</div>';
+          html += '<div class="card-meta">';
+          if (d.period_interval) html += escHtml(d.period_interval) + ' &middot; ';
+          html += fmtDate(d.created_at);
+          html += '</div>';
+          html += '</a>';
+          html += '<button class="btn btn-sm btn-danger" style="position:absolute;top:0.75rem;right:0.75rem;" onclick="deleteDossier(\'' + d.id + '\')">Delete</button>';
+          html += '</div>';
+        });
+        signalsContainer.innerHTML = html;
+      }).catch(() => {
+        signalsContainer.innerHTML = '<div class="empty">Failed to load signal reports.</div>';
+      });
+
+      fetch('/api/v1/schedules').then(r => r.json()).then(data => {
+        const schedules = data.schedules || [];
+        if (!schedules.length) {
+          schedulesContainer.innerHTML = '<div class="empty">No schedules configured.</div>';
+          return;
+        }
+        let html = '<table><thead><tr>';
+        html += '<th>Interval</th><th>Enabled</th><th>Last Run</th><th>Next Run</th>';
+        html += '</tr></thead><tbody>';
+        schedules.forEach(s => {
+          html += '<tr>';
+          html += '<td>' + escHtml(s.interval) + '</td>';
+          html += '<td>' + (s.enabled ? 'Yes' : 'No') + '</td>';
+          html += '<td>' + (s.last_run ? fmtDate(s.last_run) : '—') + '</td>';
+          html += '<td>' + fmtDate(s.next_run) + '</td>';
+          html += '</tr>';
+        });
+        html += '</tbody></table>';
+        schedulesContainer.innerHTML = html;
+      }).catch(() => {
+        schedulesContainer.innerHTML = '<div class="empty">Failed to load schedules.</div>';
+      });
+    }
+
+    // ── Research form ──
+    // Show/hide custom model input
+    document.getElementById('rf-llm-model').addEventListener('change', (e) => {
+      const custom = document.getElementById('rf-llm-custom');
+      custom.style.display = e.target.value === '__custom__' ? '' : 'none';
+      if (e.target.value !== '__custom__') custom.value = '';
+    });
+
+    document.getElementById('research-form').addEventListener('submit', (e) => {
+      e.preventDefault();
+      const input = document.getElementById('research-input');
+      const command = input.value.trim();
+      if (!command) return;
+
+      const webProvider = document.getElementById('rf-web-provider').value || undefined;
+      const llmSelect = document.getElementById('rf-llm-model').value;
+      const llmCustom = document.getElementById('rf-llm-custom').value.trim();
+      const llmModel = llmSelect === '__custom__' ? (llmCustom || undefined) : (llmSelect || undefined);
+      const extractArticles = document.getElementById('rf-extract-articles').checked || undefined;
+      const extractBooks = document.getElementById('rf-extract-books').checked || undefined;
+
+      const body = { command };
+      if (webProvider) body.webProvider = webProvider;
+      if (llmModel) body.llmModel = llmModel;
+      if (extractArticles) body.extractArticles = true;
+      if (extractBooks) body.extractBooks = true;
+
+      input.value = '';
+      fetch('/api/v1/research', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      }).then(r => r.json()).then(data => {
+        if (data.error) { alert('Error: ' + data.error); return; }
+        setTimeout(loadResearch, 1000);
+      }).catch(() => alert('Research request failed.'));
+    });
+
+    // ── Initial load ──
+    loadResearch();
+    loadBriefings();
+    loadSignals();
+  </script>
+</body>
+</html>

@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Chez Maurice — a shared AI and memory for families and small groups</title>
+<meta name="description" content="Chez Maurice is an open-source household AI that runs on your own Mac — one shared assistant and memory for families and small groups, with a private wiki for each person. Yours by design." />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Spectral:ital,wght@0,400;0,500;0,600;1,400;1,500&family=Young+Serif&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="landing.css" />
+</head>
+<body>
+
+<!-- reusable hat symbol -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="hat" viewBox="83 83.2 1498.8 1103.5">
+    <path d="M 795 89.7 C 694.4 92.5 599.3 107.7 524.8 132.9 C 498.2 141.9 485.5 147.1 461.5 159 C 378.7 199.7 329.4 251.5 301.2 327.5 C 282.5 377.7 277.7 440.3 286 523.5 C 289.3 555.7 308.6 680.2 319 735.3 C 321.1 747 324.1 763.2 325.5 771.5 C 329.3 794.6 330.5 797.2 341.7 808.5 C 371.6 838.7 439.2 861.6 533.5 873.4 C 584.8 879.8 617.8 881.5 688.5 881.5 C 787.4 881.4 875.6 873.8 975 856.9 C 1000.6 852.6 1005.7 851.6 1044.5 843.4 C 1139.9 823.4 1219.5 795.7 1275 763.2 C 1303.6 746.5 1323.5 728.6 1334.9 709.3 C 1343.3 694.9 1344.6 685.8 1341 663.8 C 1339.9 657 1337.2 637.4 1335 620.1 C 1319.2 496.7 1298.5 397.5 1276.4 338.2 C 1245.9 256.5 1212.4 209.6 1156.2 169.3 C 1076.4 112.2 954.4 85.2 795 89.7 Z" fill="currentColor"/>
+    <path d="M 1365.7 595.4 C 1355.6 599 1352 608.5 1358.1 615.4 C 1361.8 619.7 1365.9 621 1386.5 624.6 C 1431.7 632.5 1461.1 646.4 1484 670.7 C 1502.1 689.9 1509.2 708.4 1509.2 737 C 1509.3 758.2 1505.7 772.3 1494.5 795.5 C 1473 840.1 1425.4 887.7 1360 930.1 C 1279.4 982.4 1191.7 1018.5 1072.5 1048.4 C 968.9 1074.4 826.3 1089.8 710 1087.6 C 640 1086.3 592.2 1080.8 529.5 1066.9 C 394.6 1037.1 206.4 951.7 164.9 901.5 C 156.6 891.5 153.5 884.1 153.5 874.5 C 153.6 858.6 161.8 849.7 181.3 844.5 C 188.8 842.5 190.5 841.1 189.6 837.7 C 188.1 831.6 172.4 827.9 156.2 829.8 C 131.7 832.7 112.1 844.2 99.8 862.9 C 84.8 885.9 85.4 920.1 101.5 951.4 C 120.2 987.6 155.3 1021.7 207 1053.7 C 268.9 1092.1 352.4 1127.2 435.5 1149.8 C 477 1161.1 500.3 1165.8 549 1172.4 C 651.5 1186.4 791.3 1182.6 931.5 1162 C 988.6 1153.6 1032.7 1144.9 1093.4 1130.1 C 1199.3 1104.2 1303.6 1064 1377.5 1020.5 C 1487.7 955.7 1555.4 876.9 1572.6 793 C 1576.5 774.2 1576.8 735.7 1573.2 719.3 C 1566.9 690.3 1554.2 667 1533.6 646.5 C 1506.2 619.2 1465.2 600.9 1419.4 595.5 C 1402.9 593.6 1371 593.5 1365.7 595.4 Z" fill="currentColor"/>
+    <path d="M 1367 687.2 C 1367 736.5 1303.7 789.4 1191.5 833.7 C 1127.6 859 1069.1 875.4 979.5 893 C 804.2 927.4 609.7 928.8 476.4 896.5 C 416 881.9 375.9 865.4 346.3 843.1 C 333 833.1 319.2 817.2 315 807.1 C 314.3 805.4 313.4 804 312.9 804 C 311.4 804 311.9 820.4 314 837.3 C 315 846.2 317.7 869.7 319.9 889.6 C 325.2 936.5 327.1 942.2 343 958.1 C 355.8 970.8 369 978.6 401.3 992.4 C 430.9 1005.1 487.5 1021.4 528 1028.9 C 537.1 1030.6 548.1 1032.7 552.5 1033.5 C 587.2 1039.9 638.2 1045.1 679 1046.5 C 713.6 1047.7 721 1047.7 757 1046.9 C 993.9 1041.6 1232.5 981.2 1342.5 898.7 C 1353.4 890.5 1375.3 868.2 1381.8 858.7 C 1389 848.3 1395.4 834.2 1397.5 824.6 C 1400.8 809.8 1398.9 794.9 1386.1 734.2 C 1380.2 706.2 1375.2 691.1 1369.1 683.3 C 1367 680.7 1367 680.7 1367 687.2 Z" fill="currentColor"/>
+  </symbol>
+</svg>
+
+<!-- ========================= NAV ========================= -->
+<header class="nav" id="nav">
+  <div class="wrap nav-in">
+    <a class="brand" href="#top"><svg class="hatmark"><use href="#hat"/></svg> Chez Maurice</a>
+    <nav class="nav-links">
+      <a href="#features">Features</a>
+      <a href="#download">Download</a>
+      <a href="#philosophy">Philosophy</a>
+      <a href="https://github.com" target="_blank" rel="noopener">GitHub</a>
+    </nav>
+    <div class="nav-cta">
+      <a class="btn btn-primary btn-sm" href="#download">Download</a>
+    </div>
+  </div>
+</header>
+
+<a id="top"></a>
+
+<!-- ========================= HERO ========================= -->
+<section class="hero">
+  <div class="wrap hero-grid">
+    <div class="hero-copy reveal">
+      <div class="eyebrow">Open-source household AI</div>
+      <h1>A <em>shared</em> AI and memory for families and small groups.</h1>
+      <p class="hero-promise">One Maurice everyone talks to — and a memory you all build.</p>
+      <p class="hero-sub">The server runs on your own Mac — a private wiki for each person, and it knows their books and files too.</p>
+      <div class="hero-cta">
+        <a class="btn btn-primary" href="#download">
+          <svg class="ic" viewBox="0 0 24 24" fill="currentColor"><path d="M16.4 12.7c0-2.3 1.9-3.4 2-3.5-1.1-1.6-2.8-1.8-3.4-1.8-1.4-.1-2.8.9-3.5.9s-1.8-.8-3-.8c-1.5 0-3 .9-3.8 2.3-1.6 2.8-.4 7 1.2 9.3.8 1.1 1.7 2.4 2.9 2.3 1.2 0 1.6-.7 3-.7s1.8.7 3 .7c1.3 0 2.1-1.1 2.9-2.3.6-.9.9-1.4 1.3-2.4-2.5-1-2.6-3.6-2.6-3.7zM14.2 5.6c.6-.8 1-1.9.9-3-1 0-2.1.7-2.8 1.4-.6.7-1.1 1.8-1 2.8 1.1.1 2.2-.5 2.9-1.2z"/></svg>
+          Download server for Mac
+        </a>
+        <a class="btn btn-ghost" href="#download">
+          <svg class="ic" viewBox="0 0 52 52" fill="currentColor" aria-hidden="true"><path d="M52,26C52,11.727,40.438,0.108,26.189,0.005C26.173,0.005,26.157,0,26.141,0h-0.281c-0.017,0-0.032,0.005-0.049,0.005C11.561,0.108,0,11.727,0,26c0,4.635,1.225,8.987,3.36,12.76c0.02,0.038,0.031,0.079,0.053,0.117l0.141,0.245c0.021,0.037,0.05,0.066,0.073,0.102C8.16,46.864,16.49,52,26,52c9.51,0,17.84-5.135,22.373-12.776c0.023-0.037,0.053-0.066,0.075-0.104l0.139-0.242c0.021-0.037,0.032-0.077,0.052-0.114C50.774,34.99,52,30.637,52,26z M50,26c0,3.095-0.595,6.051-1.667,8.77c-0.333-0.435-0.755-0.804-1.264-1.066h0l-16.131-8.317c-0.17-1.372-0.887-2.566-1.938-3.361l0.863-18.123c0.027-0.576-0.084-1.128-0.298-1.636C41.114,3.994,50,13.978,50,26z M46.644,38.22c-0.244,0.366-0.597,0.626-1.016,0.727c-0.457,0.111-0.933,0.028-1.341-0.234l-14.481-9.307l1.046-1.813l15.299,7.888c0,0,0,0,0,0c0.434,0.224,0.746,0.595,0.878,1.043c0.12,0.41,0.071,0.845-0.126,1.243C46.819,37.919,46.733,38.071,46.644,38.22z M7.712,38.712c-0.411,0.265-0.889,0.35-1.342,0.238c-0.417-0.1-0.771-0.363-1.016-0.732c-0.089-0.15-0.175-0.301-0.261-0.453c-0.193-0.394-0.242-0.829-0.121-1.24c0.132-0.451,0.443-0.821,0.875-1.044l15.299-7.888l1.046,1.813L7.712,38.712z M23,26c0-1.654,1.346-3,3-3s3,1.346,3,3s-1.346,3-3,3S23,27.654,23,26z M24.954,21L24.135,3.807c-0.023-0.488,0.142-0.943,0.465-1.282c0.311-0.326,0.74-0.507,1.209-0.52C25.873,2.004,25.936,2,26,2c0.064,0,0.127,0.004,0.19,0.005c0.467,0.013,0.895,0.194,1.208,0.523c0.324,0.34,0.49,0.794,0.467,1.279L27.046,21H24.954z M22.432,2.266c-0.213,0.508-0.323,1.059-0.295,1.635c0,0.001,0,0.001,0,0.001L23,22.026c-1.051,0.796-1.768,1.99-1.938,3.361L4.931,33.704c-0.51,0.263-0.931,0.632-1.263,1.069C2.596,32.053,2,29.096,2,26C2,13.979,10.885,3.995,22.432,2.266z M26,50c-7.578,0-14.342-3.534-18.744-9.036c0.537-0.072,1.06-0.262,1.537-0.568v-0.001l15.246-9.797C24.642,30.855,25.304,31,26,31s1.358-0.145,1.961-0.403l15.246,9.797c0.477,0.307,1,0.495,1.539,0.567C40.344,46.465,33.579,50,26,50z"/></svg>
+          TestFlight public beta
+        </a>
+      </div>
+      <p class="hero-micro">Free &amp; open-source &nbsp;·&nbsp; Mac server &nbsp;·&nbsp; iPhone &amp; iPad native apps<br><b>No Docker, no cloud account</b></p>
+    </div>
+
+    <!-- HERO PHONE MOCKUP -->
+    <div class="hero-phone reveal">
+      <div class="phone">
+        <div class="phone-notch"></div>
+        <div class="phone-screen">
+          <img class="phone-shot" src="screenshots/hero-chat.png" alt="Chez Maurice on iPhone — a Storyteller conversation" onload="this.closest('.phone-screen').classList.add('has-shot')" onerror="this.remove()" />
+          <div class="sbar">
+            <span class="t">9:41</span>
+            <span class="r">
+              <svg viewBox="0 0 18 13" fill="currentColor"><path d="M9 2.4c2.6 0 5 1 6.8 2.7l-1.5 1.6A7.6 7.6 0 0 0 9 4.6 7.6 7.6 0 0 0 3.7 6.7L2.2 5.1A9.6 9.6 0 0 1 9 2.4Zm0 3.4c1.7 0 3.2.7 4.4 1.8L11.8 9.2A4 4 0 0 0 9 8a4 4 0 0 0-2.8 1.2L4.6 7.6A6.3 6.3 0 0 1 9 5.8Zm0 3.4c.8 0 1.5.3 2 .9L9 12l-2-1.9c.5-.6 1.2-.9 2-.9Z"/></svg>
+              <span class="batt"><i></i></span>
+            </span>
+          </div>
+          <div class="appbar">
+            <div class="circ"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg></div>
+            <div class="ttl"><h4>Bedtime story about whales</h4><div class="meta">Today · 8:14 PM · The Storyteller</div></div>
+            <div class="circ"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="7" r="3.2"/><path d="M5.5 20a6.5 6.5 0 0 1 13 0"/></svg></div>
+          </div>
+          <div class="chat">
+            <div class="bubble-u">Tell me a story about a whale who collects sounds.</div>
+            <div class="bubble-m">
+              <p>Once, in the deep grey water off the coast, there lived a young whale named <strong>Brume</strong> who kept the sounds she loved in a coral chest…</p>
+              <div class="li">the creak of a harbour at dawn</div>
+              <div class="li">a child laughing two bays over</div>
+              <p>She never kept a sound she hadn't been <em>given</em>. That was the whole of her magic.</p>
+            </div>
+          </div>
+          <div class="composer">
+            <div class="ph">Ask the Storyteller something…</div>
+            <div class="tools">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5 12 20.5a5 5 0 0 1-7-7l9-9a3.3 3.3 0 0 1 5 4.6l-9 9a1.7 1.7 0 0 1-2.4-2.4l8.2-8.2"/></svg>
+              <span class="sp"></span>
+              <span class="pill">Claude Sonnet 4.5 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></span>
+              <span class="hatbtn"><svg class="hatmark"><use href="#hat"/></svg><span class="bdg"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></span></span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ========================= PROVIDER STRIP ========================= -->
+<section class="section--alt" style="padding:34px 0;border-top:1px solid var(--line);border-bottom:1px solid var(--line);">
+  <div class="wrap" style="display:flex;align-items:center;justify-content:center;gap:14px 38px;flex-wrap:wrap;font-family:var(--mono);font-size:13px;color:var(--muted);letter-spacing:.02em;">
+    <span style="color:var(--ink-2);font-weight:600;">Bring your own models</span>
+    <span>Ollama&nbsp;(local)</span><span>·</span><span>Mistral</span><span>·</span><span>Anthropic</span><span>·</span><span>OpenAI</span>
+  </div>
+</section>
+
+<!-- ========================= SPOTLIGHT FEATURES ========================= -->
+<section class="section" id="features">
+  <div class="wrap">
+    <div class="section-head reveal">
+      <div class="eyebrow">What makes Chez Maurice different</div>
+      <h2>An assistant that becomes part of your team, not one that watches you.</h2>
+      <p>The memory is your own Markdown — visible, scoped, and shaped by deliberate action. Here's what that buys a household.</p>
+    </div>
+
+    <!-- Spotlight 1: tamed memory / composer -->
+    <div class="spot reveal">
+      <div class="spot-copy">
+        <div class="eyebrow">Memory you choose — and grow</div>
+        <h3>He knows exactly what you hand him.</h3>
+        <p>It runs both ways, and both are deliberate. <strong>Load</strong> notes, books, files and past conversations into a chat through the composer, and watch the token budget fill — nothing else is in the room. Then <strong>write back</strong>: anything worth keeping becomes a note in the wiki, ready for next time. You don't just feed a session — you grow a memory you can see.</p>
+        <div class="spot-list">
+          <div class="row"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg> Load context in — a live 200k-token budget you can feel</div>
+          <div class="row"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg> Write notes back — they join the wiki he reads from next</div>
+          <div class="row"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg> All plain Markdown, in a git repo you own</div>
+        </div>
+      </div>
+      <div class="spot-media">
+        <div class="memloop">
+          <!-- a note someone writes -->
+          <figure class="memcard memnote">
+            <div class="memnote-h"><span class="dot"></span> léo/allergies.md</div>
+            <div class="memnote-b">
+              <b># Léo — allergies</b>
+              <span>- peanuts (severe)</span>
+              <span>- shellfish</span>
+              <span>EpiPen in the blue bag.</span>
+            </div>
+            <figcaption>a note someone writes</figcaption>
+          </figure>
+
+          <!-- the loop: written out, read back in -->
+          <div class="memloop-arrow" aria-hidden="true">
+            <svg viewBox="0 0 44 44" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 7 7 15l8 8"/><path d="M7 15h30"/><path d="M29 37l8-8-8-8"/><path d="M37 29H7"/></svg>
+            <span class="memloop-lab">write · read</span>
+          </div>
+
+          <!-- what Maurice loads for the chat -->
+          <figure class="memcard memtray">
+            <h5>Context for this chat</h5>
+            <div class="memtray-sub">pulled from the wiki</div>
+            <div class="cmp-item">
+              <span class="ico" style="background:#2f7d54"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 19.5V6a2 2 0 0 1 2-2h11a1 1 0 0 1 1 1v13"/><path d="M6 17h12"/></svg></span>
+              <span class="nm"><b>Léo — allergies</b><span>note · just now</span></span>
+              <span class="tok">0.3k</span>
+            </div>
+            <div class="cmp-item">
+              <span class="ico" style="background:#3d7de0"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2Z"/></svg></span>
+              <span class="nm"><b>Trip planning</b><span>past conversation</span></span>
+              <span class="tok">6.4k</span>
+            </div>
+            <figcaption>what Maurice draws on</figcaption>
+          </figure>
+        </div>
+      </div>
+    </div>
+
+    <!-- Spotlight 2: group chats -->
+    <div class="spot flip reveal">
+      <div class="spot-copy">
+        <div class="eyebrow">Together, with Maurice</div>
+        <h3>Group chats — and Maurice takes the notes.</h3>
+        <p>Have a real conversation with your team — a household, a project, a few friends, all in one thread. Invite Maurice in when you want him: he takes part, answers what's asked, and writes the notes — so what you decide together becomes memory instead of lost scrollback.</p>
+        <div class="spot-list">
+          <div class="row"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg> Several people in one thread — summon Maurice with a tap</div>
+          <div class="row"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg> He joins only when called, using the notes in the room</div>
+          <div class="row"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg> Ask him to capture a decision — it becomes a note you keep</div>
+        </div>
+      </div>
+      <div class="spot-media">
+        <div class="shot gc-card">
+          <img class="shot-img" src="screenshots/group-chat.png" alt="A group chat — several household members in one thread, with Maurice summoned to answer and take notes" loading="lazy" onload="this.closest('.shot').classList.add('has-shot')" onerror="this.remove()" />
+          <div class="gc-head">
+            <h5>Kyoto trip</h5>
+            <span class="gc-sub">Marc · Paola · Léo · Maurice</span>
+          </div>
+          <div class="gc-row">
+            <span class="gc-av" style="background:#2f6f9e">M</span>
+            <div class="gc-b"><span class="gc-who">Marc</span>What's still open on the list?</div>
+          </div>
+          <div class="gc-row">
+            <span class="gc-av" style="background:#2f7d54">L</span>
+            <div class="gc-b"><span class="gc-who">Léo</span>can we add the monkey park??</div>
+          </div>
+          <div class="gc-summon"><svg class="hatmark"><use href="#hat"/></svg> Léo summoned Maurice</div>
+          <div class="gc-row">
+            <span class="gc-av gc-hat"><svg class="hatmark"><use href="#hat"/></svg></span>
+            <div class="gc-b mau"><span class="gc-who">Maurice</span>Still open: ryokan booking and JR passes. Monkey park — added. I'll keep the running notes.</div>
+          </div>
+          <div class="gc-note">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5V6a2 2 0 0 1 2-2h11a1 1 0 0 1 1 1v13"/><path d="M6 17h12"/></svg>
+            Saved to <b>Kyoto trip — notes</b>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Spotlight 3: shared device -->
+    <div class="spot reveal">
+      <div class="spot-copy">
+        <div class="eyebrow">One device, every mind</div>
+        <h3>One iPad. Everyone's own Maurice.</h3>
+        <p>Cloud chatbots assume one person per device, per login — but a household isn't built that way, and not every family wants to buy each child their own tablet. Maurice puts everyone on a single shared iPad or Mac: each member has their own conversations, notes and memories, and switching is just a tap and a PIN. The kids share a screen without sharing a brain.</p>
+        <div class="spot-list">
+          <div class="row"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg> Per-member history, notes and personas</div>
+          <div class="row"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg> Host guests — and be a guest in another household</div>
+          <div class="row"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg> Roles for adults, children and guests</div>
+        </div>
+      </div>
+      <div class="spot-media">
+        <div class="shot pick-card">
+          <span class="shot-tag">mockup</span>
+          <img class="shot-img" src="screenshots/members.png" alt="Who's here — the household member picker" loading="lazy" onload="this.closest('.shot').classList.add('has-shot')" onerror="this.remove()" />
+          <h5>Who's here?</h5>
+          <div class="pk-sub">Tap your face to continue</div>
+          <div class="pick-grid">
+            <div class="member active"><span class="av" style="background:#7c2d23">P</span><span class="mn">Paola</span><span class="role">admin</span></div>
+            <div class="member"><span class="av" style="background:#2f6f9e">M</span><span class="mn">Marc</span><span class="role">standard</span></div>
+            <div class="member"><span class="av" style="background:#2f7d54">L</span><span class="mn">Léo</span><span class="role">child · 11</span></div>
+            <div class="member"><span class="av" style="background:#c98a1e">N</span><span class="mn">Noé</span><span class="role">child · 9</span></div>
+          </div>
+          <div class="pindots"><i class="on"></i><i class="on"></i><i></i><i></i></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ========================= FEATURE GRID ========================= -->
+<section class="section section--alt">
+  <div class="wrap">
+    <div class="section-head reveal">
+      <div class="eyebrow">And more</div>
+      <h2>Built like a home, not a dashboard.</h2>
+    </div>
+    <div class="fgrid">
+      <div class="fcard reveal">
+        <div class="fi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15V6a2 2 0 0 0-2-2H9"/><path d="M3 9v9a2 2 0 0 0 2 2h10"/><path d="m7 13 3 3 7-7"/></svg></div>
+        <h4>Bring your history</h4>
+        <p>Import your existing threads from Claude and ChatGPT — the official export <span class="kbd">.zip</span>s — so your past conversations come with you, searchable.</p>
+      </div>
+      <div class="fcard reveal">
+        <div class="fi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.1 4.6L19 8.3l-3.5 3.3.9 4.9L12 14.2 7.6 16.5l.9-4.9L5 8.3l4.9-.7L12 3Z"/></svg></div>
+        <h4>Many Maurices, a hat for each</h4>
+        <p>Create focused personas — a homework tutor, a trip planner, a storyteller — each with its own voice, model, creativity and bound context. The hat tells a child instantly which Maurice they're talking to.</p>
+      </div>
+      <div class="fcard reveal">
+        <div class="fi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21V8l9-5 9 5v13"/><path d="M9 21v-6h6v6"/></svg></div>
+        <h4>Households &amp; guests</h4>
+        <p>Run several households on one device, with guests who keep full capability but a limited reach — an explicit allow-list of people and personas.</p>
+      </div>
+      <div class="fcard reveal">
+        <div class="fi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg></div>
+        <h4>Native apps, no Docker</h4>
+        <p>Real SwiftUI apps for iPhone, iPad and Mac — and a single server process on your Mac. No container stack to assemble, no ops to keep alive.</p>
+      </div>
+      <div class="fcard reveal">
+        <div class="fi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 0 0 0 18M3 12h18"/></svg></div>
+        <h4>Your models, your choice</h4>
+        <p>Local models through Ollama, or Mistral, Anthropic and OpenAI in the cloud — switch per conversation, grouped by provider.</p>
+      </div>
+      <div class="fcard reveal">
+        <div class="fi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M7 20h10M9 16l-2 4M15 16l2 4"/><rect x="4" y="3" width="16" height="13" rx="2"/><path d="M4 11c4-3 12-3 16 0"/></svg></div>
+        <h4>A browsable web garden</h4>
+        <p>The same Markdown becomes a themeable website — private notes encrypted at rest, with four hand-made garden themes to choose from.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ========================= DOWNLOAD ========================= -->
+<section class="section" id="download">
+  <div class="wrap">
+    <div class="section-head reveal">
+      <div class="eyebrow">Get Chez Maurice</div>
+      <h2>Three pieces. Start with the server.</h2>
+      <p>The server is the engine — it runs on your home Mac and holds everything. The apps are how you reach it.</p>
+    </div>
+
+    <div class="dl-grid">
+      <!-- server (featured / required) -->
+      <div class="dl-card feat reveal">
+        <span class="dl-tag">Start here</span>
+        <div class="dl-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="7" rx="2"/><rect x="3" y="13" width="18" height="7" rx="2"/><path d="M7 7.5h.01M7 16.5h.01"/></svg></div>
+        <h4>Chez Maurice Server</h4>
+        <div class="req">Required · macOS · notarized .app</div>
+        <p>The chat engine, the garden and your data. Runs quietly on your home Mac. Download, open, done — no build from source.</p>
+        <a class="btn btn-primary" href="#" data-dl="server">
+          <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m0 0 4-4m-4 4-4-4"/><path d="M5 21h14"/></svg>
+          Download Server
+        </a>
+        <div class="dl-meta">v1.0 · Apple silicon · ~38 MB</div>
+      </div>
+
+      <!-- mac client -->
+      <div class="dl-card reveal">
+        <div class="dl-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="13" rx="2"/><path d="M8 21h8M12 17v4"/></svg></div>
+        <h4>Chez Maurice for Mac</h4>
+        <div class="req">macOS client</div>
+        <p>The full desktop experience — chat, hats, the composer, gardens and files — in a native Mac window. Pairs to your server.</p>
+        <a class="btn btn-ghost" href="#" data-dl="mac">
+          <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m0 0 4-4m-4 4-4-4"/><path d="M5 21h14"/></svg>
+          Download for Mac
+        </a>
+        <div class="dl-meta">v1.0 · Apple silicon · ~24 MB</div>
+      </div>
+
+      <!-- ios testflight -->
+      <div class="dl-card reveal">
+        <div class="dl-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="2" width="12" height="20" rx="3"/><path d="M11 18h2"/></svg></div>
+        <h4>iPhone &amp; iPad</h4>
+        <div class="req">via TestFlight</div>
+        <p>The same app on iPhone and iPad — built as one universal app. Join the TestFlight beta to install it on your devices.</p>
+        <a class="btn btn-ghost" href="#" data-dl="ios">
+          <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 3 7v10l9 5 9-5V7l-9-5Z"/><path d="m12 7 5 2.8v4.4L12 17l-5-2.8V9.8L12 7Z"/></svg>
+          Join the TestFlight
+        </a>
+        <div class="dl-meta">iOS 17+ · iPhone &amp; iPad</div>
+      </div>
+    </div>
+
+    <!-- how it connects -->
+    <div class="connect reveal">
+      <h4>How it all connects</h4>
+      <p class="csub">Your apps talk to the server on your Mac over a private HTTPS link you choose.</p>
+      <div class="cflow">
+        <div class="cnode">
+          <div class="cbox"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="7" rx="2"/><rect x="3" y="13" width="18" height="7" rx="2"/><path d="M7 7.5h.01M7 16.5h.01"/></svg></div>
+          <div class="cl">Server on your Mac</div>
+          <div class="cd">data · garden · LLM calls</div>
+        </div>
+        <div class="carrow">
+          <svg viewBox="0 0 48 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M2 12h40m0 0-7-6m7 6-7 6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <span>Tailscale / Cloudflare</span>
+        </div>
+        <div class="cnode">
+          <div class="cbox"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="7" y="2" width="10" height="20" rx="2.5"/><rect x="2" y="6" width="3" height="12" rx="1.2" opacity=".5"/><rect x="19" y="6" width="3" height="12" rx="1.2" opacity=".5"/></svg></div>
+          <div class="cl">Your devices</div>
+          <div class="cd">iPhone · iPad · Mac</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ========================= PHILOSOPHY ========================= -->
+<section class="philo" id="philosophy">
+  <div class="wrap reveal">
+    <div class="eyebrow">The whole point</div>
+    <blockquote>Maurice only knows what you've shown him. That limitation isn't a bug — it's the thing you can <em>tame</em>. He becomes yours through the relationship you build.</blockquote>
+    <div class="attrib">A father building an AI for his children · open-source · small on purpose</div>
+  </div>
+
+  <div class="wrap reveal">
+    <div class="philo-note">
+      <h3 class="philo-note-h">Why a Mac, and why no Docker</h3>
+      <p>Maurice runs as one signed, notarized app on a Mac you already own — open it and it's running. No container stack to assemble, no compose file, no ops to keep alive at 2 a.m. That's a deliberate trade: a household shouldn't have to run infrastructure to own its own assistant. A Mac mini sitting quietly on a shelf is the whole deployment.</p>
+      <p>Mac-first also means the clients can be real SwiftUI apps rather than a browser tab pretending to be one. The cost is honest — if you want this on a Linux box or a NAS today, you can't yet. The server is plain Bun, SQLite and Markdown with nothing Apple-specific at its core, so a Linux build is on the table; it just isn't the thing built for the household I'm shipping to first.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ========================= MAKER'S NOTE ========================= -->
+<section class="maker" id="maker">
+  <div class="wrap reveal">
+    <div class="eyebrow">Who's behind this</div>
+    <p class="maker-note">Maurice is made by one person — me. I started it as a household AI for my own family, on hardware I already owned, because I didn't want the people I live with to be the product. It's open-source and it's early: a solo project, shipped honestly, not a startup pretending to be bigger than it is. You'll find rough edges. You'll also find that nothing here mines you, upsells you, or phones home. <span class="maker-sign">— Candide</span></p>
+    <p class="maker-strip">Solo-built &nbsp;·&nbsp; in beta &nbsp;·&nbsp; maintained in the open &nbsp;·&nbsp; <a href="https://candide.me" target="_blank" rel="noopener">candide.me</a></p>
+  </div>
+</section>
+
+<!-- ========================= FOOTER ========================= -->
+<footer class="foot">
+  <div class="wrap">
+    <div class="foot-top">
+      <div>
+        <a class="brand" href="#top"><svg class="hatmark"><use href="#hat"/></svg> Chez Maurice</a>
+        <p class="foot-tag">A shared AI and memory for families and small groups.</p>
+      </div>
+      <div class="foot-cols">
+        <div class="foot-col">
+          <h6>Product</h6>
+          <a href="#features">Features</a>
+          <a href="#download">Download</a>
+          <a href="#philosophy">Philosophy</a>
+        </div>
+        <div class="foot-col">
+          <h6>Get it</h6>
+          <a href="#download" data-dl="server">Server (Mac)</a>
+          <a href="#download" data-dl="mac">Mac client</a>
+          <a href="#download" data-dl="ios">iOS TestFlight</a>
+        </div>
+        <div class="foot-col">
+          <h6>Open source</h6>
+          <a href="https://github.com" target="_blank" rel="noopener">GitHub</a>
+          <a href="https://www.gnu.org/licenses/agpl-3.0.html" target="_blank" rel="noopener">License (AGPL-3.0)</a>
+          <a href="#">Documentation</a>
+        </div>
+      </div>
+    </div>
+    <div class="foot-bot">
+      <span>© 2026 Chez Maurice · Free &amp; open-source · <a href="/terms.html">Terms</a> · <a href="/privacy.html">Privacy</a></span>
+      <span>Built for a household first, open-sourced second.</span>
+    </div>
+  </div>
+</footer>
+
+<script src="landing.js"></script>
+</body>
+</html>

@@ -1,0 +1,24 @@
+---
+import BlogPost from "../../components/BlogPost.astro";
+import { getCollection } from "astro:content";
+import { isPublic } from "../../lib/flags";
+import { stripLocalePrefix } from "../../i18n/utils";
+
+export const prerender = process.env.WEB_SSR !== "1";
+
+export async function getStaticPaths() {
+  const posts = await getCollection("blog", ({ data }) => data.locale === "en" && (import.meta.env.DEV || isPublic(data)));
+  return posts.map((post) => ({
+    params: { id: stripLocalePrefix(post.id) },
+    props: { post },
+  }));
+}
+
+let __props = Astro.props;
+if (!__props.post) {
+  __props = (await getStaticPaths()).find((e) => e.params.id === Astro.params.id)?.props ?? {};
+}
+const { post } = __props;
+if (!post) return new Response("Not found", { status: 404 });
+---
+<BlogPost post={post} locale="en" />

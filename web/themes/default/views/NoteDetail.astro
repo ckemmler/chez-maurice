@@ -1,0 +1,2373 @@
+---
+import Base from "@app/layouts/Base.astro";
+import LucideIcon from "@app/components/LucideIcon.astro";
+import type { Locale } from "@app/i18n/config";
+import { t, localizedPath, formatFullDate, stripLocalePrefix } from "@app/i18n/utils";
+import { getAlternateContentPath } from "@app/i18n/translations";
+import { render } from "astro:content";
+import { isPublic, isEncrypted, isMoc as isMocFlag, hasFlag } from "@app/lib/flags";
+import { marked } from "marked";
+import fs from "node:fs";
+import path from "node:path";
+import { scanSubtree, countNodes } from "@app/lib/subtree-scan";
+import { notesDir } from "@app/lib/garden";
+import { listNotes } from "@app/lib/notes-fs";
+import SubtreeViz from "@app/components/SubtreeViz.astro";
+
+interface Props {
+  note: any;
+  locale?: Locale;
+}
+
+const { note, locale = "en" } = Astro.props;
+// SSR garden engine: the note was read from disk and already carries rendered
+// HTML (note.html). Static build: it's a content-collection entry, so render it
+// through the content layer. Either way we end up with body HTML to emit.
+const contentHtml: string | undefined = note.html;
+const { Content } = contentHtml ? { Content: null } : await render(note);
+
+// Read fragments from _fragments/ directory next to the parent note
+const contentBase = notesDir();
+const parentDir = path.join(contentBase, note.id);
+const fragmentsDir = path.join(parentDir, "_fragments");
+
+interface Fragment { summary: string; html: string }
+
+function parseFragments(dir: string): Fragment[] {
+  if (!fs.existsSync(dir)) return [];
+  return fs.readdirSync(dir)
+    .filter(f => f.endsWith(".frag")).sort()
+    .map(f => {
+      const raw = fs.readFileSync(path.join(dir, f), "utf-8");
+      const m = raw.match(/^---\n([\s\S]*?)\n---\n?([\s\S]*)$/);
+      let summary = "", body = raw;
+      if (m) {
+        const sumLine = m[1].split("\n").find(l => l.startsWith("summary:"));
+        summary = sumLine?.replace(/^summary:\s*["']?|["']?\s*$/g, "") ?? "";
+        body = m[2];
+      }
+      return { summary, html: marked.parse(body.trim(), { async: false }) as string };
+    });
+}
+
+const fragments = parseFragments(fragmentsDir);
+const alternatePath = await getAlternateContentPath("notes", note.data.translationKey, locale);
+const isBilan = stripLocalePrefix(note.id).startsWith("bilan-");
+const isDream = note.data.tags?.some((t: string) => t.toLowerCase() === "rêve");
+
+const WIKI_RE = /\[\[([^\]|]+?)(?:\|[^\]]+?)?\]\]/g;
+const thisSlug = stripLocalePrefix(note.id);
+
+// Build MOC metadata map for wiki-link card rendering. These are serialized to
+// a JSON script tag and rendered into background-images by client JS, which the
+// base-rewriting middleware can't reach — so resolve the garden base here.
+// No-op at the root build (BASE_URL === "/").
+const gardenBase = import.meta.env.BASE_URL.replace(/\/+$/, "");
+const withBase = (p?: string) =>
+  p && p.startsWith("/") && !p.startsWith(gardenBase + "/") ? `${gardenBase}${p}` : p;
+const allMocs = listNotes(locale).filter((n) => isMocFlag(n.data));
+const mocMeta: Record<string, { title: string; description?: string; image?: string }> = {};
+for (const moc of allMocs) {
+  const slug = stripLocalePrefix(moc.id);
+  if (slug === thisSlug) continue; // don't include self
+  mocMeta[slug] = {
+    title: moc.data.title,
+    description: moc.data.description,
+    image: withBase(moc.data.image),
+  };
+}
+
+// If this is a MOC, find non-MOC child notes from wiki-links in body
+let childNotes: any[] = [];
+const childSlugs = new Set<string>();
+if (isMocFlag(note.data) && note.body) {
+  const slugs = [...note.body.matchAll(WIKI_RE)].map(m => m[1]);
+  const allNotes = listNotes(locale).filter(
+    (n) => !isMocFlag(n.data) && (import.meta.env.DEV || isPublic(n.data))
+  );
+  const notesBySlug = new Map(allNotes.map(n => [stripLocalePrefix(n.id), n]));
+  childNotes = slugs.map(s => notesBySlug.get(s)).filter((n): n is NonNullable<typeof n> => !!n);
+  childNotes.forEach(n => childSlugs.add(stripLocalePrefix(n.id)));
+
+  // Sort by order when this MOC has the backlog tag
+  if (note.data.tags?.includes("backlog")) {
+    childNotes.sort((a, b) => {
+      const oa = a.data.order ?? Infinity;
+      const ob = b.data.order ?? Infinity;
+      return oa - ob;
+    });
+  }
+}
+
+// Split into active vs done for backlog MOCs
+const isBacklog = isMocFlag(note.data) && note.data.tags?.includes("backlog");
+const activeNotes = isBacklog
+  ? childNotes.filter(n => n.data.status !== "done")
+  : childNotes;
+const doneNotes = isBacklog
+  ? childNotes
+      .filter(n => n.data.status === "done")
+      .sort((a, b) => {
+        const da = a.data.date ? new Date(a.data.date).getTime() : 0;
+        const db = b.data.date ? new Date(b.data.date).getTime() : 0;
+        return db - da; // most recent first
+      })
+  : [];
+
+// Find parent MOC: a MOC whose body contains [[this-slug]]
+let parentNote: any = null;
+for (const moc of allMocs) {
+  if (moc.body && [...moc.body.matchAll(WIKI_RE)].some(m => m[1] === thisSlug)) {
+    parentNote = moc;
+    break;
+  }
+}
+
+// Subtree visualization for MOCs
+const subtree = isMocFlag(note.data) ? scanSubtree(thisSlug, locale as string) : null;
+const subtreeNodeCount = subtree ? countNodes(subtree) : 0;
+
+// Journal/dream MoCs show date cards instead of icons
+const isJournalMoc = isMocFlag(note.data) && (note.data.tags?.includes("journal") || note.data.tags?.includes("rêve"));
+const SHORT_DAYS_FR = ["Dim", "Lun", "Mar", "Mer", "Jeu", "Ven", "Sam"];
+const MONTHS_FR = ["", "Janvier", "Février", "Mars", "Avril", "Mai", "Juin", "Juillet", "Août", "Septembre", "Octobre", "Novembre", "Décembre"];
+function dateCard(d: Date) {
+  return { day: SHORT_DAYS_FR[d.getDay()], date: d.getDate() };
+}
+// Track months for separators in journal MoCs
+let _lastMonth = "";
+function monthSeparator(d: Date): string | null {
+  const key = `${d.getFullYear()}-${d.getMonth()}`;
+  if (key === _lastMonth) return null;
+  _lastMonth = key;
+  return `${MONTHS_FR[d.getMonth() + 1]} ${d.getFullYear()}`;
+}
+
+---
+
+<Base title={note.data.title} description={note.data.description} locale={locale} alternatePath={alternatePath}>
+  <article {...(isEncrypted(note.data) ? {"data-private": ""} : {})} {...(isDream ? {"data-dream": ""} : {})}>
+    {parentNote && (
+      <nav class="breadcrumb">
+        <a href={localizedPath(locale, `/notes/${stripLocalePrefix(parentNote.id)}`)}>← {parentNote.data.title}</a>
+      </nav>
+    )}
+
+    {isMocFlag(note.data) ? (
+      <header class="moc-header" style={note.data.image ? `background-image: url(${note.data.image})` : "background: linear-gradient(135deg, #1e293b, #475569)"}>
+        {subtree && subtreeNodeCount > 1 && (
+          <button class="moc-tree-btn" data-open-subtree aria-label={locale === "fr" ? "Voir l'arborescence" : "View tree"}>
+            <LucideIcon name="network" size={18} />
+            <span class="moc-tree-btn__count">{subtreeNodeCount}</span>
+          </button>
+        )}
+        <div class="moc-header__overlay">
+          <h1 class="moc-header__title">{note.data.title}</h1>
+          {note.data.description && <p class="moc-header__desc">{note.data.description}</p>}
+        </div>
+      </header>
+    ) : (
+      <header class={isBilan ? "header--bilan" : isDream ? "header--dream" : ""}>
+        <h1 class="title">{note.data.title}</h1>
+        {note.data.description && <h2 class="intro">{note.data.description}</h2>}
+        {!isBilan && <div class="post-date">{formatFullDate(note.data.date, locale)}</div>}
+      </header>
+    )}
+
+    {subtree && subtreeNodeCount > 1 && (
+      <dialog class="subtree-modal" id="subtree-modal">
+        <div class="subtree-modal__header">
+          <h2 class="subtree-modal__title">{note.data.title}</h2>
+          <button class="subtree-modal__close" data-close-subtree aria-label={locale === "fr" ? "Fermer" : "Close"}>
+            <LucideIcon name="x" size={20} />
+          </button>
+        </div>
+        <div class="subtree-modal__body">
+          <SubtreeViz data={subtree} locale={locale} title={note.data.title} />
+        </div>
+      </dialog>
+      <script is:inline>
+        (() => {
+          const modal = document.getElementById('subtree-modal');
+          if (!modal) return;
+          document.querySelector('[data-open-subtree]')?.addEventListener('click', () => modal.showModal());
+          modal.querySelector('[data-close-subtree]')?.addEventListener('click', () => modal.close());
+          modal.addEventListener('click', (e) => { if (e.target === modal) modal.close(); });
+        })();
+      </script>
+    )}
+
+    <div class="body-text page-content">
+      {contentHtml ? <Fragment set:html={contentHtml} /> : <Content />}
+      {fragments.map(f => (
+        <details class="fragment">
+          <summary class="fragment__summary">{f.summary}</summary>
+          <div class="fragment__body" set:html={f.html} />
+        </details>
+      ))}
+    </div>
+
+    {isMocFlag(note.data) && childNotes.length > 0 && (
+      <section class="child-notes">
+        <ul class="child-notes__list" data-backlog={isBacklog ? "true" : undefined}>
+          {activeNotes.map((child) => {
+            const sep = isJournalMoc && child.data.date ? monthSeparator(new Date(child.data.date)) : null;
+            return (<>
+            {sep && <li class="child-notes__month-sep" aria-hidden="true">{sep}</li>}
+            <li data-slug={stripLocalePrefix(child.id)} data-order={child.data.order ?? ""} data-archived={hasFlag(child.data, "archived") ? "true" : undefined}>
+              {import.meta.env.DEV && isBacklog && (
+                <span class="drag-handle" draggable="true" title="Drag to reorder">⠿</span>
+              )}
+              <a href={localizedPath(locale, `/notes/${stripLocalePrefix(child.id)}`)} class="child-link">
+                {isJournalMoc && child.data.date ? (() => {
+                  const dc = dateCard(new Date(child.data.date));
+                  return (
+                    <span class="child-link__icon child-link__date-card">
+                      <span class="date-card__day">{dc.day}</span>
+                      <span class="date-card__num">{dc.date}</span>
+                    </span>
+                  );
+                })() : child.data.icon ? (
+                  <span class="child-link__icon">
+                    <LucideIcon name={child.data.icon} size={36} />
+                  </span>
+                ) : null}
+                <span class="child-link__text">
+                  <span class="child-link__title">
+                    {child.data.title}
+                    {isPublic(child.data) && <span class="public-dot">•</span>}
+                    {child.data.status && child.data.tags?.includes("backlog") && (
+                      <span class={`status-badge status-badge--${child.data.status}`}>{child.data.status.replace("_", " ")}</span>
+                    )}
+                  </span>
+                  {child.data.description && (
+                    <span class="child-link__desc">{child.data.description}</span>
+                  )}
+                </span>
+              </a>
+            </li>
+          </>);
+          })}
+        </ul>
+
+        {doneNotes.length > 0 && (
+          <details class="done-section" id="done-section">
+            <summary class="done-toggle">Done ({doneNotes.length})</summary>
+            <ul class="child-notes__list done-notes" id="done-list">
+              {doneNotes.map((child, i) => (
+                <li data-slug={stripLocalePrefix(child.id)} data-order={child.data.order ?? ""} data-done-index={i} hidden={i >= 5} data-archived={hasFlag(child.data, "archived") ? "true" : undefined}>
+                  <a href={localizedPath(locale, `/notes/${stripLocalePrefix(child.id)}`)} class="child-link">
+                    {child.data.icon && (
+                      <span class="child-link__icon">
+                        <LucideIcon name={child.data.icon} size={36} />
+                      </span>
+                    )}
+                    <span class="child-link__text">
+                      <span class="child-link__title">
+                        {child.data.title}
+                        {isPublic(child.data) && <span class="public-dot">•</span>}
+                        <span class={`status-badge status-badge--done`}>done</span>
+                      </span>
+                      {child.data.description && (
+                        <span class="child-link__desc">{child.data.description}</span>
+                      )}
+                    </span>
+                  </a>
+                </li>
+              ))}
+            </ul>
+            {doneNotes.length > 5 && (
+              <button class="show-more-btn" id="show-more-done" type="button">
+                Show more ({doneNotes.length - 5} remaining)
+              </button>
+            )}
+          </details>
+        )}
+      </section>
+    )}
+
+    <script type="application/json" id="moc-meta" set:html={JSON.stringify({ mocs: mocMeta, children: [...childSlugs] })} />
+    <script is:inline>
+    (function() {
+      var data = JSON.parse(document.getElementById('moc-meta').textContent);
+      var mocs = data.mocs;
+      var children = {};
+      data.children.forEach(function(s) { children[s] = true; });
+
+      // Index server-rendered child-link <li> elements by slug for cloning
+      var childCards = {};
+      var archivedSlugs = {};
+      var monthSepBefore = {}; // slug → month separator text
+      document.querySelectorAll('.child-notes__list > li[data-slug]').forEach(function(li) {
+        childCards[li.dataset.slug] = li.querySelector('.child-link');
+        if (li.dataset.archived === 'true') archivedSlugs[li.dataset.slug] = true;
+        var prev = li.previousElementSibling;
+        if (prev && prev.classList.contains('child-notes__month-sep')) {
+          monthSepBefore[li.dataset.slug] = prev.textContent;
+        }
+      });
+
+      function buildMocCard(href, moc) {
+        var card = document.createElement('a');
+        card.href = href;
+        card.className = 'moc-card moc-card--inline';
+        var imgDiv = document.createElement('div');
+        imgDiv.className = 'moc-card__image';
+        if (moc.image) {
+          imgDiv.style.backgroundImage = 'url(' + moc.image + ')';
+        } else {
+          imgDiv.style.background = 'linear-gradient(135deg, #1e293b, #475569)';
+        }
+        var bodyDiv = document.createElement('div');
+        bodyDiv.className = 'moc-card__body';
+        var h3 = document.createElement('h3');
+        h3.className = 'moc-card__title';
+        h3.innerHTML = '<svg class="moc-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></svg>' +
+          '<span class="moc-card__title-wrap">' + moc.title + '</span>';
+        bodyDiv.appendChild(h3);
+        if (moc.description) {
+          var p = document.createElement('p');
+          p.className = 'moc-card__desc';
+          p.textContent = moc.description;
+          bodyDiv.appendChild(p);
+        }
+        card.appendChild(imgDiv);
+        card.appendChild(bodyDiv);
+        return card;
+      }
+
+      var processed = new Set();
+      var allLinks = document.querySelectorAll('a.wiki-link');
+      var seen = new Set();
+      var anyChildReplaced = false;
+
+      // Replace <p> elements containing wiki-links with cards rendered in-place
+      allLinks.forEach(function(a) {
+        var parent = a.parentNode;
+        if (!parent || parent.tagName !== 'P' || seen.has(parent)) return;
+        seen.add(parent);
+
+        // Collect links and non-link text in this <p>
+        var links = [];
+        var hasNonLinkContent = false;
+        Array.prototype.forEach.call(parent.childNodes, function(n) {
+          if (n.nodeType === 3 && n.textContent.trim()) hasNonLinkContent = true;
+          if (n.nodeType === 1 && n.tagName === 'A' && n.classList.contains('wiki-link')) {
+            links.push(n);
+          } else if (n.nodeType === 1) {
+            hasNonLinkContent = true;
+          }
+        });
+
+        if (links.length === 0) return;
+
+        // Check all links are known (moc or child)
+        var allKnown = links.every(function(link) {
+          var s = link.dataset.refSlug;
+          return (s && mocs[s]) || (s && children[s]);
+        });
+        if (!allKnown) return;
+
+        if (!hasNonLinkContent) {
+          // Pure wiki-link paragraph: replace entirely with cards
+          var container = document.createElement('div');
+          container.className = 'moc-inline-cards';
+          links.forEach(function(link) {
+            var s = link.dataset.refSlug;
+            if (s && mocs[s]) {
+              container.appendChild(buildMocCard(link.href, mocs[s]));
+            } else if (s && children[s] && childCards[s]) {
+              if (monthSepBefore[s]) {
+                var sep = document.createElement('div');
+                sep.className = 'child-notes__month-sep';
+                sep.textContent = monthSepBefore[s];
+                container.appendChild(sep);
+              }
+              var clone = childCards[s].cloneNode(true);
+              if (archivedSlugs[s]) clone.classList.add('child-link--archived');
+              container.appendChild(clone);
+              anyChildReplaced = true;
+            }
+            processed.add(link);
+          });
+          parent.replaceWith(container);
+        } else {
+          // Mixed paragraph (link + text): replace each child wiki-link with a card,
+          // keep remaining text as an annotation below the card
+          links.forEach(function(link) {
+            var s = link.dataset.refSlug;
+            if (!s) return;
+            if ((s && mocs[s]) || (s && children[s] && childCards[s])) {
+              var card;
+              if (mocs[s]) {
+                card = buildMocCard(link.href, mocs[s]);
+              } else {
+                card = childCards[s].cloneNode(true);
+                if (archivedSlugs[s]) card.classList.add('child-link--archived');
+                anyChildReplaced = true;
+              }
+              // Collect remaining sibling nodes as annotation
+              var annotation = document.createElement('span');
+              annotation.className = 'moc-inline-annotation';
+              var sib = link.nextSibling;
+              while (sib) {
+                var next = sib.nextSibling;
+                annotation.appendChild(sib);
+                sib = next;
+              }
+              var wrapper = document.createElement('div');
+              wrapper.className = 'moc-inline-cards';
+              wrapper.appendChild(card);
+              if (annotation.textContent.trim()) {
+                // Append annotation text after the card title
+                var titleEl = card.querySelector('.child-link__title') || card.querySelector('.moc-card__title-wrap');
+                if (titleEl) {
+                  titleEl.appendChild(document.createTextNode(' '));
+                  titleEl.appendChild(annotation);
+                }
+              }
+              parent.replaceWith(wrapper);
+              processed.add(link);
+            }
+          });
+        }
+      });
+
+      // Second pass: inline moc links in mixed content
+      allLinks.forEach(function(a) {
+        if (processed.has(a)) return;
+        var slug = a.dataset.refSlug;
+        if (slug && mocs[slug]) {
+          a.classList.add('wiki-link--moc');
+          a.textContent = mocs[slug].title;
+        }
+      });
+
+      // Hide the separate child-notes section since children are now rendered in-place
+      if (anyChildReplaced) {
+        var section = document.querySelector('.child-notes');
+        if (section) section.style.display = 'none';
+      }
+    })();
+    </script>
+
+    <script is:inline>
+    (function() {
+      var bar = document.querySelector('.adherence-tabs__bar');
+      if (!bar) return;
+      var KEY = 'adherence-active-tab';
+      var container = bar.parentNode;
+
+      // Restore saved tab
+      var saved = localStorage.getItem(KEY);
+      if (saved) {
+        var target = container.querySelector('[data-tab="' + saved + '"]');
+        var panel = container.querySelector('#' + saved);
+        if (target && panel) {
+          container.querySelectorAll('.adherence-tabs__btn').forEach(function(b) {
+            b.classList.remove('adherence-tabs__btn--active');
+          });
+          container.querySelectorAll('.adherence-tabs__panel').forEach(function(p) {
+            p.classList.remove('adherence-tabs__panel--active');
+          });
+          target.classList.add('adherence-tabs__btn--active');
+          panel.classList.add('adherence-tabs__panel--active');
+        }
+      }
+
+      bar.addEventListener('click', function(e) {
+        var btn = e.target.closest('.adherence-tabs__btn');
+        if (!btn) return;
+        container.querySelectorAll('.adherence-tabs__btn').forEach(function(b) {
+          b.classList.remove('adherence-tabs__btn--active');
+        });
+        container.querySelectorAll('.adherence-tabs__panel').forEach(function(p) {
+          p.classList.remove('adherence-tabs__panel--active');
+        });
+        btn.classList.add('adherence-tabs__btn--active');
+        var panel = container.querySelector('#' + btn.dataset.tab);
+        if (panel) panel.classList.add('adherence-tabs__panel--active');
+        localStorage.setItem(KEY, btn.dataset.tab);
+      });
+    })();
+    </script>
+
+    <script is:inline>
+    (function() {
+      var list = document.querySelector('.agenda-list');
+      if (!list) return;
+      // Same-origin by default. The private tasks overlay can inject an absolute
+      // API base via <meta name="api-base" content="…"> when it runs cross-origin.
+      var apiMeta = document.querySelector('meta[name="api-base"]');
+      var API_BASE = (apiMeta && apiMeta.getAttribute('content')) || '';
+
+      // ── Popover ──
+      var pop = document.createElement('div');
+      pop.className = 'agenda-pop';
+      var POP_ACTIONS =
+        '<button data-action="done" class="agenda-pop__btn agenda-pop__btn--done">Terminer</button>' +
+        '<button data-action="followup" class="agenda-pop__btn agenda-pop__btn--followup">Suite…</button>' +
+        '<button data-action="subtask" class="agenda-pop__btn agenda-pop__btn--subtask">Sous-tâche…</button>' +
+        '<button data-action="defer" class="agenda-pop__btn agenda-pop__btn--defer">Reporter</button>' +
+        '<button data-action="cancel" class="agenda-pop__btn agenda-pop__btn--cancel">Annuler</button>';
+      var POP_REOPEN =
+        '<button data-action="reopen" class="agenda-pop__btn agenda-pop__btn--reopen">Réouvrir</button>' +
+        '<button data-action="followup" class="agenda-pop__btn agenda-pop__btn--followup">Suite…</button>' +
+        '<button data-action="subtask" class="agenda-pop__btn agenda-pop__btn--subtask">Sous-tâche…</button>' +
+        '<button data-action="cancel" class="agenda-pop__btn agenda-pop__btn--cancel">Annuler</button>';
+      pop.innerHTML = POP_ACTIONS;
+      document.body.appendChild(pop);
+
+      // ── Inline forms (replace prompt/confirm for mobile compat) ──
+      var followupForm = document.createElement('div');
+      followupForm.className = 'agenda-inline-form';
+      followupForm.style.display = 'none';
+      followupForm.innerHTML =
+        '<input type="text" class="agenda-inline-input" placeholder="Prochaine action…" />' +
+        '<div class="agenda-inline-row">' +
+        '<label class="agenda-inline-label"><input type="checkbox" class="agenda-inline-waiting" /> en attente</label>' +
+        '<button class="agenda-inline-ok">OK</button>' +
+        '<button class="agenda-inline-cancel">Annuler</button>' +
+        '</div>';
+
+      var deferForm = document.createElement('div');
+      deferForm.className = 'agenda-inline-form';
+      deferForm.style.display = 'none';
+      deferForm.innerHTML =
+        '<input type="date" class="agenda-inline-input" />' +
+        '<div class="agenda-inline-row">' +
+        '<button class="agenda-inline-ok">OK</button>' +
+        '<button class="agenda-inline-cancel">Annuler</button>' +
+        '</div>';
+
+      var subtaskForm = document.createElement('div');
+      subtaskForm.className = 'agenda-inline-form';
+      subtaskForm.style.display = 'none';
+      subtaskForm.innerHTML =
+        '<input type="text" class="agenda-inline-input" placeholder="Sous-tâche…" />' +
+        '<div class="agenda-inline-row">' +
+        '<button class="agenda-inline-ok">OK</button>' +
+        '<button class="agenda-inline-cancel">Annuler</button>' +
+        '</div>';
+
+      var activeItem = null;
+      var activeCb = null;
+      var activeTaskId = null;
+
+      function closePop() {
+        pop.classList.remove('agenda-pop--open');
+        if (activeCb && !activeCb.checked) activeCb.checked = false;
+        activeItem = null; activeCb = null; activeTaskId = null;
+      }
+
+      function closeInlineForms() {
+        followupForm.style.display = 'none';
+        deferForm.style.display = 'none';
+        subtaskForm.style.display = 'none';
+        if (followupForm.parentNode) followupForm.parentNode.removeChild(followupForm);
+        if (deferForm.parentNode) deferForm.parentNode.removeChild(deferForm);
+        if (subtaskForm.parentNode) subtaskForm.parentNode.removeChild(subtaskForm);
+      }
+
+      function showPop(item, cb, taskId) {
+        closeInlineForms();
+        activeItem = item; activeCb = cb; activeTaskId = taskId;
+        var rect = item.getBoundingClientRect();
+        pop.style.top = (rect.bottom + window.scrollY + 4) + 'px';
+        pop.style.left = (rect.left + window.scrollX) + 'px';
+        pop.classList.add('agenda-pop--open');
+      }
+
+      function apiCall(url, body) {
+        return fetch(API_BASE + url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body || {}),
+        }).then(function(r) { if (!r.ok) throw new Error(r.status); return r.json(); });
+      }
+
+      function markDone(item, cb) {
+        item.classList.remove('agenda-item--partial');
+        item.classList.add('agenda-item--done');
+        cb.checked = true;
+      }
+
+      function swapToCheckbox(item, taskId, checked) {
+        var old = item.querySelector('.agenda-partial-dot');
+        if (!old) return;
+        var cb = document.createElement('input');
+        cb.type = 'checkbox';
+        cb.className = 'agenda-check';
+        cb.dataset.taskId = taskId;
+        cb.checked = !!checked;
+        old.replaceWith(cb);
+      }
+
+      function swapToDot(item, taskId) {
+        var old = item.querySelector('.agenda-check');
+        if (!old) return;
+        var dot = document.createElement('span');
+        dot.className = 'agenda-partial-dot';
+        dot.dataset.taskId = taskId;
+        dot.textContent = '…';
+        old.replaceWith(dot);
+      }
+
+      function updateParentState(parentId) {
+        if (!parentId) return;
+        var parentItem = list.querySelector('.agenda-item[data-task-id="' + parentId + '"]');
+        if (!parentItem) return;
+        // Only follow-ups affect parent partial state (not subtasks)
+        var children = list.querySelectorAll('.agenda-item[data-parent-id="' + parentId + '"][data-link-type="followup"]');
+        if (!children.length) return;
+        var allDone = true;
+        for (var i = 0; i < children.length; i++) {
+          if (!children[i].classList.contains('agenda-item--done')) { allDone = false; break; }
+        }
+        if (!(parentItem.classList.contains('agenda-item--done') || parentItem.classList.contains('agenda-item--partial'))) return;
+        if (allDone) {
+          parentItem.classList.remove('agenda-item--partial');
+          parentItem.classList.add('agenda-item--done');
+          swapToCheckbox(parentItem, parentId, true);
+        } else {
+          parentItem.classList.remove('agenda-item--done');
+          parentItem.classList.add('agenda-item--partial');
+          swapToDot(parentItem, parentId);
+        }
+      }
+
+      function makeChainItem(task, parentId, linkType) {
+        var lt = linkType || 'followup';
+        var label = task.status === 'waiting' ? 'en attente' : 'active';
+        var n = document.createElement('div');
+        n.className = 'agenda-item agenda-task agenda-item--subtask agenda-item--chain';
+        n.dataset.taskId = task.id;
+        if (parentId) n.dataset.parentId = parentId;
+        n.dataset.linkType = lt;
+        n.innerHTML =
+          '<input type="checkbox" class="agenda-check" data-task-id="' + task.id + '" />' +
+          '<span class="agenda-time"></span>' +
+          '<span class="agenda-title">↳ ' + task.title.replace(/</g,'&lt;') + '</span>' +
+          '<span class="agenda-meta">' + label + '</span>';
+        return n;
+      }
+
+      // ── Delegated click handler for partial dots ──
+      list.addEventListener('click', function(e) {
+        var dot = e.target.closest('.agenda-partial-dot');
+        if (!dot) return;
+        var item = dot.closest('.agenda-item');
+        var taskId = dot.dataset.taskId;
+        pop.innerHTML = POP_REOPEN;
+        showPop(item, dot, taskId);
+      });
+
+      // ── Delegated checkbox handler (works for dynamically added items) ──
+      list.addEventListener('change', function(e) {
+        var cb = e.target;
+        if (!cb.classList.contains('agenda-check')) return;
+        e.preventDefault();
+        var item = cb.closest('.agenda-item');
+        var isDone = item.classList.contains('agenda-item--done');
+        cb.checked = isDone; // restore visual state
+        var taskId = cb.dataset.taskId;
+        pop.innerHTML = isDone ? POP_REOPEN : POP_ACTIONS;
+        showPop(item, cb, taskId);
+      });
+
+      // ── Popover action buttons ──
+      pop.addEventListener('click', function(e) {
+        e.stopPropagation();
+        var btn = e.target.closest('[data-action]');
+        if (!btn) return;
+        var action = btn.dataset.action;
+        if (action === 'cancel') { closePop(); return; }
+
+        var taskId = activeTaskId;
+        var item = activeItem;
+        var cb = activeCb;
+        closePop();
+        if (!taskId || !item || !cb) return;
+
+        if (action === 'reopen') {
+          var wasPartial = item.classList.contains('agenda-item--partial');
+          item.classList.remove('agenda-item--done', 'agenda-item--partial');
+          // Swap dot back to checkbox if needed
+          if (wasPartial) { swapToCheckbox(item, taskId, false); }
+          else if (cb.type === 'checkbox') { cb.checked = false; }
+          var parentId = item.dataset.parentId;
+          if (parentId) updateParentState(parentId);
+          fetch(API_BASE + '/api/v1/tasks/' + taskId, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ status: 'active' }),
+          }).then(function(r) { if (!r.ok) throw new Error(r.status); })
+            .catch(function(err) {
+              if (wasPartial) { item.classList.add('agenda-item--partial'); swapToDot(item, taskId); }
+              else { item.classList.add('agenda-item--done'); var c = item.querySelector('.agenda-check'); if (c) c.checked = true; }
+              if (parentId) updateParentState(parentId);
+              alert('Erreur: ' + err.message);
+            });
+        }
+
+        if (action === 'done') {
+          markDone(item, cb);
+          var parentId = item.dataset.parentId;
+          if (parentId) updateParentState(parentId);
+          apiCall('/api/v1/tasks/' + taskId + '/complete', {})
+            .catch(function(err) { cb.checked = false; item.classList.remove('agenda-item--done'); if (parentId) updateParentState(parentId); alert('Erreur: ' + err.message); });
+        }
+
+        if (action === 'defer') {
+          deferForm.style.display = '';
+          deferForm.querySelector('input').value = '';
+          item.parentNode.insertBefore(deferForm, item.nextSibling);
+          deferForm.querySelector('input').focus();
+
+          var onOk = function() { cleanup();
+            var newDue = deferForm.querySelector('input').value;
+            if (!newDue) return;
+            fetch(API_BASE + '/api/v1/tasks/' + taskId + '/defer', {
+              method: 'POST', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ due: newDue }),
+            }).then(function(r) {
+              if (!r.ok) throw new Error(r.status);
+              item.classList.add('agenda-item--deferred');
+              item.querySelector('.agenda-meta').textContent = '→ ' + newDue;
+              cb.disabled = true;
+            }).catch(function(err) { alert('Erreur: ' + err.message); });
+          };
+          var onCancel = function() { cleanup(); };
+          var cleanup = function() {
+            closeInlineForms();
+            deferForm.querySelector('.agenda-inline-ok').removeEventListener('click', onOk);
+            deferForm.querySelector('.agenda-inline-cancel').removeEventListener('click', onCancel);
+          };
+          deferForm.querySelector('.agenda-inline-ok').addEventListener('click', onOk);
+          deferForm.querySelector('.agenda-inline-cancel').addEventListener('click', onCancel);
+        }
+
+        if (action === 'followup') {
+          followupForm.style.display = '';
+          followupForm.querySelector('input[type="text"]').value = '';
+          followupForm.querySelector('.agenda-inline-waiting').checked = false;
+          item.parentNode.insertBefore(followupForm, item.nextSibling);
+          followupForm.querySelector('input[type="text"]').focus();
+
+          var onOk = function() { cleanup();
+            var title = followupForm.querySelector('input[type="text"]').value.trim();
+            if (!title) return;
+            var isWaiting = followupForm.querySelector('.agenda-inline-waiting').checked;
+            // Mark as partial (started, not finished) — swap checkbox to dot
+            item.classList.remove('agenda-item--done');
+            item.classList.add('agenda-item--partial');
+            swapToDot(item, taskId);
+            var pId = item.dataset.parentId;
+            if (pId) updateParentState(pId);
+            apiCall('/api/v1/tasks/' + taskId + '/complete', {
+              next_action: title,
+              next_action_status: isWaiting ? 'waiting' : 'active',
+            }).then(function(res) {
+              if (res.next_task) {
+                var n = makeChainItem(res.next_task, taskId);
+                item.parentNode.insertBefore(n, item.nextSibling);
+              }
+            }).catch(function(err) { item.classList.remove('agenda-item--partial'); swapToCheckbox(item, taskId, false); if (pId) updateParentState(pId); alert('Erreur: ' + err.message); });
+          };
+          var onCancel = function() { cleanup(); };
+          var cleanup = function() {
+            closeInlineForms();
+            followupForm.querySelector('.agenda-inline-ok').removeEventListener('click', onOk);
+            followupForm.querySelector('.agenda-inline-cancel').removeEventListener('click', onCancel);
+          };
+          followupForm.querySelector('.agenda-inline-ok').addEventListener('click', onOk);
+          followupForm.querySelector('.agenda-inline-cancel').addEventListener('click', onCancel);
+        }
+
+        if (action === 'subtask') {
+          subtaskForm.style.display = '';
+          subtaskForm.querySelector('input[type="text"]').value = '';
+          // Insert after last child of this task, or after the task itself
+          var lastChild = list.querySelector('.agenda-item[data-parent-id="' + taskId + '"]:last-of-type');
+          var insertAfter = lastChild || item;
+          insertAfter.parentNode.insertBefore(subtaskForm, insertAfter.nextSibling);
+          subtaskForm.querySelector('input[type="text"]').focus();
+
+          var onOk = function() { cleanup();
+            var title = subtaskForm.querySelector('input[type="text"]').value.trim();
+            if (!title) return;
+            fetch(API_BASE + '/api/v1/tasks', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                title: title,
+                parent_id: taskId,
+                link_type: 'subtask',
+                status: 'active',
+                category: item.querySelector('.agenda-meta') ? item.querySelector('.agenda-meta').textContent.split('·').pop().trim() : null,
+              }),
+            }).then(function(r) { if (!r.ok) throw new Error(r.status); return r.json(); })
+              .then(function(task) {
+                var n = makeChainItem(task, taskId, 'subtask');
+                var last = list.querySelector('.agenda-item[data-parent-id="' + taskId + '"]:last-of-type');
+                var after = last || item;
+                after.parentNode.insertBefore(n, after.nextSibling);
+              })
+              .catch(function(err) { alert('Erreur: ' + err.message); });
+          };
+          var onCancel = function() { cleanup(); };
+          var cleanup = function() {
+            closeInlineForms();
+            subtaskForm.querySelector('.agenda-inline-ok').removeEventListener('click', onOk);
+            subtaskForm.querySelector('.agenda-inline-cancel').removeEventListener('click', onCancel);
+          };
+          subtaskForm.querySelector('.agenda-inline-ok').addEventListener('click', onOk);
+          subtaskForm.querySelector('.agenda-inline-cancel').addEventListener('click', onCancel);
+        }
+      });
+
+      document.addEventListener('click', function(e) {
+        if (!pop.contains(e.target) && !e.target.classList.contains('agenda-check')) closePop();
+      });
+      document.addEventListener('keydown', function(e) { if (e.key === 'Escape') { closePop(); closeInlineForms(); } });
+    })();
+    </script>
+
+    <script is:inline>
+    (function() {
+      // Transaction categorization in agenda
+      var txSelects = document.querySelectorAll('.agenda-tx-cat-select');
+      if (!txSelects.length) return;
+
+      var API_BASE = '';
+      var meta = document.querySelector('meta[name="api-base"]');
+      if (meta) API_BASE = meta.getAttribute('content') || '';
+
+      // Handle categorization
+      document.addEventListener('change', function(e) {
+        var sel = e.target;
+        if (!sel.classList || !sel.classList.contains('agenda-tx-cat-select')) return;
+        var txId = sel.dataset.txId;
+        var category = sel.value;
+        if (!category) return;
+
+        fetch(API_BASE + '/api/v1/compte/transactions/' + txId + '/categorize', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ category: category }),
+        })
+        .then(function(r) {
+          if (!r.ok) throw new Error(r.status);
+          return r.json();
+        })
+        .then(function() {
+          var badge = document.createElement('span');
+          badge.className = 'agenda-tx-cat';
+          badge.textContent = category;
+          sel.replaceWith(badge);
+          var item = badge.closest('.agenda-transaction');
+          if (item) {
+            item.classList.remove('agenda-transaction--uncat');
+          }
+        })
+        .catch(function(err) { alert('Erreur: ' + err.message); });
+      });
+    })();
+    </script>
+
+    {import.meta.env.DEV && note.data.tags?.includes("backlog") && (
+      <script is:inline>
+      (function() {
+        var list = document.querySelector('.child-notes__list[data-backlog]');
+        if (!list) return;
+        var dragItem = null;
+        var orderBefore = null;
+
+        function getOrderSnapshot() {
+          return Array.from(list.querySelectorAll('li[data-slug]')).map(function(li) {
+            return li.dataset.slug;
+          }).join(',');
+        }
+
+        list.querySelectorAll('.drag-handle').forEach(function(handle) {
+          handle.addEventListener('dragstart', function(e) {
+            dragItem = handle.closest('li');
+            orderBefore = getOrderSnapshot();
+            dragItem.classList.add('dragging');
+            e.dataTransfer.effectAllowed = 'move';
+          });
+        });
+
+        list.addEventListener('dragover', function(e) {
+          e.preventDefault();
+          e.dataTransfer.dropEffect = 'move';
+          var target = e.target.closest ? e.target.closest('li') : null;
+          if (!target || target === dragItem || !list.contains(target)) return;
+          var rect = target.getBoundingClientRect();
+          var midY = rect.top + rect.height / 2;
+          if (e.clientY < midY) {
+            list.insertBefore(dragItem, target);
+          } else {
+            list.insertBefore(dragItem, target.nextSibling);
+          }
+        });
+
+        // Use dragend instead of drop — it always fires
+        list.addEventListener('dragend', function(e) {
+          if (dragItem) dragItem.classList.remove('dragging');
+
+          // Only persist if order actually changed
+          var orderAfter = getOrderSnapshot();
+          if (orderBefore === orderAfter) {
+            dragItem = null;
+            return;
+          }
+          dragItem = null;
+
+          var items = list.querySelectorAll('li[data-slug]');
+          var payload = [];
+          items.forEach(function(li, i) {
+            li.dataset.order = (i + 1) * 10;
+            payload.push({ slug: li.dataset.slug, order: (i + 1) * 10 });
+          });
+
+          fetch('/_dev/reorder-children', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ items: payload }),
+          }).then(function(r) { return r.json(); }).then(function(data) {
+            if (data.error) {
+              console.error('Reorder failed:', data.error);
+            } else {
+              console.log('Reorder saved:', data.count, 'items');
+            }
+          }).catch(function(err) { console.error('Reorder failed:', err); });
+        });
+      })();
+      </script>
+    )}
+
+    {doneNotes.length > 0 && (
+      <script is:inline>
+      (function() {
+        var details = document.getElementById('done-section');
+        if (!details) return;
+        var KEY = 'backlog-done-visible';
+        // Restore open/closed state
+        if (localStorage.getItem(KEY) === 'true') {
+          details.open = true;
+        }
+        details.addEventListener('toggle', function() {
+          localStorage.setItem(KEY, details.open ? 'true' : 'false');
+        });
+
+        // Show-more pagination
+        var btn = document.getElementById('show-more-done');
+        if (!btn) return;
+        var BATCH = 10;
+        var shown = 5;
+        var items = document.querySelectorAll('#done-list li[data-done-index]');
+        var total = items.length;
+
+        btn.addEventListener('click', function() {
+          var nextLimit = shown + BATCH;
+          for (var i = shown; i < Math.min(nextLimit, total); i++) {
+            items[i].removeAttribute('hidden');
+          }
+          shown = Math.min(nextLimit, total);
+          var remaining = total - shown;
+          if (remaining > 0) {
+            btn.textContent = 'Show more (' + remaining + ' remaining)';
+          } else {
+            btn.style.display = 'none';
+          }
+        });
+      })();
+      </script>
+    )}
+
+    <footer>
+      <p><a href={localizedPath(locale, "/notes")}>{t(locale, "notes.backToNotes")}</a></p>
+    </footer>
+  </article>
+</Base>
+
+<style>
+  article {
+    max-width: 65ch;
+  }
+
+  .breadcrumb {
+    margin-bottom: var(--spacing-md);
+  }
+
+  .breadcrumb a {
+    color: var(--color-text-quiet);
+    text-decoration: none;
+    font-size: 0.95rem;
+  }
+
+  .breadcrumb a:hover {
+    color: var(--color-text);
+  }
+
+  /* MOC hero header */
+  .moc-header {
+    position: relative;
+    height: 320px;
+    background-size: cover;
+    background-position: center;
+    border-radius: 8px;
+    overflow: hidden;
+    margin-bottom: var(--spacing-xl);
+  }
+
+  .moc-header__overlay {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    padding: var(--spacing-xl);
+    background: linear-gradient(transparent 30%, rgba(0, 0, 0, 0.85));
+  }
+
+  .moc-header__title {
+    color: white;
+    font-size: 2.5rem;
+    font-weight: 600;
+    margin: 0;
+    line-height: 1.1;
+  }
+
+  .moc-header__desc {
+    color: rgba(255, 255, 255, 0.85);
+    font-size: 1.15rem;
+    margin: 0.5rem 0 0;
+    font-family: var(--font-sans);
+  }
+
+  /* MoC tree button */
+  .moc-tree-btn {
+    position: absolute;
+    top: 12px;
+    left: 12px;
+    z-index: 2;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 10px;
+    border: none;
+    border-radius: 8px;
+    background: rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(8px);
+    color: white;
+    cursor: pointer;
+    font-size: 0.8125rem;
+    font-weight: 500;
+    transition: background 0.15s;
+  }
+
+  .moc-tree-btn:hover {
+    background: rgba(0, 0, 0, 0.7);
+  }
+
+  .moc-tree-btn__count {
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Subtree modal */
+  .subtree-modal {
+    border: none;
+    border-radius: 12px;
+    padding: 0;
+    max-width: min(90vw, 860px);
+    max-height: 85vh;
+    background: var(--color-bg, #fff);
+    color: var(--color-text, #1e293b);
+    box-shadow: 0 24px 48px rgba(0, 0, 0, 0.2);
+    overflow: hidden;
+  }
+
+  .subtree-modal::backdrop {
+    background: rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(4px);
+  }
+
+  .subtree-modal__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 1rem 1.25rem;
+    border-bottom: 1px solid var(--color-border, #e2e8f0);
+  }
+
+  .subtree-modal__title {
+    font-size: 1.1rem;
+    font-weight: 600;
+    margin: 0;
+  }
+
+  .subtree-modal__close {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border: none;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--color-text-quiet, #64748b);
+    cursor: pointer;
+  }
+
+  .subtree-modal__close:hover {
+    background: var(--color-bg-alt, #f1f5f9);
+    color: var(--color-text, #1e293b);
+  }
+
+  .subtree-modal__body {
+    padding: 1rem 1.25rem 1.5rem;
+    overflow: auto;
+    max-height: calc(85vh - 60px);
+  }
+
+  @media (min-width: 640px) {
+    .moc-header {
+      height: 400px;
+    }
+
+    .moc-header__title {
+      font-size: 3rem;
+    }
+  }
+
+  /* Simple header (non-MOC) */
+  header {
+    margin-bottom: var(--spacing-xl);
+  }
+
+  .title {
+    font-size: 3rem;
+    font-weight: 600;
+    margin-bottom: 0;
+    line-height: 1.1;
+  }
+
+  /* Compact bilan header */
+  .header--bilan {
+    margin-top: -1rem;
+    margin-bottom: var(--spacing-sm);
+  }
+
+  .header--bilan .title {
+    font-size: 1.5rem;
+    font-weight: 500;
+    color: var(--color-text-quiet);
+  }
+
+  /* Compact dream header */
+  .header--dream {
+    margin-bottom: var(--spacing-md);
+  }
+
+  .header--dream .title {
+    font-size: 1.35rem;
+    font-weight: 500;
+  }
+
+  .header--dream .intro {
+    font-size: 0.95rem;
+  }
+
+  .header--dream .post-date {
+    font-size: 0.8rem;
+  }
+
+  .intro {
+    color: var(--color-text-quiet);
+    font-family: var(--font-sans);
+    font-size: 1.25rem;
+    font-weight: 400;
+    margin-top: 0.5rem;
+    margin-bottom: 0.25rem;
+  }
+
+  .body-text {
+    margin-top: var(--spacing-lg);
+  }
+
+  /* MOC cards — :global because inline script creates them dynamically */
+  :global(.moc-card) {
+    text-decoration: none;
+    color: var(--color-text);
+    border: 1px solid var(--color-border);
+    border-radius: 8px;
+    overflow: hidden;
+    transition: border-color 0.2s;
+    display: block;
+  }
+
+  :global(.moc-card):hover {
+    border-color: var(--color-text-quiet);
+  }
+
+  :global(.moc-card--inline) {
+    margin: var(--spacing-lg) 0;
+  }
+
+  :global(.moc-card__image) {
+    height: 140px;
+    background-size: cover;
+    background-position: center;
+  }
+
+  :global(.moc-card__body) {
+    padding: var(--spacing-md);
+  }
+
+  :global(.moc-card__title) {
+    font-size: 1.2rem;
+    margin: 0 0 0.25rem;
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+  }
+
+  :global(.moc-card__title-wrap) {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+  }
+
+  :global(.moc-card__desc) {
+    font-size: 0.95rem;
+    color: var(--color-text-quiet);
+    margin: 0;
+  }
+
+  :global(.moc-icon) {
+    flex-shrink: 0;
+    opacity: 0.6;
+  }
+
+  /* Child notes section */
+  .child-notes {
+    margin-top: var(--spacing-xl);
+  }
+
+  .child-notes__list {
+    list-style: none;
+    padding: 0;
+  }
+
+  .child-notes__list li {
+    margin-bottom: var(--spacing-md);
+  }
+
+  .child-link {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-md);
+    text-decoration: none;
+    color: var(--color-text);
+    padding: var(--spacing-sm) 0;
+  }
+
+  .child-link:hover .child-link__title {
+    text-decoration: underline;
+  }
+
+  :global(.moc-inline-cards) {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    margin: 0.5rem 0 1.5rem;
+  }
+
+  .child-link__icon {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 56px;
+    height: 56px;
+    border-radius: 12px;
+    background: var(--color-bg-subtle, #f1f5f9);
+    color: var(--color-text-quiet);
+  }
+
+  :global(.dark) .child-link__icon,
+  :root[data-theme="dark"] .child-link__icon {
+    background: #1e293b;
+    color: rgba(255, 255, 255, 0.6);
+  }
+
+  .child-link__date-card {
+    flex-direction: column;
+    gap: 0;
+    line-height: 1;
+    font-family: var(--font-sans, system-ui, sans-serif);
+  }
+
+  .date-card__day {
+    font-size: 0.6875rem;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: var(--color-text-quiet);
+  }
+
+  .date-card__num {
+    font-size: 1.375rem;
+    font-weight: 700;
+    color: var(--color-text);
+  }
+
+  .child-notes__month-sep {
+    display: block !important;
+    list-style: none;
+    font-family: var(--font-sans, system-ui, sans-serif);
+    font-size: 0.875rem;
+    font-weight: 700;
+    color: var(--color-text);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    padding: 1rem 0 0.375rem;
+    border-bottom: 2px solid var(--color-border, rgba(255,255,255,0.15));
+    margin-bottom: 0.25rem;
+  }
+
+  .child-link__text {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+  }
+
+  .child-link__title {
+    font-size: 1.2rem;
+    font-weight: 500;
+  }
+
+  .child-link__desc {
+    font-size: 0.95rem;
+    color: var(--color-text-quiet);
+  }
+
+  /* Archived child notes */
+  li[data-archived="true"] .child-link,
+  .child-link--archived {
+    opacity: 0.45;
+  }
+
+  li[data-archived="true"] .child-link:hover,
+  .child-link--archived:hover {
+    opacity: 0.7;
+  }
+
+  /* Drag handles (dev-only) */
+  .drag-handle {
+    cursor: grab;
+    user-select: none;
+    font-size: 1.2rem;
+    color: var(--color-text-quiet);
+    opacity: 0.4;
+    padding: 0 0.25rem;
+    flex-shrink: 0;
+  }
+
+  .drag-handle:hover {
+    opacity: 0.8;
+  }
+
+  .child-notes__list li {
+    display: flex;
+    align-items: center;
+  }
+
+  .child-notes__list li.dragging {
+    opacity: 0.4;
+  }
+
+  /* Status badges for backlog items */
+  .status-badge {
+    display: inline-block;
+    font-size: 0.7rem;
+    font-weight: 600;
+    font-family: var(--font-sans);
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    padding: 0.15em 0.5em;
+    border-radius: 4px;
+    margin-left: 0.5em;
+    vertical-align: middle;
+    background: var(--color-bg-subtle, #f1f5f9);
+    color: var(--color-text-quiet);
+  }
+
+  .status-badge--proposed { background: #e2e8f0; color: #475569; }
+  .status-badge--ready { background: #dbeafe; color: #1d4ed8; }
+  .status-badge--in_progress { background: #fef3c7; color: #92400e; }
+  .status-badge--review { background: #ede9fe; color: #6d28d9; }
+  .status-badge--done { background: #d1fae5; color: #065f46; }
+
+  :global(.dark) .status-badge--proposed,
+  :root[data-theme="dark"] .status-badge--proposed { background: #334155; color: #94a3b8; }
+  :global(.dark) .status-badge--ready,
+  :root[data-theme="dark"] .status-badge--ready { background: #1e3a5f; color: #93c5fd; }
+  :global(.dark) .status-badge--in_progress,
+  :root[data-theme="dark"] .status-badge--in_progress { background: #422006; color: #fcd34d; }
+  :global(.dark) .status-badge--review,
+  :root[data-theme="dark"] .status-badge--review { background: #2e1065; color: #c4b5fd; }
+  :global(.dark) .status-badge--done,
+  :root[data-theme="dark"] .status-badge--done { background: #064e3b; color: #6ee7b7; }
+
+  /* Done section */
+  .done-section {
+    margin-top: var(--spacing-lg);
+  }
+
+  .done-toggle {
+    cursor: pointer;
+    user-select: none;
+    font-size: 0.9rem;
+    font-weight: 600;
+    font-family: var(--font-sans);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--color-text-quiet);
+    padding: var(--spacing-sm) 0;
+    border-top: 1px solid var(--color-border);
+    list-style: none;
+    display: flex;
+    align-items: center;
+    gap: 0.4em;
+  }
+
+  .done-toggle::-webkit-details-marker {
+    display: none;
+  }
+
+  .done-toggle::before {
+    content: "▸";
+    display: inline-block;
+    transition: transform 0.15s ease;
+  }
+
+  .done-section[open] > .done-toggle::before {
+    transform: rotate(90deg);
+  }
+
+  .done-toggle:hover {
+    color: var(--color-text);
+  }
+
+  .done-notes .child-link {
+    opacity: 0.6;
+  }
+
+  .done-notes .child-link:hover {
+    opacity: 1;
+  }
+
+  .show-more-btn {
+    display: block;
+    margin: var(--spacing-sm) 0;
+    padding: var(--spacing-xs) var(--spacing-md);
+    font-size: 0.85rem;
+    font-family: var(--font-sans);
+    color: var(--color-text-quiet);
+    background: var(--color-bg-subtle, #f1f5f9);
+    border: 1px solid var(--color-border);
+    border-radius: 6px;
+    cursor: pointer;
+    transition: color 0.15s, border-color 0.15s;
+  }
+
+  .show-more-btn:hover {
+    color: var(--color-text);
+    border-color: var(--color-text-quiet);
+  }
+
+  :global(.dark) .show-more-btn,
+  :root[data-theme="dark"] .show-more-btn {
+    background: #1e293b;
+  }
+
+  .fragment {
+    border-left: 2px solid var(--color-border);
+    padding-left: 0.75rem;
+    margin: 1rem 0;
+  }
+  .fragment__summary {
+    cursor: pointer;
+    font-weight: 600;
+    font-family: var(--font-sans);
+    font-size: 0.95rem;
+    color: var(--color-text-quiet);
+    list-style: none;
+    display: flex;
+    align-items: center;
+    gap: 0.4em;
+  }
+  .fragment__summary::-webkit-details-marker { display: none; }
+  .fragment__summary::before {
+    content: "▸";
+    display: inline-block;
+    transition: transform 0.15s ease;
+  }
+  .fragment[open] > .fragment__summary::before {
+    transform: rotate(90deg);
+  }
+  .fragment__body { margin-top: 0.5rem; }
+
+  :global(article[data-dream]) .fragment__summary {
+    font-size: 0.75rem;
+    font-weight: 500;
+  }
+
+  :global(article[data-dream]) :global(h2) {
+    font-size: 1rem;
+    font-weight: 600;
+  }
+
+  :global(article[data-dream]) :global(h3) {
+    font-size: 0.9rem;
+    font-weight: 600;
+  }
+
+  footer {
+    margin-top: var(--spacing-xl);
+    padding-top: var(--spacing-lg);
+    border-top: 1px solid var(--color-border);
+  }
+
+  /* ── Adherence navigation bar ── */
+
+  .page-content :global(.adherence-nav) {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.5rem 0;
+    border-bottom: 1px solid var(--color-border);
+    font-family: var(--font-sans);
+    font-size: 0.8125rem;
+    gap: 1rem;
+  }
+
+  .page-content :global(.adherence-nav:last-child) {
+    border-bottom: none;
+    border-top: 1px solid var(--color-border);
+    margin-top: 1.5rem;
+    padding-top: 0.75rem;
+  }
+
+  .page-content :global(.adherence-nav a) {
+    color: var(--color-link);
+    text-decoration: none;
+  }
+
+  .page-content :global(.adherence-nav a:hover) {
+    text-decoration: underline;
+  }
+
+  .page-content :global(.adherence-nav span) {
+    min-width: 0;
+  }
+
+  /* ── Adherence tabs ── */
+
+  .page-content :global(.adherence-tabs__bar) {
+    display: flex;
+    gap: 0;
+    border-bottom: 2px solid var(--color-border);
+    margin-bottom: 0;
+  }
+
+  .page-content :global(.adherence-tabs__btn) {
+    font-family: var(--font-sans);
+    font-size: 0.8125rem;
+    font-weight: 600;
+    padding: 0.5rem 1rem;
+    background: none;
+    border: none;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -2px;
+    color: var(--color-text-quiet);
+    cursor: pointer;
+    white-space: nowrap;
+    transition: color 0.15s, border-color 0.15s;
+  }
+
+  .page-content :global(.adherence-tabs__btn:hover) {
+    color: var(--color-text);
+  }
+
+  .page-content :global(.adherence-tabs__btn--active) {
+    color: var(--color-link);
+    border-bottom-color: var(--color-link);
+  }
+
+  .page-content :global(.adherence-tabs__btn--agenda) {
+    padding: 0.4rem 0.75rem;
+    display: flex;
+    align-items: center;
+    margin-right: auto;
+  }
+
+  .page-content :global(.adherence-tabs__panel) {
+    display: none;
+  }
+
+  .page-content :global(.adherence-tabs__panel--active) {
+    display: block;
+  }
+
+  .page-content :global(.adherence-tabs__panel h4 a) {
+    color: inherit;
+    text-decoration: none;
+  }
+
+  .page-content :global(.adherence-tabs__panel h4 a:hover) {
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+
+  /* ── Signal details (collapsible log) ── */
+
+  .page-content :global(.signal-details) {
+    font-family: var(--font-sans);
+    font-size: 0.78rem;
+    line-height: 1.5;
+    color: var(--color-text-muted);
+    border-left: 2px solid var(--color-border);
+    padding-left: 0.75rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .page-content :global(.signal-details strong) {
+    color: var(--color-text-quiet);
+    font-weight: 600;
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+  }
+
+  .page-content :global(.signal-details ul) {
+    margin: 0.15rem 0 0.6rem;
+    padding-left: 1rem;
+  }
+
+  .page-content :global(.signal-details li) {
+    margin: 0.1rem 0;
+  }
+
+  .page-content :global(.signal-details p) {
+    margin: 0;
+  }
+
+  /* ── Sleep card ── */
+
+  .page-content :global(.sleep-card) {
+    border: 1px solid var(--color-border);
+    border-radius: 10px;
+    padding: 1rem 1.25rem;
+    margin: 1rem 0 1.5rem;
+    background: var(--color-bg-alt);
+  }
+
+  .page-content :global(.sleep-header) {
+    display: flex;
+    align-items: baseline;
+    gap: 0.6rem;
+    margin-bottom: 0.75rem;
+    flex-wrap: wrap;
+  }
+
+  .page-content :global(.sleep-icon) {
+    font-size: 1rem;
+  }
+
+  .page-content :global(.sleep-total) {
+    font-family: var(--font-sans);
+    font-size: 1.5rem;
+    font-weight: 700;
+    letter-spacing: -0.03em;
+  }
+
+  .page-content :global(.sleep-time-range) {
+    font-family: var(--font-sans);
+    font-size: 0.8125rem;
+    color: var(--color-text-muted);
+  }
+
+  .page-content :global(.sleep-efficiency) {
+    font-family: var(--font-sans);
+    font-size: 0.8125rem;
+    color: var(--color-text-muted);
+    margin-left: auto;
+  }
+
+  .page-content :global(.sleep-bar) {
+    display: flex;
+    height: 10px;
+    border-radius: 5px;
+    overflow: hidden;
+    margin-bottom: 0.6rem;
+    gap: 2px;
+  }
+
+  .page-content :global(.sleep-bar__deep) {
+    background: #4338ca;
+    border-radius: 5px;
+  }
+
+  .page-content :global(.sleep-bar__core) {
+    background: #818cf8;
+    border-radius: 5px;
+  }
+
+  .page-content :global(.sleep-bar__rem) {
+    background: #c4b5fd;
+    border-radius: 5px;
+  }
+
+  .page-content :global(.sleep-stages) {
+    display: flex;
+    gap: 1.25rem;
+    flex-wrap: wrap;
+  }
+
+  .page-content :global(.sleep-stage) {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-family: var(--font-sans);
+    font-size: 0.8125rem;
+    color: var(--color-text-muted);
+  }
+
+  .page-content :global(.sleep-dot) {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+  }
+
+  .page-content :global(.sleep-dot--deep) { background: #4338ca; }
+  .page-content :global(.sleep-dot--core) { background: #818cf8; }
+  .page-content :global(.sleep-dot--rem) { background: #c4b5fd; }
+
+  /* ── Health metric cards (HRV, respiratory rate) ── */
+
+  .page-content :global(.health-metrics-row) {
+    display: flex;
+    gap: 0.75rem;
+    margin: 0 0 0.75rem;
+  }
+
+  .page-content :global(.health-metric-card) {
+    flex: 1;
+    border: 1px solid var(--color-border);
+    border-radius: 10px;
+    padding: 0.75rem 1rem;
+    background: var(--color-bg-alt);
+  }
+
+  .page-content :global(.health-metric-header) {
+    display: flex;
+    align-items: baseline;
+    gap: 0.5rem;
+    margin-bottom: 0.5rem;
+    font-size: 0.8125rem;
+  }
+
+  .page-content :global(.health-metric-icon) {
+    font-size: 0.75rem;
+  }
+
+  .page-content :global(.health-metric-label) {
+    font-weight: 600;
+    color: var(--color-text-secondary);
+  }
+
+  .page-content :global(.health-metric-value) {
+    font-weight: 700;
+    font-size: 0.9375rem;
+  }
+
+  .page-content :global(.health-metric-range) {
+    color: var(--color-text-secondary);
+    font-size: 0.75rem;
+    margin-left: auto;
+  }
+
+  .page-content :global(.health-sparkline) {
+    width: 100%;
+    height: 32px;
+    display: block;
+  }
+
+  /* ── Activity card ── */
+
+  .page-content :global(.activity-row) {
+    display: flex;
+    gap: 0.75rem;
+    align-items: stretch;
+    margin: 0 0 1.5rem;
+  }
+
+  .page-content :global(.activity-card) {
+    border: 1px solid var(--color-border);
+    border-radius: 10px;
+    padding: 1rem 1.25rem;
+    background: var(--color-bg-alt);
+  }
+
+  .page-content :global(.activity-card--bars) {
+    flex: 3;
+    min-width: 0;
+  }
+
+  .page-content :global(.activity-card--donut) {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    min-width: 0;
+    overflow: hidden;
+  }
+
+  .page-content :global(.activity-header) {
+    display: flex;
+    align-items: baseline;
+    gap: 0.6rem;
+    margin-bottom: 0.75rem;
+  }
+
+  .page-content :global(.activity-icon) {
+    font-size: 1rem;
+  }
+
+  .page-content :global(.activity-total) {
+    font-family: var(--font-sans);
+    font-size: 1.5rem;
+    font-weight: 700;
+    letter-spacing: -0.03em;
+  }
+
+  .page-content :global(.activity-bars) {
+    display: flex;
+    align-items: flex-end;
+    gap: 2px;
+    height: 40px;
+  }
+
+  .page-content :global(.activity-donut__svg) {
+    width: 100%;
+    max-width: 100px;
+    height: auto;
+  }
+
+  .page-content :global(.activity-donut__legend) {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+    width: 100%;
+    overflow: hidden;
+  }
+
+  .page-content :global(.activity-col) {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-end;
+    height: 100%;
+    min-width: 0;
+  }
+
+  .page-content :global(.activity-col__bar) {
+    width: 100%;
+    border-radius: 2px 2px 0 0;
+    min-height: 1px;
+  }
+
+  .page-content :global(.activity-col__hour) {
+    font-family: var(--font-mono);
+    font-size: 0.6rem;
+    color: var(--color-text-muted);
+    line-height: 1;
+    margin-top: 3px;
+  }
+
+  .page-content :global(.activity-legend-item) {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-family: var(--font-sans);
+    font-size: 0.65rem;
+    color: var(--color-text-muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
+  }
+
+  .page-content :global(.activity-legend-dot) {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  /* ── Markdown tables (adherence grids, etc.) ── */
+
+  .page-content :global(table) {
+    width: 100%;
+    font-family: var(--font-sans);
+    font-size: 0.8125rem;
+    border-collapse: collapse;
+    margin: 1rem 0 1.5rem;
+    line-height: 1.35;
+  }
+
+  .page-content :global(th),
+  .page-content :global(td) {
+    padding: 0.4rem 0.6rem;
+    text-align: left;
+    border-bottom: 1px solid var(--color-border);
+    white-space: nowrap;
+  }
+
+  .page-content :global(th) {
+    font-weight: 600;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--color-text-muted);
+    border-bottom-width: 2px;
+  }
+
+  .page-content :global(th:first-child),
+  .page-content :global(td:first-child) {
+    white-space: normal;
+    font-weight: 500;
+  }
+
+  .page-content :global(tr:last-child td) {
+    border-bottom: none;
+  }
+
+  .page-content :global(tbody tr:hover) {
+    background: var(--color-bg-alt);
+  }
+
+  /* Scroll wrapper for wide tables (monthly grids) */
+  .page-content :global(table) {
+    display: block;
+    overflow-x: auto;
+  }
+
+  /* ── Agenda list ── */
+
+  .page-content :global(.agenda-list) {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    margin-top: 0.75rem;
+  }
+
+  .page-content :global(.agenda-empty) {
+    font-family: var(--font-sans);
+    font-size: 0.8125rem;
+    color: var(--color-text-muted);
+    font-style: italic;
+  }
+
+  .page-content :global(.agenda-item) {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0.55rem 0.75rem;
+    border-bottom: 1px solid var(--color-border);
+    font-family: var(--font-sans);
+    font-size: 0.8125rem;
+    border-left: 3px solid transparent;
+  }
+
+  .page-content :global(.agenda-item:last-child) {
+    border-bottom: none;
+  }
+
+  .page-content :global(.agenda-task) {
+    border-left-color: #8b5cf6;
+  }
+
+  .page-content :global(.agenda-event) {
+    border-left-color: #3b82f6;
+  }
+
+  .page-content :global(.agenda-item--subtask) {
+    padding-left: 2rem;
+    font-size: 0.75rem;
+    opacity: 0.85;
+  }
+  .page-content :global(.agenda-item--done) {
+    opacity: 0.5;
+  }
+
+  .page-content :global(.agenda-item--done .agenda-title) {
+    text-decoration: line-through;
+  }
+
+  .page-content :global(.agenda-item--partial) {
+    opacity: 0.65;
+    border-left-color: #f59e0b;
+  }
+  .page-content :global(.agenda-item--partial .agenda-title) {
+    text-decoration: line-through;
+    text-decoration-style: dashed;
+    text-decoration-color: var(--color-text-muted);
+  }
+  .page-content :global(.agenda-partial-dot) {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 15px;
+    height: 15px;
+    border-radius: 3px;
+    background: #f59e0b;
+    color: #fff;
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 1;
+    flex-shrink: 0;
+    cursor: pointer;
+    letter-spacing: -1px;
+  }
+
+  .page-content :global(.agenda-check) {
+    accent-color: #8b5cf6;
+    width: 15px;
+    height: 15px;
+    flex-shrink: 0;
+    cursor: pointer;
+  }
+
+  .page-content :global(.agenda-item--deferred) {
+    border-left-color: #f59e0b;
+    opacity: 0.6;
+    font-style: italic;
+  }
+
+  .page-content :global(.agenda-item--chain) {
+    border-left-color: #a78bfa;
+    padding-left: calc(0.75rem + 15px + 0.6rem);
+    font-style: italic;
+    opacity: 0.8;
+  }
+
+  .page-content :global(.agenda-time) {
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    color: var(--color-text-muted);
+    min-width: 3rem;
+    flex-shrink: 0;
+  }
+
+  .page-content :global(.agenda-title) {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .page-content :global(.agenda-meta) {
+    font-size: 0.72rem;
+    color: var(--color-text-muted);
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+
+  /* ── Transactions ── */
+
+  .page-content :global(.tx-summary) {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.75rem;
+    padding: 0.5rem 0.75rem;
+    border-radius: 6px;
+    background: rgba(245, 158, 11, 0.06);
+    font-family: var(--font-sans);
+  }
+
+  .page-content :global(.tx-summary__count) {
+    font-size: 0.8125rem;
+    color: var(--color-text-quiet);
+  }
+
+  .page-content :global(.tx-list) {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .page-content :global(.tx-row) {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.5rem;
+    padding: 0.5rem 0.25rem;
+    border-bottom: 1px solid var(--color-border, rgba(255,255,255,0.06));
+    font-family: var(--font-sans);
+  }
+
+  .page-content :global(.tx-info) {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.125rem;
+  }
+
+  .page-content :global(.tx-merchant) {
+    font-size: 0.875rem;
+    font-weight: 500;
+  }
+
+  .page-content :global(.tx-detail) {
+    font-size: 0.6875rem;
+    color: var(--color-text-quiet);
+    line-height: 1.3;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .page-content :global(.agenda-transactions) {
+    margin-top: 0.75rem;
+  }
+
+  .page-content :global(.agenda-tx-header) {
+    font-family: var(--font-sans);
+    font-size: 0.6875rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--color-text-muted);
+    padding: 0.4rem 0.75rem 0.2rem;
+  }
+
+  .page-content :global(.agenda-transaction) {
+    border-left-color: #10b981;
+  }
+
+  .page-content :global(.agenda-transaction--uncat) {
+    border-left-color: #f59e0b;
+    background: rgba(245, 158, 11, 0.04);
+  }
+
+  .page-content :global(.agenda-tx-amount) {
+    font-family: var(--font-mono);
+    font-size: 0.8125rem;
+    min-width: 5.5rem;
+    text-align: right;
+    flex-shrink: 0;
+  }
+
+  .page-content :global(.agenda-tx-amount.negative) { color: #dc2626; }
+  .page-content :global(.agenda-tx-amount.positive) { color: #16a34a; }
+
+  .page-content :global(.agenda-tx-counterparty) {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .page-content :global(.agenda-tx-cat) {
+    font-size: 0.625rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    padding: 0.1rem 0.4rem;
+    border-radius: 9999px;
+    background: rgba(124, 58, 237, 0.08);
+    color: #7c3aed;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+
+  html.dark .page-content :global(.agenda-tx-cat) {
+    background: rgba(167, 139, 250, 0.12);
+    color: #a78bfa;
+  }
+
+  .page-content :global(.agenda-tx-cat-select) {
+    font-family: var(--font-sans);
+    font-size: 0.75rem;
+    padding: 0.15rem 0.3rem;
+    border: 1px solid #f59e0b;
+    border-radius: 4px;
+    background: var(--color-bg);
+    color: inherit;
+    flex-shrink: 0;
+  }
+
+  .page-content :global(.agenda-tx-cat-select--suggested) {
+    border-color: #a78bfa;
+    color: #a78bfa;
+  }
+
+  /* ── Task action popover ── */
+
+  :global(.agenda-pop) {
+    position: absolute;
+    z-index: 100;
+    display: none;
+    flex-direction: column;
+    gap: 2px;
+    padding: 4px;
+    background: var(--color-bg, #1a1a2e);
+    border: 1px solid var(--color-border, #333);
+    border-radius: 8px;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.3);
+    min-width: 180px;
+  }
+
+  :global(.agenda-pop--open) {
+    display: flex;
+  }
+
+  :global(.agenda-pop__btn) {
+    font-family: var(--font-sans, system-ui, sans-serif);
+    font-size: 0.8125rem;
+    padding: 0.45rem 0.7rem;
+    border: none;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--color-text, #e0e0e0);
+    cursor: pointer;
+    text-align: left;
+    white-space: nowrap;
+  }
+
+  :global(.agenda-pop__btn:hover) {
+    background: var(--color-bg-alt, rgba(255,255,255,0.06));
+  }
+
+  :global(.agenda-pop__btn--done:hover) {
+    background: rgba(16, 185, 129, 0.12);
+    color: #34d399;
+  }
+
+  :global(.agenda-pop__btn--defer:hover) {
+    background: rgba(245, 158, 11, 0.12);
+    color: #fbbf24;
+  }
+
+  :global(.agenda-pop__btn--followup:hover) {
+    background: rgba(124, 58, 237, 0.12);
+    color: #a78bfa;
+  }
+
+  :global(.agenda-pop__btn--reopen:hover) {
+    background: rgba(59, 130, 246, 0.12);
+    color: #60a5fa;
+  }
+
+  :global(.agenda-pop__btn--subtask:hover) {
+    background: rgba(14, 165, 233, 0.12);
+    color: #38bdf8;
+  }
+
+  :global(.agenda-pop__btn--cancel) {
+    font-size: 0.75rem;
+    color: var(--color-text-muted, #777);
+    border-top: 1px solid var(--color-border, #333);
+    margin-top: 2px;
+    padding-top: 0.4rem;
+    border-radius: 0 0 6px 6px;
+  }
+
+  /* ── Inline forms (mobile-friendly replacement for prompt/confirm) ── */
+
+  :global(.agenda-inline-form) {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    padding: 0.5rem 0.75rem;
+    border-bottom: 1px solid var(--color-border);
+    border-left: 3px solid #a78bfa;
+    background: var(--color-bg-alt, #f9f9f9);
+  }
+
+  :global(.agenda-inline-input) {
+    font-family: var(--font-sans, system-ui, sans-serif);
+    font-size: 0.8125rem;
+    padding: 0.35rem 0.5rem;
+    border: 1px solid var(--color-border, #ddd);
+    border-radius: 6px;
+    background: var(--color-bg, #fff);
+    color: inherit;
+    width: 100%;
+    box-sizing: border-box;
+  }
+
+  :global(.agenda-inline-row) {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  :global(.agenda-inline-label) {
+    font-family: var(--font-sans, system-ui, sans-serif);
+    font-size: 0.75rem;
+    color: var(--color-text-muted);
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    cursor: pointer;
+    flex: 1;
+  }
+
+  :global(.agenda-inline-ok) {
+    font-family: var(--font-sans, system-ui, sans-serif);
+    font-size: 0.75rem;
+    font-weight: 600;
+    padding: 0.25rem 0.6rem;
+    border-radius: 4px;
+    border: none;
+    background: #7c3aed;
+    color: white;
+    cursor: pointer;
+  }
+
+  :global(.agenda-inline-cancel) {
+    font-family: var(--font-sans, system-ui, sans-serif);
+    font-size: 0.75rem;
+    padding: 0.25rem 0.6rem;
+    border-radius: 4px;
+    border: 1px solid var(--color-border, #ddd);
+    background: transparent;
+    color: var(--color-text-muted);
+    cursor: pointer;
+  }
+
+  /* ── Dream entries ── */
+
+  .page-content :global(.dream-entry) {
+    margin-top: 1rem;
+    margin-bottom: 1.25rem;
+    font-size: 1.1rem;
+  }
+
+  .page-content :global(.dream-entry h3) {
+    font-size: 1rem;
+    font-weight: 600;
+    margin: 0 0 0.4rem;
+  }
+</style>

@@ -1,0 +1,106 @@
+/* ─────────────────────────────────────────────────────────────
+   Maurice — design tokens
+   Drop into <head> via <link>. Defaults to the "paper" (light) surface
+   with the cream palette. Switch to dark by setting [data-mode="dark"]
+   on <html> or any parent.
+   ───────────────────────────────────────────────────────────── */
+
+:root {
+  /* ── Type ────────────────────────────────────────────────── */
+  --font-serif: "DM Serif Display";                       /* swappable */
+  --font-serif-stack: var(--font-serif), "Iowan Old Style", Georgia, serif;
+  --font-sans: "Geist", "Inter", -apple-system, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", "SF Mono", ui-monospace, Menlo, monospace;
+
+  /* Type scale — UI side */
+  --fs-meta:      10px;   /* mono eyebrows, timestamps */
+  --fs-label:     11px;   /* sans labels */
+  --fs-body:      14.5px; /* default body */
+  --fs-body-cozy: 15.5px;
+  --fs-body-compact: 13.5px;
+
+  /* Type scale — display side */
+  --fs-sm:    14px;   /* italic speaker labels */
+  --fs-md:    18px;   /* sidebar wordmark */
+  --fs-lg:    22px;   /* convo header title */
+  --fs-xl:    32px;   /* empty-state greeting */
+  --fs-2xl:   48px;
+  --fs-3xl:   68px;   /* hero wordmark */
+
+  /* ── Surface (light / paper / cream — the default) ───────── */
+  --bg:           #f5efe6;
+  --surface:      #fbf7f0;
+  --surface-alt:  #f0e9dc;
+
+  /* ── Ink (derived alpha overlays so they ride any surface) */
+  --ink-rgb:        38, 35, 32;       /* light-mode ink as r,g,b */
+  --ink:            rgb(var(--ink-rgb));
+  --ink-soft:       rgba(var(--ink-rgb), 0.62);
+  --ink-mute:       rgba(var(--ink-rgb), 0.42);
+  --ink-hint:       rgba(var(--ink-rgb), 0.30);
+  --rule:           rgba(var(--ink-rgb), 0.10);
+  --rule-hard:      rgba(var(--ink-rgb), 0.18);
+
+  /* ── Code blocks ─────────────────────────────────────────── */
+  --code-bg:   #efe7d8;
+  --code-ink:  #3a342c;
+
+  /* ── Density (gap / pad / line-height) ───────────────────── */
+  --density-gap: 22px;     /* msgGap */
+  --density-pad: 14px;
+  --density-lh:  1.50;
+
+  /* ── Motion ──────────────────────────────────────────────── */
+  --ease-out: cubic-bezier(0.2, 0.7, 0.2, 1);
+  --dur-fast: 120ms;
+  --dur-base: 200ms;
+
+  /* ── Radius / shadow ─────────────────────────────────────── */
+  --r-sm: 4px;
+  --r-md: 6px;
+  --r-lg: 14px;
+  --r-xl: 46px;            /* iPhone bezel */
+  --shadow-window: 0 0 0 0.5px rgba(0,0,0,0.18), 0 30px 80px rgba(0,0,0,0.25);
+}
+
+/* Density variants — apply with [data-density="cozy" | "compact"] */
+[data-density="cozy"]    { --density-gap: 28px; --density-pad: 18px; --density-lh: 1.55; }
+[data-density="compact"] { --density-gap: 16px; --density-pad: 11px; --density-lh: 1.45; }
+
+/* ─── Dark mode (studio) ──────────────────────────────────── */
+[data-mode="dark"] {
+  --bg:           #1f1c19;
+  --surface:      #262320;
+  --surface-alt:  #181614;
+
+  --ink-rgb:      240, 235, 226;
+  --ink-soft:     rgba(var(--ink-rgb), 0.65);
+  --ink-mute:     rgba(var(--ink-rgb), 0.40);
+  --ink-hint:     rgba(var(--ink-rgb), 0.28);
+  --rule:         rgba(var(--ink-rgb), 0.10);
+  --rule-hard:    rgba(var(--ink-rgb), 0.18);
+
+  --code-bg:  #15130f;
+  --code-ink: #d8d1c2;
+}
+
+/* ─────────────────────────────────────────────────────────────
+   Optional palette overrides — apply with [data-palette="…"].
+   These ONLY override the 3 surface tones; ink/rules stay derived.
+   ───────────────────────────────────────────────────────────── */
+
+/* Light variants */
+[data-palette="paper-white"] { --bg:#fff;     --surface:#fff;     --surface-alt:#f6f6f4; }
+[data-palette="bone"]        { --bg:#fafaf8;  --surface:#fff;     --surface-alt:#f0f0ec; }
+[data-palette="ivory"]       { --bg:#f8f5ef;  --surface:#fefcf7;  --surface-alt:#efeae0; }
+[data-palette="cream"]       { --bg:#f5efe6;  --surface:#fbf7f0;  --surface-alt:#f0e9dc; }
+[data-palette="stone"]       { --bg:#efece6;  --surface:#f8f6f1;  --surface-alt:#e6e2d9; }
+[data-palette="sage"]        { --bg:#ecefe7;  --surface:#f5f7f0;  --surface-alt:#e2e7d9; }
+[data-palette="mist"]        { --bg:#eceff3;  --surface:#f6f8fb;  --surface-alt:#dde3ea; }
+
+/* Dark variants */
+[data-palette="studio"]   { --bg:#1f1c19; --surface:#262320; --surface-alt:#181614; }
+[data-palette="slate"]    { --bg:#171a1d; --surface:#1f2328; --surface-alt:#0f1216; }
+[data-palette="forest"]   { --bg:#141815; --surface:#1c211c; --surface-alt:#0e120e; }
+[data-palette="plum"]     { --bg:#1c171c; --surface:#241e26; --surface-alt:#130f18; }
+[data-palette="espresso"] { --bg:#1a1916; --surface:#222019; --surface-alt:#100f0c; }

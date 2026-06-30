@@ -1,0 +1,28 @@
+---
+import NoteDetail from "../../components/NoteDetail.astro";
+import { getCollection } from "astro:content";
+import { isPublic } from "../../lib/flags";
+import { stripLocalePrefix } from "../../i18n/utils";
+import { getNote } from "../../lib/notes-fs";
+
+export const prerender = process.env.WEB_SSR !== "1";
+
+export async function getStaticPaths() {
+  const notes = await getCollection("notes", ({ data }) => data.locale === "en" && (import.meta.env.DEV || isPublic(data)));
+  return notes.map((note) => ({
+    params: { id: stripLocalePrefix(note.id) },
+    props: { note },
+  }));
+}
+
+// Static build: note arrives via props (rendered through the content layer).
+// SSR (everyday garden engine): read it straight off disk, so a flaky content
+// store can never 404 a note that plainly exists as a file.
+let note = Astro.props.note;
+if (!note) {
+  note = await getNote("en", Astro.params.id);
+  if (note && !(import.meta.env.DEV || isPublic(note.data))) note = null;
+}
+if (!note) return new Response("Not found", { status: 404 });
+---
+<NoteDetail note={note} locale="en" />

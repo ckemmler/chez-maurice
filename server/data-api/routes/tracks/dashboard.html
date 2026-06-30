@@ -1,0 +1,824 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Chez Maurice Research Plans</title>
+    <style>
+      :root {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        color: #0f172a;
+        background: #f8fafc;
+      }
+      body { margin: 0; padding: 24px; }
+      h1 { margin-bottom: 8px; }
+      .layout { display: grid; grid-template-columns: 320px 1fr; gap: 16px; min-height: 80vh; }
+      .panel { background: #fff; border-radius: 12px; padding: 16px; box-shadow: 0 4px 20px rgba(15,23,42,0.08); }
+      .plans-list { list-style: none; padding: 0; margin: 0; max-height: 80vh; overflow-y: auto; }
+      .plans-list li { padding: 10px; border-radius: 8px; cursor: pointer; border: 1px solid transparent; display: flex; justify-content: space-between; align-items: center; }
+      .plans-list li:hover { background: #f1f5f9; }
+      .plans-list li.active { border-color: #3b82f6; background: #eff6ff; }
+      .plan-info { flex: 1; }
+      .delete-plan-btn { background: #ef4444; padding: 4px 8px; font-size: 12px; }
+      .detail-card { margin-top: 16px; padding: 12px; border-radius: 10px; background: #f8fafc; border: 1px solid #e2e8f0; }
+      .stages { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+      .stage { border-radius: 8px; padding: 8px 12px; background: #e2e8f0; font-size: 13px; }
+      .stage.done { background: #dcfce7; }
+      .stage.attention { background: #fee2e2; }
+      .stage.pending { background: #fde68a; }
+      .stage.ready { background: #e0e7ff; }
+      .stage.skipped { background: #e2e8f0; color: #475569; }
+      button { border: none; border-radius: 8px; padding: 8px 12px; background: #3b82f6; color: #fff; cursor: pointer; font-size: 14px; }
+      button:disabled { opacity: 0.6; cursor: not-allowed; }
+      textarea, select { width: 100%; margin-top: 4px; padding: 6px 8px; border-radius: 6px; border: 1px solid #cbd5f5; font-family: inherit; box-sizing: border-box; }
+      .note-field { margin-top: 8px; }
+      .composer-overlay { position: fixed; inset: 0; padding: 24px; background: rgba(15,23,42,0.7); display: none; align-items: center; justify-content: center; z-index: 1000; }
+      .composer-overlay.show { display: flex; }
+      .composer-panel { width: min(1100px, 96vw); height: min(94vh, 96vh); background: #fff; border-radius: 16px; box-shadow: 0 20px 60px rgba(15,23,42,0.45); display: flex; flex-direction: column; padding: 18px 20px 20px; box-sizing: border-box; gap: 12px; }
+      .composer-header { display: flex; justify-content: space-between; align-items: center; padding-bottom: 12px; border-bottom: 1px solid #e2e8f0; }
+      .composer-header button { background: #e2e8f0; color: #0f172a; }
+      .composer-tabs { display: flex; gap: 8px; margin: 0; }
+      .composer-tabs button { background: #e2e8f0; color: #0f172a; }
+      .composer-tabs button.active { background: #0f172a; color: #fff; }
+      .composer-body { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+      .tab-view { display: none; flex: 1; padding: 16px 0 0; box-sizing: border-box; min-height: 0; }
+      .tab-view.active { display: flex; }
+      .tab-view[data-view="prompt"] { gap: 16px; overflow: hidden; }
+      .context-pane { width: 320px; border-right: 1px solid #e2e8f0; padding-right: 12px; margin-right: 12px; overflow-y: auto; flex-shrink: 0; max-height: 100%; display: flex; flex-direction: column; }
+      #briefing-context { margin-top: 12px; flex: 1; overflow-y: auto; }
+      .editor-pane { flex: 1; display: flex; flex-direction: column; gap: 12px; min-height: 0; }
+      .wildcard-buttons { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+      .wildcard-buttons button { background: #e0e7ff; color: #1e1b4b; }
+      #briefing-editor { flex: 1; min-height: 0; border: 1px solid #cbd5f5; border-radius: 10px; padding: 12px; font-size: 14px; resize: vertical; }
+      .composer-actions { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+      .composer-action-buttons { display: flex; gap: 8px; }
+      .composer-action-buttons button { background: #0f172a; }
+      .composer-action-buttons button:nth-child(2) { background: #475569; }
+      .composer-action-buttons button:nth-child(3) { background: #3b82f6; }
+      .tab-view[data-view="preview"] { padding: 16px; gap: 16px; flex-direction: column; overflow-y: auto; }
+      .preview-sections { display: flex; flex-direction: column; gap: 16px; width: 100%; }
+      .preview-section { background: #f5f3ef; color: #1a1a1a; border-radius: 12px; padding: 20px 24px; display: flex; flex-direction: column; min-height: 0; border: 1px solid #e0ddd6; }
+      .preview-section h4 { margin: 0 0 12px; font-size: 13px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #6b6b6b; }
+      #prompt-preview { flex: 1; margin: 0; white-space: pre-wrap; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 13px; line-height: 1.6; color: #4a4a4a; }
+      #composer-preview { flex: 1; width: 100%; min-height: 0; margin: 0;
+        font-family: 'Iowan Old Style', 'Palatino Linotype', Palatino, Georgia, serif; font-size: 16px; line-height: 1.65; }
+      #composer-preview h1,#composer-preview h2,#composer-preview h3,#composer-preview h4,#composer-preview h5 { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif; color: #1a1a1a; margin-top: 1.5rem; font-weight: 700; letter-spacing: -0.02em; }
+      #composer-preview h2 { font-size: 1.25rem; padding-top: 0.75rem; border-top: 1px solid #e0ddd6; }
+      #composer-preview ul { padding-left: 1.4em; }
+      #composer-preview p { margin-top: 0.5rem; max-width: 65ch; }
+      .preview-placeholder { font-style: italic; color: #6b6b6b; margin-bottom: 0.75rem; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif; font-size: 14px; }
+      .report-overlay { position: fixed; inset: 0; background: rgba(26,26,26,0.6); display: none; align-items: center; justify-content: center; z-index: 1100; padding: 24px; backdrop-filter: blur(2px); }
+      .report-overlay.show { display: flex; }
+      .report-panel { width: min(780px, 96vw); height: min(92vh, 96vh); background: #fafaf8; border-radius: 12px; box-shadow: 0 20px 60px rgba(26,26,26,0.35); display: flex; flex-direction: column; }
+      .report-header { display: flex; justify-content: space-between; align-items: center; padding: 16px 24px; border-bottom: 1px solid #e0ddd6;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif; }
+      .report-header h3 { font-size: 1.125rem; font-weight: 700; color: #1a1a1a; letter-spacing: -0.02em; }
+      .report-header small { color: #6b6b6b; font-size: 0.75rem; }
+      .report-body { flex: 1; padding: 32px 40px; overflow-y: auto; background: #fafaf8; color: #1a1a1a;
+        font-family: 'Iowan Old Style', 'Palatino Linotype', Palatino, Georgia, serif;
+        font-size: 1.0625rem; line-height: 1.65; }
+      .report-body h1, .report-body h2, .report-body h3, .report-body h4 {
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+        font-weight: 700; color: #1a1a1a; letter-spacing: -0.02em; line-height: 1.2; }
+      .report-body h2 { font-size: 1.5rem; margin-top: 2rem; margin-bottom: 1rem;
+        padding-top: 1rem; border-top: 1px solid #e0ddd6; }
+      .report-body h3 { font-size: 1.25rem; margin-top: 1.5rem; margin-bottom: 0.75rem; color: #4a4a4a; }
+      .report-body p { margin-bottom: 1rem; max-width: 65ch; }
+      .report-body a { color: #2c5282; }
+      .report-body a:hover { text-decoration: underline; }
+      .report-body ul, .report-body ol { max-width: 65ch; padding-left: 1.4em; }
+      .report-body li { margin-bottom: 0.25rem; }
+      .report-body blockquote { border-left: 3px solid #8b4513; padding-left: 1.5rem;
+        color: #4a4a4a; font-style: italic; }
+      .report-body > p:first-of-type::first-letter { font-size: 3.2em; float: left;
+        font-weight: 700; line-height: 0.8; margin: 0.1em 0.12em 0 0; }
+      .report-body hr { border: none; border-top: 1px solid #e0ddd6; margin: 2rem 0; }
+    </style>
+  </head>
+  <body>
+    <h1>Research Plans</h1>
+    <p>Select a plan to review its track entries.</p>
+    <div class="layout">
+      <aside class="panel"><ul class="plans-list" id="plans"></ul></aside>
+      <section class="panel"><div id="plan-detail"><p>Select a plan to view details.</p></div></section>
+    </div>
+    <div id="briefing-modal" class="composer-overlay" aria-hidden="true">
+      <div class="composer-panel">
+        <div class="composer-header">
+          <div>
+            <h3 id="briefing-title">Briefing</h3>
+            <small id="briefing-path"></small>
+          </div>
+          <button type="button" id="composer-close">Close</button>
+        </div>
+        <div class="composer-tabs">
+          <button type="button" data-tab="prompt" class="active">Prompt</button>
+          <button type="button" data-tab="preview">Preview</button>
+        </div>
+        <div class="composer-body">
+          <div class="tab-view active" data-view="prompt">
+            <div class="context-pane" id="composer-context-wrapper">
+              <h4>Wildcards</h4>
+              <div class="wildcard-buttons">
+                <button type="button" data-insert-wildcard="{{OTHER_PERSPECTIVES}}">Other tracks</button>
+                <button type="button" data-insert-wildcard="{{PERSPECTIVE}}">Perspective</button>
+                <button type="button" data-insert-wildcard="{{PREVIOUS_CYCLES}}">Previous cycles</button>
+                <button type="button" data-insert-wildcard="{{SIGNALS}}">Signals</button>
+                <button type="button" data-insert-wildcard="{{ACTIONS}}">Actions</button>
+                <button type="button" data-insert-wildcard="{{QUESTIONS}}">Questions</button>
+              </div>
+              <div id="briefing-context"></div>
+            </div>
+            <div class="editor-pane">
+              <textarea id="briefing-editor"></textarea>
+              <div class="composer-actions">
+                <span id="composer-hint"></span>
+                <div class="composer-action-buttons">
+                  <button type="button" id="composer-preview-prompt">Preview prompt</button>
+                  <button type="button" id="composer-save-prompt">Save prompt</button>
+                  <button type="button" id="composer-run">Generate</button>
+                  <button type="button" id="briefing-save">Save</button>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="tab-view" data-view="preview">
+            <div class="preview-sections">
+              <div class="preview-section">
+                <h4>Expanded prompt (wildcards substituted)</h4>
+                <pre id="prompt-preview">(Preview not available)</pre>
+              </div>
+              <div class="preview-section">
+                <h4>Briefing markdown</h4>
+                <div id="composer-preview"><div class="preview-placeholder">No briefing generated yet.</div></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div id="report-modal" class="report-overlay" aria-hidden="true">
+      <div class="report-panel">
+        <div class="report-header">
+          <div>
+            <h3 id="report-title">Deep Research Report</h3>
+            <small id="report-meta"></small>
+          </div>
+          <button type="button" id="report-close">Close</button>
+        </div>
+        <div class="report-body" id="report-content"></div>
+      </div>
+    </div>
+    <script src="https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js" integrity="sha256-/T6Ch12HaxDTXiiMHDL/95B2S/bRMyCV2wE8pQnXlAk=" crossorigin="anonymous"></script>
+    <script>
+      const plansEl = document.getElementById('plans');
+      const detailEl = document.getElementById('plan-detail');
+      const composerOverlay = document.getElementById('briefing-modal');
+      const composerTitle = document.getElementById('briefing-title');
+      const composerMeta = document.getElementById('briefing-path');
+      const composerContextEl = document.getElementById('briefing-context');
+      const composerContextWrapper = document.getElementById('composer-context-wrapper');
+      const composerEditor = document.getElementById('briefing-editor');
+      const composerClose = document.getElementById('composer-close');
+      const composerPreviewPrompt = document.getElementById('composer-preview-prompt');
+      const composerSavePrompt = document.getElementById('composer-save-prompt');
+      const composerRun = document.getElementById('composer-run');
+      const composerSave = document.getElementById('briefing-save');
+      const composerTabs = Array.from(document.querySelectorAll('.composer-tabs button'));
+      const composerViews = Array.from(document.querySelectorAll('.tab-view'));
+      const composerPreview = document.getElementById('composer-preview');
+      const promptPreview = document.getElementById('prompt-preview');
+      const composerHint = document.getElementById('composer-hint');
+      const wildcardButtons = Array.from(document.querySelectorAll('[data-insert-wildcard]'));
+      const defaultBriefingPrompt = `You are a research analyst drafting a concise briefing for a research process to occur. The research is part of a series of tracks which represent the user's interest at this point in time.
+
+Here are the other tracks currently pursued by the user:
+{{OTHER_PERSPECTIVES}}
+
+This particular briefing is about the following track:
+{{PERSPECTIVE}}
+
+The process goes like this: the user reads material (articles, books, papers), writes notes, or captures thoughts. A classifier detects signals—segments of content that resonate with this track's perspective. "Resonating" means the content addresses questions, themes, or tensions central to the track, whether by advancing the inquiry, offering evidence, presenting alternative frameworks, or challenging existing assumptions.
+
+These signals trigger research cycles that produce dossiers synthesizing findings. Each cycle builds on previous work, creating an evolving understanding of the track.
+
+Here are the most recent research cycles for this track:
+{{PREVIOUS_CYCLES}}
+
+Your task is to synthesize the latest signals in light of this research history, producing a focused briefing that:
+
+1. **Builds on previous findings**—what do the new signals add, confirm, challenge, or complicate?
+2. **Identifies emerging themes**—what patterns, questions, or directions are developing across cycles?
+3. **Highlights tensions or contradictions**—both within new signals and against prior research
+4. **Suggests specific research directions**, including:
+   - Articles from the user's corpus that offer relevant perspectives, with clear explanations of their relevance
+   - External articles or sources that would broaden or challenge current understanding
+   - Book chapters from the corpus, with context about the author's intent and how it connects to this inquiry
+   - Book recommendations (both supporting and challenging current views)
+   - Alternative perspectives or frameworks to prevent intellectual entrenchment
+5. **Notes cross-connections** with other active tracks when relevant
+
+The briefing should be **concise and actionable**—typically 4-6 paragraphs. Write for a reader who knows the track's perspective and has the research history, but hasn't seen these specific new signals yet. Balance advancing the inquiry with introducing counterpoints and alternative viewpoints. Focus on what's intellectually interesting about the progression, and where inquiry should go next.
+
+Latest signals for this track:
+{{SIGNALS}}`;
+      const escapeHtml = (value = '') => value
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+      let currentPlan = null;
+      let composerState = null;
+      const markdownRenderer = typeof window.marked !== 'undefined' ? window.marked : null;
+      const reportOverlay = document.getElementById('report-modal');
+      const reportContent = document.getElementById('report-content');
+      const reportTitle = document.getElementById('report-title');
+      const reportMeta = document.getElementById('report-meta');
+      const reportClose = document.getElementById('report-close');
+
+      function fallbackMarkdown(text) {
+        const lines = (text || '').split(/\r?\n/);
+        const chunks = [];
+        let inList = false;
+        const formatInline = (value) =>
+          escapeHtml(value)
+            .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+            .replace(/\*(.+?)\*/g, '<em>$1</em>');
+        const closeList = () => {
+          if (inList) {
+            chunks.push('</ul>');
+            inList = false;
+          }
+        };
+        for (const rawLine of lines) {
+          const line = rawLine.trim();
+          if (!line) {
+            closeList();
+            continue;
+          }
+          const heading = rawLine.match(/^(#{1,6})\s+(.*)$/);
+          if (heading) {
+            closeList();
+            const level = heading[1].length;
+            chunks.push(`<h${level}>${formatInline(heading[2])}</h${level}>`);
+            continue;
+          }
+          if (/^[-*]\s+/.test(line)) {
+            if (!inList) {
+              chunks.push('<ul>');
+              inList = true;
+            }
+            chunks.push(`<li>${formatInline(line.replace(/^[-*]\s+/, ''))}</li>`);
+            continue;
+          }
+          closeList();
+          chunks.push(`<p>${formatInline(rawLine)}</p>`);
+        }
+        closeList();
+        return chunks.join('\n') || `<p>${escapeHtml(text || '')}</p>`;
+      }
+
+      function setPreviewMarkdown(text) {
+        if (markdownRenderer) {
+          if (typeof markdownRenderer.parse === 'function') {
+            composerPreview.innerHTML = markdownRenderer.parse(text || '');
+            return;
+          }
+          if (typeof markdownRenderer === 'function') {
+            composerPreview.innerHTML = markdownRenderer(text || '');
+            return;
+          }
+        }
+        composerPreview.innerHTML = fallbackMarkdown(text || '');
+      }
+
+      function setPromptPreview(text) {
+        promptPreview.textContent = text ? text : '(No prompt available)';
+      }
+
+      async function fetchJSON(url, options) {
+        const res = await fetch(url, options);
+        if (!res.ok) {
+          const text = await res.text();
+          throw new Error(text || res.statusText);
+        }
+        return res.json();
+      }
+
+      async function loadPlans() {
+        const data = await fetchJSON('/api/v1/tracks/plans');
+        plansEl.innerHTML = '';
+        data.plans.forEach((plan) => {
+          const li = document.createElement('li');
+          li.dataset.planId = plan.planId;
+          li.innerHTML = `
+            <div class="plan-info">
+              <strong>${plan.planId}</strong><br/>
+              <small>${plan.startDate ?? '—'} → ${plan.endDate ?? '—'} · ${plan.trackCount} tracks</small>
+            </div>
+            <button class="delete-plan-btn" data-delete-plan="${plan.planId}" onclick="event.stopPropagation()">Delete</button>
+          `;
+          li.addEventListener('click', (e) => {
+            if (!e.target.classList.contains('delete-plan-btn')) {
+              selectPlan(plan.planId, li);
+            }
+          });
+          const deleteBtn = li.querySelector('.delete-plan-btn');
+          deleteBtn.addEventListener('click', () => deletePlanConfirm(plan.planId));
+          plansEl.appendChild(li);
+        });
+        if (data.plans.length) {
+          selectPlan(data.plans[0].planId, plansEl.querySelector('li'));
+        }
+      }
+
+      async function selectPlan(planId, li) {
+        plansEl.querySelectorAll('li').forEach((item) => item.classList.remove('active'));
+        if (li) li.classList.add('active');
+        detailEl.innerHTML = '<p>Loading…</p>';
+        currentPlan = await fetchJSON(`/api/v1/tracks/plans/${planId}`);
+        renderPlan(currentPlan);
+      }
+
+      function renderPlan(plan) {
+        const tracks = plan.entries.map((entry) => {
+          const stageChips = entry.stages
+            .filter((stage) => !['classification', 'plan', 'plan_review'].includes(stage.key))
+            .map((stage) => `<span class="stage ${stage.state}"><strong>${stage.label}:</strong> ${stage.summary}</span>`)
+            .join('');
+
+          return `
+          <div class="detail-card">
+            <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
+              <div>
+                <strong>${entry.trackName}</strong><br/>
+                <small>Decision: ${entry.decision}</small>
+              </div>
+              <div>
+                <label>
+                  Decision
+                  <select data-track="${entry.trackId}" class="decision-select">
+                    ${['research','monitor','skip'].map((opt) => `<option value="${opt}" ${entry.decision===opt?'selected':''}>${opt}</option>`).join('')}
+                  </select>
+                </label>
+              </div>
+            </div>
+            <div class="note-field">
+              <label>Note
+                <textarea rows="2" data-note="${entry.trackId}">${entry.note ?? ''}</textarea>
+              </label>
+            </div>
+            <div class="stages">
+              ${stageChips}
+            </div>
+            <details style="margin-top:8px;">
+              <summary>Signals (${entry.signalCount})</summary>
+              <ul>
+                ${entry.signals.map((signal) => `<li><strong>${signal.title || signal.segment_id}</strong> — ${signal.source_type} (${signal.logical_day})<br/><small>${signal.excerpt}</small></li>`).join('')}
+              </ul>
+            </details>
+            <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap;">
+              <button data-save="${entry.trackId}">Save Decision</button>
+              <button data-generate="${entry.trackId}" ${entry.decision==='skip'?'disabled':''}>Generate briefing</button>
+              ${entry.briefing?.exists ? `<button data-edit="${entry.trackId}">Edit briefing</button>` : ''}
+              ${entry.signalCount === 0
+                ? `<button data-report-force="${entry.trackId}" style="background:#d97706;">Force deep research (no signals)</button>`
+                : `<button data-report-generate="${entry.trackId}" ${entry.briefing?.exists ? '' : 'disabled'}>Run deep research</button>`
+              }
+              ${entry.report?.exists ? `<a href="/reports/${plan.planId}/${entry.trackId}" target="_blank" rel="noopener" style="display:inline-block;border:none;border-radius:8px;padding:8px 12px;background:#3b82f6;color:#fff;cursor:pointer;font-size:14px;text-decoration:none;">View report</a>` : ''}
+              ${entry.researchLog?.exists ? `<a href="/reports/${plan.planId}/${entry.trackId}/log" target="_blank" rel="noopener" style="display:inline-block;border:none;border-radius:8px;padding:8px 12px;background:#6b7280;color:#fff;cursor:pointer;font-size:14px;text-decoration:none;">Research log</a>` : ''}
+            </div>
+          </div>
+        `;}).join('');
+
+        detailEl.innerHTML = `
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+            <div>
+              <h2 style="margin:0;">Plan ${plan.planId}</h2>
+              <p style="margin:4px 0 0;">Window: ${plan.startDate ?? '—'} → ${plan.endDate ?? '—'}</p>
+            </div>
+            <div style="display:flex;gap:8px;">
+              <button id="generate-digest-btn">Generate Digest</button>
+              <button id="view-digest-btn">View Digest</button>
+            </div>
+          </div>
+          ${tracks}
+        `;
+
+        document.getElementById('generate-digest-btn')?.addEventListener('click', () => generatePlanDigest(plan.planId));
+        document.getElementById('view-digest-btn')?.addEventListener('click', () => viewPlanDigest(plan.planId));
+
+        detailEl.querySelectorAll('button[data-save]').forEach((btn) => {
+          btn.addEventListener('click', () => saveDecision(btn.dataset.save));
+        });
+        detailEl.querySelectorAll('button[data-generate]').forEach((btn) => {
+          btn.addEventListener('click', () => openGenerateBriefing(btn.dataset.generate));
+        });
+        detailEl.querySelectorAll('button[data-edit]').forEach((btn) => {
+          btn.addEventListener('click', () => openBriefing(btn.dataset.edit));
+        });
+        detailEl.querySelectorAll('button[data-report-generate]').forEach((btn) => {
+          btn.addEventListener('click', () => runDeepResearch(btn.dataset.reportGenerate));
+        });
+        detailEl.querySelectorAll('button[data-report-force]').forEach((btn) => {
+          btn.addEventListener('click', () => runDeepResearch(btn.dataset.reportForce, { force: true }));
+        });
+        // "View report" is now an <a> link opening in a new tab — no JS binding needed.
+      }
+
+      async function saveDecision(trackId) {
+        if (!currentPlan) return;
+        const select = detailEl.querySelector(`select[data-track="${trackId}"]`);
+        const note = detailEl.querySelector(`textarea[data-note="${trackId}"]`);
+        const decision = select.value;
+        const payload = { decision, note: note.value };
+        try {
+          await fetchJSON(`/api/v1/tracks/plans/${currentPlan.planId}/entries/${trackId}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+          });
+          selectPlan(currentPlan.planId, plansEl.querySelector(`li[data-plan-id="${currentPlan.planId}"]`));
+        } catch (err) {
+          alert(err.message);
+        }
+      }
+
+      async function openBriefing(trackId) {
+        if (!currentPlan) return;
+        try {
+          const data = await fetchJSON(`/api/v1/tracks/plans/${currentPlan.planId}/entries/${trackId}/briefing`);
+          composerState = {
+            planId: currentPlan.planId,
+            trackId,
+            mode: 'edit',
+            latestBriefing: data.content || '',
+          };
+          composerTitle.textContent = `Briefing — ${trackId}`;
+          composerMeta.textContent = data.path || '';
+          composerContextWrapper.style.display = 'none';
+          composerContextEl.innerHTML = '';
+          composerEditor.value = data.content;
+          setPreviewMarkdown(data.content || '');
+          composerPreviewPrompt.disabled = true;
+          composerSavePrompt.style.display = 'none';
+          composerPreviewPrompt.style.display = 'inline-flex';
+          composerRun.style.display = 'none';
+          composerSave.style.display = 'inline-flex';
+          composerHint.textContent = 'Edit the existing briefing then click Save to update the markdown file.';
+          setComposerTab('prompt');
+          showComposer();
+        } catch (err) {
+          alert(err.message);
+        }
+      }
+
+      async function openGenerateBriefing(trackId) {
+        if (!currentPlan) return;
+        try {
+          const context = await fetchJSON(`/api/v1/tracks/plans/${currentPlan.planId}/entries/${trackId}/context`);
+          composerState = {
+            planId: currentPlan.planId,
+            trackId,
+            mode: 'generate',
+            context,
+            latestBriefing: null,
+            savedPrompt: context.savedPrompt || null,
+          };
+          composerTitle.textContent = `Compose briefing — ${trackId}`;
+          composerMeta.textContent = `Plan ${currentPlan.planId}`;
+          composerContextWrapper.style.display = 'block';
+          composerContextEl.innerHTML = renderBriefingContext(context);
+          composerEditor.value = context.savedPrompt?.trim() ? context.savedPrompt : defaultBriefingPrompt;
+          composerPreview.innerHTML = '';
+          composerPreviewPrompt.disabled = false;
+          composerPreviewPrompt.style.display = 'inline-flex';
+          composerSavePrompt.style.display = 'inline-flex';
+          composerRun.style.display = 'inline-flex';
+          composerSave.style.display = 'none';
+          composerHint.textContent = 'Use wildcards to pull context into your instructions, then click Generate.';
+          setComposerTab('prompt');
+          showComposer();
+        } catch (err) {
+          alert(err.message);
+        }
+      }
+
+      function renderBriefingContext(context) {
+        const sections = [];
+        if (context.perspective) {
+          sections.push(`<div><strong>Perspective</strong><p>${escapeHtml(context.perspective.slice(0, 1000))}</p></div>`);
+        }
+        if (context.otherPerspectives && context.otherPerspectives.length) {
+          const list = context.otherPerspectives
+            .map((item) => `<li><strong>${escapeHtml(item.trackName || item.trackId)}</strong><br/><small>${escapeHtml((item.perspective || '').slice(0, 400))}</small></li>`)
+            .join('');
+          sections.push(`<div><strong>Other tracks</strong><ul>${list}</ul></div>`);
+        }
+        if (context.previousBriefings && context.previousBriefings.length) {
+          const list = context.previousBriefings
+            .map((item) => `<li><strong>${escapeHtml(item.planId)}</strong> — ${item.updatedAt ?? ''}<br/><small>${escapeHtml(item.excerpt)}</small></li>`)
+            .join('');
+          sections.push(`<div><strong>Previous research cycles</strong><ul>${list}</ul></div>`);
+        }
+        if (context.entry?.signals?.length) {
+          const sigList = context.entry.signals
+            .map((signal) => `<li>${signal.logical_day} — ${escapeHtml(signal.title || signal.segment_id)}</li>`)
+            .join('');
+          sections.push(`<div><strong>Signals</strong><ul>${sigList}</ul></div>`);
+        }
+        return sections.join('');
+      }
+
+      async function saveBriefing() {
+        if (!composerState) return;
+        try {
+          await fetchJSON(`/api/v1/tracks/plans/${composerState.planId}/entries/${composerState.trackId}/briefing`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ content: composerEditor.value }),
+          });
+          closeComposer();
+          selectPlan(composerState.planId, plansEl.querySelector(`li[data-plan-id="${composerState.planId}"]`));
+        } catch (err) {
+          alert(err.message);
+        }
+      }
+
+      async function runBriefingGeneration() {
+        if (!composerState || composerState.mode !== 'generate') return;
+        try {
+          await savePromptDefinition({ silent: true });
+          composerRun.disabled = true;
+          composerRun.textContent = 'Generating…';
+          const result = await fetchJSON(`/api/v1/tracks/plans/${composerState.planId}/entries/${composerState.trackId}/briefing`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({}),
+          });
+          const content = result.briefing?.content || '';
+          if (composerState) {
+            composerState.latestBriefing = content;
+          }
+          renderPreview();
+          setComposerTab('preview');
+          await selectPlan(composerState.planId, plansEl.querySelector(`li[data-plan-id="${composerState.planId}"]`));
+        } catch (err) {
+          alert(err.message);
+        } finally {
+          composerRun.disabled = false;
+          composerRun.textContent = 'Generate';
+        }
+      }
+
+      async function savePromptDefinition({ silent = false } = {}) {
+        if (!composerState || composerState.mode !== 'generate') return;
+        try {
+          if (!silent) {
+            composerSavePrompt.disabled = true;
+            composerSavePrompt.textContent = 'Saving…';
+          }
+          const payload = { prompt: composerEditor.value };
+          await fetchJSON(`/api/v1/tracks/plans/${composerState.planId}/entries/${composerState.trackId}/prompt`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+          });
+          if (composerState) {
+            composerState.savedPrompt = composerEditor.value;
+          }
+          if (!silent) {
+            composerHint.textContent = 'Global briefing prompt updated.';
+          }
+        } catch (err) {
+          if (silent) {
+            console.error(err);
+          } else {
+            alert(err.message);
+          }
+        } finally {
+          if (!silent) {
+            composerSavePrompt.disabled = false;
+            composerSavePrompt.textContent = 'Save prompt';
+          }
+        }
+      }
+
+      function renderPreview() {
+        const promptText = (() => {
+          if (composerState?.mode === 'generate' && composerState.context) {
+            return expandWildcards(composerEditor.value, composerState.context);
+          }
+          return composerEditor.value;
+        })();
+        setPromptPreview(promptText);
+
+        if (!composerState) {
+          composerPreview.innerHTML = '<div class="preview-placeholder">Open a plan entry to preview.</div>';
+          return;
+        }
+
+        if (composerState.mode === 'edit') {
+          setPreviewMarkdown(composerEditor.value);
+          return;
+        }
+
+        const hasBriefing = Boolean(composerState.latestBriefing);
+        const markdownSource = hasBriefing ? composerState.latestBriefing : promptText;
+        setPreviewMarkdown(markdownSource);
+        if (!hasBriefing) {
+          composerPreview.insertAdjacentHTML(
+            'afterbegin',
+            '<div class="preview-placeholder">Briefing not generated yet — showing prompt rendered as markdown.</div>',
+          );
+        }
+      }
+
+      function previewExpandedPrompt() {
+        renderPreview();
+        setComposerTab('preview');
+        promptPreview.scrollTop = 0;
+      }
+
+      function expandWildcards(input, context) {
+        if (!context) return input;
+        const signalsText = (context.entry?.signals || [])
+          .map((signal) => `Title: ${signal.title || signal.segment_id}\nDay: ${signal.logical_day}\nSource: ${signal.source_type}\nExcerpt: ${signal.excerpt}\n`)
+          .join('\n');
+        const actions = (context.entry?.suggested_actions || []).map((a) => `- ${a}`).join('\n');
+        const questions = (context.entry?.questions || []).map((q) => `- ${q}`).join('\n');
+        const recents = (context.previousBriefings || [])
+          .map((b) => `${b.planId} (${b.updatedAt ?? ''})\n${b.excerpt}`)
+          .join('\n\n');
+        const otherTracks = (context.otherPerspectives || [])
+          .map((track) => {
+            const label = track.trackName || track.trackId;
+            const snippet = (track.perspective || '').slice(0, 1200);
+            return `${label}\n${snippet}`;
+          })
+          .join('\n\n---\n\n');
+        const map = {
+          '{{PERSPECTIVE}}': context.perspective || '',
+          '{{OTHER_PERSPECTIVES}}': otherTracks,
+          '{{PREVIOUS_CYCLES}}': recents,
+          '{{RECENT_BRIEFINGS}}': recents,
+          '{{SIGNALS}}': signalsText,
+          '{{ACTIONS}}': actions,
+          '{{QUESTIONS}}': questions,
+        };
+        return Object.entries(map).reduce((text, [token, value]) => text.split(token).join(value || ''), input);
+      }
+
+      function showComposer() {
+        composerOverlay.classList.add('show');
+        composerOverlay.setAttribute('aria-hidden', 'false');
+      }
+
+      function closeComposer() {
+        composerOverlay.classList.remove('show');
+        composerOverlay.setAttribute('aria-hidden', 'true');
+        composerContextWrapper.style.display = 'none';
+        composerContextEl.innerHTML = '';
+        composerPreview.innerHTML = '';
+        promptPreview.textContent = '';
+        composerEditor.value = '';
+        setComposerTab('prompt');
+        composerPreviewPrompt.disabled = false;
+        composerSavePrompt.style.display = 'none';
+        composerState = null;
+      }
+
+      function openReportModal(title, meta, content) {
+        reportTitle.textContent = title;
+        reportMeta.textContent = meta || '';
+        if (markdownRenderer && typeof markdownRenderer.parse === 'function') {
+          reportContent.innerHTML = markdownRenderer.parse(content || '');
+        } else if (markdownRenderer && typeof markdownRenderer === 'function') {
+          reportContent.innerHTML = markdownRenderer(content || '');
+        } else {
+          reportContent.innerHTML = fallbackMarkdown(content || '');
+        }
+        reportOverlay.classList.add('show');
+        reportOverlay.setAttribute('aria-hidden', 'false');
+      }
+
+      function closeReportModal() {
+        reportOverlay.classList.remove('show');
+        reportOverlay.setAttribute('aria-hidden', 'true');
+        reportContent.innerHTML = '';
+      }
+
+      function setComposerTab(tab) {
+        composerTabs.forEach((btn) => btn.classList.toggle('active', btn.dataset.tab === tab));
+        composerViews.forEach((view) => view.classList.toggle('active', view.dataset.view === tab));
+      }
+
+      function insertWildcard(token) {
+        if (!token) return;
+        const textarea = composerEditor;
+        const start = textarea.selectionStart ?? textarea.value.length;
+        const end = textarea.selectionEnd ?? textarea.value.length;
+        const before = textarea.value.slice(0, start);
+        const after = textarea.value.slice(end);
+        textarea.value = `${before}${token}${after}`;
+        const nextPos = start + token.length;
+        textarea.focus();
+        textarea.setSelectionRange(nextPos, nextPos);
+      }
+
+      composerPreviewPrompt.addEventListener('click', previewExpandedPrompt);
+      composerSavePrompt.addEventListener('click', () => savePromptDefinition({ silent: false }));
+      composerRun.addEventListener('click', runBriefingGeneration);
+      composerSave.addEventListener('click', saveBriefing);
+      composerClose.addEventListener('click', closeComposer);
+      reportClose.addEventListener('click', closeReportModal);
+      composerTabs.forEach((btn) => btn.addEventListener('click', () => {
+        const tab = btn.dataset.tab;
+        if (tab === 'preview') {
+          renderPreview();
+        }
+        setComposerTab(tab);
+      }));
+      wildcardButtons.forEach((btn) => btn.addEventListener('click', () => insertWildcard(btn.dataset.insertWildcard)));
+
+      loadPlans().catch((err) => {
+        detailEl.innerHTML = `<p style="color:red">Failed to load plans: ${err.message}</p>`;
+      });
+
+      async function runDeepResearch(trackId, options) {
+        if (!currentPlan) return;
+        const trigger = detailEl.querySelector(`button[data-report-generate="${trackId}"]`)
+          || detailEl.querySelector(`button[data-report-force="${trackId}"]`);
+        try {
+          if (trigger) {
+            trigger.disabled = true;
+            trigger.textContent = 'Running…';
+          }
+          const payload = options?.force ? { force: true } : {};
+          await fetchJSON(`/api/v1/tracks/plans/${currentPlan.planId}/entries/${trackId}/report`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+          });
+          await selectPlan(currentPlan.planId, plansEl.querySelector(`li[data-plan-id="${currentPlan.planId}"]`));
+        } catch (err) {
+          alert(err.message);
+        } finally {
+          if (trigger) {
+            trigger.disabled = false;
+            trigger.textContent = 'Run deep research';
+          }
+        }
+      }
+
+      async function openReportPreview(trackId) {
+        if (!currentPlan) return;
+        try {
+          const report = await fetchJSON(`/api/v1/tracks/plans/${currentPlan.planId}/entries/${trackId}/report`);
+          openReportModal(`Deep research — ${trackId}`, report.updatedAt || '', report.content || '');
+        } catch (err) {
+          alert(err.message);
+        }
+      }
+
+      async function generatePlanDigest(planId) {
+        const btn = document.getElementById('generate-digest-btn');
+        try {
+          if (btn) {
+            btn.disabled = true;
+            btn.textContent = 'Generating…';
+          }
+          await fetchJSON(`/api/v1/tracks/plans/${planId}/digest`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({}),
+          });
+          window.open(`/reports/${planId}`, '_blank');
+        } catch (err) {
+          alert(err.message);
+        } finally {
+          if (btn) {
+            btn.disabled = false;
+            btn.textContent = 'Generate Digest';
+          }
+        }
+      }
+
+      function viewPlanDigest(planId) {
+        window.open(`/reports/${planId}`, '_blank');
+      }
+
+      async function deletePlanConfirm(planId) {
+        if (!confirm(`Delete plan ${planId}? This cannot be undone.`)) {
+          return;
+        }
+        try {
+          await fetchJSON(`/api/v1/tracks/plans/${planId}`, { method: 'DELETE' });
+          detailEl.innerHTML = '<p>Select a plan to view details.</p>';
+          await loadPlans();
+        } catch (err) {
+          alert(err.message);
+        }
+      }
+    </script>
+  </body>
+</html>`;

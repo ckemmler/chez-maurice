@@ -1,0 +1,5 @@
+---
+import { resolveView } from "@app/lib/theme-registry";
+const View = resolveView(Astro.locals.theme, "SeriesList");
+---
+<View {...Astro.props}><slot /></View>

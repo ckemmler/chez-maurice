@@ -1,0 +1,78 @@
+---
+import Base from "@app/layouts/Base.astro";
+import type { Locale } from "@app/i18n/config";
+import { t, resourceItemPath, formatShortDate, stripLocalePrefix } from "@app/i18n/utils";
+import { getCollection } from "astro:content";
+import { isPublic } from "@app/lib/flags";
+
+interface Props {
+  locale?: Locale;
+}
+
+const { locale = "en" } = Astro.props;
+
+function isDraft(entry: { data: { flags?: string[] } }) {
+  return !isPublic(entry.data);
+}
+
+const series = await getCollection("series", ({ data }) => (import.meta.env.DEV || isPublic(data)) && data.locale === locale && !data.show)
+  .then((s) => s.sort((a, b) => b.data.date_watched.valueOf() - a.data.date_watched.valueOf()));
+
+const fiches = await getCollection("fiches", ({ data }) => data.locale === locale && data.resource_collection === "series");
+const ficheByResourceId = new Map(fiches.map((f) => [f.data.resource_id, f]));
+const seriesSlugs = new Set(series.map((s) => stripLocalePrefix(s.id)));
+const orphanFiches = fiches.filter((f) => !seriesSlugs.has(f.data.resource_id));
+---
+
+<Base title={t(locale, "series.title")} description={t(locale, "series.description")} locale={locale}>
+  <article class="prose">
+    <h1>{t(locale, "series.title")}</h1>
+    <p class="text-muted">{t(locale, "series.description")}</p>
+    <p class="draft-empty-notice text-muted">All items on this page are drafts.</p>
+
+    {series.length > 0 ? (
+      <ul class="series-list">
+        {series.map((s) => {
+          const fiche = ficheByResourceId.get(stripLocalePrefix(s.id));
+          return (
+            <li data-draft={isDraft(s) ? "true" : undefined}>
+              <a href={resourceItemPath(locale, "series", s.id)} class="series-title">{s.data.title}</a>{!isDraft(s) && <span class="public-dot">•</span>}
+              {fiche && <a href={`${locale === "fr" ? "/fr" : ""}/fiches/${fiche.id.replace(/\/(en|fr)\//, "/")}`} class="fiche-link">fiche</a>}
+              {s.data.platform && <span class="text-muted"> — {s.data.platform}</span>}
+              {s.data.seasons_watched && <span class="text-muted text-sm"> · {s.data.seasons_watched} {t(locale, "series.seasons")}</span>}
+              <span class="text-muted text-sm"> · {formatShortDate(s.data.date_watched, locale)}</span>
+              {s.data.rating && (
+                <span class="rating">{"★".repeat(s.data.rating)}{"☆".repeat(5 - s.data.rating)}</span>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+    ) : (
+      <p class="text-muted">{t(locale, "series.noSeriesYet")}</p>
+    )}
+
+    {orphanFiches.length > 0 && (
+      <section>
+        <h2>Fiches</h2>
+        <ul class="series-list">
+          {orphanFiches.map((fiche) => (
+            <li>
+              <a href={`${locale === "fr" ? "/fr" : ""}/fiches/${fiche.id.replace(/\/(en|fr)\//, "/")}`} class="fiche-link">{fiche.data.title}</a>
+              <span class="text-muted text-sm"> · {formatShortDate(fiche.data.date, locale)}</span>
+            </li>
+          ))}
+        </ul>
+      </section>
+    )}
+  </article>
+</Base>
+
+<style>
+  .series-list { list-style: none; padding: 0; }
+  .series-list li { margin-bottom: var(--spacing-md); font-size: 1.05rem; }
+  .series-title { font-size: 1.35rem; }
+  .rating { display: inline-block; margin-left: var(--spacing-sm); color: #d4a017; letter-spacing: 1px; }
+  :global(.prose .fiche-link) { color: #7c3aed; font-size: 0.9em; }
+  :global(.dark .prose .fiche-link) { color: #a78bfa; }
+</style>

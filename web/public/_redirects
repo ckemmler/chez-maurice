@@ -1,0 +1,4 @@
+/books      /resources/books      301
+/books/*    /resources/books/:splat 301
+/articles   /resources/articles   301
+/articles/* /resources/articles/:splat 301
