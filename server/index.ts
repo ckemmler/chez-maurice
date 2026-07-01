@@ -1,9 +1,12 @@
 import { readFileSync, existsSync, readdirSync } from "node:fs";
 import { resolve, join, extname } from "node:path";
 
-// ── Load .env from repo root (before any other imports that read env) ────
-function loadRootEnv(): void {
-  const envPath = resolve(process.cwd(), "../.env");
+// ── Load .env before any other imports that read env ─────────────────────
+// Two locations, first-wins (and an already-set env var always wins):
+//   1. ~/.maurice/.env  — the user config file (next to config.toml); this is
+//      where an installed (.pkg) server reads its config, e.g. TLS settings.
+//   2. ../.env          — repo-root, for a from-source / dev run.
+function loadEnvFile(envPath: string): void {
   if (!existsSync(envPath)) return;
   const content = readFileSync(envPath, "utf8");
   for (const rawLine of content.split(/\r?\n/)) {
@@ -22,7 +25,8 @@ function loadRootEnv(): void {
     }
   }
 }
-loadRootEnv();
+loadEnvFile(resolve(process.env.HOME || "", ".maurice", ".env"));
+loadEnvFile(resolve(process.cwd(), "../.env"));
 
 import { Hono } from "hono";
 import { cors } from "hono/cors";
