@@ -260,8 +260,6 @@ p{margin:0;text-wrap:pretty;}
 .dl-card{background:var(--card);border:1px solid var(--line);border-radius:20px;padding:30px 26px;display:flex;flex-direction:column;position:relative;}
 .dl-card.feat{border-color:var(--ink);box-shadow:0 24px 50px -30px rgba(27,26,23,.5);}
 .dl-tag{position:absolute;top:-12px;left:26px;background:var(--ink);color:var(--paper);font-family:var(--mono);font-size:10px;letter-spacing:.08em;text-transform:uppercase;padding:4px 10px;border-radius:8px;}
-.dl-tag.soon{background:var(--ochre-deep);}
-.btn.is-soon{opacity:.5;pointer-events:none;cursor:default;}
 .dl-ico{width:54px;height:54px;border-radius:14px;background:var(--paper-2);border:1px solid var(--line);display:flex;align-items:center;justify-content:center;margin-bottom:18px;color:var(--ink);}
 .dl-ico svg{width:28px;height:28px;}
 .dl-card h4{font-family:var(--serif);font-size:23px;font-weight:600;margin:0 0 7px;}
