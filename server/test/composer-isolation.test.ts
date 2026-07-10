@@ -4,6 +4,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { join } from "node:path";
 import { setDefaultLibrary, removeLibrary, getDefaultLibrary } from "../src/services/calibreLibraries";
+import { gardensRoot } from "../src/services/gardensRoot";
 
 // B6 cross-cutting: every composer endpoint is account-scoped, and the encrypted
 // flag is carried through resolution (loaded, not blocked, in the single-user
@@ -15,7 +16,11 @@ const BASE = "https://localhost:3001/api/v1/composer";
 const tls = { rejectUnauthorized: false } as any;
 const DATA = process.env.MAURICE_DATA_DIR || join(process.env.HOME || "", ".maurice");
 const PAOLA_LIB = "/tmp/paola-cc-isolation";
-const ENCRYPTED_NOTE = "akita-backlog-social-platform-search"; // an encrypted candide note
+// Seeded by this suite (see beforeAll) rather than borrowed from the developer's
+// own garden: gardens are gitignored, so a real slug leaves the test red on any
+// fresh clone. Written where the running server reads — its gardensRoot().
+const ENCRYPTED_NOTE = "composer-isolation-encrypted-fixture";
+const ENCRYPTED_NOTE_PATH = join(gardensRoot(), "candide", "notes", "en", `${ENCRYPTED_NOTE}.md`);
 
 let candideTok = "", paolaTok = "", candideId = "", paolaId = "", candideOnlyConv = "";
 
@@ -53,6 +58,23 @@ beforeAll(() => {
     .get(candideId, paolaId) as { conversation_id: string }).conversation_id;
   db.close();
 
+  // An encrypted note for candide, so the carry-through assertions don't depend
+  // on whatever happens to be in the developer's garden.
+  fs.mkdirSync(path.dirname(ENCRYPTED_NOTE_PATH), { recursive: true });
+  fs.writeFileSync(
+    ENCRYPTED_NOTE_PATH,
+    [
+      "---",
+      "title: Encrypted fixture (composer-isolation)",
+      "locale: en",
+      "flags: [encrypted]",
+      "---",
+      "",
+      "Body text that must ride through resolution with the encrypted flag intact.",
+      "",
+    ].join("\n"),
+  );
+
   // Build paola a distinct fake library with a colliding book_id=18.
   fs.rmSync(PAOLA_LIB, { recursive: true, force: true });
   const chDir = join(PAOLA_LIB, "Paola/Secret_18/chapters");
@@ -79,6 +101,7 @@ beforeAll(() => {
 });
 
 afterAll(() => {
+  fs.rmSync(ENCRYPTED_NOTE_PATH, { force: true });
   const lib = getDefaultLibrary(paolaId);
   if (lib && lib.library_root === PAOLA_LIB) removeLibrary(paolaId, lib.id);
   fs.rmSync(PAOLA_LIB, { recursive: true, force: true });
