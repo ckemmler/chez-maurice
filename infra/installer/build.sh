@@ -63,11 +63,14 @@ echo "==> Copying server..."
 # SECURITY: never package secrets. .gitignore protects git, NOT this payload —
 # .secrets/ (Cloudflare token, APNs .p8) and any cert/key/env must be excluded
 # here or they ship inside the (public) installer.
+# Leading "/" anchors an exclude to the server/ transfer root, so /test/ drops
+# server/test/ without touching any nested dir that happens to be named test.
 rsync -a \
   --exclude='node_modules' --exclude='.git' \
   --exclude='.env' --exclude='.env.*' \
   --exclude='certs' --exclude='.secrets' \
   --exclude='*.p8' --exclude='*.p12' --exclude='*.pem' --exclude='*.key' --exclude='*.cer' \
+  --exclude='/test/' --exclude='/scripts/seed-demo.ts' \
   "$REPO_ROOT/server/" "$DEST/server/"
 
 # ── Copy MCP gateway (Python tools) ─────────────────────────────────────
