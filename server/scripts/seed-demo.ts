@@ -22,6 +22,16 @@ if (!DATA || /(^|[/\\])\.maurice([/\\]|$)/.test(DATA)) {
   process.exit(1);
 }
 
+// Same for gardens. gardensRoot() falls back to the repo's web/gardens whenever
+// that dir exists, so in a source checkout an unset env silently seeds the demo
+// household's notes into the developer's own gardens. Demand it explicitly.
+if (!process.env.MAURICE_GARDENS_DIR) {
+  console.error(
+    "✗ Refusing to seed: set MAURICE_GARDENS_DIR to a throwaway dir (e.g. /tmp/maurice-demo/gardens).",
+  );
+  process.exit(1);
+}
+
 // Importing db runs the schema migrations against MAURICE_DATA_DIR.
 import db from "../src/db";
 import { createUser } from "../src/services/users";
@@ -31,6 +41,7 @@ import { createMaurice } from "../src/services/maurices";
 import { saveFile } from "../src/services/files";
 import { createConversation } from "../src/services/conversations";
 import { saveSpec } from "../src/services/composer/specs";
+import { gardensRoot } from "../src/services/gardensRoot";
 
 // Refuse to run twice into the same dir (avoid UNIQUE-username crashes mid-way).
 const existing = (db.query(`SELECT COUNT(*) c FROM users`).get() as any).c as number;
@@ -41,7 +52,7 @@ if (existing > 0) {
 
 const REPO = resolve(import.meta.dir, "../..");
 const AVATARS_SRC = join(REPO, "design/landing/screenshots/avatars");
-const GARDENS = join(REPO, "web/gardens");
+const GARDENS = gardensRoot();
 
 // ── Members ─────────────────────────────────────────────────────────────────
 // icon is rendered as an SF Symbol by the app (Image(systemName:)), so it must
