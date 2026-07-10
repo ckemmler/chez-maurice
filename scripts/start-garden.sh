@@ -37,6 +37,9 @@ done
 
 cd "$shell"
 echo "→ Garden '$member' on :$port (base: ${base:-/}, root: .garden-roots/$member)"
+# Host handling: the engine accepts any Host by default (it only ever serves
+# through the authenticated Bun proxy) — see web/astro.config.mjs. Export
+# ALLOWED_HOSTS to pin an explicit allowlist if you expose this port directly.
 nohup env GARDEN="$member" GARDEN_BASE="$base" GARDEN_SHELL=1 WEB_SSR=1 \
   ./node_modules/.bin/astro dev --port "$port" --host 0.0.0.0 >>"$log" 2>&1 &
 echo $! >"$pidfile"

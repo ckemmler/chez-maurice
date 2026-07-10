@@ -49,6 +49,23 @@ export default defineConfig({
   // build, a request-time param lookup under SSR.
   output: process.env.WEB_SSR === "1" ? "server" : "static",
   adapter: cloudflare(),
+  // Hosts the dev server accepts. In the garden topology this engine is only ever
+  // reached through the authenticated Bun reverse proxy (server/index.ts) — the
+  // single gated ingress that the tunnel / Tailnet / custom domain points at, never
+  // this port directly. Vite's host check (a DNS-rebinding guard for internet-facing
+  // dev servers) is therefore redundant here, and pinning hostnames would break
+  // every self-hosted deployment on its own host. So accept any host by default:
+  // zero-config on any Tailnet/Cloudflare/custom domain, with the Host header left
+  // intact so `api-base` (Astro.url.hostname) stays correct. Set ALLOWED_HOSTS to a
+  // comma-separated allowlist (leading "." = subdomain wildcard, e.g. ".example.com")
+  // to pin an explicit list if you deliberately expose this port outside the proxy.
+  // (Must be the first-class top-level option, not vite.server.allowedHosts, which
+  // Astro would override with its own default of [].)
+  server: {
+    allowedHosts: process.env.ALLOWED_HOSTS
+      ? process.env.ALLOWED_HOSTS.split(",").map((s) => s.trim()).filter(Boolean)
+      : true,
+  },
   // Per-member cache so concurrent engine instances don't race on the shared
   // node_modules/.astro + .vite dirs (an ENOTEMPTY crash otherwise). Candide
   // (no GARDEN) keeps the defaults; each member gets its own.
@@ -92,10 +109,6 @@ export default defineConfig({
       },
     },
     server: {
-      // Hosts the dev server accepts when proxied behind a public hostname.
-      // Set ALLOWED_HOSTS to a comma-separated list (a leading "." allows all
-      // subdomains, e.g. ".example.com"). Empty by default for a local run.
-      allowedHosts: (process.env.ALLOWED_HOSTS || "").split(",").map((s) => s.trim()).filter(Boolean),
       ...(hasTls && {
         https: {
           cert: readFileSync(certFile),

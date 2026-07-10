@@ -13,4 +13,7 @@ echo "→ Garden 'candide' on http://localhost:4321/g/candide (cwd: $PWD)"
 # THEME=candide: this garden defaults to the full-site (kind:site) theme — its
 # home is the composed hero, not the garden-first notes index. (Falls back to the
 # neutral default garden theme if the private candide theme isn't present.)
+# Host handling: the engine accepts any Host by default (it only ever serves
+# through the authenticated Bun proxy) — see web/astro.config.mjs. Export
+# ALLOWED_HOSTS to pin an explicit allowlist if you expose this port directly.
 exec env GARDEN=candide GARDEN_BASE=/g/candide WEB_SSR=1 THEME=candide "$NPM" run dev
