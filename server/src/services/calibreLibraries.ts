@@ -2,6 +2,7 @@ import { Database } from "bun:sqlite";
 import { existsSync } from "fs";
 import { join } from "path";
 import db from "../db";
+import { invalidateLibraryRoot } from "../../data-api/services/calibre";
 
 // Per-account Calibre library configuration. One default library per account
 // for now (the table allows more later). The Python Calibre MCP tools read the
@@ -87,10 +88,17 @@ export function setDefaultLibrary(
       [crypto.randomUUID(), accountId, label, root],
     );
   }
+  // The data-api caches the resolved root; without this the edit only lands once
+  // the TTL lapses.
+  invalidateLibraryRoot();
   return getDefaultLibrary(accountId)!;
 }
 
 export function removeLibrary(accountId: string, id: string): boolean {
-  return db.run(`DELETE FROM calibre_libraries WHERE id = ? AND account_id = ?`, [id, accountId])
-    .changes > 0;
+  const removed =
+    db.run(`DELETE FROM calibre_libraries WHERE id = ? AND account_id = ?`, [id, accountId])
+      .changes > 0;
+  // Deleting the default library changes what resolves too.
+  if (removed) invalidateLibraryRoot();
+  return removed;
 }

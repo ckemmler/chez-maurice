@@ -32,6 +32,7 @@ import {
   setDefaultLibrary,
   getDefaultLibrary,
   removeLibrary,
+  validateLibraryRoot,
 } from "../services/calibreLibraries";
 import { listModels, getModel, addModel, removeModel, type Model } from "../services/models";
 import {
@@ -315,6 +316,64 @@ web.delete("/calibre/:id", (c) => {
   return c.json({ ok: removeLibrary(account_id, c.req.param("id")) });
 });
 
+// ── Global Calibre library (HTML admin form) ────────────────────
+// One shared library for the household. The data-api + Python MCP tools read
+// this same row (admin account's default) to locate books/chapters/summaries.
+web.get("/library", (c) => {
+  const redir = requireWebAdmin(c);
+  if (redir) return redir;
+  const session = getAdminSession(c)!;
+  const lang = langOf(c);
+  const error = c.req.query("error");
+  const saved = c.req.query("msg") === "library_saved";
+
+  const lib = getDefaultLibrary(session.userId);
+  const root = lib?.library_root ?? "";
+  const check = root ? validateLibraryRoot(root) : null;
+
+  const status = check
+    ? check.ok
+      ? `<p class="ok">✓ ${check.bookCount} books at this library.</p>`
+      : `<p class="error">${escape(check.error || "Library not readable.")}</p>`
+    : `<p class="sec-desc" style="margin:0">No library configured yet.</p>`;
+
+  return c.html(layout("Calibre library", `
+    <form method="POST" action="/admin/library">
+      <div class="card dialog">
+        <div class="dialog-head"><div><div class="eyebrow">Reading</div><div class="ttl">Calibre library</div></div></div>
+        <div class="dialog-body">
+          <p class="sec-desc" style="margin:0 0 10px">The folder that contains <span class="mono">metadata.db</span> — the shared Calibre library the reading features serve.</p>
+          ${saved ? `<p class="ok">Library saved.</p>` : ""}
+          ${error ? `<p class="error">${escape(error)}</p>` : ""}
+          <div class="field">
+            <label class="label">Library root</label>
+            <input type="text" name="library_root" class="mono" placeholder="/Users/candide/media/Livres" value="${escape(root)}" required />
+          </div>
+          ${status}
+        </div>
+        <div class="dialog-foot">
+          <a href="/admin/dashboard" class="btn ghost">${escape(t(lang, "common.cancel"))}</a>
+          <button type="submit" class="btn accent">Save library</button>
+        </div>
+      </div>
+    </form>`, true, adminName(c), lang));
+});
+
+web.post("/library", async (c) => {
+  const redir = requireWebAdmin(c);
+  if (redir) return redir;
+  const session = getAdminSession(c)!;
+  const form = await c.req.parseBody();
+  const root = ((form.library_root as string) || "").trim();
+  if (!root) return c.redirect("/admin/library?error=" + encodeURIComponent("Library root is required."));
+  try {
+    setDefaultLibrary(session.userId, root, "Library");
+    return c.redirect("/admin/library?msg=library_saved");
+  } catch (e: any) {
+    return c.redirect("/admin/library?error=" + encodeURIComponent(e?.message ?? "Invalid library."));
+  }
+});
+
 // ── GET /admin ──────────────────────────────────────────────────
 web.get("/", (c) => {
   if (!adminExists()) return c.redirect("/admin/setup");
@@ -567,6 +626,16 @@ web.get("/dashboard", async (c) => {
             <input type="number" name="max_tokens" value="${household.max_tokens}" min="256" max="200000" /></div>
           <div class="grid-actions"><button type="submit" class="btn primary">${escape(t(lang, "settings.save"))}</button></div>
         </form>
+      </section>
+
+      <section id="sec-reading">
+        ${sectionHead(t(lang, "dashboard.kicker_ai"), "Reading", "The shared Calibre library the reading features serve.")}
+        <div class="card pad">
+          <div class="field"><label class="label">Calibre library</label>
+            <div class="mono" style="opacity:.8">${escape(getDefaultLibrary(getAdminSession(c)!.userId)?.library_root || "— not configured —")}</div>
+          </div>
+          <div class="grid-actions"><a href="/admin/library" class="btn ghost sm">Configure library</a></div>
+        </div>
       </section>
 
       <section>
