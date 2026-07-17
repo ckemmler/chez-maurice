@@ -5,6 +5,7 @@ import chapters from "./chapters";
 import summaries from "./summaries";
 import actions from "./actions";
 import bookmarks from "./bookmarks";
+import highlights from "./highlights";
 import add from "./add";
 
 const calibre = new Hono();
@@ -15,6 +16,7 @@ calibre.route("/books", chapters);
 calibre.route("/books", summaries);
 calibre.route("/books", actions);
 calibre.route("/books", bookmarks);
+calibre.route("/books", highlights);
 calibre.route("/add", add);
 
 export default calibre;

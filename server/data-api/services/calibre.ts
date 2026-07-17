@@ -263,6 +263,19 @@ export async function getBookMetadata(bookId: number): Promise<BookMetadata | nu
   return getBookRecord(bookId);
 }
 
+/** Absolute path to a book's Calibre cover image, or null if it has none. */
+export async function getCoverFile(bookId: number): Promise<string | null> {
+  const meta = await getBookMetadata(bookId);
+  if (!meta) return null;
+  const p = path.join(getLibraryRoot(), meta.bookPath, "cover.jpg");
+  try {
+    await fs.access(p);
+    return p;
+  } catch {
+    return null;
+  }
+}
+
 export function searchBooksByTags(tags: string[]): BookMetadata[] {
   if (!tags.length) return [];
 

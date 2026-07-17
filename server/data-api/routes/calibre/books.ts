@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { getBookMetadata, getChapterStats, listBooks, listChapters, searchBooksByTags } from "../../services/calibre";
+import { getBookMetadata, getChapterStats, getCoverFile, listBooks, listChapters, searchBooksByTags } from "../../services/calibre";
 import { renderBookBrowserArtifact } from "../../services/calibreArtifact";
 
 const books = new Hono();
@@ -37,6 +37,16 @@ books.get("/search", async (c) => {
       tags: b.tags,
       series: b.series,
     })),
+  });
+});
+
+books.get("/:bookId/cover", async (c) => {
+  const bookId = Number(c.req.param("bookId"));
+  if (Number.isNaN(bookId)) return c.json({ error: "Invalid book id" }, 400);
+  const file = await getCoverFile(bookId);
+  if (!file) return c.json({ error: "No cover" }, 404);
+  return new Response(Bun.file(file), {
+    headers: { "Cache-Control": "public, max-age=86400" },
   });
 });
 
