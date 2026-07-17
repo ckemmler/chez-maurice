@@ -9,13 +9,12 @@ import { Hono } from "hono";
 import { mkdirSync, writeFileSync, unlinkSync } from "node:fs";
 import { resolve, extname } from "node:path";
 import { spawnSync } from "node:child_process";
+import { getLibraryRoot } from "../../services/calibre";
 
 const app = new Hono();
 
 const CALIBRE_DB =
   "/Applications/calibre.app/Contents/MacOS/calibredb";
-const LIBRARY_PATH =
-  process.env.CALIBRE_LIBRARY_PATH ?? `${process.env.HOME || "."}/Calibre Library`;
 const tmpDir = resolve(import.meta.dir, "../../../../data/tmp");
 
 const ALLOWED_EXTENSIONS = new Set([".pdf", ".epub"]);
@@ -43,10 +42,11 @@ app.post("/", async (c) => {
     const buffer = await file.arrayBuffer();
     writeFileSync(tmpPath, Buffer.from(buffer));
 
-    // Run calibredb add
+    // Run calibredb add — resolve the library at request time, so uploads land in
+    // the same library the read paths serve.
     const result = spawnSync(CALIBRE_DB, [
       "add", tmpPath,
-      "--library-path", LIBRARY_PATH,
+      "--library-path", getLibraryRoot(),
     ], {
       timeout: 30_000,
     });

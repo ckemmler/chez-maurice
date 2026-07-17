@@ -1,14 +1,15 @@
 import { Database } from "bun:sqlite";
 import { join } from "path";
 import { mkdirSync, existsSync } from "fs";
+import { getAppDir, getMauriceDbPath } from "../lib/appDir";
 
-// Resolve database path: use MAURICE_DATA_DIR env or default to ~/.maurice
-const dataDir =
-  process.env.MAURICE_DATA_DIR ||
-  join(process.env.HOME || "/tmp", ".maurice");
+// Where the app's own state lives (maurice.db, avatars, images, files). The rule
+// itself lives in lib/appDir.ts so data-api resolves maurice.db identically —
+// see the note there about why this is not config.toml's data_dir.
+const dataDir = getAppDir();
 mkdirSync(dataDir, { recursive: true });
 
-const dbPath = join(dataDir, "maurice.db");
+const dbPath = getMauriceDbPath();
 const db = new Database(dbPath, { create: true });
 
 // WAL mode for concurrent reads

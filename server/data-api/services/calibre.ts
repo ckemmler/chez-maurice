@@ -1,6 +1,7 @@
 import { Database } from "bun:sqlite";
 import { promises as fs } from "node:fs";
 import path from "node:path";
+import { getMauriceDbPath } from "../lib/config";
 
 export interface BookMetadata {
   id: number;
@@ -22,16 +23,85 @@ export interface ChapterInfo {
   summaryWordCount: number;
 }
 
-const LIBRARY_PATH =
+// The Calibre library root is a single globally-shared library, configurable
+// from the web admin UI (persisted in maurice.db `calibre_libraries`, the
+// admin account's default row). We resolve it from there so an admin edit takes
+// effect without a redeploy; env vars remain the fallback for first-run / tests.
+const ENV_LIBRARY_PATH =
   process.env.CALIBRE_LIBRARY_PATH ?? `${process.env.HOME || "."}/Calibre Library`;
-const DB_PATH =
-  process.env.CALIBRE_DB_PATH ?? path.join(LIBRARY_PATH, "metadata.db");
+
+// Warn once per distinct cause: a latching boolean would hide a later, different
+// failure, and silence is what hid the admin setting being ignored in the first
+// place. Both fallback paths below must say something.
+const warnedCauses = new Set<string>();
+function warnFallback(cause: string): void {
+  if (warnedCauses.has(cause)) return;
+  warnedCauses.add(cause);
+  console.warn(`[calibre] ${cause}; falling back to library root ${ENV_LIBRARY_PATH}`);
+}
+
+function resolveLibraryRoot(): string {
+  try {
+    const meta = new Database(getMauriceDbPath(), { readonly: true });
+    try {
+      const row = meta
+        .query(
+          `SELECT cl.library_root AS root
+             FROM calibre_libraries cl
+             JOIN users u ON u.id = cl.account_id
+            WHERE cl.is_default = 1 AND u.role = 'admin'
+         ORDER BY cl.created_at LIMIT 1`,
+        )
+        .get() as { root: string } | undefined;
+      if (row?.root) return row.root;
+      // Opened fine but nothing configured: no default library for an admin
+      // account. Silent here would serve an empty library with no explanation.
+      warnFallback(`no default Calibre library configured for an admin account in ${getMauriceDbPath()}`);
+    } finally {
+      meta.close();
+    }
+  } catch (err) {
+    // maurice.db unavailable (e.g. tests) — fall through to env.
+    warnFallback(`could not read library root from ${getMauriceDbPath()} (${err})`);
+  }
+  return ENV_LIBRARY_PATH;
+}
+
+// Resolving opens maurice.db, so cache the answer — re-resolving per query would
+// reopen the main DB on every Calibre read. invalidateLibraryRoot() makes an
+// in-process admin edit take effect at once; the TTL bounds staleness when the row
+// changes out of process (the Python Calibre MCP tools share this table).
+const ROOT_TTL_MS = 5_000;
+let cachedRoot: string | null = null;
+let cachedRootAt = 0;
+
+/** The library root every read and write path must agree on. */
+export function getLibraryRoot(): string {
+  const now = Date.now();
+  if (cachedRoot === null || now - cachedRootAt >= ROOT_TTL_MS) {
+    cachedRoot = resolveLibraryRoot();
+    cachedRootAt = now;
+  }
+  return cachedRoot;
+}
+
+/** Drop the cached root so the next call re-reads it. Call after writing library_root. */
+export function invalidateLibraryRoot(): void {
+  cachedRoot = null;
+}
 
 let db: Database | null = null;
+// Which root `db` is open against — distinct from cachedRoot, which caches
+// resolution. Conflating the two is what made the old refresh rule unreadable.
+let openedRoot: string | null = null;
 
 function getDb(): Database {
-  if (!db) {
-    db = new Database(DB_PATH, { readonly: true });
+  const root = getLibraryRoot();
+  if (!db || openedRoot !== root) {
+    db?.close();
+    openedRoot = root;
+    const dbPath = process.env.CALIBRE_DB_PATH ?? path.join(root, "metadata.db");
+    db = new Database(dbPath, { readonly: true });
   }
   return db;
 }
@@ -160,7 +230,7 @@ function countIndexedSummaries(summaryDir: string, summaryFiles: string[]): numb
 }
 
 export async function getChapterStats(bookPath: string): Promise<{ chapters: number; summarized: number; indexed: number }> {
-  const bookDir = path.join(LIBRARY_PATH, bookPath);
+  const bookDir = path.join(getLibraryRoot(), bookPath);
   const chapterDir = path.join(bookDir, "chapters");
   const summaryDir = path.join(bookDir, "chapter_summaries");
 
@@ -261,7 +331,7 @@ async function fileExists(target: string) {
 }
 
 async function loadChapterEntries(book: BookMetadata) {
-  const bookDir = path.join(LIBRARY_PATH, book.bookPath);
+  const bookDir = path.join(getLibraryRoot(), book.bookPath);
   const chapterDir = path.join(bookDir, "chapters");
   const summaryDir = path.join(bookDir, "chapter_summaries");
 

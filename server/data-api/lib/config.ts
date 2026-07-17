@@ -77,6 +77,13 @@ export function getDbPath(name: string): string {
   return resolve(getDataDir(), name);
 }
 
+/**
+ * Path to maurice.db, which is NOT a data_dir database — do not reach for
+ * getDbPath("maurice.db"), which resolves under [paths] data_dir and points at a
+ * file that never exists. See lib/appDir.ts for the rule and why the two differ.
+ */
+export { getMauriceDbPath } from "../../lib/appDir";
+
 export function getPort(service: string): number {
   const envKey = `MAURICE_PORT_${service.toUpperCase().replace(/-/g, "_")}`;
   if (process.env[envKey]) return parseInt(process.env[envKey]!, 10);
