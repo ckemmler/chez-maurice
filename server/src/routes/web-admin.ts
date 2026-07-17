@@ -25,6 +25,7 @@ import {
   formatInviteCode,
 } from "../services/auth";
 import db from "../db";
+import { getAppDir } from "../../lib/appDir";
 import { layout, escape } from "./web-admin-html";
 import { createApiToken, listApiTokens, revokeApiToken } from "../middleware/auth";
 import {
@@ -87,8 +88,7 @@ function headIcon(provider: string, fallback: string): string {
 }
 
 function uploadsDir(): string {
-  const dataDir = process.env.MAURICE_DATA_DIR || join(process.env.HOME || "/tmp", ".maurice");
-  const dir = join(dataDir, "uploads");
+  const dir = join(getAppDir(), "uploads");
   mkdirSync(dir, { recursive: true });
   return dir;
 }
