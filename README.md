@@ -39,6 +39,14 @@ bun install
 bun run index.ts          # serves http://localhost:3001
 ```
 
+To restart it later without tying up a terminal, use `scripts/restart-api.sh`
+(stops whatever holds :3001 and relaunches in the background, picking up `.env`).
+
+If you use the Calibre reading features (chapter extraction / summaries), run
+`scripts/setup-calibre-venv.sh` once — it builds a Python venv for the Calibre
+CLI on an interpreter with a working `pyexpat` (Homebrew's python@3.14 ships a
+broken one that crashes EPUB parsing). The server auto-detects it.
+
 On first launch it has no users. Open **http://localhost:3001/admin** in a browser
 — you'll be redirected to a one-time **setup** page to create the admin account.
 Then, from `/admin`, configure a model:

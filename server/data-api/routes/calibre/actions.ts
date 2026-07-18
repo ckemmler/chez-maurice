@@ -7,7 +7,7 @@
  * GET  /:bookId/status     — processing status (chapter/summary counts)
  */
 
-import { openSync, mkdirSync } from "node:fs";
+import { openSync, mkdirSync, existsSync } from "node:fs";
 import { resolve } from "node:path";
 import { spawn, spawnSync } from "node:child_process";
 
@@ -19,9 +19,41 @@ const actions = new Hono();
 
 const repoRoot = resolve(import.meta.dir, "../../../..");
 const cliPath = resolve(repoRoot, "tools/calibre/cli.py");
-const pythonBin =
-  process.env.CALIBRE_PYTHON || resolve(repoRoot, ".venv/bin/python");
 const logDir = resolve(repoRoot, "logs");
+
+/** True if this interpreter can load `pyexpat` — Homebrew's python@3.14 ships a
+ *  broken one (libexpat symbol mismatch) that crashes EPUB parsing. */
+function pythonHasExpat(py: string): boolean {
+  try {
+    return spawnSync(py, ["-c", "import xml.parsers.expat"], { timeout: 5000 }).status === 0;
+  } catch {
+    return false;
+  }
+}
+
+/** Pick the Calibre CLI interpreter: an explicit override, then the dedicated
+ *  `.venv-calibre` (created by scripts/setup-calibre-venv.sh), then `.venv` —
+ *  preferring the first whose pyexpat works so a broken default doesn't silently
+ *  fail every extraction. */
+function resolveCalibrePython(): string {
+  const candidates = [
+    process.env.CALIBRE_PYTHON,
+    resolve(repoRoot, ".venv-calibre/bin/python"),
+    resolve(repoRoot, ".venv/bin/python"),
+  ].filter((p): p is string => !!p && existsSync(p));
+
+  const working = candidates.find(pythonHasExpat);
+  if (working) return working;
+
+  const fallback = candidates[0] ?? resolve(repoRoot, ".venv/bin/python");
+  console.warn(
+    `[calibre] No Python with a working pyexpat found (checked: ${candidates.join(", ") || "none"}). ` +
+      `Chapter extraction will fail — run scripts/setup-calibre-venv.sh. Falling back to ${fallback}.`,
+  );
+  return fallback;
+}
+
+const pythonBin = resolveCalibrePython();
 
 function spawnCalibreAction(action: string, bookId: number, sync: boolean) {
   const args = [cliPath, action, String(bookId)];
