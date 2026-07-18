@@ -36,16 +36,26 @@ Anthropic / OpenAI / Mistral (entered in the admin UI — never committed).
 ```bash
 cd server
 bun install
-bun run index.ts          # serves http://localhost:3001
 ```
 
-To restart it later without tying up a terminal, use `scripts/restart-api.sh`
-(stops whatever holds :3001 and relaunches in the background, picking up `.env`).
+Then run the services as macOS launchd agents — one command, and they start on
+login and restart on crash. No process to babysit:
+
+```bash
+scripts/service.sh install        # API (:3001), MCP gateway (:8710), web (:4321)
+scripts/service.sh status         # what's running
+scripts/service.sh restart [api]  # restart all, or one service
+scripts/service.sh logs api       # tail a service's log
+```
+
+(For a throwaway dev run without launchd, `cd server && bun run index.ts` still
+works — it serves http://localhost:3001.)
 
 If you use the Calibre reading features (chapter extraction / summaries), run
 `scripts/setup-calibre-venv.sh` once — it builds a Python venv for the Calibre
 CLI on an interpreter with a working `pyexpat` (Homebrew's python@3.14 ships a
-broken one that crashes EPUB parsing). The server auto-detects it.
+broken one that crashes EPUB parsing). The server auto-detects it, no restart
+needed.
 
 On first launch it has no users. Open **http://localhost:3001/admin** in a browser
 — you'll be redirected to a one-time **setup** page to create the admin account.
