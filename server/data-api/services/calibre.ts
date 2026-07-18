@@ -241,7 +241,16 @@ export async function getChapterStats(bookPath: string): Promise<{ chapters: num
 
   try {
     const files = await fs.readdir(chapterDir);
-    chapters = files.filter((f) => f.endsWith(".txt") && !f.includes(".summary")).length;
+    const textFiles = files.filter((f) => f.endsWith(".txt") && !f.includes(".summary"));
+    // Count only summarizable chapters (skip front-matter), so the denominator
+    // matches what the summarizer processes — a done book shows 26 / 26, not 26 / 30.
+    const kept = await Promise.all(
+      textFiles.map(async (f) => {
+        const { size } = await fs.stat(path.join(chapterDir, f));
+        return shouldSkipChapter(f, size) ? 0 : 1;
+      }),
+    );
+    chapters = kept.reduce((a: number, b: number) => a + b, 0);
   } catch {
     return { chapters: 0, summarized: 0, indexed: 0 };
   }
@@ -320,6 +329,24 @@ export function searchBooksByTags(tags: string[]): BookMetadata[] {
   }));
 }
 
+// Front-matter / non-content chapters the summarizer skips (mirrors
+// should_skip_chapter / SKIP_PATTERNS in tools/calibre/mcp_server.py). Kept in
+// sync so the app's chapter list and progress count match what actually gets
+// summarized — otherwise a fully-summarized book reads as "26 / 30".
+const CHAPTER_SKIP_PATTERNS: RegExp[] = [
+  /^cover$/, /^title\s+page$/, /^copyright/, /^dedication$/, /^epigraph$/,
+  /^contents?$/, /^table\s+of\s+contents/, /^toc$/, /^index$/, /^bibliography/,
+  /^about\s+the\s+author/, /^also\s+by/, /^none$/,
+];
+
+/** True if a chapter file is non-content (too small, or a front-matter title).
+ *  `byteSize` is the file's UTF-8 byte length, matching Python's st_size check. */
+function shouldSkipChapter(filename: string, byteSize: number): boolean {
+  if (byteSize < 1000) return true;
+  const nameClean = filename.replace(/\.txt$/i, "").replace(/^\d+-/, "").toLowerCase();
+  return CHAPTER_SKIP_PATTERNS.some((re) => re.test(nameClean));
+}
+
 function chapterTitleFromFilename(filename: string): string {
   const name = filename.replace(/\.txt$/i, "");
   return name.replace(/^\d+[\-_]?/, "").replace(/[_-]/g, " ").trim() || name;
@@ -365,7 +392,7 @@ async function loadChapterEntries(book: BookMetadata) {
 
     for (let pos = 0; pos < sorted.length; pos += 1) {
       const file = sorted[pos];
-      if (file.includes(".summary")) {
+      if (!file || file.includes(".summary")) {
         continue;
       }
       const chapterPath = path.join(chapterDir, file);
@@ -374,6 +401,9 @@ async function loadChapterEntries(book: BookMetadata) {
         `${path.parse(file).name}.summary.txt`,
       );
       const content = await fs.readFile(chapterPath, "utf-8");
+      if (shouldSkipChapter(file, Buffer.byteLength(content, "utf-8"))) {
+        continue; // front-matter / non-content — never summarized, so hide it
+      }
       const hasSummary = await fileExists(summaryPath);
       let summaryWordCount = 0;
       if (hasSummary) {
