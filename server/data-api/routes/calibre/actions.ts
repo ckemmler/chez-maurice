@@ -7,7 +7,7 @@
  * GET  /:bookId/status     — processing status (chapter/summary counts)
  */
 
-import { openSync, mkdirSync, existsSync } from "node:fs";
+import { openSync, mkdirSync, existsSync, closeSync, readFileSync, appendFileSync, unlinkSync } from "node:fs";
 import { resolve } from "node:path";
 import { spawn, spawnSync } from "node:child_process";
 
@@ -53,6 +53,36 @@ function resolveCalibrePython(): string {
   return fallback;
 }
 
+// --- Job outcome tracking -------------------------------------------------
+// Async actions are fire-and-forget, so their success/failure was only ever
+// visible in a log file — a failed job looked identical to a running one from
+// the client (a spinner that never resolves). Track the last outcome per book
+// and expose it on /status so the app can show the real error.
+
+type JobState = "running" | "ok" | "error";
+interface JobInfo {
+  action: string;
+  state: JobState;
+  error?: string;
+  at: string;
+}
+const jobs = new Map<number, JobInfo>();
+
+/** Derive an outcome from the CLI's output: it prints a single JSON line, either
+ *  `{ "success": true, … }` or `{ "error": "…", "message": "…" }`. */
+function jobOutcome(action: string, output: string, code: number | null): JobInfo {
+  let error: string | undefined;
+  const lastLine = output.trim().split("\n").filter(Boolean).pop() ?? "";
+  try {
+    const parsed = JSON.parse(lastLine) as { error?: string; message?: string };
+    if (parsed.error) error = parsed.message ? `${parsed.error}: ${parsed.message}` : String(parsed.error);
+  } catch {
+    // not JSON — fall through to the exit-code check
+  }
+  if (!error && code !== 0) error = output.trim().slice(-400) || `exited with code ${code}`;
+  return { action, state: error ? "error" : "ok", error, at: new Date().toISOString() };
+}
+
 function spawnCalibreAction(action: string, bookId: number, sync: boolean) {
   // Resolved per invocation (not at startup) so running setup-calibre-venv.sh
   // takes effect on the next action — no server restart needed. The check is a
@@ -85,9 +115,13 @@ function spawnCalibreAction(action: string, bookId: number, sync: boolean) {
     }
   }
 
-  // Async (fire-and-forget)
-  const fd = openSync(logFile, "a");
+  // Async — the child writes to its own file (so it survives a server restart),
+  // and on exit we parse that file into the job outcome and fold it into the
+  // shared log. `jobs` starts at "running" so /status reflects an in-flight job.
+  const jobFile = resolve(logDir, `job-${bookId}-${action}.out`);
+  const fd = openSync(jobFile, "w");
   console.log(`[calibre] Spawning: ${pythonBin} ${args.join(" ")}`);
+  jobs.set(bookId, { action, state: "running", at: new Date().toISOString() });
   const proc = spawn(pythonBin, args, {
     cwd: resolve(repoRoot, "tools/calibre"),
     env: childEnv,
@@ -95,10 +129,19 @@ function spawnCalibreAction(action: string, bookId: number, sync: boolean) {
     detached: true,
   });
   const pid = proc.pid;
-  proc.on("exit", (code) => {
-    console.log(`[calibre] PID ${pid} exited with code ${code}`);
-  });
+  const finish = (code: number | null) => {
+    try { closeSync(fd); } catch {}
+    let out = "";
+    try { out = readFileSync(jobFile, "utf8"); } catch {}
+    const info = jobOutcome(action, out, code);
+    jobs.set(bookId, info);
+    try { appendFileSync(logFile, out); } catch {}      // keep the shared history
+    try { unlinkSync(jobFile); } catch {}
+    console.log(`[calibre] PID ${pid} ${action} → ${info.state}${info.error ? `: ${info.error.slice(0, 140)}` : ""}`);
+  };
+  proc.on("exit", (code) => finish(code));
   proc.on("error", (err) => {
+    jobs.set(bookId, { action, state: "error", error: String(err), at: new Date().toISOString() });
     console.error(`[calibre] PID ${pid} error:`, err);
   });
   proc.unref();
@@ -124,6 +167,7 @@ actions.get("/:bookId/status", async (c) => {
     chapters: stats.chapters,
     summarized: stats.summarized,
     indexed: stats.indexed,
+    job: jobs.get(bookId) ?? null,
   });
 });
 
