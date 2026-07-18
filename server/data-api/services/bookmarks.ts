@@ -132,7 +132,9 @@ export function updateReadingProgress(
   view: string,
   position: number = 0,
 ): ReadingProgress {
-  const pos = Number.isFinite(position) ? Math.min(1, Math.max(0, position)) : 0;
+  // Position is an opaque per-view offset (top character index for full text,
+  // paragraph index for summaries) — a non-negative number, not a 0–1 fraction.
+  const pos = Number.isFinite(position) && position >= 0 ? position : 0;
   return getDb()
     .query(
       `INSERT INTO reading_progress (member_id, book_id, chapter_index, chapter_slug, view, enabled, position, updated_at)
