@@ -29,6 +29,7 @@ function getDb(): Database {
         chapter_slug TEXT NOT NULL,
         view TEXT NOT NULL DEFAULT 'summary',
         enabled INTEGER NOT NULL DEFAULT 0,
+        position REAL NOT NULL DEFAULT 0,
         updated_at TEXT NOT NULL DEFAULT (datetime('now')),
         PRIMARY KEY (member_id, book_id)
       )
@@ -37,6 +38,8 @@ function getDb(): Database {
     try { db.exec("ALTER TABLE bookmarks ADD COLUMN member_id TEXT NOT NULL DEFAULT ''"); } catch {}
     try { db.exec("ALTER TABLE bookmarks ADD COLUMN scope TEXT NOT NULL DEFAULT 'tenant'"); } catch {}
     try { db.exec("ALTER TABLE reading_progress ADD COLUMN member_id TEXT NOT NULL DEFAULT ''"); } catch {}
+    // Fractional scroll position (0–1) within the current chapter+view.
+    try { db.exec("ALTER TABLE reading_progress ADD COLUMN position REAL NOT NULL DEFAULT 0"); } catch {}
   }
   return db;
 }
@@ -105,6 +108,7 @@ export interface ReadingProgress {
   chapter_slug: string;
   view: string;
   enabled: number;
+  position: number;
   updated_at: string;
 }
 
@@ -114,28 +118,34 @@ export function getReadingProgress(memberId: string, bookId: number): ReadingPro
     .get(memberId, bookId) as ReadingProgress | null;
 }
 
+/**
+ * Record the reader's last position — last-write-wins, per member, so it syncs
+ * across a member's devices. Upserts unconditionally (tracking is on by default);
+ * stores the exact chapter, view and fractional scroll `position` (0–1) they left
+ * off at, rather than only advancing to the furthest chapter.
+ */
 export function updateReadingProgress(
   memberId: string,
   bookId: number,
   chapterIndex: number,
   chapterSlug: string,
   view: string,
-): ReadingProgress | null {
-  const db = getDb();
-  const existing = db
-    .query("SELECT * FROM reading_progress WHERE member_id = ? AND book_id = ?")
-    .get(memberId, bookId) as ReadingProgress | null;
-
-  if (!existing || !existing.enabled) return null;
-  if (chapterIndex <= existing.chapter_index) return existing;
-
-  return db
+  position: number = 0,
+): ReadingProgress {
+  const pos = Number.isFinite(position) ? Math.min(1, Math.max(0, position)) : 0;
+  return getDb()
     .query(
-      `UPDATE reading_progress
-       SET chapter_index = ?, chapter_slug = ?, view = ?, updated_at = datetime('now')
-       WHERE member_id = ? AND book_id = ? RETURNING *`,
+      `INSERT INTO reading_progress (member_id, book_id, chapter_index, chapter_slug, view, enabled, position, updated_at)
+       VALUES (?, ?, ?, ?, ?, 1, ?, datetime('now'))
+       ON CONFLICT(member_id, book_id) DO UPDATE SET
+         chapter_index = excluded.chapter_index,
+         chapter_slug  = excluded.chapter_slug,
+         view          = excluded.view,
+         position      = excluded.position,
+         updated_at    = datetime('now')
+       RETURNING *`,
     )
-    .get(chapterIndex, chapterSlug, view, memberId, bookId) as ReadingProgress;
+    .get(memberId, bookId, chapterIndex, chapterSlug, view, pos) as ReadingProgress;
 }
 
 export function toggleReadingTracking(memberId: string, bookId: number): ReadingProgress {
