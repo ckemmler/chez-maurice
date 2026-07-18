@@ -21,34 +21,49 @@ const repoRoot = resolve(import.meta.dir, "../../../..");
 const cliPath = resolve(repoRoot, "tools/calibre/cli.py");
 const logDir = resolve(repoRoot, "logs");
 
-/** True if this interpreter can load `pyexpat` — Homebrew's python@3.14 ships a
- *  broken one (libexpat symbol mismatch) that crashes EPUB parsing. */
-function pythonHasExpat(py: string): boolean {
+/** True if this interpreter can import a module — a cheap capability probe.
+ *  `import xml.parsers.expat` gates extraction (Homebrew's python@3.14 ships a
+ *  broken pyexpat that crashes EPUB parsing); `import qdrant_client` gates the
+ *  summarize/index path, whose data deps live only in the full `.venv`. */
+function pythonCanImport(py: string, module: string): boolean {
   try {
-    return spawnSync(py, ["-c", "import xml.parsers.expat"], { timeout: 5000 }).status === 0;
+    return spawnSync(py, ["-c", `import ${module}`], {
+      timeout: 15_000,
+      env: { ...process.env, PYTHONPATH: `${repoRoot}${process.env.PYTHONPATH ? `:${process.env.PYTHONPATH}` : ""}` },
+    }).status === 0;
   } catch {
     return false;
   }
 }
 
-/** Pick the Calibre CLI interpreter: an explicit override, then the dedicated
- *  `.venv-calibre` (created by scripts/setup-calibre-venv.sh), then `.venv` —
- *  preferring the first whose pyexpat works so a broken default doesn't silently
- *  fail every extraction. */
-function resolveCalibrePython(): string {
+/** Pick the interpreter for an action by *capability*, not a fixed venv. The
+ *  two venvs are complementary: `.venv-calibre` has a working pyexpat (for EPUB
+ *  parsing) but a minimal dep set; the full `.venv` has the data deps (qdrant,
+ *  corpus) that summarize/index need but a broken pyexpat on python@3.14. So
+ *  `extract` requires pyexpat, and `summarize`/`index` require qdrant_client —
+ *  the CALIBRE_PYTHON pin is only a preference, capability decides, so a pin
+ *  aimed at one action can't silently break the other. */
+function resolveCalibrePython(action: string): string {
+  const needsExpat = action === "extract";
+  const capability = needsExpat ? "xml.parsers.expat" : "qdrant_client";
+  const venvCalibre = resolve(repoRoot, ".venv-calibre/bin/python");
+  const venvFull = resolve(repoRoot, ".venv/bin/python");
+  // Order candidates by which venv is likelier to satisfy this action, but the
+  // capability probe is what actually selects.
   const candidates = [
     process.env.CALIBRE_PYTHON,
-    resolve(repoRoot, ".venv-calibre/bin/python"),
-    resolve(repoRoot, ".venv/bin/python"),
+    ...(needsExpat ? [venvCalibre, venvFull] : [venvFull, venvCalibre]),
   ].filter((p): p is string => !!p && existsSync(p));
 
-  const working = candidates.find(pythonHasExpat);
+  const working = candidates.find((py) => pythonCanImport(py, capability));
   if (working) return working;
 
-  const fallback = candidates[0] ?? resolve(repoRoot, ".venv/bin/python");
+  const fallback = candidates[0] ?? venvFull;
   console.warn(
-    `[calibre] No Python with a working pyexpat found (checked: ${candidates.join(", ") || "none"}). ` +
-      `Chapter extraction will fail — run scripts/setup-calibre-venv.sh. Falling back to ${fallback}.`,
+    `[calibre] No Python that can import '${capability}' for '${action}' ` +
+      `(checked: ${candidates.join(", ") || "none"}). ` +
+      `${needsExpat ? "Run scripts/setup-calibre-venv.sh." : "Install the data-api deps into .venv."} ` +
+      `Falling back to ${fallback}.`,
   );
   return fallback;
 }
@@ -87,15 +102,21 @@ function spawnCalibreAction(action: string, bookId: number, sync: boolean) {
   // Resolved per invocation (not at startup) so running setup-calibre-venv.sh
   // takes effect on the next action — no server restart needed. The check is a
   // ~50ms spawn, negligible next to extraction/summarization.
-  const pythonBin = resolveCalibrePython();
+  const pythonBin = resolveCalibrePython(action);
   const args = [cliPath, action, String(bookId)];
   mkdirSync(logDir, { recursive: true });
   const logFile = resolve(logDir, "calibre_actions.log");
 
   // The CLI has no request/member context, so hand it the library the API
   // already resolved — otherwise it reports "no_library" and every action fails.
+  // Repo root on PYTHONPATH so the summarize path can import `tools.corpus`.
   const libraryRoot = getLibraryRoot();
-  const childEnv = { ...process.env, CALIBRE_LIBRARY: libraryRoot, CALIBRE_LIBRARY_PATH: libraryRoot };
+  const childEnv = {
+    ...process.env,
+    CALIBRE_LIBRARY: libraryRoot,
+    CALIBRE_LIBRARY_PATH: libraryRoot,
+    PYTHONPATH: `${repoRoot}${process.env.PYTHONPATH ? `:${process.env.PYTHONPATH}` : ""}`,
+  };
 
   if (sync) {
     const result = spawnSync(pythonBin, args, {
