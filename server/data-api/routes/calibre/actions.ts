@@ -13,7 +13,7 @@ import { spawn, spawnSync } from "node:child_process";
 
 import { Hono } from "hono";
 
-import { getBookMetadata, getChapterStats } from "../../services/calibre";
+import { getBookMetadata, getChapterStats, getLibraryRoot } from "../../services/calibre";
 
 const actions = new Hono();
 
@@ -62,10 +62,15 @@ function spawnCalibreAction(action: string, bookId: number, sync: boolean) {
   mkdirSync(logDir, { recursive: true });
   const logFile = resolve(logDir, "calibre_actions.log");
 
+  // The CLI has no request/member context, so hand it the library the API
+  // already resolved — otherwise it reports "no_library" and every action fails.
+  const libraryRoot = getLibraryRoot();
+  const childEnv = { ...process.env, CALIBRE_LIBRARY: libraryRoot, CALIBRE_LIBRARY_PATH: libraryRoot };
+
   if (sync) {
     const result = spawnSync(pythonBin, args, {
       cwd: resolve(repoRoot, "tools/calibre"),
-      env: { ...process.env },
+      env: childEnv,
       timeout: 600_000, // 10 minutes
     });
     const stdout = result.stdout?.toString() ?? "";
@@ -85,7 +90,7 @@ function spawnCalibreAction(action: string, bookId: number, sync: boolean) {
   console.log(`[calibre] Spawning: ${pythonBin} ${args.join(" ")}`);
   const proc = spawn(pythonBin, args, {
     cwd: resolve(repoRoot, "tools/calibre"),
-    env: { ...process.env },
+    env: childEnv,
     stdio: ["ignore", fd, fd],
     detached: true,
   });
