@@ -91,14 +91,15 @@ bookmarks.post("/:bookId/reading-progress", async (c) => {
   const bookId = Number(c.req.param("bookId"));
   if (Number.isNaN(bookId)) return c.json({ error: "Invalid book ID" }, 400);
 
-  const body = await c.req.json<{ chapter_index: number; chapter_slug: string; view?: string }>();
+  const body = await c.req.json<{ chapter_index: number; chapter_slug: string; view?: string; position?: number }>();
   if (typeof body.chapter_index !== "number" || !body.chapter_slug) {
     return c.json({ error: "chapter_index and chapter_slug required" }, 400);
   }
 
   const view = body.view === "summary" ? "summary" : "full";
-  const result = updateReadingProgress(memberId, bookId, body.chapter_index, body.chapter_slug, view);
-  return c.json(result ?? { ignored: true });
+  const position = typeof body.position === "number" ? body.position : 0;
+  const result = updateReadingProgress(memberId, bookId, body.chapter_index, body.chapter_slug, view, position);
+  return c.json(result);
 });
 
 export default bookmarks;
