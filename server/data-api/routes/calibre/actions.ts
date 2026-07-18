@@ -53,9 +53,11 @@ function resolveCalibrePython(): string {
   return fallback;
 }
 
-const pythonBin = resolveCalibrePython();
-
 function spawnCalibreAction(action: string, bookId: number, sync: boolean) {
+  // Resolved per invocation (not at startup) so running setup-calibre-venv.sh
+  // takes effect on the next action — no server restart needed. The check is a
+  // ~50ms spawn, negligible next to extraction/summarization.
+  const pythonBin = resolveCalibrePython();
   const args = [cliPath, action, String(bookId)];
   mkdirSync(logDir, { recursive: true });
   const logFile = resolve(logDir, "calibre_actions.log");
