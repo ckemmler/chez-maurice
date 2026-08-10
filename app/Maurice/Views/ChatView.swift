@@ -1754,9 +1754,6 @@ private struct ComposerBar: View {
     @State private var consentLanguage: String?
     /// Where the running dictation writes; nil when none is running.
     @State private var dictationAnchor: DictationAnchor?
-    /// Where the caret sits, as plain character offsets — nil while nothing can
-    /// tell us. See anchorAtSelection() for why nothing does, currently.
-    @State private var caretOffsets: Range<Int>?
     #if os(iOS)
     @Environment(\.scenePhase) private var scenePhase
     #endif
@@ -1777,23 +1774,18 @@ private struct ComposerBar: View {
     /// request that has gone stale is dropped rather than honoured late.
     private func startDictationIfRequested() {
         #if os(iOS)
-        guard #available(iOS 26.0, *) else { return }
         guard DictationRequest.shared.take(), !dictation.isListening else { return }
         // The button is for capturing a thought, not for continuing whatever
         // conversation happened to be open — that one has a context and a
         // Maurice of its own, and dropping a stray dictated line into it is
         // rarely what someone reaching for a hardware button wants.
         Task {
-            if inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                await chat.discardActiveIfEmpty()
-            }
             // Clear the draft too. Landing on a fresh thread while the previous
             // dictation still sits in the field isn't a fresh start, and the new
-            // words pile onto the old ones — which reads as the button having
-            // failed to open anything.
+            // words pile onto the old ones.
             inputText = ""
             dictationAnchor = nil
-            chat.activeConversationId = nil
+            await chat.startNewConversation()
             dictation.start(locale: session.resolvedLocale, allowServer: allowServerDictation)
         }
         #endif
@@ -1823,7 +1815,7 @@ private struct ComposerBar: View {
     private func anchorAtSelection() -> DictationAnchor {
         let text = inputText
         let end = text.count
-        return DictationAnchor(base: text, offsets: caretOffsets ?? end..<end)
+        return DictationAnchor(base: text, offsets: end..<end)
     }
 
     /// Send, closing dictation first. stop() delivers the final text
@@ -2017,12 +2009,10 @@ private struct ComposerBar: View {
                     // mishears, and a mishearing that sent itself would cost a
                     // whole turn to undo.
                     //
-                    // Shown only where the caret can be read. Dictation itself
-                    // would run on older systems, but it could only ever append,
-                    // and a button that puts your correction at the end of the
-                    // draft instead of where you were editing is worth less than
-                    // no button at all.
-                    if #available(iOS 26.0, macOS 26.0, *) {
+                    // iOS only: macOS would need the audio-input entitlement the
+                    // sandboxed target doesn't carry, so the button would be
+                    // present and fail every time.
+                    #if os(iOS)
                     Button {
                         dictation.toggle(locale: session.resolvedLocale, allowServer: allowServerDictation)
                     } label: {
@@ -2056,7 +2046,7 @@ private struct ComposerBar: View {
                     .buttonStyle(.plain)
                     .disabled(chat.isStreaming)
                     .help(session.localized(dictation.isListening ? "chat.dictate_stop" : "chat.dictate"))
-                    }
+                    #endif
 
                     // Tools — per-chat tool families (wrench).
                     Button(action: onOpenTools) {
@@ -2201,7 +2191,14 @@ private struct ComposerBar: View {
         // onAppear, a warm one through the scene coming back to the foreground,
         // and which of the two happens is not ours to predict.
         .onChange(of: scenePhase) { _, phase in
-            if phase == .active { startDictationIfRequested() }
+            if phase == .active {
+                startDictationIfRequested()
+            } else {
+                // The audio session has no background mode, so leaving the app
+                // suspends the engine while the state still says "listening" —
+                // the mic goes on pulsing over a recording that stopped.
+                dictation.stop()
+            }
         }
         // The intent may fire before this view exists or long after it settled;
         // observing the request covers both, where checking on appearance only
@@ -2255,7 +2252,7 @@ private struct ComposerBar: View {
         // what changes: the audio leaves the device. Saying yes starts dictating
         // straight away — making someone ask twice for the same thing is its own
         // small insult.
-        .alert(session.localized("dictation.consent.title"),
+        .alert(session.localized("dictation.consent.title", consentLanguage ?? ""),
                isPresented: Binding(get: { consentLanguage != nil },
                                     set: { if !$0 { consentLanguage = nil } })) {
             Button(session.localized("dictation.consent.allow")) {

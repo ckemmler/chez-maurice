@@ -314,6 +314,26 @@ final class ChatService {
         knownIds = []
     }
 
+    /// Leave the current thread for a brand-new one.
+    ///
+    /// Clearing `activeConversationId` alone is not enough and looked like it
+    /// was: the previous thread's messages, participants and ids stay loaded, so
+    /// the screen goes on showing the old conversation while the app believes
+    /// none is selected. The conversation itself is created on first send.
+    func startNewConversation() async {
+        await discardActiveIfEmpty()
+        activeConversationId = nil
+        messages = []
+        participants = []
+        knownIds = []
+        streamingText = ""
+        streamingData = []
+        streamingUsage = nil
+        toolActivity = nil
+        pendingSummon = false
+        currentMauriceId = defaultMauriceId
+    }
+
     // MARK: - Messages
 
     func loadMessages(for conversationId: String) async {

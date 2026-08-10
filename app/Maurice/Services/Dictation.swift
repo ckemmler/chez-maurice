@@ -87,6 +87,11 @@ final class Dictation {
     func start(locale: Locale, allowServer: Bool) {
         guard !isListening else { return }
         transcript = ""
+        // Back to idle before trying again. The composer reacts to `state`
+        // changing, so leaving the previous failure in place meant a second
+        // attempt that failed the same way assigned the same value, fired no
+        // change, and showed nothing at all — a button that had simply died.
+        state = .idle
 
         // Ask for both permissions up front. Speech authorisation gates the
         // recognizer; microphone authorisation gates the audio tap. Being
