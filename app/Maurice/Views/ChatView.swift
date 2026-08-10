@@ -1012,39 +1012,6 @@ enum TurnCostPref {
     static let key = "maurice.showTurnCost"
 }
 
-/// The composer field on systems that can tell us where the caret is.
-///
-/// It exists as its own view purely because of availability: `TextSelection` is
-/// iOS 26, and a stored property of that type can't live in a view the rest of
-/// the app compiles down to iOS 17. Keeping it here confines the newer API to
-/// one small file-private type, and lets the parent hold nothing but offsets.
-@available(iOS 26.0, macOS 26.0, *)
-private struct CaretReportingField: View {
-    let placeholder: String
-    @Binding var text: String
-    @Binding var caret: Range<Int>?
-    let onSubmit: () -> Void
-    @State private var selection: TextSelection?
-
-    var body: some View {
-        TextField(placeholder, text: $text, selection: $selection, axis: .vertical)
-            .onSubmit(onSubmit)
-            .onChange(of: selection) { _, sel in
-                // Only here do the indices provably address the text on screen.
-                // Converting anywhere else is what crashed this once: a
-                // String.Index belongs to the string it came from, and equal
-                // contents are not the same string.
-                guard let sel, case .selection(let range) = sel.indices else {
-                    caret = nil
-                    return
-                }
-                let lower = text.distance(from: text.startIndex, to: range.lowerBound)
-                let upper = text.distance(from: text.startIndex, to: range.upperBound)
-                caret = lower..<upper
-            }
-    }
-}
-
 /// Where a dictation session writes, fixed when it starts.
 ///
 /// The recogniser revises as it listens, so each partial has to replace the last
@@ -1787,9 +1754,8 @@ private struct ComposerBar: View {
     @State private var consentLanguage: String?
     /// Where the running dictation writes; nil when none is running.
     @State private var dictationAnchor: DictationAnchor?
-    /// Where the caret sits, as plain character offsets. The selection itself
-    /// is a type that doesn't exist below iOS 26, so it can't be stored here at
-    /// all; CaretReportingField owns it and hands down offsets.
+    /// Where the caret sits, as plain character offsets — nil while nothing can
+    /// tell us. See anchorAtSelection() for why nothing does, currently.
     @State private var caretOffsets: Range<Int>?
     #if os(iOS)
     @Environment(\.scenePhase) private var scenePhase
@@ -1845,11 +1811,18 @@ private struct ComposerBar: View {
     /// one, at the caret otherwise, and at the end when the field has never been
     /// focused. Resolved once, when dictation starts — the caret moves as the
     /// text is rewritten, so consulting it again mid-session would chase itself.
+    /// Where the next dictation writes. The end of the field, for now.
+    ///
+    /// SwiftUI's TextSelection was the obvious source and it cannot be used:
+    /// its indices belong to a string value we don't hold, and converting them —
+    /// even inside the selection-change handler, where the two ought to be in
+    /// step — traps in String.distance. That crashed the app on launch. The
+    /// offsets path below is kept because it is sound; what is missing is a
+    /// caret we can read without a trap, which means a UIViewRepresentable over
+    /// UITextView and its integer NSRange.
     private func anchorAtSelection() -> DictationAnchor {
         let text = inputText
         let end = text.count
-        // No known caret (never focused, or a multi-range selection) means the
-        // end, which is the plain append this started as.
         return DictationAnchor(base: text, offsets: caretOffsets ?? end..<end)
     }
 
@@ -2009,21 +1982,10 @@ private struct ComposerBar: View {
                 // growing to ~10 lines before it scrolls.
                 // `selection` is what lets dictation land at the caret and
                 // replace what's selected, rather than always appending.
-                Group {
-                    if #available(iOS 26.0, macOS 26.0, *) {
-                        CaretReportingField(placeholder: session.localized("chat.composer.placeholder"),
-                                            text: $inputText,
-                                            caret: $caretOffsets,
-                                            onSubmit: { submit(onSend) })
-                    } else {
-                        // No caret to report on older systems — and no mic
-                        // button either, so nothing downstream asks for one.
-                        TextField(session.localized("chat.composer.placeholder"),
-                                  text: $inputText, axis: .vertical)
-                            .onSubmit { submit(onSend) }
-                    }
-                }
-                .textFieldStyle(.plain)
+                TextField(session.localized("chat.composer.placeholder"),
+                          text: $inputText, axis: .vertical)
+                    .onSubmit { submit(onSend) }
+                    .textFieldStyle(.plain)
                 .font(.system(size: kBodyFont + 2))
                 .lineLimit(2...10)
                 .focused($isFocused)
