@@ -737,6 +737,8 @@ private struct MessageRow: View {
     var isLast: Bool = false
     @State private var didCopy = false
     @State private var showReport = false
+    /// Per-message cost meter — off unless the user asks for it in Settings.
+    @AppStorage(TurnCostPref.key) private var showTurnCost = false
 
     /// The participant who authored this turn (nil for Maurice, or a 1:1 chat
     /// where the row falls back to the device user).
@@ -848,6 +850,9 @@ private struct MessageRow: View {
         }
         if let blocks = message.data, !blocks.isEmpty {
             DataCardStack(blocks: blocks)
+        }
+        if showTurnCost, let usage = message.usage {
+            TurnUsageFooter(usage: usage)
         }
     }
 
@@ -998,6 +1003,94 @@ private struct DataCardStack: View {
             .foregroundStyle(theme.inkMute)
         }
         .padding(10)
+    }
+}
+
+/// The one place the cost-meter preference key is spelled, so the chat row and
+/// the Settings toggle can't drift apart.
+enum TurnCostPref {
+    static let key = "maurice.showTurnCost"
+}
+
+/// What a turn cost, under the reply. Hidden unless the user turns it on in
+/// Settings — most people don't want a meter on every message, but when you're
+/// tuning prompt caching you need to see whether it's biting, per turn, without
+/// leaving the app.
+///
+/// Collapsed it answers the two questions that matter: what did this cost, and
+/// how much of the prompt came from cache. Expanded it shows the token split and
+/// what the same turn would have cost uncached.
+struct TurnUsageFooter: View {
+    @Environment(\.mauriceTheme) private var theme
+    let usage: TurnUsage
+    @State private var expanded = false
+
+    /// Dollars at a resolution that doesn't round a real cost to "$0.00".
+    private func money(_ v: Double) -> String {
+        if v == 0 { return "$0" }
+        if v < 0.01 { return String(format: "$%.4f", v) }
+        return String(format: "$%.2f", v)
+    }
+
+    private func tokens(_ n: Int) -> String {
+        n >= 1000 ? String(format: "%.1fk", Double(n) / 1000) : "\(n)"
+    }
+
+    /// Cost if priced, token volume otherwise — never a bare "$0.00" for a model
+    /// we simply have no price for.
+    private var headline: String {
+        if let c = usage.cost { return money(c) }
+        return "\(tokens(usage.promptTokens + usage.output)) tok"
+    }
+
+    private var cacheLabel: String? {
+        guard let rate = usage.cacheHitRate else { return nil }
+        if usage.cache_read == 0 { return "no cache" }
+        return "\(Int((rate * 100).rounded()))% cached"
+    }
+
+    var body: some View {
+        DisclosureGroup(isExpanded: $expanded) {
+            VStack(alignment: .leading, spacing: 3) {
+                row("Prompt", "\(tokens(usage.input)) fresh · \(tokens(usage.cache_read)) from cache · \(tokens(usage.cache_write)) written")
+                row("Reply", "\(tokens(usage.output)) tok")
+                row("Rounds", "\(usage.rounds)")
+                if let uncached = usage.cost_uncached, usage.cost != nil {
+                    row("Without cache", money(uncached))
+                    if let saved = usage.saved, saved > 0 {
+                        row("Saved", money(saved))
+                    }
+                }
+                row("Model", usage.model)
+            }
+            .padding(.top, 5)
+            .frame(maxWidth: .infinity, alignment: .leading)
+        } label: {
+            HStack(spacing: 5) {
+                Image(systemName: "gauge.with.needle").font(.system(size: 10))
+                Text(headline).font(.system(size: 11, weight: .medium))
+                if let cacheLabel {
+                    Text("·").font(.system(size: 11))
+                    Text(cacheLabel).font(.system(size: 11))
+                }
+            }
+            .foregroundStyle(theme.inkMute)
+        }
+        .padding(.top, 2)
+    }
+
+    @ViewBuilder
+    private func row(_ label: String, _ value: String) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 6) {
+            Text(label)
+                .font(.system(size: 11))
+                .foregroundStyle(theme.inkMute)
+                .frame(width: 92, alignment: .leading)
+            Text(value)
+                .font(.system(size: 11))
+                .foregroundStyle(theme.inkSoft)
+            Spacer(minLength: 0)
+        }
     }
 }
 
@@ -1956,11 +2049,76 @@ private struct ComposerBar: View {
     }
 }
 
+// ── Photo sizing ────────────────────────────────────────────────
+//
+// Claude reads an image as a grid of 28x28-pixel patches and bills
+// ceil(w/28) * ceil(h/28) visual tokens, capped at 1568 tokens / 1568px on the
+// long edge for the standard tier and 4784 / 2576px on the high-resolution one.
+// Sizing to the standard ceiling here gives up nothing a standard-tier model
+// would have seen anyway, and cuts a high-resolution model's bill by about
+// two-thirds — on every turn, since a photo stays in the conversation prefix and
+// is re-sent whole with each later message.
+//
+// Doing it here rather than only on the server matters for two reasons: the
+// upload itself shrinks (this is a phone, often on a hotel connection), and the
+// photo is compressed once instead of twice. The server keeps the same rule as a
+// floor for other clients, and simply passes these bytes through — the two must
+// stay in step; see services/images.ts.
+private let visualPatch = 28
+private let maxVisualTokens = 1568
+private let maxLongEdge = 1568
+
+private func visualTokens(_ width: Int, _ height: Int) -> Int {
+    Int(ceil(Double(width) / Double(visualPatch))) * Int(ceil(Double(height) / Double(visualPatch)))
+}
+
+/// Long edge to render at, so both the edge limit and the token grid fit. Nil
+/// when the image is already small enough to send untouched.
+///
+/// A pixel budget alone doesn't land it: each side rounds *up* to a whole patch,
+/// so 1280x960 is 1.23 megapixels yet bills 46x35 = 1610 tokens, over the cap.
+/// Step down until the rounded-up grid actually fits.
+private func targetLongEdge(width: Int, height: Int) -> CGFloat? {
+    let longest = max(width, height)
+    var scale = min(1.0, Double(maxLongEdge) / Double(longest))
+    var w = Int((Double(width) * scale).rounded())
+    var h = Int((Double(height) * scale).rounded())
+    while visualTokens(w, h) > maxVisualTokens && scale > 0.05 {
+        scale *= 0.98
+        w = Int((Double(width) * scale).rounded())
+        h = Int((Double(height) * scale).rounded())
+    }
+    if w >= width && h >= height { return nil }
+    return CGFloat(max(w, h))
+}
+
 /// Decode any image Data to a downsized JPEG (the attachment pipeline sends a
 /// base64 image/jpeg data URI; camera HEIC / PNG files would otherwise be
 /// mislabelled). Orientation-correct via ImageIO.
-private func normalizeToJPEG(_ data: Data, maxPixel: CGFloat = 2048) -> Data? {
+private func normalizeToJPEG(_ data: Data) -> Data? {
     guard let src = CGImageSourceCreateWithData(data as CFData, nil) else { return nil }
+
+    // Read the dimensions first: the target depends on the aspect ratio, so a
+    // single fixed cap can't be right for both a 4:3 photo and a 16:9 one.
+    var maxPixel = CGFloat(maxLongEdge)
+    if let props = CGImageSourceCopyPropertiesAtIndex(src, 0, nil) as? [CFString: Any],
+       let w = props[kCGImagePropertyPixelWidth] as? Int,
+       let h = props[kCGImagePropertyPixelHeight] as? Int, w > 0, h > 0 {
+        // Orientation 5...8 mean the stored pixels are rotated a quarter turn, so
+        // the displayed image is taller than it is wide. Aspect drives the target,
+        // so swap before measuring.
+        let orientation = props[kCGImagePropertyOrientation] as? Int ?? 1
+        let (dw, dh) = orientation >= 5 ? (h, w) : (w, h)
+        guard let edge = targetLongEdge(width: dw, height: dh) else {
+            maxPixel = CGFloat(max(dw, dh)) // already small enough; don't enlarge
+            return encodeJPEG(src, maxPixel: maxPixel)
+        }
+        maxPixel = edge
+    }
+    return encodeJPEG(src, maxPixel: maxPixel)
+}
+
+private func encodeJPEG(_ src: CGImageSource, maxPixel: CGFloat) -> Data? {
     let opts: [CFString: Any] = [
         kCGImageSourceCreateThumbnailFromImageAlways: true,
         kCGImageSourceThumbnailMaxPixelSize: maxPixel,

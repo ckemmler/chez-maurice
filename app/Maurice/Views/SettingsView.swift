@@ -30,6 +30,8 @@ struct SettingsView: View {
     @State private var showCrop = false
     @State private var showSourceDialog = false
     @State private var showSafety = false
+    /// Per-message cost meter in the chat — see TurnUsageFooter.
+    @AppStorage(TurnCostPref.key) private var showTurnCost = false
     @State private var showCamera = false
     @State private var showLibrary = false
 
@@ -136,6 +138,16 @@ struct SettingsView: View {
                             }
                         }
                         SetCaption(session.localized("settings.mcp.copyhint"))
+                    }
+
+                    SetGroup("USAGE") {
+                        SetCard {
+                            SetCheckRow(label: "Show what each reply cost",
+                                        on: showTurnCost, accent: accent) {
+                                showTurnCost.toggle()
+                            }
+                        }
+                        SetCaption("Adds a small line under each of Maurice's replies with the cost of that turn and how much of the prompt was served from cache. Local models are free; cloud models show a figure when their price is on file.")
                     }
 
                     SetGroup("SAFETY") {

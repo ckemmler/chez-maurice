@@ -14,9 +14,10 @@ import { ollamaTurn, type OllamaToolCall } from "./ollama";
 import { openaiTurn, type OpenAIToolCall } from "./openaiChat";
 import { resolveFamilies, toolInFamilies, canUseExperimental, isExperimentalTool } from "./toolFamilies";
 import { t, userLocale } from "./i18n";
+import { newUsage, priceUsage, hasUsage, type TurnUsage } from "./pricing";
 
 interface StreamEvent {
-  type: "text_delta" | "done" | "error" | "tool_call" | "tool_data";
+  type: "text_delta" | "done" | "error" | "tool_call" | "tool_data" | "usage";
   text?: string;
   message_id?: string;
   message?: string;
@@ -26,6 +27,9 @@ interface StreamEvent {
   // tool_data events: the structured result a tool returned, rendered
   // deterministically by the client alongside Maurice's prose.
   data?: unknown;
+  // usage events: what the turn cost, summed over its agentic rounds. Emitted
+  // once, immediately before `done`.
+  usage?: TurnUsage;
 }
 
 // Cap on agentic tool rounds per user turn — prevents runaway loops.
@@ -92,6 +96,13 @@ const CONTENT_SAFETY_FLOOR =
 // A fresh "now" for every turn, in the server's (= household's) timezone, so the
 // model interprets relative times and passes correct dates to tools. Models —
 // especially local ones — have no clock otherwise.
+//
+// This deliberately does NOT go in the system prompt. Prompt caching is a prefix
+// match, and the system prompt sits at the very front of it: a clock that ticks
+// to the minute would give every single request a unique prefix and make the
+// whole prompt — tools, persona, loaded context, the lot — uncacheable forever.
+// It rides at the tail of the message list instead (see timeReminder), where it
+// invalidates nothing ahead of it.
 function currentTimeContext(): string {
   const now = new Date();
   const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
@@ -102,9 +113,21 @@ function currentTimeContext(): string {
   return `The current date and time is ${formatted} (${tz}). Treat this as "now": resolve relative times like "today", "tomorrow", "this week" against it, and pass concrete dates to tools accordingly.`;
 }
 
+/** The clock, as a trailing turn rather than a system-prompt line.
+ *
+ *  Framed as a system-reminder so the model reads it as injected context and not
+ *  as something the user typed. Built once per turn and appended last, so the
+ *  agentic rounds within a turn all share it (they cache against each other) and
+ *  the next turn's copy lands after everything the previous one cached. */
+function timeReminder(): any {
+  return {
+    role: "user",
+    content: [{ type: "text", text: `<system-reminder>${currentTimeContext()}</system-reminder>` }],
+  };
+}
+
 function buildSystemPrompt(userDisplayName: string, profileText?: string | null): string {
   let prompt = `You are Maurice, a household AI assistant. You are talking to ${userDisplayName}.`;
-  prompt += ` ${currentTimeContext()}`;
   prompt += ` Be helpful, clear, and warm. Keep responses concise unless the user asks for depth.`;
   prompt += ` The user may share photos with you — describe what you see and answer any questions about them.`;
   prompt += ` You have tools: a web_search tool for current information from the internet, and the household's personal tools (tasks, calendar, contacts, notes, health, books, and more). Use them when they help; prefer the personal tools for anything about ${userDisplayName}'s own data.`;
@@ -121,7 +144,6 @@ function buildSystemPrompt(userDisplayName: string, profileText?: string | null)
 function buildRoomSystemPrompt(conversationId: string, summonerName: string): string {
   const names = getParticipants(conversationId).map((p) => p.display_name);
   let prompt = `You are Maurice, a household AI assistant, present in a shared room with: ${names.join(", ")}.`;
-  prompt += ` ${currentTimeContext()}`;
   prompt += ` Several people talk to each other here; each human message is prefixed with the speaker's name (e.g. "Alex: ..."). You are not the medium of their conversation — you are a participant they summon with @claude or @maurice.`;
   prompt += ` You were just summoned by ${summonerName}. Respond to the room. Address people by name when it helps; keep replies concise and warm.`;
   prompt += ` Anything loaded into this conversation's context — notes, books, past conversations, signals someone added — is shared with everyone in the room; treat it as common ground and discuss it openly with whoever asks, no matter who added it. Stay grounded in what was actually said and in that shared context, and don't invent things people didn't say.`;
@@ -174,17 +196,64 @@ const WEB_SEARCH_FUNCTION = {
   },
 };
 
-// Anthropic content can be string or an array (with images). The OpenAI/Ollama
-// chat APIs here take plain text, so flatten to text (images are dropped for
-// those providers; Anthropic keeps them on its own path).
+// Anthropic content can be a string or an array of blocks (text, images, PDFs).
+// The Ollama chat path here takes plain text, so flatten — but say so where an
+// image is lost, rather than letting it vanish and leaving the model to answer
+// as though nothing had been attached.
 function toTextMessages(messages: any[]): Array<{ role: string; content: string }> {
   return messages.map((m) => ({
     role: m.role,
     content:
       typeof m.content === "string"
         ? m.content
-        : (m.content as any[]).filter((c) => c.type === "text").map((c) => c.text).join("\n"),
+        : (m.content as any[])
+            .map((c) =>
+              c.type === "text" ? c.text : c.type === "image" || c.type === "document" ? DROPPED_ATTACHMENT : null,
+            )
+            .filter((s): s is string => s != null)
+            .join("\n"),
   }));
+}
+
+// Stands in for an attachment this model cannot read. Silence was the old
+// behaviour and it is the worst of the options: the model answers confidently
+// about a photo it was never shown, and nobody can tell why.
+const DROPPED_ATTACHMENT =
+  "[An image or document was attached here, but the model in use cannot read images. Say so plainly rather than guessing at its contents.]";
+
+/** Anthropic blocks → OpenAI Chat Completions content.
+ *
+ *  Text-only turns stay plain strings, which is what every OpenAI-compatible
+ *  provider expects and keeps the payload identical to before. A turn carrying
+ *  an image becomes a content-part array with an `image_url` data URI — the
+ *  standard shape, verified against Mistral.
+ *
+ *  `vision` gates it because sending image parts to a text-only model is a hard
+ *  request error, not a graceful degradation. Without it the turn falls back to
+ *  the same explicit note the Ollama path uses. PDFs have no portable
+ *  representation here at all, so they take that path regardless. */
+function toOpenAIMessages(messages: any[], vision: boolean): Array<{ role: string; content: any }> {
+  return messages.map((m) => {
+    if (typeof m.content === "string") return { role: m.role, content: m.content };
+    const blocks = m.content as any[];
+    const hasImage = vision && blocks.some((c) => c.type === "image" && c.source?.type === "base64");
+    if (!hasImage) return { role: m.role, content: toTextMessages([m])[0]!.content };
+
+    const parts: any[] = [];
+    for (const c of blocks) {
+      if (c.type === "text") {
+        parts.push({ type: "text", text: c.text });
+      } else if (c.type === "image" && c.source?.type === "base64") {
+        parts.push({
+          type: "image_url",
+          image_url: { url: `data:${c.source.media_type};base64,${c.source.data}` },
+        });
+      } else if (c.type === "document") {
+        parts.push({ type: "text", text: DROPPED_ATTACHMENT });
+      }
+    }
+    return { role: m.role, content: parts };
+  });
 }
 
 // Many MCP tools return pretty-printed JSON (indent=2). The model doesn't need
@@ -306,9 +375,15 @@ async function* runOpenAIAgentic(
   mcp: McpSession | null,
   temperature: number | undefined,
   lang: string,
+  provider: string,
 ): AsyncGenerator<StreamEvent> {
   const convo: any[] = [{ role: "system", content: system }, ...baseMessages];
+  const usage = newUsage(provider, model);
+  function* reportUsage(): Generator<StreamEvent> {
+    if (hasUsage(usage)) yield { type: "usage", usage: priceUsage(usage) };
+  }
   for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
+    usage.rounds++;
     let content = "";
     let toolCalls: OpenAIToolCall[] = [];
     for await (const ev of openaiTurn(baseUrl, apiKey, model, convo, tools, temperature)) {
@@ -317,12 +392,21 @@ async function* runOpenAIAgentic(
         yield { type: "text_delta", text: ev.text };
       } else if (ev.type === "turn_end") {
         toolCalls = ev.toolCalls;
+        if (ev.usage) {
+          // prompt_tokens is the whole prompt including whatever the cache
+          // served, so the full-price slice is the remainder.
+          usage.cache_read += ev.usage.cached;
+          usage.input += Math.max(0, ev.usage.prompt - ev.usage.cached);
+          usage.output += ev.usage.completion;
+        }
       } else if (ev.type === "error") {
+        yield* reportUsage();
         yield { type: "error", message: ev.message };
         return;
       }
     }
     if (!toolCalls.length) {
+      yield* reportUsage();
       yield { type: "done", message_id: crypto.randomUUID() };
       return;
     }
@@ -343,7 +427,38 @@ async function* runOpenAIAgentic(
     }
   }
   yield { type: "text_delta", text: t(lang, "chat.stopped_tool_steps") };
+  yield* reportUsage();
   yield { type: "done", message_id: crypto.randomUUID() };
+}
+
+// ── Prompt caching (Anthropic) ──────────────────────────────────
+//
+// Anthropic caches by prefix, marked with explicit breakpoints, and bills a
+// cached read at a tenth of a fresh token. The agentic loop is what makes this
+// worth doing: every round re-sends the system prompt, the whole tool roster and
+// the entire history, so a turn that calls three tools pays for that prefix four
+// times over. Three breakpoints, comfortably inside the cap of four:
+//
+//   1. the system prompt — tools render ahead of it, so one marker on the last
+//      system block covers the roster, the persona, the loaded context and the
+//      safety floor in a single entry;
+//   2. the end of the conversation history — carries from one turn to the next;
+//   3. the growing tool-result trail, moved along as each round appends to it.
+//
+// Placement only ever lands on blocks we build ourselves, never on a history
+// message: those come back from the database as plain strings and would have to
+// be rewritten into block form to carry a marker, which is a needless change to
+// the exact bytes the cache key is computed from.
+const EPHEMERAL = { type: "ephemeral" } as const;
+
+/** Mark a message's last content block as a cache breakpoint. Returns the block
+ *  so a later round can clear the marker when it moves on. */
+function breakpointOn(message: any): any | null {
+  const blocks = message?.content;
+  if (!Array.isArray(blocks) || blocks.length === 0) return null;
+  const last = blocks[blocks.length - 1];
+  last.cache_control = EPHEMERAL;
+  return last;
 }
 
 function buildApiMessages(conversationId: string): any[] {
@@ -367,7 +482,14 @@ function buildApiMessages(conversationId: string): any[] {
       const tag = speaker(m);
       const images = [...m.content.matchAll(imagePattern)];
       if (images.length === 0) {
-        return { role, content: tag + m.content };
+        const text = tag + m.content;
+        // Block form even for plain text, so a message's shape doesn't depend on
+        // where it happens to sit: a cache breakpoint has to be attached to a
+        // block, and a message that were a bare string on one turn and a block on
+        // the next would change the very bytes the cache key is built from.
+        // (Empty content stays a string — the API rejects an empty text block,
+        // and such a message would never be a breakpoint target anyway.)
+        return { role, content: text ? [{ type: "text", text }] : text };
       }
       const content: any[] = [];
       for (const img of images) {
@@ -386,10 +508,7 @@ function buildApiMessages(conversationId: string): any[] {
       }
       const textContent = (tag + m.content.replace(imagePattern, "")).trim();
       if (textContent) content.push({ type: "text", text: textContent });
-      return {
-        role,
-        content: content.length === 1 && content[0].type === "text" ? content[0].text : content,
-      };
+      return { role, content };
     });
 }
 
@@ -494,6 +613,12 @@ export async function* streamResponse(
   // loaded context above can strip or out-prioritize it (covers every provider).
   systemPrompt += CONTENT_SAFETY_FLOOR;
 
+  // The clock goes at the very end of the message list, after attachBinaries has
+  // found the latest real user turn (appending it earlier would hang this turn's
+  // images off the reminder instead). Everything before it stays byte-stable
+  // from one turn to the next, which is what makes the prefix cacheable.
+  messages.push(timeReminder());
+
   // Resolve the model for this turn, honouring the member's access: the
   // persona's preference if allowed, else the household default if allowed,
   // else their best available. (No member → just persona/default.) For the
@@ -533,7 +658,11 @@ export async function* streamResponse(
       const all = await mcp.listTools();
       const expOK = canUseExperimental(memberId);
       mcpTools = (families === "all" ? all : all.filter((t) => toolInFamilies(t.name, families as string[])))
-        .filter((t) => expOK || !isExperimentalTool(t.name)); // never hand experimental tools to ungated members
+        .filter((t) => expOK || !isExperimentalTool(t.name)) // never hand experimental tools to ungated members
+        // Tools render at the very front of the cached prefix, so their order has
+        // to be stable: the MCP server makes no ordering promise, and a roster
+        // that reshuffles between turns would invalidate the whole cache.
+        .sort((a, b) => a.name.localeCompare(b.name));
     } catch (err: any) {
       console.error("[claude] MCP unavailable:", err?.message);
       mcp = null;
@@ -561,7 +690,11 @@ export async function* streamResponse(
     }
     const tools = mcpTools.map(mcpToolToFunction);
     if (wantsWeb && hasWebSearch()) tools.push(WEB_SEARCH_FUNCTION);
-    yield* runOpenAIAgentic(baseUrl, key, resolved, systemPrompt, toTextMessages(messages), tools, mcp, temperature, userLang);
+    yield* runOpenAIAgentic(
+      baseUrl, key, resolved, systemPrompt,
+      toOpenAIMessages(messages, !!rec?.vision),
+      tools, mcp, temperature, userLang, provider,
+    );
     return;
   }
 
@@ -584,12 +717,34 @@ export async function* streamResponse(
   if (wantsWeb && hasWebSearch()) tools.push(WEB_SEARCH_TOOL);
   for (const t of mcpTools) tools.push(mcpToolToAnthropic(t));
 
+  // Breakpoint 2 of 3: the end of the conversation history. `messages` ends with
+  // the time reminder, so the message before it is the last real turn — cache up
+  // to there and the next turn reads everything said so far instead of re-paying
+  // for it. (Nothing to mark on the very first turn of a thread.)
+  if (messages.length >= 2) breakpointOn(messages[messages.length - 2]);
+
+  // Breakpoint 3 of 3: the tail, moved along as the loop appends tool results, so
+  // each round reads the previous round's prefix rather than re-sending it at
+  // full price. Starts on the time reminder; the loop hands it forward.
+  let tailBlock = breakpointOn(messages[messages.length - 1]);
+
+  // Token/cost accounting for this turn, accumulated across every agentic round
+  // (each round is a separate billed request) and reported once at the end.
+  const usage = newUsage("anthropic", resolved);
+  function* reportUsage(): Generator<StreamEvent> {
+    if (hasUsage(usage)) yield { type: "usage", usage: priceUsage(usage) };
+  }
+
   try {
     for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
+      usage.rounds++;
       const body: any = {
         model: resolved,
         max_tokens: config.maxTokens,
-        system: systemPrompt,
+        // Breakpoint 1 of 3. Tools are rendered ahead of the system prompt, so
+        // this single marker caches the whole fixed head of the request: the tool
+        // roster, the persona, the loaded context and the safety floor.
+        system: [{ type: "text", text: systemPrompt, cache_control: EPHEMERAL }],
         messages,
         stream: true,
       };
@@ -631,6 +786,9 @@ export async function* streamResponse(
       const contentBlocks: any[] = []; // final assistant content (text + tool_use)
       const blockState: Record<number, { type: string; text?: string; id?: string; name?: string; partialJson?: string }> = {};
       let stopReason: string | null = null;
+      // Output tokens already credited to `usage` for this round, so the running
+      // total from message_delta can be applied as a delta rather than a sum.
+      let roundOutput = 0;
 
       while (true) {
         const { done, value } = await reader.read();
@@ -651,7 +809,19 @@ export async function* streamResponse(
             continue;
           }
 
-          if (event.type === "content_block_start") {
+          // Anthropic reports usage in two places: the input side (and any
+          // cache activity) arrives up front on message_start, the final output
+          // count on message_delta. Both are per-round, so they accumulate.
+          if (event.type === "message_start") {
+            const u = event.message?.usage;
+            if (u) {
+              usage.input += u.input_tokens ?? 0;
+              roundOutput = u.output_tokens ?? 0;
+              usage.output += roundOutput;
+              usage.cache_read += u.cache_read_input_tokens ?? 0;
+              usage.cache_write += u.cache_creation_input_tokens ?? 0;
+            }
+          } else if (event.type === "content_block_start") {
             const idx = event.index;
             const cb = event.content_block;
             if (cb?.type === "text") {
@@ -686,6 +856,13 @@ export async function* streamResponse(
             }
           } else if (event.type === "message_delta") {
             if (event.delta?.stop_reason) stopReason = event.delta.stop_reason;
+            // message_delta carries the round's final output count. message_start
+            // already contributed its (partial) figure, so replace rather than
+            // add: subtract what we counted for this round and add the total.
+            if (event.usage?.output_tokens != null) {
+              usage.output += event.usage.output_tokens - roundOutput;
+              roundOutput = event.usage.output_tokens;
+            }
           } else if (event.type === "error") {
             yield { type: "error", message: event.error?.message || "Unknown error" };
             return;
@@ -695,6 +872,7 @@ export async function* streamResponse(
 
       // Not a tool turn → we're done.
       if (stopReason !== "tool_use") {
+        yield* reportUsage();
         yield { type: "done", message_id: crypto.randomUUID() };
         return;
       }
@@ -720,6 +898,14 @@ export async function* streamResponse(
       }
 
       messages.push({ role: "user", content: toolResults });
+
+      // Hand the tail breakpoint to the results just appended, so the next round
+      // reads this one's prefix. Moved rather than added: the cap is four, and a
+      // marker left behind on every round would blow through it by round four.
+      // The new marker sits a couple of blocks past the old one, well inside the
+      // twenty-block window the API looks back over to find the prior entry.
+      if (tailBlock) delete tailBlock.cache_control;
+      tailBlock = breakpointOn(messages[messages.length - 1]);
       // loop again with the tool results appended
     }
 
@@ -728,10 +914,14 @@ export async function* streamResponse(
       type: "text_delta",
       text: t(userLang, "chat.stopped_tool_steps_more"),
     };
+    yield* reportUsage();
     yield { type: "done", message_id: crypto.randomUUID() };
   } catch (err: any) {
-    // Client cancelled (⏹ Stop) → the fetch was aborted. Stop quietly; the route
-    // persists whatever streamed so far. Anything else is a real error.
+    // Client cancelled (⏹ Stop) → the fetch was aborted. Report what the rounds
+    // that did complete cost — the route persists the partial turn, so dropping
+    // the usage here would make a stopped turn look free. Anything that isn't a
+    // cancellation is a real error.
+    yield* reportUsage();
     if (signal?.aborted || err?.name === "AbortError") return;
     yield { type: "error", message: err.message || "Stream failed" };
   }

@@ -7,9 +7,19 @@ export interface OpenAIToolCall {
   function: { name: string; arguments: string }; // arguments is a JSON string
 }
 
+/** Token counts for one Chat Completions round, normalized across providers.
+ *  `cached` is the slice of the prompt that was served from the provider's
+ *  prompt cache (OpenAI reports it under prompt_tokens_details; providers that
+ *  don't report it simply leave this at 0). */
+export interface OpenAIUsage {
+  prompt: number;
+  completion: number;
+  cached: number;
+}
+
 export type OpenAITurnEvent =
   | { type: "text"; text: string }
-  | { type: "turn_end"; content: string; toolCalls: OpenAIToolCall[] }
+  | { type: "turn_end"; content: string; toolCalls: OpenAIToolCall[]; usage: OpenAIUsage | null }
   | { type: "error"; message: string };
 
 /** Normalize a Chat Completions `delta.content` to plain text. It's usually a
@@ -44,7 +54,11 @@ export async function* openaiTurn(
   tools: any[],
   temperature: number | undefined,
 ): AsyncGenerator<OpenAITurnEvent> {
-  const body: any = { model, messages, stream: true };
+  // include_usage adds a final chunk carrying the round's token counts (it has
+  // an empty `choices` array, so the parse loop below must read usage before it
+  // bails on a missing delta). Providers that don't honour the flag just never
+  // send that chunk, and usage comes back null.
+  const body: any = { model, messages, stream: true, stream_options: { include_usage: true } };
   if (tools.length) { body.tools = tools; body.tool_choice = "auto"; }
   if (temperature !== undefined) body.temperature = temperature;
   // Note: max-tokens param is omitted — OpenAI's o-series wants
@@ -72,6 +86,7 @@ export async function* openaiTurn(
   const decoder = new TextDecoder();
   let buffer = "";
   let content = "";
+  let usage: OpenAIUsage | null = null;
   const toolAcc: Record<number, { id: string; name: string; args: string }> = {};
 
   while (true) {
@@ -85,11 +100,19 @@ export async function* openaiTurn(
       if (!t.startsWith("data:")) continue;
       const payload = t.slice(5).trim();
       if (payload === "[DONE]") {
-        yield { type: "turn_end", content, toolCalls: collect(toolAcc) };
+        yield { type: "turn_end", content, toolCalls: collect(toolAcc), usage };
         return;
       }
       let chunk: any;
       try { chunk = JSON.parse(payload); } catch { continue; }
+      // Read usage first: the chunk that carries it has no delta to speak of.
+      if (chunk.usage) {
+        usage = {
+          prompt: chunk.usage.prompt_tokens ?? 0,
+          completion: chunk.usage.completion_tokens ?? 0,
+          cached: chunk.usage.prompt_tokens_details?.cached_tokens ?? 0,
+        };
+      }
       const delta = chunk.choices?.[0]?.delta;
       if (!delta) continue;
       const text = deltaText(delta.content);
@@ -105,5 +128,5 @@ export async function* openaiTurn(
       }
     }
   }
-  yield { type: "turn_end", content, toolCalls: collect(toolAcc) };
+  yield { type: "turn_end", content, toolCalls: collect(toolAcc), usage };
 }

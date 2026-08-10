@@ -16,6 +16,8 @@ export interface Model {
   ram: number | null;
   discovered: boolean;
   descr: string;
+  /** can read images — gates whether the OpenAI-compatible path sends them */
+  vision: boolean;
 }
 
 /** The shape the apps consume (matches the iOS ModelInfo decoder). */
@@ -42,6 +44,7 @@ function rowToModel(r: any): Model {
     ram: r.ram ?? null,
     discovered: !!r.discovered,
     descr: r.descr,
+    vision: !!r.vision,
   };
 }
 
