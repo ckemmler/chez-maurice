@@ -32,6 +32,8 @@ struct SettingsView: View {
     @State private var showSafety = false
     /// Per-message cost meter in the chat — see TurnUsageFooter.
     @AppStorage(TurnCostPref.key) private var showTurnCost = false
+    /// Dictation may use Apple's servers for languages with no local model.
+    @AppStorage(ServerDictationPref.key) private var allowServerDictation = false
     @State private var showCamera = false
     @State private var showLibrary = false
 
@@ -148,6 +150,16 @@ struct SettingsView: View {
                             }
                         }
                         SetCaption("Adds a small line under each of Maurice's replies with the cost of that turn and how much of the prompt was served from cache. Local models are free; cloud models show a figure when their price is on file.")
+                    }
+
+                    SetGroup(session.localized("settings.dictation.group")) {
+                        SetCard {
+                            SetCheckRow(label: session.localized("settings.dictation.allow_server"),
+                                        on: allowServerDictation, accent: accent) {
+                                allowServerDictation.toggle()
+                            }
+                        }
+                        SetCaption(session.localized("settings.dictation.caption"))
                     }
 
                     SetGroup("SAFETY") {

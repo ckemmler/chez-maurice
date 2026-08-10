@@ -1012,6 +1012,13 @@ enum TurnCostPref {
     static let key = "maurice.showTurnCost"
 }
 
+/// Whether dictation may fall back to Apple's servers for languages with no
+/// on-device model. Off until the user says otherwise, and the one place the key
+/// is spelled so the composer and Settings can't drift apart.
+enum ServerDictationPref {
+    static let key = "maurice.allowServerDictation"
+}
+
 /// What a turn cost, under the reply. Hidden unless the user turns it on in
 /// Settings — most people don't want a meter on every message, but when you're
 /// tuning prompt caching you need to see whether it's biting, per turn, without
@@ -1701,6 +1708,9 @@ private struct ComposerBar: View {
     @State private var dictation = Dictation()
     @State private var micPulse = false
     @State private var dictationError: String?
+    /// The language a consent prompt is being shown for, or nil.
+    @State private var consentLanguage: String?
+    @AppStorage(ServerDictationPref.key) private var allowServerDictation = false
     @FocusState var isFocused: Bool
     let onAddContext: () -> Void
     var onOpenTools: () -> Void = {}
@@ -1898,7 +1908,7 @@ private struct ComposerBar: View {
                     // mishears, and a mishearing that sent itself would cost a
                     // whole turn to undo.
                     Button {
-                        dictation.toggle(locale: session.resolvedLocale)
+                        dictation.toggle(locale: session.resolvedLocale, allowServer: allowServerDictation)
                     } label: {
                         Image(systemName: dictation.isListening ? "mic.fill" : "mic")
                             .font(.system(size: 16))
@@ -1907,6 +1917,17 @@ private struct ComposerBar: View {
                                              : theme.inkSoft)
                             .frame(width: 34, height: 34)
                             .contentShape(Rectangle())
+                            // A cloud while the audio is going to Apple rather
+                            // than staying here. Consent was given once; this is
+                            // what makes it visible each time it applies.
+                            .overlay(alignment: .topTrailing) {
+                                if dictation.isListening && dictation.usingServer {
+                                    Image(systemName: "cloud.fill")
+                                        .font(.system(size: 8))
+                                        .foregroundStyle(theme.inkMute)
+                                        .offset(x: -4, y: 6)
+                                }
+                            }
                             // A quiet pulse is the "I'm listening" tell. Without
                             // one you can't distinguish listening from a button
                             // that didn't take.
@@ -2068,9 +2089,14 @@ private struct ComposerBar: View {
             // language chosen inside the app, which is what the rest of the UI
             // speaks. The missing-model case names the language it tried.
             guard case .failed(let failure) = state else { return }
-            if case .noOnDeviceModel(let language) = failure {
+            switch failure {
+            case .needsServerConsent(let language):
+                // A decision, not an error: ask it where the user already is,
+                // instead of sending them to Settings to find a switch.
+                consentLanguage = language
+            case .noOnDeviceModel(let language):
                 dictationError = session.localized(failure.messageKey, language)
-            } else {
+            default:
                 dictationError = session.localized(failure.messageKey)
             }
         }
@@ -2080,6 +2106,25 @@ private struct ComposerBar: View {
             Button(L("common.done"), role: .cancel) {}
         } message: {
             Text(dictationError ?? "")
+        }
+        // Consent is asked once, at the moment it's needed, and states plainly
+        // what changes: the audio leaves the device. Saying yes starts dictating
+        // straight away — making someone ask twice for the same thing is its own
+        // small insult.
+        .alert(session.localized("dictation.consent.title"),
+               isPresented: Binding(get: { consentLanguage != nil },
+                                    set: { if !$0 { consentLanguage = nil } })) {
+            Button(session.localized("dictation.consent.allow")) {
+                allowServerDictation = true
+                let language = consentLanguage
+                consentLanguage = nil
+                if language != nil {
+                    dictation.start(locale: session.resolvedLocale, allowServer: true)
+                }
+            }
+            Button(L("common.cancel"), role: .cancel) { consentLanguage = nil }
+        } message: {
+            Text(session.localized("dictation.consent.body", consentLanguage ?? ""))
         }
         .onChange(of: selectedPhoto) {
             Task {

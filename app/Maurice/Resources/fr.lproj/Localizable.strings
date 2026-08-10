@@ -339,3 +339,11 @@
 "dictation.error.no_offline_model" = "La dictée en %@ demande un modèle absent de cet appareil. Ajoutez-le dans Réglages › Général › Clavier › Langues de dictée, puis réessayez — Maurice n'enverra pas votre voix sur un serveur.";
 "dictation.error.audio_session" = "Impossible de prendre le micro.";
 "dictation.error.audio_engine" = "Impossible de démarrer l'enregistrement.";
+
+/* Dictation consent */
+"dictation.consent.title" = "Dicter en %@ ?";
+"dictation.consent.body" = "Cet appareil n'a pas de modèle de dictée hors ligne pour le %@ : Maurice ne peut le transcrire qu'en envoyant l'audio à Apple. Rien d'autre ne change — vos conversations restent sur votre serveur. Vous pourrez le désactiver dans les Réglages.";
+"dictation.consent.allow" = "Envoyer l'audio à Apple";
+"settings.dictation.group" = "DICTÉE";
+"settings.dictation.allow_server" = "Autoriser la transcription par Apple";
+"settings.dictation.caption" = "La dictée reste sur cet appareil dès que la langue dispose d'un modèle hors ligne. En autorisant ceci, les langues qui n'en ont pas sont transcrites par Apple, ce qui veut dire que l'audio quitte votre appareil. Le micro affiche un nuage pendant ce temps-là.";

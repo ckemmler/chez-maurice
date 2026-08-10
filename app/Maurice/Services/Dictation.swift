@@ -4,12 +4,16 @@ import AVFoundation
 
 /// Speech-to-text for the composer.
 ///
-/// Transcription runs **on the device**. Maurice's whole premise is a server in
-/// your home and models you can point at yourself; shipping the household's
-/// voice off to a transcription service to save a little accuracy would trade
-/// away the thing that makes it worth running. `requiresOnDeviceRecognition`
-/// enforces that — if the locale has no downloaded model, dictation reports it
-/// rather than quietly falling back to the network.
+/// Transcription runs **on the device** whenever the language has a local model.
+/// Maurice's premise is a server in your home and models you can point at
+/// yourself, so audio does not leave the device by default.
+///
+/// Not every language has one, though: a phone can dictate French through the
+/// keyboard all day and still expose no French model to SFSpeechRecognizer —
+/// they are separate assets. Rather than leave the button dead for those
+/// languages, the caller may pass `allowServer`, which the user grants
+/// explicitly and can withdraw. It is never assumed, never silent, and while it
+/// is in use `usingServer` is true so the UI can say so.
 ///
 /// The text lands in the composer for the user to read and edit; nothing is sent
 /// on their behalf. Recognition mishears, and a mishearing that auto-sends costs
@@ -27,6 +31,10 @@ final class Dictation {
         /// No downloaded on-device model for this language; carries it so the
         /// message can name it instead of saying "this language".
         case noOnDeviceModel(language: String)
+        /// No on-device model, and the user hasn't agreed to send audio to
+        /// Apple. Distinct from `noOnDeviceModel` because there is something the
+        /// user can decide here, rather than something to go install.
+        case needsServerConsent(language: String)
         case audioSession
         case audioEngine
 
@@ -36,6 +44,7 @@ final class Dictation {
             case .micDenied:       return "dictation.error.mic_denied"
             case .unavailable:     return "dictation.error.unavailable"
             case .noOnDeviceModel: return "dictation.error.no_offline_model"
+            case .needsServerConsent: return "dictation.consent.body"
             case .audioSession:    return "dictation.error.audio_session"
             case .audioEngine:     return "dictation.error.audio_engine"
             }
@@ -49,6 +58,11 @@ final class Dictation {
     }
 
     private(set) var state: State = .idle
+    /// True while the running session is transcribing through Apple's servers
+    /// rather than on the device. The UI shows this: audio leaving the device is
+    /// exactly the kind of thing that should be visible while it happens, not
+    /// buried in a settings screen the user agreed to once.
+    private(set) var usingServer = false
     /// What has been heard so far this session, including the unstable tail the
     /// recognizer may still revise.
     private(set) var transcript = ""
@@ -66,11 +80,11 @@ final class Dictation {
 
     // MARK: - Control
 
-    func toggle(locale: Locale) {
-        isListening ? stop() : start(locale: locale)
+    func toggle(locale: Locale, allowServer: Bool) {
+        isListening ? stop() : start(locale: locale, allowServer: allowServer)
     }
 
-    func start(locale: Locale) {
+    func start(locale: Locale, allowServer: Bool) {
         guard !isListening else { return }
         transcript = ""
 
@@ -89,7 +103,7 @@ final class Dictation {
                         self.state = .failed(.micDenied)
                         return
                     }
-                    self.beginListening(locale: locale)
+                    self.beginListening(locale: locale, allowServer: allowServer)
                 }
             }
         }
@@ -151,31 +165,49 @@ final class Dictation {
         return nil
     }
 
-    private func beginListening(locale: Locale) {
-        guard let rec = onDeviceRecognizer(for: locale) else {
+    private func beginListening(locale: Locale, allowServer: Bool) {
+        var onDevice = true
+        var recognizer: SFSpeechRecognizer?
+
+        if let rec = onDeviceRecognizer(for: locale) {
+            recognizer = rec
+        } else if allowServer {
+            // The user has agreed that audio may go to Apple for languages with
+            // no local model. Any available recogniser for the language will do
+            // now, since the transcription happens server-side either way.
+            onDevice = false
+            recognizer = SFSpeechRecognizer(locale: locale) ?? SFSpeechRecognizer()
+        }
+
+        guard let rec = recognizer, rec.isAvailable else {
             // Nothing usable. Separate "the model isn't installed" from "the
             // recogniser exists but isn't available right now" — the first asks
             // the user to go install something, and sending them to Settings
             // over a transient outage wastes their time on the wrong errand.
             let exists = SFSpeechRecognizer(locale: locale) != nil
             let available = SFSpeechRecognizer(locale: locale)?.isAvailable ?? false
+            let language = locale.localizedString(forLanguageCode: locale.language.languageCode?.identifier ?? "")
+                ?? locale.identifier
             if exists && !available {
                 state = .failed(.unavailable)
+            } else if !allowServer {
+                // There *is* a way forward — it's just one only the user can
+                // authorise. Offer the decision instead of a dead end.
+                state = .failed(.needsServerConsent(language: language))
             } else {
                 // Name the language, not the locale: the fix is "install French",
                 // and naming a region would be the wrong instruction for someone
                 // running French (Belgium).
-                let name = locale.localizedString(forLanguageCode: locale.language.languageCode?.identifier ?? "")
-                    ?? locale.identifier
-                state = .failed(.noOnDeviceModel(language: name))
+                state = .failed(.noOnDeviceModel(language: language))
             }
             return
         }
-        recognizer = rec
+        self.recognizer = rec
+        usingServer = !onDevice
 
         let req = SFSpeechAudioBufferRecognitionRequest()
         req.shouldReportPartialResults = true
-        req.requiresOnDeviceRecognition = true
+        req.requiresOnDeviceRecognition = onDevice
         request = req
 
         #if os(iOS)
@@ -236,6 +268,7 @@ final class Dictation {
     }
 
     private func teardown() {
+        usingServer = false
         if engine.isRunning { engine.stop() }
         engine.inputNode.removeTap(onBus: 0)
         request?.endAudio()
