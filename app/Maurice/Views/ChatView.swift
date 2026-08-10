@@ -1012,6 +1012,18 @@ enum TurnCostPref {
     static let key = "maurice.showTurnCost"
 }
 
+/// Text typed before dictation started, plus what has been dictated since.
+/// Separated by a space unless one side is empty — a leading or trailing space
+/// in the composer is the kind of small mess that survives all the way into the
+/// sent message.
+private func joinDictated(_ base: String, _ dictated: String) -> String {
+    let head = base.trimmingCharacters(in: .whitespacesAndNewlines)
+    let tail = dictated.trimmingCharacters(in: .whitespacesAndNewlines)
+    if head.isEmpty { return tail }
+    if tail.isEmpty { return head }
+    return head + " " + tail
+}
+
 /// Whether dictation may fall back to Apple's servers for languages with no
 /// on-device model. Off until the user says otherwise, and the one place the key
 /// is spelled so the composer and Settings can't drift apart.
@@ -1710,6 +1722,9 @@ private struct ComposerBar: View {
     @State private var dictationError: String?
     /// The language a consent prompt is being shown for, or nil.
     @State private var consentLanguage: String?
+    /// What the field held when dictation started, so live partials rewrite only
+    /// the dictated tail instead of piling up.
+    @State private var dictationBase: String?
     @AppStorage(ServerDictationPref.key) private var allowServerDictation = false
     @FocusState var isFocused: Bool
     let onAddContext: () -> Void
@@ -2066,13 +2081,22 @@ private struct ComposerBar: View {
         #endif
         // Dictated text is appended, not assigned: you may have typed a few words
         // before reaching for the mic, and losing them would be worse than a
-        // clumsy join.
+        // clumsy join. `dictationBase` is what the field held when dictation
+        // started, so each partial rewrites only the dictated tail.
         .onAppear {
             dictation.onFinish = { text in
-                let existing = inputText.trimmingCharacters(in: .whitespacesAndNewlines)
-                inputText = existing.isEmpty ? text : existing + " " + text
+                inputText = joinDictated(dictationBase ?? inputText, text)
+                dictationBase = nil
                 isFocused = true
             }
+        }
+        // The recogniser revises as it goes, so the tail is rewritten on every
+        // partial rather than appended to. Without this the field stays empty
+        // until you stop, which reads as the button having done nothing.
+        .onChange(of: dictation.transcript) { _, partial in
+            guard dictation.isListening else { return }
+            if dictationBase == nil { dictationBase = inputText }
+            inputText = joinDictated(dictationBase ?? "", partial)
         }
         .onDisappear { dictation.stop() }
         .onChange(of: dictation.isListening) { _, listening in

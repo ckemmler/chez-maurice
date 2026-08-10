@@ -263,7 +263,11 @@ final class Dictation {
         let text = transcript.trimmingCharacters(in: .whitespacesAndNewlines)
         teardown()
         if state == .listening { state = .idle }
-        if !text.isEmpty { onFinish?(text) }
+        // Called even when nothing was heard: the composer keeps a note of what
+        // the field held before dictation started, and this is what tells it to
+        // let go. Skipping the empty case leaves that note behind, and the next
+        // dictation rebuilds the field from a stale starting point.
+        onFinish?(text)
         transcript = ""
     }
 
