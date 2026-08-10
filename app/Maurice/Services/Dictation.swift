@@ -65,6 +65,10 @@ final class Dictation {
     private(set) var usingServer = false
     /// True between start() and the moment listening actually begins or fails.
     private var isStarting = false
+    /// Utterances the recogniser has already finalised this session. A pause
+    /// ends an utterance, not the session, so these accumulate and the live
+    /// partial is appended to them rather than replacing them.
+    private var committed = ""
     /// What has been heard so far this session, including the unstable tail the
     /// recognizer may still revise.
     private(set) var transcript = ""
@@ -96,6 +100,7 @@ final class Dictation {
         guard !isListening, !isStarting else { return }
         isStarting = true
         transcript = ""
+        committed = ""
         // Back to idle before trying again. The composer reacts to `state`
         // changing, so leaving the previous failure in place meant a second
         // attempt that failed the same way assigned the same value, fired no
@@ -229,11 +234,6 @@ final class Dictation {
         self.recognizer = rec
         usingServer = !onDevice
 
-        let req = SFSpeechAudioBufferRecognitionRequest()
-        req.shouldReportPartialResults = true
-        req.requiresOnDeviceRecognition = onDevice
-        request = req
-
         #if os(iOS)
         do {
             let session = AVAudioSession.sharedInstance()
@@ -257,8 +257,10 @@ final class Dictation {
         // to crash on a device whose input runs at something else.
         let format = input.outputFormat(forBus: 0)
         input.removeTap(onBus: 0)
-        input.installTap(onBus: 0, bufferSize: 1024, format: format) { [weak req] buffer, _ in
-            req?.append(buffer)
+        // Weak self, not the request: a new utterance swaps in a new request,
+        // and a tap still feeding the old one would go into a task nobody reads.
+        input.installTap(onBus: 0, bufferSize: 1024, format: format) { [weak self] buffer, _ in
+            Task { @MainActor in self?.request?.append(buffer) }
         }
 
         engine.prepare()
@@ -271,22 +273,53 @@ final class Dictation {
             return
         }
 
+        // State first: the task callback ignores anything arriving outside a
+        // listening session, and the first result can land immediately.
+        isStarting = false
+        state = .listening
+        listen(with: rec)
+    }
+
+    /// Run one utterance, and start the next when it ends.
+    ///
+    /// A pause makes the recogniser finalise what it has and close the task. That
+    /// is the end of an utterance, not of the session: treating it as the end
+    /// stopped dictation at the first breath, and — because the composer anchors
+    /// on the text as it was when dictation began — each new burst replaced the
+    /// last instead of continuing it. Finalised text is banked here and a fresh
+    /// task takes over, so speaking in four goes reads as one sentence.
+    private func listen(with rec: SFSpeechRecognizer) {
+        let req = SFSpeechAudioBufferRecognitionRequest()
+        req.shouldReportPartialResults = true
+        req.requiresOnDeviceRecognition = !usingServer
+        request = req
+
         task = rec.recognitionTask(with: req) { [weak self] result, error in
             Task { @MainActor in
-                guard let self else { return }
+                guard let self, self.state == .listening else { return }
                 if let result {
-                    self.transcript = result.bestTranscription.formattedString
-                    if result.isFinal { self.finish() }
-                } else if error != nil, self.isListening {
-                    // A recogniser error after real speech still has a usable
-                    // partial: keep what was heard rather than discarding it.
+                    let segment = result.bestTranscription.formattedString
+                    self.transcript = Self.join(self.committed, segment)
+                    if result.isFinal {
+                        self.committed = self.transcript
+                        self.listen(with: rec)   // next utterance
+                    }
+                } else if error != nil {
+                    // Out of pauses and into a real failure. Whatever was heard
+                    // is still worth keeping, so end rather than restart.
                     self.finish()
                 }
             }
         }
+    }
 
-        isStarting = false
-        state = .listening
+    /// Two spoken fragments, with a single space between them.
+    private static func join(_ a: String, _ b: String) -> String {
+        let left = a.trimmingCharacters(in: .whitespacesAndNewlines)
+        let right = b.trimmingCharacters(in: .whitespacesAndNewlines)
+        if left.isEmpty { return right }
+        if right.isEmpty { return left }
+        return left + " " + right
     }
 
     /// Stop everything and hand the text over exactly once.
@@ -309,6 +342,7 @@ final class Dictation {
 
     private func teardown() {
         usingServer = false
+        committed = ""
         if engine.isRunning { engine.stop() }
         engine.inputNode.removeTap(onBus: 0)
         request?.endAudio()
