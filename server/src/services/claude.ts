@@ -96,6 +96,13 @@ const CONTENT_SAFETY_FLOOR =
 // A fresh "now" for every turn, in the server's (= household's) timezone, so the
 // model interprets relative times and passes correct dates to tools. Models —
 // especially local ones — have no clock otherwise.
+//
+// This deliberately does NOT go in the system prompt. Prompt caching is a prefix
+// match, and the system prompt sits at the very front of it: a clock that ticks
+// to the minute would give every single request a unique prefix and make the
+// whole prompt — tools, persona, loaded context, the lot — uncacheable forever.
+// It rides at the tail of the message list instead (see timeReminder), where it
+// invalidates nothing ahead of it.
 function currentTimeContext(): string {
   const now = new Date();
   const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
@@ -106,9 +113,21 @@ function currentTimeContext(): string {
   return `The current date and time is ${formatted} (${tz}). Treat this as "now": resolve relative times like "today", "tomorrow", "this week" against it, and pass concrete dates to tools accordingly.`;
 }
 
+/** The clock, as a trailing turn rather than a system-prompt line.
+ *
+ *  Framed as a system-reminder so the model reads it as injected context and not
+ *  as something the user typed. Built once per turn and appended last, so the
+ *  agentic rounds within a turn all share it (they cache against each other) and
+ *  the next turn's copy lands after everything the previous one cached. */
+function timeReminder(): any {
+  return {
+    role: "user",
+    content: [{ type: "text", text: `<system-reminder>${currentTimeContext()}</system-reminder>` }],
+  };
+}
+
 function buildSystemPrompt(userDisplayName: string, profileText?: string | null): string {
   let prompt = `You are Maurice, a household AI assistant. You are talking to ${userDisplayName}.`;
-  prompt += ` ${currentTimeContext()}`;
   prompt += ` Be helpful, clear, and warm. Keep responses concise unless the user asks for depth.`;
   prompt += ` The user may share photos with you — describe what you see and answer any questions about them.`;
   prompt += ` You have tools: a web_search tool for current information from the internet, and the household's personal tools (tasks, calendar, contacts, notes, health, books, and more). Use them when they help; prefer the personal tools for anything about ${userDisplayName}'s own data.`;
@@ -125,7 +144,6 @@ function buildSystemPrompt(userDisplayName: string, profileText?: string | null)
 function buildRoomSystemPrompt(conversationId: string, summonerName: string): string {
   const names = getParticipants(conversationId).map((p) => p.display_name);
   let prompt = `You are Maurice, a household AI assistant, present in a shared room with: ${names.join(", ")}.`;
-  prompt += ` ${currentTimeContext()}`;
   prompt += ` Several people talk to each other here; each human message is prefixed with the speaker's name (e.g. "Alex: ..."). You are not the medium of their conversation — you are a participant they summon with @claude or @maurice.`;
   prompt += ` You were just summoned by ${summonerName}. Respond to the room. Address people by name when it helps; keep replies concise and warm.`;
   prompt += ` Anything loaded into this conversation's context — notes, books, past conversations, signals someone added — is shared with everyone in the room; treat it as common ground and discuss it openly with whoever asks, no matter who added it. Stay grounded in what was actually said and in that shared context, and don't invent things people didn't say.`;
@@ -514,6 +532,12 @@ export async function* streamResponse(
   // loaded context above can strip or out-prioritize it (covers every provider).
   systemPrompt += CONTENT_SAFETY_FLOOR;
 
+  // The clock goes at the very end of the message list, after attachBinaries has
+  // found the latest real user turn (appending it earlier would hang this turn's
+  // images off the reminder instead). Everything before it stays byte-stable
+  // from one turn to the next, which is what makes the prefix cacheable.
+  messages.push(timeReminder());
+
   // Resolve the model for this turn, honouring the member's access: the
   // persona's preference if allowed, else the household default if allowed,
   // else their best available. (No member → just persona/default.) For the
@@ -553,7 +577,11 @@ export async function* streamResponse(
       const all = await mcp.listTools();
       const expOK = canUseExperimental(memberId);
       mcpTools = (families === "all" ? all : all.filter((t) => toolInFamilies(t.name, families as string[])))
-        .filter((t) => expOK || !isExperimentalTool(t.name)); // never hand experimental tools to ungated members
+        .filter((t) => expOK || !isExperimentalTool(t.name)) // never hand experimental tools to ungated members
+        // Tools render at the very front of the cached prefix, so their order has
+        // to be stable: the MCP server makes no ordering promise, and a roster
+        // that reshuffles between turns would invalidate the whole cache.
+        .sort((a, b) => a.name.localeCompare(b.name));
     } catch (err: any) {
       console.error("[claude] MCP unavailable:", err?.message);
       mcp = null;
