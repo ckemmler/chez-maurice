@@ -116,22 +116,59 @@ final class Dictation {
         #endif
     }
 
-    private func beginListening(locale: Locale) {
-        // Fall back to the device locale when the app's language has no
-        // recognizer — better to transcribe in the wrong language than not at
-        // all, and the user hears the result immediately either way.
-        let rec = SFSpeechRecognizer(locale: locale) ?? SFSpeechRecognizer()
-        guard let rec, rec.isAvailable else {
-            state = .failed(.unavailable)
-            return
+    /// A recognizer for this language that has its model on the device.
+    ///
+    /// Region is a preference, not a requirement. Someone with French (Belgium)
+    /// installed and no French (France) is not missing French — asking for the
+    /// exact identifier and giving up turns a working setup into a dead button,
+    /// and tells them to install a second model of a language they already have.
+    /// Try the exact locale, then any sibling of the same language that is
+    /// actually downloaded.
+    private func onDeviceRecognizer(for locale: Locale) -> SFSpeechRecognizer? {
+        if let exact = SFSpeechRecognizer(locale: locale),
+           exact.isAvailable, exact.supportsOnDeviceRecognition {
+            return exact
         }
-        guard rec.supportsOnDeviceRecognition else {
-            // The language has no downloaded model. Name it: "this language has
-            // no model" leaves the user guessing which one the app even asked
-            // for, which is exactly the question they need answered.
-            let name = locale.localizedString(forIdentifier: locale.identifier)
-                ?? locale.identifier
-            state = .failed(.noOnDeviceModel(language: name))
+        guard let language = locale.language.languageCode?.identifier else { return nil }
+        let siblings = SFSpeechRecognizer.supportedLocales()
+            .filter { $0.language.languageCode?.identifier == language }
+            // Prefer the variant for the region the device is set to, then take
+            // the rest in a stable order. Enumeration order alone is arbitrary —
+            // it would answer an Irish-English request with Philippine English
+            // while the machine had British sitting right there.
+            .sorted { a, b in
+                let region = Locale.current.region?.identifier
+                let aHome = a.region?.identifier == region
+                let bHome = b.region?.identifier == region
+                return aHome == bHome ? a.identifier < b.identifier : aHome
+            }
+        for candidate in siblings {
+            if let rec = SFSpeechRecognizer(locale: candidate),
+               rec.isAvailable, rec.supportsOnDeviceRecognition {
+                return rec
+            }
+        }
+        return nil
+    }
+
+    private func beginListening(locale: Locale) {
+        guard let rec = onDeviceRecognizer(for: locale) else {
+            // Nothing usable. Separate "the model isn't installed" from "the
+            // recogniser exists but isn't available right now" — the first asks
+            // the user to go install something, and sending them to Settings
+            // over a transient outage wastes their time on the wrong errand.
+            let exists = SFSpeechRecognizer(locale: locale) != nil
+            let available = SFSpeechRecognizer(locale: locale)?.isAvailable ?? false
+            if exists && !available {
+                state = .failed(.unavailable)
+            } else {
+                // Name the language, not the locale: the fix is "install French",
+                // and naming a region would be the wrong instruction for someone
+                // running French (Belgium).
+                let name = locale.localizedString(forLanguageCode: locale.language.languageCode?.identifier ?? "")
+                    ?? locale.identifier
+                state = .failed(.noOnDeviceModel(language: name))
+            }
             return
         }
         recognizer = rec
