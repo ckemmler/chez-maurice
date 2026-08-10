@@ -210,6 +210,8 @@ struct StreamEvent: Decodable {
     let status: String?
     /// tool_data events: the structured rows a tool returned (model-untouched).
     let data: JSONValue?
+    /// usage events: what the turn cost, sent once just before `done`.
+    let usage: TurnUsage?
 
     enum EventType: String, Decodable {
         case text_delta
@@ -219,6 +221,40 @@ struct StreamEvent: Decodable {
         case image_loading
         case tool_call
         case tool_data
+        case usage
+    }
+}
+
+// MARK: - Turn cost
+
+/// What one assistant turn cost, summed over its agentic rounds. `cache_read`
+/// is the number that says whether prompt caching is working: zero across
+/// repeated turns in the same thread means something upstream keeps changing
+/// the prompt prefix. `cost` is nil when the model has no price on file.
+struct TurnUsage: Decodable, Equatable {
+    let provider: String
+    let model: String
+    let rounds: Int
+    let input: Int
+    let output: Int
+    let cache_read: Int
+    let cache_write: Int
+    let cost: Double?
+    /// What the same turn would have cost with no cache at all.
+    let cost_uncached: Double?
+
+    /// Every token the prompt side of this turn touched, cached or not.
+    var promptTokens: Int { input + cache_read + cache_write }
+
+    /// Share of the prompt served from cache, 0…1. Nil when there was no prompt.
+    var cacheHitRate: Double? {
+        promptTokens > 0 ? Double(cache_read) / Double(promptTokens) : nil
+    }
+
+    /// USD saved by the cache on this turn, if both figures are known.
+    var saved: Double? {
+        guard let cost, let cost_uncached else { return nil }
+        return max(0, cost_uncached - cost)
     }
 }
 
@@ -393,15 +429,19 @@ struct ServerMessage: Decodable, Identifiable {
     /// Structured tool results for this turn, rendered beside the prose. Nil for
     /// human turns and assistant turns that called no data-returning tools.
     let data: [DataBlock]?
+    /// What this turn cost. Nil for human turns, for local models before the
+    /// server started recording, and for providers that report no usage.
+    let usage: TurnUsage?
     let created_at: String
 
-    init(id: String, role: String, content: String, model: String?, author_id: String? = nil, data: [DataBlock]? = nil, created_at: String) {
+    init(id: String, role: String, content: String, model: String?, author_id: String? = nil, data: [DataBlock]? = nil, usage: TurnUsage? = nil, created_at: String) {
         self.id = id
         self.role = role
         self.content = content
         self.model = model
         self.author_id = author_id
         self.data = data
+        self.usage = usage
         self.created_at = created_at
     }
 }

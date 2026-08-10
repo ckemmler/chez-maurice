@@ -737,6 +737,8 @@ private struct MessageRow: View {
     var isLast: Bool = false
     @State private var didCopy = false
     @State private var showReport = false
+    /// Per-message cost meter — off unless the user asks for it in Settings.
+    @AppStorage(TurnCostPref.key) private var showTurnCost = false
 
     /// The participant who authored this turn (nil for Maurice, or a 1:1 chat
     /// where the row falls back to the device user).
@@ -848,6 +850,9 @@ private struct MessageRow: View {
         }
         if let blocks = message.data, !blocks.isEmpty {
             DataCardStack(blocks: blocks)
+        }
+        if showTurnCost, let usage = message.usage {
+            TurnUsageFooter(usage: usage)
         }
     }
 
@@ -998,6 +1003,94 @@ private struct DataCardStack: View {
             .foregroundStyle(theme.inkMute)
         }
         .padding(10)
+    }
+}
+
+/// The one place the cost-meter preference key is spelled, so the chat row and
+/// the Settings toggle can't drift apart.
+enum TurnCostPref {
+    static let key = "maurice.showTurnCost"
+}
+
+/// What a turn cost, under the reply. Hidden unless the user turns it on in
+/// Settings — most people don't want a meter on every message, but when you're
+/// tuning prompt caching you need to see whether it's biting, per turn, without
+/// leaving the app.
+///
+/// Collapsed it answers the two questions that matter: what did this cost, and
+/// how much of the prompt came from cache. Expanded it shows the token split and
+/// what the same turn would have cost uncached.
+struct TurnUsageFooter: View {
+    @Environment(\.mauriceTheme) private var theme
+    let usage: TurnUsage
+    @State private var expanded = false
+
+    /// Dollars at a resolution that doesn't round a real cost to "$0.00".
+    private func money(_ v: Double) -> String {
+        if v == 0 { return "$0" }
+        if v < 0.01 { return String(format: "$%.4f", v) }
+        return String(format: "$%.2f", v)
+    }
+
+    private func tokens(_ n: Int) -> String {
+        n >= 1000 ? String(format: "%.1fk", Double(n) / 1000) : "\(n)"
+    }
+
+    /// Cost if priced, token volume otherwise — never a bare "$0.00" for a model
+    /// we simply have no price for.
+    private var headline: String {
+        if let c = usage.cost { return money(c) }
+        return "\(tokens(usage.promptTokens + usage.output)) tok"
+    }
+
+    private var cacheLabel: String? {
+        guard let rate = usage.cacheHitRate else { return nil }
+        if usage.cache_read == 0 { return "no cache" }
+        return "\(Int((rate * 100).rounded()))% cached"
+    }
+
+    var body: some View {
+        DisclosureGroup(isExpanded: $expanded) {
+            VStack(alignment: .leading, spacing: 3) {
+                row("Prompt", "\(tokens(usage.input)) fresh · \(tokens(usage.cache_read)) from cache · \(tokens(usage.cache_write)) written")
+                row("Reply", "\(tokens(usage.output)) tok")
+                row("Rounds", "\(usage.rounds)")
+                if let uncached = usage.cost_uncached, usage.cost != nil {
+                    row("Without cache", money(uncached))
+                    if let saved = usage.saved, saved > 0 {
+                        row("Saved", money(saved))
+                    }
+                }
+                row("Model", usage.model)
+            }
+            .padding(.top, 5)
+            .frame(maxWidth: .infinity, alignment: .leading)
+        } label: {
+            HStack(spacing: 5) {
+                Image(systemName: "gauge.with.needle").font(.system(size: 10))
+                Text(headline).font(.system(size: 11, weight: .medium))
+                if let cacheLabel {
+                    Text("·").font(.system(size: 11))
+                    Text(cacheLabel).font(.system(size: 11))
+                }
+            }
+            .foregroundStyle(theme.inkMute)
+        }
+        .padding(.top, 2)
+    }
+
+    @ViewBuilder
+    private func row(_ label: String, _ value: String) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 6) {
+            Text(label)
+                .font(.system(size: 11))
+                .foregroundStyle(theme.inkMute)
+                .frame(width: 92, alignment: .leading)
+            Text(value)
+                .font(.system(size: 11))
+                .foregroundStyle(theme.inkSoft)
+            Spacer(minLength: 0)
+        }
     }
 }
 

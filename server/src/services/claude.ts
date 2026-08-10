@@ -14,9 +14,10 @@ import { ollamaTurn, type OllamaToolCall } from "./ollama";
 import { openaiTurn, type OpenAIToolCall } from "./openaiChat";
 import { resolveFamilies, toolInFamilies, canUseExperimental, isExperimentalTool } from "./toolFamilies";
 import { t, userLocale } from "./i18n";
+import { newUsage, priceUsage, hasUsage, type TurnUsage } from "./pricing";
 
 interface StreamEvent {
-  type: "text_delta" | "done" | "error" | "tool_call" | "tool_data";
+  type: "text_delta" | "done" | "error" | "tool_call" | "tool_data" | "usage";
   text?: string;
   message_id?: string;
   message?: string;
@@ -26,6 +27,9 @@ interface StreamEvent {
   // tool_data events: the structured result a tool returned, rendered
   // deterministically by the client alongside Maurice's prose.
   data?: unknown;
+  // usage events: what the turn cost, summed over its agentic rounds. Emitted
+  // once, immediately before `done`.
+  usage?: TurnUsage;
 }
 
 // Cap on agentic tool rounds per user turn — prevents runaway loops.
@@ -306,9 +310,15 @@ async function* runOpenAIAgentic(
   mcp: McpSession | null,
   temperature: number | undefined,
   lang: string,
+  provider: string,
 ): AsyncGenerator<StreamEvent> {
   const convo: any[] = [{ role: "system", content: system }, ...baseMessages];
+  const usage = newUsage(provider, model);
+  function* reportUsage(): Generator<StreamEvent> {
+    if (hasUsage(usage)) yield { type: "usage", usage: priceUsage(usage) };
+  }
   for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
+    usage.rounds++;
     let content = "";
     let toolCalls: OpenAIToolCall[] = [];
     for await (const ev of openaiTurn(baseUrl, apiKey, model, convo, tools, temperature)) {
@@ -317,12 +327,21 @@ async function* runOpenAIAgentic(
         yield { type: "text_delta", text: ev.text };
       } else if (ev.type === "turn_end") {
         toolCalls = ev.toolCalls;
+        if (ev.usage) {
+          // prompt_tokens is the whole prompt including whatever the cache
+          // served, so the full-price slice is the remainder.
+          usage.cache_read += ev.usage.cached;
+          usage.input += Math.max(0, ev.usage.prompt - ev.usage.cached);
+          usage.output += ev.usage.completion;
+        }
       } else if (ev.type === "error") {
+        yield* reportUsage();
         yield { type: "error", message: ev.message };
         return;
       }
     }
     if (!toolCalls.length) {
+      yield* reportUsage();
       yield { type: "done", message_id: crypto.randomUUID() };
       return;
     }
@@ -343,6 +362,7 @@ async function* runOpenAIAgentic(
     }
   }
   yield { type: "text_delta", text: t(lang, "chat.stopped_tool_steps") };
+  yield* reportUsage();
   yield { type: "done", message_id: crypto.randomUUID() };
 }
 
@@ -561,7 +581,7 @@ export async function* streamResponse(
     }
     const tools = mcpTools.map(mcpToolToFunction);
     if (wantsWeb && hasWebSearch()) tools.push(WEB_SEARCH_FUNCTION);
-    yield* runOpenAIAgentic(baseUrl, key, resolved, systemPrompt, toTextMessages(messages), tools, mcp, temperature, userLang);
+    yield* runOpenAIAgentic(baseUrl, key, resolved, systemPrompt, toTextMessages(messages), tools, mcp, temperature, userLang, provider);
     return;
   }
 
@@ -584,8 +604,16 @@ export async function* streamResponse(
   if (wantsWeb && hasWebSearch()) tools.push(WEB_SEARCH_TOOL);
   for (const t of mcpTools) tools.push(mcpToolToAnthropic(t));
 
+  // Token/cost accounting for this turn, accumulated across every agentic round
+  // (each round is a separate billed request) and reported once at the end.
+  const usage = newUsage("anthropic", resolved);
+  function* reportUsage(): Generator<StreamEvent> {
+    if (hasUsage(usage)) yield { type: "usage", usage: priceUsage(usage) };
+  }
+
   try {
     for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
+      usage.rounds++;
       const body: any = {
         model: resolved,
         max_tokens: config.maxTokens,
@@ -631,6 +659,9 @@ export async function* streamResponse(
       const contentBlocks: any[] = []; // final assistant content (text + tool_use)
       const blockState: Record<number, { type: string; text?: string; id?: string; name?: string; partialJson?: string }> = {};
       let stopReason: string | null = null;
+      // Output tokens already credited to `usage` for this round, so the running
+      // total from message_delta can be applied as a delta rather than a sum.
+      let roundOutput = 0;
 
       while (true) {
         const { done, value } = await reader.read();
@@ -651,7 +682,19 @@ export async function* streamResponse(
             continue;
           }
 
-          if (event.type === "content_block_start") {
+          // Anthropic reports usage in two places: the input side (and any
+          // cache activity) arrives up front on message_start, the final output
+          // count on message_delta. Both are per-round, so they accumulate.
+          if (event.type === "message_start") {
+            const u = event.message?.usage;
+            if (u) {
+              usage.input += u.input_tokens ?? 0;
+              roundOutput = u.output_tokens ?? 0;
+              usage.output += roundOutput;
+              usage.cache_read += u.cache_read_input_tokens ?? 0;
+              usage.cache_write += u.cache_creation_input_tokens ?? 0;
+            }
+          } else if (event.type === "content_block_start") {
             const idx = event.index;
             const cb = event.content_block;
             if (cb?.type === "text") {
@@ -686,6 +729,13 @@ export async function* streamResponse(
             }
           } else if (event.type === "message_delta") {
             if (event.delta?.stop_reason) stopReason = event.delta.stop_reason;
+            // message_delta carries the round's final output count. message_start
+            // already contributed its (partial) figure, so replace rather than
+            // add: subtract what we counted for this round and add the total.
+            if (event.usage?.output_tokens != null) {
+              usage.output += event.usage.output_tokens - roundOutput;
+              roundOutput = event.usage.output_tokens;
+            }
           } else if (event.type === "error") {
             yield { type: "error", message: event.error?.message || "Unknown error" };
             return;
@@ -695,6 +745,7 @@ export async function* streamResponse(
 
       // Not a tool turn → we're done.
       if (stopReason !== "tool_use") {
+        yield* reportUsage();
         yield { type: "done", message_id: crypto.randomUUID() };
         return;
       }
@@ -728,10 +779,14 @@ export async function* streamResponse(
       type: "text_delta",
       text: t(userLang, "chat.stopped_tool_steps_more"),
     };
+    yield* reportUsage();
     yield { type: "done", message_id: crypto.randomUUID() };
   } catch (err: any) {
-    // Client cancelled (⏹ Stop) → the fetch was aborted. Stop quietly; the route
-    // persists whatever streamed so far. Anything else is a real error.
+    // Client cancelled (⏹ Stop) → the fetch was aborted. Report what the rounds
+    // that did complete cost — the route persists the partial turn, so dropping
+    // the usage here would make a stopped turn look free. Anything that isn't a
+    // cancellation is a real error.
+    yield* reportUsage();
     if (signal?.aborted || err?.name === "AbortError") return;
     yield { type: "error", message: err.message || "Stream failed" };
   }

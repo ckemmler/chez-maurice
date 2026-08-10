@@ -22,6 +22,7 @@ import {
 import { getUser, getUserByUsername, guestCanReach } from "../services/users";
 import { blockedIdsFor, createReport, isReason, hasBlocked } from "../services/safety";
 import { streamResponse, getHouseholdConfig } from "../services/claude";
+import type { TurnUsage } from "../services/pricing";
 import { getConversationMaurice, canUseMaurice } from "../services/maurices";
 import { resolveUsableModel } from "../services/modelAccess";
 import { getModel, householdDefaultModel } from "../services/models";
@@ -388,6 +389,9 @@ conversations.post("/:id/messages", async (c) => {
         // Structured tool results collected from the stream, persisted with the
         // turn and rendered client-side beside the prose.
         const dataBlocks: { tool: string; data: unknown }[] = [];
+        // Token counts + cost for the turn, reported once near the end of the
+        // stream. Persisted with the message so it survives a reload.
+        let turnUsage: TurnUsage | null = null;
         let pendingText = "";
         let lastFlush = Date.now();
         const FLUSH_INTERVAL = 30; // ms between flushes
@@ -402,6 +406,7 @@ conversations.post("/:id/messages", async (c) => {
           const msg = addMessage(convoId, "assistant", fullResponse, {
             mauriceId: summonedMaurice,
             data: dataBlocks.length ? dataBlocks : null,
+            usage: turnUsage,
           });
           // Refresh the semantic index (fire-and-forget) and fan the reply out to
           // the other participants' sockets + activity notifications.
@@ -455,6 +460,12 @@ conversations.post("/:id/messages", async (c) => {
             // fall through to forward it to the client for live rendering.
             if (event.type === "tool_data" && event.data != null) {
               dataBlocks.push({ tool: event.tool ?? "tool", data: event.data });
+            }
+
+            // Cost of the turn: keep it for persistence, and forward it so the
+            // client can show the figure without waiting for a reload.
+            if (event.type === "usage" && event.usage) {
+              turnUsage = event.usage;
             }
 
             // Everything else (tool_call, tool_data, errors) — flush pending

@@ -40,6 +40,9 @@ final class ChatService {
     /// Structured tool results received so far this turn — rendered beside the
     /// streaming prose and carried onto the finished message.
     var streamingData: [DataBlock] = []
+    /// Cost of the turn being streamed, once the server reports it (just before
+    /// `done`). Carried onto the finished message.
+    var streamingUsage: TurnUsage?
     var isGeneratingImage = false
     /// Human-readable label of the tool currently running (e.g. "Searching the web"), or nil.
     var toolActivity: String?
@@ -619,6 +622,7 @@ final class ChatService {
         isStreaming = true
         streamingText = ""
         streamingData = []
+        streamingUsage = nil
         error = nil
 
         // Consume the stream in a cancellable child task (inherits this
@@ -662,6 +666,8 @@ final class ChatService {
                         if let data = event.data {
                             streamingData.append(DataBlock(tool: event.tool ?? "tool", data: data))
                         }
+                    case .usage:
+                        streamingUsage = event.usage
                     case .done:
                         doneEvent = event
                     case .error:
@@ -694,6 +700,7 @@ final class ChatService {
                     model: nil,
                     author_id: nil,
                     data: streamingData.isEmpty ? nil : streamingData,
+                    usage: streamingUsage,
                     created_at: ISO8601DateFormatter().string(from: Date())
                 )
                 messages.append(assistantMsg)
@@ -703,6 +710,7 @@ final class ChatService {
 
         streamingText = ""
         streamingData = []
+        streamingUsage = nil
         isStreaming = false
         isGeneratingImage = false
         toolActivity = nil
@@ -735,6 +743,7 @@ final class ChatService {
         activeConversationId = nil
         streamingText = ""
         streamingData = []
+        streamingUsage = nil
         toolActivity = nil
         error = nil
         await loadConversations()

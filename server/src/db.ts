@@ -116,6 +116,12 @@ try {
 // that called no data-returning tools.
 try { db.run(`ALTER TABLE messages ADD COLUMN data TEXT`); } catch {}
 
+// What the turn cost — a JSON TurnUsage (see services/pricing.ts) with the token
+// counts summed across the turn's agentic rounds, plus the priced figure. Kept
+// on the message so the cost stays visible after a reload, not just live on the
+// stream. Null for human turns and for providers that report no usage.
+try { db.run(`ALTER TABLE messages ADD COLUMN usage TEXT`); } catch {}
+
 db.run(`
   CREATE INDEX IF NOT EXISTS idx_conversations_user
     ON conversations(user_id, updated_at DESC)

@@ -1,4 +1,5 @@
 import db from "../db";
+import type { TurnUsage } from "./pricing";
 
 export interface Conversation {
   id: string;
@@ -33,20 +34,26 @@ export interface Message {
    *  rendered by the client beside the prose. Stored as a JSON TEXT column;
    *  exposed here already parsed (see hydrateMessage). */
   data: { tool: string; data: unknown }[] | null;
+  /** what this turn cost — token counts + priced figure, or null. Same
+   *  JSON-TEXT-column treatment as `data`. */
+  usage: TurnUsage | null;
   created_at: string;
 }
 
-/** Rows come back with `data` as a JSON string (or null); parse it once here so
- *  every consumer (REST detail, WS publish, the done path) gets real objects. */
+/** Rows come back with `data` / `usage` as JSON strings (or null); parse them
+ *  once here so every consumer (REST detail, WS publish, the done path) gets
+ *  real objects. */
 function hydrateMessage(m: any): Message {
-  if (typeof m?.data === "string") {
-    try {
-      m.data = JSON.parse(m.data);
-    } catch {
-      m.data = null;
+  for (const field of ["data", "usage"] as const) {
+    if (typeof m?.[field] === "string") {
+      try {
+        m[field] = JSON.parse(m[field]);
+      } catch {
+        m[field] = null;
+      }
+    } else if (m && m[field] == null) {
+      m[field] = null;
     }
-  } else if (m && m.data == null) {
-    m.data = null;
   }
   return m as Message;
 }
@@ -297,7 +304,7 @@ export function getMessages(conversationId: string): Message[] {
   return (
     db
       .query(
-        `SELECT id, conversation_id, role, content, model, author_id, maurice_id, data, created_at
+        `SELECT id, conversation_id, role, content, model, author_id, maurice_id, data, usage, created_at
          FROM messages WHERE conversation_id = ?
          ORDER BY created_at`
       )
@@ -326,14 +333,17 @@ export function addMessage(
     mauriceId?: string | null;
     /** structured tool results for this turn, [{ tool, data }]; persisted as JSON */
     data?: { tool: string; data: unknown }[] | null;
+    /** token counts + cost for this turn; persisted as JSON */
+    usage?: TurnUsage | null;
   } = {}
 ): Message {
   const id = crypto.randomUUID();
   const dataJson = opts.data && opts.data.length ? JSON.stringify(opts.data) : null;
+  const usageJson = opts.usage ? JSON.stringify(opts.usage) : null;
   db.run(
-    `INSERT INTO messages (id, conversation_id, role, content, model, author_id, maurice_id, data)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-    [id, conversationId, role, content, opts.model ?? null, opts.authorId ?? null, opts.mauriceId ?? null, dataJson]
+    `INSERT INTO messages (id, conversation_id, role, content, model, author_id, maurice_id, data, usage)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [id, conversationId, role, content, opts.model ?? null, opts.authorId ?? null, opts.mauriceId ?? null, dataJson, usageJson]
   );
 
   // Touch conversation updated_at
