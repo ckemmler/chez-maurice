@@ -331,19 +331,19 @@
 "gardens.in_your_garden" = "in deinem persönlichen Garten";
 
 /* Dictation */
-"chat.dictate" = "Dictate";
-"chat.dictate_stop" = "Stop dictating";
-"dictation.error.speech_denied" = "Speech recognition is off for Maurice. Turn it on in Settings › Privacy › Speech Recognition.";
-"dictation.error.mic_denied" = "Microphone access is off for Maurice. Turn it on in Settings › Privacy › Microphone.";
-"dictation.error.unavailable" = "Dictation isn't available right now.";
-"dictation.error.no_offline_model" = "Dictation for %@ needs a model that isn't on this device. Add it under Settings › General › Keyboard › Dictation Languages, then try again — Maurice won't send your voice to a server.";
-"dictation.error.audio_session" = "Couldn't take over the microphone.";
-"dictation.error.audio_engine" = "Couldn't start recording.";
+"chat.dictate" = "Diktieren";
+"chat.dictate_stop" = "Diktat beenden";
+"dictation.error.speech_denied" = "Die Spracherkennung ist für Maurice deaktiviert. Aktiviere sie unter Einstellungen › Datenschutz & Sicherheit › Spracherkennung.";
+"dictation.error.mic_denied" = "Der Mikrofonzugriff ist für Maurice deaktiviert. Aktiviere ihn unter Einstellungen › Datenschutz & Sicherheit › Mikrofon.";
+"dictation.error.unavailable" = "Das Diktat ist gerade nicht verfügbar.";
+"dictation.error.no_offline_model" = "Für das Diktat auf %@ fehlt ein Modell auf diesem Gerät. Füge es unter Einstellungen › Allgemein › Tastatur › Diktiersprachen hinzu und versuche es erneut — Maurice sendet deine Stimme nicht an einen Server.";
+"dictation.error.audio_session" = "Das Mikrofon konnte nicht übernommen werden.";
+"dictation.error.audio_engine" = "Die Aufnahme konnte nicht gestartet werden.";
 
 /* Dictation consent */
-"dictation.consent.title" = "Dictate in %@?";
-"dictation.consent.body" = "This device has no offline dictation model for %@, so Maurice can only transcribe it by sending the audio to Apple. Nothing else about Maurice changes — your conversations stay on your own server. You can turn this off again in Settings.";
-"dictation.consent.allow" = "Send audio to Apple";
-"settings.dictation.group" = "DICTATION";
-"settings.dictation.allow_server" = "Allow Apple transcription";
-"settings.dictation.caption" = "Dictation stays on this device whenever the language has an offline model. Allow this and languages without one are transcribed by Apple instead, which means the audio leaves your device. The microphone shows a cloud while that is happening.";
+"dictation.consent.title" = "Auf %@ diktieren?";
+"dictation.consent.body" = "Auf diesem Gerät gibt es kein Offline-Diktatmodell für %@. Maurice kann es nur transkribieren, indem er die Aufnahme an Apple sendet. Sonst ändert sich nichts — deine Unterhaltungen bleiben auf deinem Server. Du kannst das in den Einstellungen wieder ausschalten.";
+"dictation.consent.allow" = "Audio an Apple senden";
+"settings.dictation.group" = "DIKTAT";
+"settings.dictation.allow_server" = "Transkription durch Apple erlauben";
+"settings.dictation.caption" = "Das Diktat bleibt auf diesem Gerät, sobald die Sprache ein Offline-Modell hat. Erlaubst du dies, werden Sprachen ohne Modell stattdessen von Apple transkribiert — die Aufnahme verlässt dann dein Gerät. Währenddessen zeigt das Mikrofon eine Wolke.";

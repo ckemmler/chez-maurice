@@ -331,19 +331,19 @@
 "gardens.in_your_garden" = "in je persoonlijke tuin";
 
 /* Dictation */
-"chat.dictate" = "Dictate";
-"chat.dictate_stop" = "Stop dictating";
-"dictation.error.speech_denied" = "Speech recognition is off for Maurice. Turn it on in Settings › Privacy › Speech Recognition.";
-"dictation.error.mic_denied" = "Microphone access is off for Maurice. Turn it on in Settings › Privacy › Microphone.";
-"dictation.error.unavailable" = "Dictation isn't available right now.";
-"dictation.error.no_offline_model" = "Dictation for %@ needs a model that isn't on this device. Add it under Settings › General › Keyboard › Dictation Languages, then try again — Maurice won't send your voice to a server.";
-"dictation.error.audio_session" = "Couldn't take over the microphone.";
-"dictation.error.audio_engine" = "Couldn't start recording.";
+"chat.dictate" = "Dicteren";
+"chat.dictate_stop" = "Dicteren stoppen";
+"dictation.error.speech_denied" = "Spraakherkenning staat uit voor Maurice. Zet het aan via Instellingen › Privacy en beveiliging › Spraakherkenning.";
+"dictation.error.mic_denied" = "Toegang tot de microfoon staat uit voor Maurice. Zet het aan via Instellingen › Privacy en beveiliging › Microfoon.";
+"dictation.error.unavailable" = "Dicteren is op dit moment niet beschikbaar.";
+"dictation.error.no_offline_model" = "Dicteren in het %@ vraagt om een model dat niet op dit apparaat staat. Voeg het toe via Instellingen › Algemeen › Toetsenbord › Dicteertalen en probeer het opnieuw — Maurice stuurt je stem niet naar een server.";
+"dictation.error.audio_session" = "De microfoon kon niet worden overgenomen.";
+"dictation.error.audio_engine" = "De opname kon niet worden gestart.";
 
 /* Dictation consent */
-"dictation.consent.title" = "Dictate in %@?";
-"dictation.consent.body" = "This device has no offline dictation model for %@, so Maurice can only transcribe it by sending the audio to Apple. Nothing else about Maurice changes — your conversations stay on your own server. You can turn this off again in Settings.";
-"dictation.consent.allow" = "Send audio to Apple";
-"settings.dictation.group" = "DICTATION";
-"settings.dictation.allow_server" = "Allow Apple transcription";
-"settings.dictation.caption" = "Dictation stays on this device whenever the language has an offline model. Allow this and languages without one are transcribed by Apple instead, which means the audio leaves your device. The microphone shows a cloud while that is happening.";
+"dictation.consent.title" = "Dicteren in het %@?";
+"dictation.consent.body" = "Dit apparaat heeft geen offline dicteermodel voor het %@, dus Maurice kan het alleen transcriberen door de audio naar Apple te sturen. Verder verandert er niets — je gesprekken blijven op je eigen server. Je kunt dit weer uitzetten in de instellingen.";
+"dictation.consent.allow" = "Audio naar Apple sturen";
+"settings.dictation.group" = "DICTEREN";
+"settings.dictation.allow_server" = "Transcriptie door Apple toestaan";
+"settings.dictation.caption" = "Dicteren blijft op dit apparaat zolang de taal een offline model heeft. Sta je dit toe, dan worden talen zonder model door Apple getranscribeerd, wat betekent dat de audio je apparaat verlaat. Zolang dat gebeurt, toont de microfoon een wolkje.";
