@@ -536,25 +536,10 @@ try { db.run(`UPDATE models SET provider = CASE WHEN tier = 'local' THEN 'ollama
 // is off and a model opts in. Anthropic models are marked for completeness —
 // that path sends images unconditionally, as it always could.
 try { db.run(`ALTER TABLE models ADD COLUMN vision INTEGER NOT NULL DEFAULT 0`); } catch {}
-// Seed the known-capable models once and only once. Re-running this on every
-// boot would quietly overwrite an operator who had turned a model's vision off
-// — the same trap the household's default_model already falls into.
 try { db.run(`ALTER TABLE households ADD COLUMN vision_seeded INTEGER NOT NULL DEFAULT 0`); } catch {}
-try {
-  const seeded = (
-    db.query(`SELECT vision_seeded FROM households WHERE id = 'default'`).get() as
-      | { vision_seeded: number }
-      | undefined
-  )?.vision_seeded;
-  if (!seeded) {
-    db.run(
-      `UPDATE models SET vision = 1
-       WHERE provider = 'anthropic'
-          OR id IN ('gpt-4o', 'gpt-4o-mini', 'mistral-medium-latest')`,
-    );
-    db.run(`UPDATE households SET vision_seeded = 1 WHERE id = 'default'`);
-  }
-} catch {}
+// The seed itself runs further down, after the model rows exist — see
+// seedVisionFlags(). Ordering matters more than it looks: run it here and it
+// matches nothing on a fresh database, then marks itself done forever.
 
 // Migration: `garden` was one 54-tool family, now sub-split. Expand any stored
 // "garden" selection to its sub-families so existing personas/chats keep the
@@ -656,6 +641,32 @@ try {
   if ((!def || !db.query(`SELECT 1 FROM models WHERE id = ?`).get(def)) &&
       db.query(`SELECT 1 FROM models WHERE id = 'claude-sonnet-4-6'`).get()) {
     db.run(`UPDATE households SET default_model = 'claude-sonnet-4-6' WHERE id = 'default'`);
+  }
+} catch {}
+
+// Which models can read an image. Runs here, below every block that inserts or
+// remaps model rows, because it can only mark rows that already exist — an
+// earlier placement matched nothing on a fresh database and then marked itself
+// done, leaving every model text-only with no way back.
+//
+// vision_seeded is a generation counter, not a boolean: bumping it re-seeds once
+// and repairs databases that ran the mis-ordered version, while still never
+// overwriting a later operator change twice for the same generation.
+const VISION_SEED_GENERATION = 2;
+try {
+  const seeded =
+    (db.query(`SELECT vision_seeded FROM households WHERE id = 'default'`).get() as
+      | { vision_seeded: number }
+      | undefined
+    )?.vision_seeded ?? 0;
+  if (seeded < VISION_SEED_GENERATION) {
+    db.run(
+      `UPDATE models SET vision = 1
+       WHERE provider = 'anthropic'
+          OR id IN ('gpt-4o', 'gpt-4o-mini',
+                    'mistral-medium-latest', 'mistral-large-latest', 'mistral-small-latest')`,
+    );
+    db.run(`UPDATE households SET vision_seeded = ? WHERE id = 'default'`, [VISION_SEED_GENERATION]);
   }
 } catch {}
 
