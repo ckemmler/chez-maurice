@@ -1746,7 +1746,17 @@ private struct ComposerBar: View {
     private func startDictationIfRequested() {
         #if os(iOS)
         guard DictationRequest.shared.take(), !dictation.isListening else { return }
-        dictation.start(locale: session.resolvedLocale, allowServer: allowServerDictation)
+        // The button is for capturing a thought, not for continuing whatever
+        // conversation happened to be open — that one has a context and a
+        // Maurice of its own, and dropping a stray dictated line into it is
+        // rarely what someone reaching for a hardware button wants.
+        Task {
+            if inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                await chat.discardActiveIfEmpty()
+            }
+            chat.activeConversationId = nil
+            dictation.start(locale: session.resolvedLocale, allowServer: allowServerDictation)
+        }
         #endif
     }
 
@@ -2111,6 +2121,12 @@ private struct ComposerBar: View {
         // and which of the two happens is not ours to predict.
         .onChange(of: scenePhase) { _, phase in
             if phase == .active { startDictationIfRequested() }
+        }
+        // The intent may fire before this view exists or long after it settled;
+        // observing the request covers both, where checking on appearance only
+        // catches the first.
+        .onChange(of: DictationRequest.shared.token) { _, _ in
+            startDictationIfRequested()
         }
         #endif
         // The recogniser revises as it goes, so the tail is rewritten on every

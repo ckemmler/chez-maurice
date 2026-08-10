@@ -13,16 +13,25 @@ import AppIntents
 /// that loses its race with a launch that took too long, must not open the
 /// microphone ten minutes later when the app is next opened by hand — recording
 /// someone who didn't ask is the one failure that isn't merely annoying.
-@MainActor
+/// Observable, not merely readable. The composer cannot poll for this: on a cold
+/// launch the intent may set it before any view exists, and on a warm one it
+/// lands well after the view appeared and stopped looking. Only one of those two
+/// is covered by checking on appearance, and which one happens is up to the
+/// system. Bumping a counter lets the composer react whenever it arrives.
+@Observable @MainActor
 final class DictationRequest {
     static let shared = DictationRequest()
+    private(set) var token = 0
     private var madeAt: Date?
 
     /// How long a pending request stays good. Long enough to cover a cold launch
     /// on a busy phone, short enough that it can't be mistaken for intent later.
     private static let window: TimeInterval = 20
 
-    func make() { madeAt = Date() }
+    func make() {
+        madeAt = Date()
+        token &+= 1
+    }
 
     /// Consume the request if there is a fresh one. Returns false otherwise, and
     /// clears a stale note so it can't fire later.
