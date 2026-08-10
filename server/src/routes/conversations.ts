@@ -336,7 +336,7 @@ conversations.post("/:id/messages", async (c) => {
     // If an image was attached, save it and build markdown content
     let messageContent = content?.trim() || "";
     if (image) {
-      const { filename } = saveUploadedImage(image);
+      const { filename } = await saveUploadedImage(image);
       const imageMarkdown = `![photo](/api/images/${filename})`;
       messageContent = messageContent
         ? `${imageMarkdown}\n\n${messageContent}`

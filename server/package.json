@@ -12,6 +12,7 @@
   "dependencies": {
     "@mozilla/readability": "^0.6.0",
     "hono": "^4.12.18",
-    "linkedom": "^0.18.12"
+    "linkedom": "^0.18.12",
+    "sharp": "^0.35.3"
   }
 }
