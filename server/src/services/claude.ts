@@ -196,17 +196,64 @@ const WEB_SEARCH_FUNCTION = {
   },
 };
 
-// Anthropic content can be string or an array (with images). The OpenAI/Ollama
-// chat APIs here take plain text, so flatten to text (images are dropped for
-// those providers; Anthropic keeps them on its own path).
+// Anthropic content can be a string or an array of blocks (text, images, PDFs).
+// The Ollama chat path here takes plain text, so flatten — but say so where an
+// image is lost, rather than letting it vanish and leaving the model to answer
+// as though nothing had been attached.
 function toTextMessages(messages: any[]): Array<{ role: string; content: string }> {
   return messages.map((m) => ({
     role: m.role,
     content:
       typeof m.content === "string"
         ? m.content
-        : (m.content as any[]).filter((c) => c.type === "text").map((c) => c.text).join("\n"),
+        : (m.content as any[])
+            .map((c) =>
+              c.type === "text" ? c.text : c.type === "image" || c.type === "document" ? DROPPED_ATTACHMENT : null,
+            )
+            .filter((s): s is string => s != null)
+            .join("\n"),
   }));
+}
+
+// Stands in for an attachment this model cannot read. Silence was the old
+// behaviour and it is the worst of the options: the model answers confidently
+// about a photo it was never shown, and nobody can tell why.
+const DROPPED_ATTACHMENT =
+  "[An image or document was attached here, but the model in use cannot read images. Say so plainly rather than guessing at its contents.]";
+
+/** Anthropic blocks → OpenAI Chat Completions content.
+ *
+ *  Text-only turns stay plain strings, which is what every OpenAI-compatible
+ *  provider expects and keeps the payload identical to before. A turn carrying
+ *  an image becomes a content-part array with an `image_url` data URI — the
+ *  standard shape, verified against Mistral.
+ *
+ *  `vision` gates it because sending image parts to a text-only model is a hard
+ *  request error, not a graceful degradation. Without it the turn falls back to
+ *  the same explicit note the Ollama path uses. PDFs have no portable
+ *  representation here at all, so they take that path regardless. */
+function toOpenAIMessages(messages: any[], vision: boolean): Array<{ role: string; content: any }> {
+  return messages.map((m) => {
+    if (typeof m.content === "string") return { role: m.role, content: m.content };
+    const blocks = m.content as any[];
+    const hasImage = vision && blocks.some((c) => c.type === "image" && c.source?.type === "base64");
+    if (!hasImage) return { role: m.role, content: toTextMessages([m])[0]!.content };
+
+    const parts: any[] = [];
+    for (const c of blocks) {
+      if (c.type === "text") {
+        parts.push({ type: "text", text: c.text });
+      } else if (c.type === "image" && c.source?.type === "base64") {
+        parts.push({
+          type: "image_url",
+          image_url: { url: `data:${c.source.media_type};base64,${c.source.data}` },
+        });
+      } else if (c.type === "document") {
+        parts.push({ type: "text", text: DROPPED_ATTACHMENT });
+      }
+    }
+    return { role: m.role, content: parts };
+  });
 }
 
 // Many MCP tools return pretty-printed JSON (indent=2). The model doesn't need
@@ -643,7 +690,11 @@ export async function* streamResponse(
     }
     const tools = mcpTools.map(mcpToolToFunction);
     if (wantsWeb && hasWebSearch()) tools.push(WEB_SEARCH_FUNCTION);
-    yield* runOpenAIAgentic(baseUrl, key, resolved, systemPrompt, toTextMessages(messages), tools, mcp, temperature, userLang, provider);
+    yield* runOpenAIAgentic(
+      baseUrl, key, resolved, systemPrompt,
+      toOpenAIMessages(messages, !!rec?.vision),
+      tools, mcp, temperature, userLang, provider,
+    );
     return;
   }
 

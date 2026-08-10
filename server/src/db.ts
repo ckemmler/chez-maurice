@@ -530,6 +530,32 @@ try { db.run(`ALTER TABLE households ADD COLUMN providers_seeded INTEGER NOT NUL
 try { db.run(`ALTER TABLE models ADD COLUMN provider TEXT`); } catch {}
 try { db.run(`UPDATE models SET provider = CASE WHEN tier = 'local' THEN 'ollama' ELSE 'anthropic' END WHERE provider IS NULL OR provider = ''`); } catch {}
 
+// Whether the model can actually read an image. Only consulted on the
+// OpenAI-compatible path, which has to decide whether to send image content
+// blocks at all: a text-only model rejects the request outright, so the default
+// is off and a model opts in. Anthropic models are marked for completeness —
+// that path sends images unconditionally, as it always could.
+try { db.run(`ALTER TABLE models ADD COLUMN vision INTEGER NOT NULL DEFAULT 0`); } catch {}
+// Seed the known-capable models once and only once. Re-running this on every
+// boot would quietly overwrite an operator who had turned a model's vision off
+// — the same trap the household's default_model already falls into.
+try { db.run(`ALTER TABLE households ADD COLUMN vision_seeded INTEGER NOT NULL DEFAULT 0`); } catch {}
+try {
+  const seeded = (
+    db.query(`SELECT vision_seeded FROM households WHERE id = 'default'`).get() as
+      | { vision_seeded: number }
+      | undefined
+  )?.vision_seeded;
+  if (!seeded) {
+    db.run(
+      `UPDATE models SET vision = 1
+       WHERE provider = 'anthropic'
+          OR id IN ('gpt-4o', 'gpt-4o-mini', 'mistral-medium-latest')`,
+    );
+    db.run(`UPDATE households SET vision_seeded = 1 WHERE id = 'default'`);
+  }
+} catch {}
+
 // Migration: `garden` was one 54-tool family, now sub-split. Expand any stored
 // "garden" selection to its sub-families so existing personas/chats keep the
 // same tools. Idempotent (only acts on the exact "garden" element). Ids mirror
