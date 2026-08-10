@@ -259,10 +259,15 @@ final class Dictation {
     }
 
     /// Stop everything and hand the text over exactly once.
+    ///
+    /// Twice was possible and it showed: a final result and an error can both
+    /// arrive for the same session, and each delivery appended the same words
+    /// again. The guard is what makes the doc comment above true.
     private func finish() {
+        guard state == .listening else { return }
         let text = transcript.trimmingCharacters(in: .whitespacesAndNewlines)
         teardown()
-        if state == .listening { state = .idle }
+        state = .idle
         // Called even when nothing was heard: the composer keeps a note of what
         // the field held before dictation started, and this is what tells it to
         // let go. Skipping the empty case leaves that note behind, and the next

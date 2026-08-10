@@ -1012,16 +1012,30 @@ enum TurnCostPref {
     static let key = "maurice.showTurnCost"
 }
 
-/// Text typed before dictation started, plus what has been dictated since.
-/// Separated by a space unless one side is empty — a leading or trailing space
-/// in the composer is the kind of small mess that survives all the way into the
-/// sent message.
-private func joinDictated(_ base: String, _ dictated: String) -> String {
-    let head = base.trimmingCharacters(in: .whitespacesAndNewlines)
-    let tail = dictated.trimmingCharacters(in: .whitespacesAndNewlines)
-    if head.isEmpty { return tail }
-    if tail.isEmpty { return head }
-    return head + " " + tail
+/// Where a dictation session writes, fixed when it starts.
+///
+/// The recogniser revises as it listens, so each partial has to replace the last
+/// one rather than follow it. Holding the text as it was, plus the span being
+/// replaced, makes that a substitution instead of an ever-growing append — and
+/// the same structure puts the words at the caret, or over the selection, since
+/// an empty selection at the end is just the append case.
+private struct DictationAnchor {
+    let base: String
+    let range: Range<String.Index>
+
+    /// The field's contents with `dictated` in place of the anchored span.
+    /// Spacing is added only where the neighbouring text calls for it: a stray
+    /// space at either end is the kind of small mess that survives into the sent
+    /// message.
+    func applying(_ dictated: String) -> String {
+        let text = dictated.trimmingCharacters(in: .whitespacesAndNewlines)
+        if text.isEmpty { return base.replacingCharacters(in: range, with: "") }
+        let before = base[base.startIndex..<range.lowerBound]
+        let after = base[range.upperBound...]
+        let lead = before.isEmpty || before.last?.isWhitespace == true ? "" : " "
+        let trail = after.isEmpty || after.first?.isWhitespace == true ? "" : " "
+        return before + lead + text + trail + after
+    }
 }
 
 /// Whether dictation may fall back to Apple's servers for languages with no
@@ -1722,9 +1736,10 @@ private struct ComposerBar: View {
     @State private var dictationError: String?
     /// The language a consent prompt is being shown for, or nil.
     @State private var consentLanguage: String?
-    /// What the field held when dictation started, so live partials rewrite only
-    /// the dictated tail instead of piling up.
-    @State private var dictationBase: String?
+    /// Where the running dictation writes; nil when none is running.
+    @State private var dictationAnchor: DictationAnchor?
+    /// The field's caret or selection, used to place the next dictation.
+    @State private var selection: TextSelection?
     #if os(iOS)
     @Environment(\.scenePhase) private var scenePhase
     #endif
@@ -1754,6 +1769,12 @@ private struct ComposerBar: View {
             if inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 await chat.discardActiveIfEmpty()
             }
+            // Clear the draft too. Landing on a fresh thread while the previous
+            // dictation still sits in the field isn't a fresh start, and the new
+            // words pile onto the old ones — which reads as the button having
+            // failed to open anything.
+            inputText = ""
+            dictationAnchor = nil
             chat.activeConversationId = nil
             dictation.start(locale: session.resolvedLocale, allowServer: allowServerDictation)
         }
@@ -1766,6 +1787,33 @@ private struct ComposerBar: View {
 
     private var canSend: Bool {
         (!trimmed.isEmpty || pendingImageData != nil) && !chat.isStreaming
+    }
+
+    /// Where the next dictation should write: over the selection if there is
+    /// one, at the caret otherwise, and at the end when the field has never been
+    /// focused. Resolved once, when dictation starts — the caret moves as the
+    /// text is rewritten, so consulting it again mid-session would chase itself.
+    private func anchorAtSelection() -> DictationAnchor {
+        let end = inputText.endIndex
+        guard let selection else { return DictationAnchor(base: inputText, range: end..<end) }
+        switch selection.indices {
+        case .selection(let range):
+            return DictationAnchor(base: inputText, range: range)
+        default:
+            // A multi-range selection has no single sensible insertion point;
+            // appending is the predictable answer rather than picking one.
+            return DictationAnchor(base: inputText, range: end..<end)
+        }
+    }
+
+    /// Send, closing dictation first. stop() delivers the final text
+    /// synchronously, so the words spoken up to the tap are in the field before
+    /// the send reads it — and, more to the point, dictation can no longer
+    /// deliver into a field the send has just cleared, which put the sent
+    /// sentence back in the composer as if it had failed.
+    private func submit(_ action: () -> Void) {
+        if dictation.isListening { dictation.stop() }
+        action()
     }
 
     /// Has the user attached any context (live items or locked carry-over)?
@@ -1912,12 +1960,15 @@ private struct ComposerBar: View {
 
                 // Slightly larger than the body; ~2 lines tall by default,
                 // growing to ~10 lines before it scrolls.
-                TextField(session.localized("chat.composer.placeholder"), text: $inputText, axis: .vertical)
+                // `selection` is what lets dictation land at the caret and
+                // replace what's selected, rather than always appending.
+                TextField(session.localized("chat.composer.placeholder"),
+                          text: $inputText, selection: $selection, axis: .vertical)
                     .textFieldStyle(.plain)
                     .font(.system(size: kBodyFont + 2))
                     .lineLimit(2...10)
                     .focused($isFocused)
-                    .onSubmit { onSend() }
+                    .onSubmit { submit(onSend) }
                     .submitLabel(.send)
 
                 HStack(spacing: 4) {
@@ -2029,7 +2080,7 @@ private struct ComposerBar: View {
                     // 💬 no-one (group only) · 🎩 choose who · ➤ send to them.
                     HStack(spacing: 8) {
                         if chat.isRoom {
-                            Button { onPostBubble() } label: {
+                            Button { submit(onPostBubble) } label: {
                                 Image(systemName: "bubble.left")
                                     .font(.system(size: 18, weight: .medium))
                                     .foregroundStyle(canSend ? theme.inkSoft : theme.inkMute)
@@ -2050,7 +2101,7 @@ private struct ComposerBar: View {
                             // Draft present: tap sends to the armed Maurice;
                             // long-press opens the picker to choose someone else,
                             // then sends to them ("Send" in the picker).
-                            Button { onSend() } label: { actionAvatar(sending: true) }
+                            Button { submit(onSend) } label: { actionAvatar(sending: true) }
                             .buttonStyle(.plain)
                             .keyboardShortcut(.return, modifiers: .command)
                             .simultaneousGesture(
@@ -2104,12 +2155,14 @@ private struct ComposerBar: View {
         #endif
         // Dictated text is appended, not assigned: you may have typed a few words
         // before reaching for the mic, and losing them would be worse than a
-        // clumsy join. `dictationBase` is what the field held when dictation
+        // clumsy join. The anchor is where dictation writes, fixed when it
         // started, so each partial rewrites only the dictated tail.
         .onAppear {
             dictation.onFinish = { text in
-                inputText = joinDictated(dictationBase ?? inputText, text)
-                dictationBase = nil
+                if let anchor = dictationAnchor ?? anchorAtSelection() as DictationAnchor? {
+                    inputText = anchor.applying(text)
+                }
+                dictationAnchor = nil
                 isFocused = true
             }
             startDictationIfRequested()
@@ -2134,8 +2187,8 @@ private struct ComposerBar: View {
         // until you stop, which reads as the button having done nothing.
         .onChange(of: dictation.transcript) { _, partial in
             guard dictation.isListening else { return }
-            if dictationBase == nil { dictationBase = inputText }
-            inputText = joinDictated(dictationBase ?? "", partial)
+            if dictationAnchor == nil { dictationAnchor = anchorAtSelection() }
+            if let anchor = dictationAnchor { inputText = anchor.applying(partial) }
         }
         .onDisappear { dictation.stop() }
         .onChange(of: dictation.isListening) { _, listening in
@@ -2221,7 +2274,7 @@ private struct ComposerBar: View {
         .onChange(of: studio.pendingSend) {
             guard studio.pendingSend else { return }
             studio.pendingSend = false
-            onSend()
+            submit(onSend)
         }
     }
 }
