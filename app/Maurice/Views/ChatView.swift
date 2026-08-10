@@ -1752,8 +1752,13 @@ private struct ComposerBar: View {
     @State private var dictationError: String?
     /// The language a consent prompt is being shown for, or nil.
     @State private var consentLanguage: String?
-    /// Where the running dictation writes; nil when none is running.
+    /// Where the running dictation writes; nil when none is running, and nil
+    /// also means "don't write" — which is how a manual edit stops the final
+    /// delivery from landing on top of it.
     @State private var dictationAnchor: DictationAnchor?
+    /// The exact text dictation last put in the field. Anything else appearing
+    /// there came from the person, and their edit outranks the transcript.
+    @State private var lastDictatedText: String?
     #if os(iOS)
     @Environment(\.scenePhase) private var scenePhase
     #endif
@@ -1786,6 +1791,8 @@ private struct ComposerBar: View {
             inputText = ""
             dictationAnchor = nil
             await chat.startNewConversation()
+            dictationAnchor = anchorAtSelection()
+            lastDictatedText = nil
             dictation.start(locale: session.resolvedLocale, allowServer: allowServerDictation)
         }
         #endif
@@ -2014,7 +2021,13 @@ private struct ComposerBar: View {
                     // present and fail every time.
                     #if os(iOS)
                     Button {
-                        dictation.toggle(locale: session.resolvedLocale, allowServer: allowServerDictation)
+                        if dictation.isListening {
+                            dictation.stop()
+                        } else {
+                            dictationAnchor = anchorAtSelection()
+                            lastDictatedText = nil
+                            dictation.start(locale: session.resolvedLocale, allowServer: allowServerDictation)
+                        }
                     } label: {
                         Image(systemName: dictation.isListening ? "mic.fill" : "mic")
                             .font(.system(size: 16))
@@ -2177,8 +2190,10 @@ private struct ComposerBar: View {
         // started, so each partial rewrites only the dictated tail.
         .onAppear {
             dictation.onFinish = { text in
-                if let anchor = dictationAnchor ?? anchorAtSelection() as DictationAnchor? {
-                    inputText = anchor.applying(text)
+                if let anchor = dictationAnchor {
+                    let final = anchor.applying(text)
+                    lastDictatedText = final
+                    inputText = final
                 }
                 dictationAnchor = nil
                 isFocused = true
@@ -2211,9 +2226,20 @@ private struct ComposerBar: View {
         // partial rather than appended to. Without this the field stays empty
         // until you stop, which reads as the button having done nothing.
         .onChange(of: dictation.transcript) { _, partial in
-            guard dictation.isListening else { return }
-            if dictationAnchor == nil { dictationAnchor = anchorAtSelection() }
-            if let anchor = dictationAnchor { inputText = anchor.applying(partial) }
+            guard dictation.isListening, let anchor = dictationAnchor else { return }
+            let next = anchor.applying(partial)
+            lastDictatedText = next
+            inputText = next
+        }
+        // A change to the field that dictation didn't make came from the person.
+        // Their edit wins: the anchor is dropped so neither the next partial nor
+        // the final delivery can rebuild the field from a snapshot that predates
+        // the correction, and listening stops because carrying on would fight
+        // them for the cursor.
+        .onChange(of: inputText) { _, current in
+            guard dictation.isListening, current != lastDictatedText else { return }
+            dictationAnchor = nil
+            dictation.stop()
         }
         .onDisappear { dictation.stop() }
         .onChange(of: dictation.isListening) { _, listening in
