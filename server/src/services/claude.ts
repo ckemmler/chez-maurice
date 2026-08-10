@@ -384,6 +384,36 @@ async function* runOpenAIAgentic(
   yield { type: "done", message_id: crypto.randomUUID() };
 }
 
+// ── Prompt caching (Anthropic) ──────────────────────────────────
+//
+// Anthropic caches by prefix, marked with explicit breakpoints, and bills a
+// cached read at a tenth of a fresh token. The agentic loop is what makes this
+// worth doing: every round re-sends the system prompt, the whole tool roster and
+// the entire history, so a turn that calls three tools pays for that prefix four
+// times over. Three breakpoints, comfortably inside the cap of four:
+//
+//   1. the system prompt — tools render ahead of it, so one marker on the last
+//      system block covers the roster, the persona, the loaded context and the
+//      safety floor in a single entry;
+//   2. the end of the conversation history — carries from one turn to the next;
+//   3. the growing tool-result trail, moved along as each round appends to it.
+//
+// Placement only ever lands on blocks we build ourselves, never on a history
+// message: those come back from the database as plain strings and would have to
+// be rewritten into block form to carry a marker, which is a needless change to
+// the exact bytes the cache key is computed from.
+const EPHEMERAL = { type: "ephemeral" } as const;
+
+/** Mark a message's last content block as a cache breakpoint. Returns the block
+ *  so a later round can clear the marker when it moves on. */
+function breakpointOn(message: any): any | null {
+  const blocks = message?.content;
+  if (!Array.isArray(blocks) || blocks.length === 0) return null;
+  const last = blocks[blocks.length - 1];
+  last.cache_control = EPHEMERAL;
+  return last;
+}
+
 function buildApiMessages(conversationId: string): any[] {
   const history = getMessages(conversationId);
   const imagePattern = /!\[.*?\]\(\/api\/images\/(.+?)\)/g;
@@ -405,7 +435,14 @@ function buildApiMessages(conversationId: string): any[] {
       const tag = speaker(m);
       const images = [...m.content.matchAll(imagePattern)];
       if (images.length === 0) {
-        return { role, content: tag + m.content };
+        const text = tag + m.content;
+        // Block form even for plain text, so a message's shape doesn't depend on
+        // where it happens to sit: a cache breakpoint has to be attached to a
+        // block, and a message that were a bare string on one turn and a block on
+        // the next would change the very bytes the cache key is built from.
+        // (Empty content stays a string — the API rejects an empty text block,
+        // and such a message would never be a breakpoint target anyway.)
+        return { role, content: text ? [{ type: "text", text }] : text };
       }
       const content: any[] = [];
       for (const img of images) {
@@ -424,10 +461,7 @@ function buildApiMessages(conversationId: string): any[] {
       }
       const textContent = (tag + m.content.replace(imagePattern, "")).trim();
       if (textContent) content.push({ type: "text", text: textContent });
-      return {
-        role,
-        content: content.length === 1 && content[0].type === "text" ? content[0].text : content,
-      };
+      return { role, content };
     });
 }
 
@@ -632,6 +666,17 @@ export async function* streamResponse(
   if (wantsWeb && hasWebSearch()) tools.push(WEB_SEARCH_TOOL);
   for (const t of mcpTools) tools.push(mcpToolToAnthropic(t));
 
+  // Breakpoint 2 of 3: the end of the conversation history. `messages` ends with
+  // the time reminder, so the message before it is the last real turn — cache up
+  // to there and the next turn reads everything said so far instead of re-paying
+  // for it. (Nothing to mark on the very first turn of a thread.)
+  if (messages.length >= 2) breakpointOn(messages[messages.length - 2]);
+
+  // Breakpoint 3 of 3: the tail, moved along as the loop appends tool results, so
+  // each round reads the previous round's prefix rather than re-sending it at
+  // full price. Starts on the time reminder; the loop hands it forward.
+  let tailBlock = breakpointOn(messages[messages.length - 1]);
+
   // Token/cost accounting for this turn, accumulated across every agentic round
   // (each round is a separate billed request) and reported once at the end.
   const usage = newUsage("anthropic", resolved);
@@ -645,7 +690,10 @@ export async function* streamResponse(
       const body: any = {
         model: resolved,
         max_tokens: config.maxTokens,
-        system: systemPrompt,
+        // Breakpoint 1 of 3. Tools are rendered ahead of the system prompt, so
+        // this single marker caches the whole fixed head of the request: the tool
+        // roster, the persona, the loaded context and the safety floor.
+        system: [{ type: "text", text: systemPrompt, cache_control: EPHEMERAL }],
         messages,
         stream: true,
       };
@@ -799,6 +847,14 @@ export async function* streamResponse(
       }
 
       messages.push({ role: "user", content: toolResults });
+
+      // Hand the tail breakpoint to the results just appended, so the next round
+      // reads this one's prefix. Moved rather than added: the cap is four, and a
+      // marker left behind on every round would blow through it by round four.
+      // The new marker sits a couple of blocks past the old one, well inside the
+      // twenty-block window the API looks back over to find the prior entry.
+      if (tailBlock) delete tailBlock.cache_control;
+      tailBlock = breakpointOn(messages[messages.length - 1]);
       // loop again with the tool results appended
     }
 
