@@ -1725,6 +1725,9 @@ private struct ComposerBar: View {
     /// What the field held when dictation started, so live partials rewrite only
     /// the dictated tail instead of piling up.
     @State private var dictationBase: String?
+    #if os(iOS)
+    @Environment(\.scenePhase) private var scenePhase
+    #endif
     @AppStorage(ServerDictationPref.key) private var allowServerDictation = false
     @FocusState var isFocused: Bool
     let onAddContext: () -> Void
@@ -1736,6 +1739,16 @@ private struct ComposerBar: View {
 
     /// The thread's armed Maurice (what ➤ summons; nil = everyday).
     private var currentMaurice: Maurice { maurices.maurice(for: chat.currentMauriceId) }
+
+    /// Start listening if something outside the app asked for it — the Action
+    /// Button, or the shortcut by voice. Silently does nothing otherwise, and a
+    /// request that has gone stale is dropped rather than honoured late.
+    private func startDictationIfRequested() {
+        #if os(iOS)
+        guard DictationRequest.shared.take(), !dictation.isListening else { return }
+        dictation.start(locale: session.resolvedLocale, allowServer: allowServerDictation)
+        #endif
+    }
 
     private var trimmed: String {
         inputText.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -2089,7 +2102,17 @@ private struct ComposerBar: View {
                 dictationBase = nil
                 isFocused = true
             }
+            startDictationIfRequested()
         }
+        #if os(iOS)
+        // The Action Button leaves a note and opens the app; the composer picks
+        // it up here. Both hooks are needed: a cold launch arrives through
+        // onAppear, a warm one through the scene coming back to the foreground,
+        // and which of the two happens is not ours to predict.
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active { startDictationIfRequested() }
+        }
+        #endif
         // The recogniser revises as it goes, so the tail is rewritten on every
         // partial rather than appended to. Without this the field stays empty
         // until you stop, which reads as the button having done nothing.
