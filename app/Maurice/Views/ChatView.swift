@@ -1021,17 +1021,33 @@ enum TurnCostPref {
 /// an empty selection at the end is just the append case.
 private struct DictationAnchor {
     let base: String
-    let range: Range<String.Index>
+    /// Character offsets, not String.Index. An index belongs to the string it
+    /// came from: the selection's indices address the field's live text, and
+    /// using them to slice the snapshot taken alongside it trapped in
+    /// validateScalarRange even though the two held equal contents. Offsets
+    /// survive the copy; they are resolved against `base` at the moment of use
+    /// and clamped, so a stale one can only be wrong, never fatal.
+    let offsets: Range<Int>
+
+    init(base: String, offsets: Range<Int>) {
+        self.base = base
+        let count = base.count
+        let lower = min(max(offsets.lowerBound, 0), count)
+        let upper = min(max(offsets.upperBound, lower), count)
+        self.offsets = lower..<upper
+    }
 
     /// The field's contents with `dictated` in place of the anchored span.
     /// Spacing is added only where the neighbouring text calls for it: a stray
     /// space at either end is the kind of small mess that survives into the sent
     /// message.
     func applying(_ dictated: String) -> String {
+        let lower = base.index(base.startIndex, offsetBy: offsets.lowerBound)
+        let upper = base.index(base.startIndex, offsetBy: offsets.upperBound)
         let text = dictated.trimmingCharacters(in: .whitespacesAndNewlines)
-        if text.isEmpty { return base.replacingCharacters(in: range, with: "") }
-        let before = base[base.startIndex..<range.lowerBound]
-        let after = base[range.upperBound...]
+        let before = base[base.startIndex..<lower]
+        let after = base[upper...]
+        if text.isEmpty { return String(before) + String(after) }
         let lead = before.isEmpty || before.last?.isWhitespace == true ? "" : " "
         let trail = after.isEmpty || after.first?.isWhitespace == true ? "" : " "
         return before + lead + text + trail + after
@@ -1740,6 +1756,10 @@ private struct ComposerBar: View {
     @State private var dictationAnchor: DictationAnchor?
     /// The field's caret or selection, used to place the next dictation.
     @State private var selection: TextSelection?
+    /// The same thing as plain character offsets, converted at the one moment
+    /// the indices are known to belong to the text on screen. Everything
+    /// downstream works in offsets — see DictationAnchor for why.
+    @State private var caretOffsets: Range<Int>?
     #if os(iOS)
     @Environment(\.scenePhase) private var scenePhase
     #endif
@@ -1794,16 +1814,11 @@ private struct ComposerBar: View {
     /// focused. Resolved once, when dictation starts — the caret moves as the
     /// text is rewritten, so consulting it again mid-session would chase itself.
     private func anchorAtSelection() -> DictationAnchor {
-        let end = inputText.endIndex
-        guard let selection else { return DictationAnchor(base: inputText, range: end..<end) }
-        switch selection.indices {
-        case .selection(let range):
-            return DictationAnchor(base: inputText, range: range)
-        default:
-            // A multi-range selection has no single sensible insertion point;
-            // appending is the predictable answer rather than picking one.
-            return DictationAnchor(base: inputText, range: end..<end)
-        }
+        let text = inputText
+        let end = text.count
+        // No known caret (never focused, or a multi-range selection) means the
+        // end, which is the plain append this started as.
+        return DictationAnchor(base: text, offsets: caretOffsets ?? end..<end)
     }
 
     /// Send, closing dictation first. stop() delivers the final text
@@ -2185,6 +2200,18 @@ private struct ComposerBar: View {
         // The recogniser revises as it goes, so the tail is rewritten on every
         // partial rather than appended to. Without this the field stays empty
         // until you stop, which reads as the button having done nothing.
+        .onChange(of: selection) { _, sel in
+            // Only here do the indices provably address the text on screen; a
+            // conversion anywhere else is the trap that crashed this once.
+            guard let sel, case .selection(let range) = sel.indices else {
+                caretOffsets = nil
+                return
+            }
+            let text = inputText
+            let lower = text.distance(from: text.startIndex, to: range.lowerBound)
+            let upper = text.distance(from: text.startIndex, to: range.upperBound)
+            caretOffsets = lower..<upper
+        }
         .onChange(of: dictation.transcript) { _, partial in
             guard dictation.isListening else { return }
             if dictationAnchor == nil { dictationAnchor = anchorAtSelection() }
