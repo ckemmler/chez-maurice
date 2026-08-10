@@ -2064,7 +2064,15 @@ private struct ComposerBar: View {
             #endif
         }
         .onChange(of: dictation.state) { _, state in
-            if case .failed(let message) = state { dictationError = message }
+            // Localize here, not in the service: session.localized honours the
+            // language chosen inside the app, which is what the rest of the UI
+            // speaks. The missing-model case names the language it tried.
+            guard case .failed(let failure) = state else { return }
+            if case .noOnDeviceModel(let language) = failure {
+                dictationError = session.localized(failure.messageKey, language)
+            } else {
+                dictationError = session.localized(failure.messageKey)
+            }
         }
         .alert(session.localized("chat.dictate"),
                isPresented: Binding(get: { dictationError != nil },

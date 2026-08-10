@@ -16,12 +16,36 @@ import AVFoundation
 /// a whole turn to undo.
 @Observable @MainActor
 final class Dictation {
+    /// Why dictation couldn't start. A case rather than a message: the view owns
+    /// wording, and it is the only thing holding the SessionStore that knows
+    /// which language the user picked *in the app* — `String(localized:)` here
+    /// would follow the system language and answer in the wrong one.
+    enum Failure: Equatable {
+        case speechDenied
+        case micDenied
+        case unavailable
+        /// No downloaded on-device model for this language; carries it so the
+        /// message can name it instead of saying "this language".
+        case noOnDeviceModel(language: String)
+        case audioSession
+        case audioEngine
+
+        var messageKey: String {
+            switch self {
+            case .speechDenied:    return "dictation.error.speech_denied"
+            case .micDenied:       return "dictation.error.mic_denied"
+            case .unavailable:     return "dictation.error.unavailable"
+            case .noOnDeviceModel: return "dictation.error.no_offline_model"
+            case .audioSession:    return "dictation.error.audio_session"
+            case .audioEngine:     return "dictation.error.audio_engine"
+            }
+        }
+    }
+
     enum State: Equatable {
         case idle
         case listening
-        /// Something stopped us — a refused permission, no on-device model for
-        /// the locale, no microphone. Carries text fit to show the user.
-        case failed(String)
+        case failed(Failure)
     }
 
     private(set) var state: State = .idle
@@ -57,12 +81,12 @@ final class Dictation {
             Task { @MainActor in
                 guard let self else { return }
                 guard speechAuth == .authorized else {
-                    self.state = .failed(String(localized: "dictation.error.speech_denied"))
+                    self.state = .failed(.speechDenied)
                     return
                 }
                 self.requestMicrophone { granted in
                     guard granted else {
-                        self.state = .failed(String(localized: "dictation.error.mic_denied"))
+                        self.state = .failed(.micDenied)
                         return
                     }
                     self.beginListening(locale: locale)
@@ -98,11 +122,16 @@ final class Dictation {
         // all, and the user hears the result immediately either way.
         let rec = SFSpeechRecognizer(locale: locale) ?? SFSpeechRecognizer()
         guard let rec, rec.isAvailable else {
-            state = .failed(String(localized: "dictation.error.unavailable"))
+            state = .failed(.unavailable)
             return
         }
         guard rec.supportsOnDeviceRecognition else {
-            state = .failed(String(localized: "dictation.error.no_offline_model"))
+            // The language has no downloaded model. Name it: "this language has
+            // no model" leaves the user guessing which one the app even asked
+            // for, which is exactly the question they need answered.
+            let name = locale.localizedString(forIdentifier: locale.identifier)
+                ?? locale.identifier
+            state = .failed(.noOnDeviceModel(language: name))
             return
         }
         recognizer = rec
@@ -120,7 +149,7 @@ final class Dictation {
             try session.setCategory(.record, mode: .measurement, options: .duckOthers)
             try session.setActive(true, options: .notifyOthersOnDeactivation)
         } catch {
-            state = .failed(String(localized: "dictation.error.audio_session"))
+            state = .failed(.audioSession)
             return
         }
         #endif
@@ -138,7 +167,7 @@ final class Dictation {
         do {
             try engine.start()
         } catch {
-            state = .failed(String(localized: "dictation.error.audio_engine"))
+            state = .failed(.audioEngine)
             teardown()
             return
         }

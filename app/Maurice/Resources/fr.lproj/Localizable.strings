@@ -336,6 +336,6 @@
 "dictation.error.speech_denied" = "La reconnaissance vocale est désactivée pour Maurice. Activez-la dans Réglages › Confidentialité › Reconnaissance vocale.";
 "dictation.error.mic_denied" = "L'accès au micro est désactivé pour Maurice. Activez-le dans Réglages › Confidentialité › Microphone.";
 "dictation.error.unavailable" = "La dictée n'est pas disponible pour le moment.";
-"dictation.error.no_offline_model" = "Cette langue n'a pas de modèle de dictée sur l'appareil. Ajoutez son clavier dans Réglages, puis réessayez — Maurice n'enverra pas votre voix sur un serveur.";
+"dictation.error.no_offline_model" = "La dictée en %@ demande un modèle absent de cet appareil. Ajoutez-le dans Réglages › Général › Clavier › Langues de dictée, puis réessayez — Maurice n'enverra pas votre voix sur un serveur.";
 "dictation.error.audio_session" = "Impossible de prendre le micro.";
 "dictation.error.audio_engine" = "Impossible de démarrer l'enregistrement.";
