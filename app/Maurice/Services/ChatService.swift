@@ -321,6 +321,17 @@ final class ChatService {
     /// the screen goes on showing the old conversation while the app believes
     /// none is selected. The conversation itself is created on first send.
     func startNewConversation() async {
+        // A reply still streaming belongs to the thread being left. Left running
+        // it keeps writing — and on completion appends the finished answer into
+        // whatever `messages` now holds, which is the new empty thread. It also
+        // keeps isStreaming true, disabling the composer in a conversation that
+        // has nothing to do with it.
+        stop()
+        // Same for the room socket: it stays subscribed to the old room, and
+        // nothing downstream checks which conversation an event belongs to, so
+        // another member's message would land in the new thread's history.
+        socket?.disconnect()
+        socket = nil
         await discardActiveIfEmpty()
         activeConversationId = nil
         messages = []

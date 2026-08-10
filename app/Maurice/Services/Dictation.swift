@@ -63,6 +63,8 @@ final class Dictation {
     /// exactly the kind of thing that should be visible while it happens, not
     /// buried in a settings screen the user agreed to once.
     private(set) var usingServer = false
+    /// True between start() and the moment listening actually begins or fails.
+    private var isStarting = false
     /// What has been heard so far this session, including the unstable tail the
     /// recognizer may still revise.
     private(set) var transcript = ""
@@ -85,7 +87,14 @@ final class Dictation {
     }
 
     func start(locale: Locale, allowServer: Bool) {
-        guard !isListening else { return }
+        // isListening only becomes true at the end of beginListening, after two
+        // async permission callbacks — so it cannot be the re-entrancy guard. A
+        // double tap, or the Action Button racing a tap, otherwise runs
+        // beginListening twice: the second overwrites the first's task without
+        // cancelling it, and the orphan goes on writing the transcript until it
+        // reports final and tears down the session that replaced it.
+        guard !isListening, !isStarting else { return }
+        isStarting = true
         transcript = ""
         // Back to idle before trying again. The composer reacts to `state`
         // changing, so leaving the previous failure in place meant a second
@@ -100,11 +109,13 @@ final class Dictation {
             Task { @MainActor in
                 guard let self else { return }
                 guard speechAuth == .authorized else {
+                    self.isStarting = false
                     self.state = .failed(.speechDenied)
                     return
                 }
                 self.requestMicrophone { granted in
                     guard granted else {
+                        self.isStarting = false
                         self.state = .failed(.micDenied)
                         return
                     }
@@ -176,12 +187,14 @@ final class Dictation {
 
         if let rec = onDeviceRecognizer(for: locale) {
             recognizer = rec
-        } else if allowServer {
+        } else if allowServer, let server = SFSpeechRecognizer(locale: locale) {
             // The user has agreed that audio may go to Apple for languages with
-            // no local model. Any available recogniser for the language will do
-            // now, since the transcription happens server-side either way.
+            // no local model. Only a recogniser *for this language* will do: the
+            // old fallback to the device default meant agreeing to dictate in
+            // Icelandic and getting the words transcribed as English, which is
+            // worse than refusing.
             onDevice = false
-            recognizer = SFSpeechRecognizer(locale: locale) ?? SFSpeechRecognizer()
+            recognizer = server
         }
 
         guard let rec = recognizer, rec.isAvailable else {
@@ -189,11 +202,17 @@ final class Dictation {
             // recogniser exists but isn't available right now" — the first asks
             // the user to go install something, and sending them to Settings
             // over a transient outage wastes their time on the wrong errand.
-            let exists = SFSpeechRecognizer(locale: locale) != nil
-            let available = SFSpeechRecognizer(locale: locale)?.isAvailable ?? false
+            let candidate = SFSpeechRecognizer(locale: locale)
+            let exists = candidate != nil
+            let available = candidate?.isAvailable ?? false
             let language = locale.localizedString(forLanguageCode: locale.language.languageCode?.identifier ?? "")
                 ?? locale.identifier
-            if exists && !available {
+            isStarting = false
+            if !exists {
+                // Apple has no recogniser for this language at all. Neither a
+                // local model nor consent changes that, so don't offer either.
+                state = .failed(.noOnDeviceModel(language: language))
+            } else if !available {
                 state = .failed(.unavailable)
             } else if !allowServer {
                 // There *is* a way forward — it's just one only the user can
@@ -223,6 +242,11 @@ final class Dictation {
             try session.setCategory(.record, mode: .measurement, options: .duckOthers)
             try session.setActive(true, options: .notifyOthersOnDeactivation)
         } catch {
+            // Tear down like every other failure path: setCategory may have
+            // succeeded before setActive threw, leaving other apps' audio ducked
+            // with nothing to un-duck it.
+            teardown()
+            isStarting = false
             state = .failed(.audioSession)
             return
         }
@@ -241,8 +265,9 @@ final class Dictation {
         do {
             try engine.start()
         } catch {
-            state = .failed(.audioEngine)
             teardown()
+            isStarting = false
+            state = .failed(.audioEngine)
             return
         }
 
@@ -260,6 +285,7 @@ final class Dictation {
             }
         }
 
+        isStarting = false
         state = .listening
     }
 

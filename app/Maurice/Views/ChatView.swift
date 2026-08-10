@@ -1806,10 +1806,6 @@ private struct ComposerBar: View {
         (!trimmed.isEmpty || pendingImageData != nil) && !chat.isStreaming
     }
 
-    /// Where the next dictation should write: over the selection if there is
-    /// one, at the caret otherwise, and at the end when the field has never been
-    /// focused. Resolved once, when dictation starts — the caret moves as the
-    /// text is rewritten, so consulting it again mid-session would chase itself.
     /// Where the next dictation writes. The end of the field, for now.
     ///
     /// SwiftUI's TextSelection was the obvious source and it cannot be used:
@@ -1979,8 +1975,6 @@ private struct ComposerBar: View {
 
                 // Slightly larger than the body; ~2 lines tall by default,
                 // growing to ~10 lines before it scrolls.
-                // `selection` is what lets dictation land at the caret and
-                // replace what's selected, rather than always appending.
                 TextField(session.localized("chat.composer.placeholder"),
                           text: $inputText, axis: .vertical)
                     .onSubmit { submit(onSend) }
@@ -2208,10 +2202,15 @@ private struct ComposerBar: View {
         .onChange(of: scenePhase) { _, phase in
             if phase == .active {
                 startDictationIfRequested()
-            } else {
+            } else if phase == .background {
                 // The audio session has no background mode, so leaving the app
                 // suspends the engine while the state still says "listening" —
                 // the mic goes on pulsing over a recording that stopped.
+                //
+                // .background only, never .inactive: that one fires for a
+                // notification banner, Control Centre, or the app switcher
+                // preview, none of which stop the recording. Cutting on it would
+                // truncate a long sentence because a message happened to arrive.
                 dictation.stop()
             }
         }
