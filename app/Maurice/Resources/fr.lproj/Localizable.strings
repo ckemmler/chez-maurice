@@ -329,3 +329,13 @@
 "gardens.remove_hint" = "Vous ne pouvez retirer que vous-même — jamais les autres.";
 "gardens.in_garden_with" = "dans le jardin que vous entretenez avec %@";
 "gardens.in_your_garden" = "dans votre jardin personnel";
+
+/* Dictation */
+"chat.dictate" = "Dicter";
+"chat.dictate_stop" = "Arrêter la dictée";
+"dictation.error.speech_denied" = "La reconnaissance vocale est désactivée pour Maurice. Activez-la dans Réglages › Confidentialité › Reconnaissance vocale.";
+"dictation.error.mic_denied" = "L'accès au micro est désactivé pour Maurice. Activez-le dans Réglages › Confidentialité › Microphone.";
+"dictation.error.unavailable" = "La dictée n'est pas disponible pour le moment.";
+"dictation.error.no_offline_model" = "Cette langue n'a pas de modèle de dictée sur l'appareil. Ajoutez son clavier dans Réglages, puis réessayez — Maurice n'enverra pas votre voix sur un serveur.";
+"dictation.error.audio_session" = "Impossible de prendre le micro.";
+"dictation.error.audio_engine" = "Impossible de démarrer l'enregistrement.";

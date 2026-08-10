@@ -1696,6 +1696,11 @@ private struct ComposerBar: View {
     @State private var showCamera = false
     @State private var showPhotoPicker = false
     @State private var showFileImporter = false
+    /// Speech-to-text, owned by the composer: it starts and stops with this
+    /// view, so leaving the chat can't strand a live microphone.
+    @State private var dictation = Dictation()
+    @State private var micPulse = false
+    @State private var dictationError: String?
     @FocusState var isFocused: Bool
     let onAddContext: () -> Void
     var onOpenTools: () -> Void = {}
@@ -1889,6 +1894,32 @@ private struct ComposerBar: View {
                     .buttonStyle(.plain)   // no default menu-button background
                     .disabled(chat.isStreaming)
 
+                    // Dictate — fills the field, never sends. Recognition
+                    // mishears, and a mishearing that sent itself would cost a
+                    // whole turn to undo.
+                    Button {
+                        dictation.toggle(locale: session.resolvedLocale)
+                    } label: {
+                        Image(systemName: dictation.isListening ? "mic.fill" : "mic")
+                            .font(.system(size: 16))
+                            .foregroundStyle(dictation.isListening
+                                             ? (session.activeDeviceUser?.color ?? .blue).legible(onDark: theme.isDark)
+                                             : theme.inkSoft)
+                            .frame(width: 34, height: 34)
+                            .contentShape(Rectangle())
+                            // A quiet pulse is the "I'm listening" tell. Without
+                            // one you can't distinguish listening from a button
+                            // that didn't take.
+                            .opacity(dictation.isListening && micPulse ? 0.45 : 1)
+                            .animation(dictation.isListening
+                                       ? .easeInOut(duration: 0.7).repeatForever(autoreverses: true)
+                                       : .default,
+                                       value: micPulse)
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(chat.isStreaming)
+                    .help(session.localized(dictation.isListening ? "chat.dictate_stop" : "chat.dictate"))
+
                     // Tools — per-chat tool families (wrench).
                     Button(action: onOpenTools) {
                         Image(systemName: "wrench.adjustable")
@@ -2012,6 +2043,36 @@ private struct ComposerBar: View {
         .padding(.horizontal, 10)
         .padding(.vertical, 12)
         #endif
+        // Dictated text is appended, not assigned: you may have typed a few words
+        // before reaching for the mic, and losing them would be worse than a
+        // clumsy join.
+        .onAppear {
+            dictation.onFinish = { text in
+                let existing = inputText.trimmingCharacters(in: .whitespacesAndNewlines)
+                inputText = existing.isEmpty ? text : existing + " " + text
+                isFocused = true
+            }
+        }
+        .onDisappear { dictation.stop() }
+        .onChange(of: dictation.isListening) { _, listening in
+            micPulse = listening
+            #if os(iOS)
+            // The haptic is the "I'm listening" cue, and it matters more than it
+            // looks: the microphone takes a moment to come up, and speaking into
+            // the gap clips your first word.
+            UIImpactFeedbackGenerator(style: listening ? .medium : .light).impactOccurred()
+            #endif
+        }
+        .onChange(of: dictation.state) { _, state in
+            if case .failed(let message) = state { dictationError = message }
+        }
+        .alert(session.localized("chat.dictate"),
+               isPresented: Binding(get: { dictationError != nil },
+                                    set: { if !$0 { dictationError = nil } })) {
+            Button(L("common.done"), role: .cancel) {}
+        } message: {
+            Text(dictationError ?? "")
+        }
         .onChange(of: selectedPhoto) {
             Task {
                 guard let item = selectedPhoto else { return }

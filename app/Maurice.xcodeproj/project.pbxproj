@@ -43,6 +43,8 @@
 		CB71AD2912D05739932A2EB1 /* ChatView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E01BB325D88F4E74B3571BC /* ChatView.swift */; };
 		CC9F77433FFC0CCC7F8668EA /* UserPickerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB58402567AEED97404D604C /* UserPickerView.swift */; };
 		CCEF2532174820F615C4C61F /* ChatService.swift in Sources */ = {isa = PBXBuildFile; fileRef = EDFA39C22354B093CDDBB691 /* ChatService.swift */; };
+		40310B9F788B1E4B1F24D942 /* Dictation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2B42103BED598E72BE11F777 /* Dictation.swift */; };
+		79811BB28E785F4C40E4E482 /* Dictation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2B42103BED598E72BE11F777 /* Dictation.swift */; };
 		D050F6CF74E2684FAF9E78A2 /* ChatService.swift in Sources */ = {isa = PBXBuildFile; fileRef = EDFA39C22354B093CDDBB691 /* ChatService.swift */; };
 		D8646EEFDB175A13C908F420 /* MarkdownUI in Frameworks */ = {isa = PBXBuildFile; productRef = 452588EF4A59C7B3E4BE0156 /* MarkdownUI */; };
 		DE41C437D70BFE6F0A82015E /* Localizable.strings in Resources */ = {isa = PBXBuildFile; fileRef = 64254BB6519693E70459014E /* Localizable.strings */; };
@@ -86,6 +88,7 @@
 		DDC0BDB56B55D342FE7D3C43 /* Hats.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Hats.swift; sourceTree = "<group>"; };
 		E63F94A6CA387F2378B68525 /* StudioViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StudioViews.swift; sourceTree = "<group>"; };
 		EDFA39C22354B093CDDBB691 /* ChatService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatService.swift; sourceTree = "<group>"; };
+		2B42103BED598E72BE11F777 /* Dictation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Dictation.swift; sourceTree = "<group>"; };
 		EE3170FDE5751A81E295CF2E /* BoaterHat.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BoaterHat.swift; sourceTree = "<group>"; };
 		0FA1117011AF2CB600F00001 /* YoungSerif-Regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Fonts/YoungSerif-Regular.ttf"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -174,6 +177,7 @@
 			children = (
 				815355ED837E18AB9BEFDC83 /* APIClient.swift */,
 				EDFA39C22354B093CDDBB691 /* ChatService.swift */,
+				2B42103BED598E72BE11F777 /* Dictation.swift */,
 				70240FCC64F152DDCEC0F0E2 /* ComposerStore.swift */,
 				405F9AA69C83E58A86FDD625 /* SessionStore.swift */,
 				C4A2FD62165976ABC1E019B3 /* MauriceStore.swift */,
@@ -319,6 +323,7 @@
 				79A6D1DBFB049245E3D239D6 /* APIClient.swift in Sources */,
 				52B02D3D7EF2D7154BDB5FD8 /* BoaterHat.swift in Sources */,
 				CCEF2532174820F615C4C61F /* ChatService.swift in Sources */,
+				40310B9F788B1E4B1F24D942 /* Dictation.swift in Sources */,
 				8D85F19C2F440203BAFC484F /* ChatView.swift in Sources */,
 				7D41CDDFD359570A173D9D72 /* ComposerStore.swift in Sources */,
 				AF3DE3F5A58AC486DD4036F1 /* ComposerViews.swift in Sources */,
@@ -344,6 +349,7 @@
 				B1ED9211E2F19D6C411ADE78 /* APIClient.swift in Sources */,
 				B124B0C5C8B1A67C94E9A4FE /* BoaterHat.swift in Sources */,
 				D050F6CF74E2684FAF9E78A2 /* ChatService.swift in Sources */,
+				79811BB28E785F4C40E4E482 /* Dictation.swift in Sources */,
 				CB71AD2912D05739932A2EB1 /* ChatView.swift in Sources */,
 				7CB12254AF16A2499EAEA7D7 /* ComposerStore.swift in Sources */,
 				E3C10DC76C2CF893DD4DF505 /* ComposerViews.swift in Sources */,
@@ -397,6 +403,8 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = "Chez Maurice";
 				INFOPLIST_KEY_NSCameraUsageDescription = "Maurice uses the camera so you can take a profile photo.";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Maurice uses the microphone so you can dictate a message instead of typing it.";
+				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Maurice turns your dictation into text on this device. Your voice is not sent to a server.";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.education";
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
@@ -560,6 +568,8 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = "Chez Maurice";
 				INFOPLIST_KEY_NSCameraUsageDescription = "Maurice uses the camera so you can take a profile photo.";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Maurice uses the microphone so you can dictate a message instead of typing it.";
+				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Maurice turns your dictation into text on this device. Your voice is not sent to a server.";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.education";
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
@@ -596,6 +606,8 @@
 				INFOPLIST_FILE = "Maurice-iOS-Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = "Chez Maurice";
 				INFOPLIST_KEY_NSCameraUsageDescription = "Maurice uses the camera so you can take a profile photo.";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Maurice uses the microphone so you can dictate a message instead of typing it.";
+				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Maurice turns your dictation into text on this device. Your voice is not sent to a server.";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.education";
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
@@ -625,6 +637,8 @@
 				INFOPLIST_FILE = "Maurice-iOS-Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = "Chez Maurice";
 				INFOPLIST_KEY_NSCameraUsageDescription = "Maurice uses the camera so you can take a profile photo.";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Maurice uses the microphone so you can dictate a message instead of typing it.";
+				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Maurice turns your dictation into text on this device. Your voice is not sent to a server.";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.education";
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";

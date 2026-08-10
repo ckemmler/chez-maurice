@@ -329,3 +329,13 @@
 "gardens.remove_hint" = "You can only ever remove yourself — never others.";
 "gardens.in_garden_with" = "in the garden you tend with %@";
 "gardens.in_your_garden" = "in your personal garden";
+
+/* Dictation */
+"chat.dictate" = "Dictate";
+"chat.dictate_stop" = "Stop dictating";
+"dictation.error.speech_denied" = "Speech recognition is off for Maurice. Turn it on in Settings › Privacy › Speech Recognition.";
+"dictation.error.mic_denied" = "Microphone access is off for Maurice. Turn it on in Settings › Privacy › Microphone.";
+"dictation.error.unavailable" = "Dictation isn't available right now.";
+"dictation.error.no_offline_model" = "This language has no on-device dictation model. Add the keyboard for it in Settings, then try again — Maurice won't send your voice to a server.";
+"dictation.error.audio_session" = "Couldn't take over the microphone.";
+"dictation.error.audio_engine" = "Couldn't start recording.";
