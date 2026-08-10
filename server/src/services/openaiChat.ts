@@ -56,24 +56,35 @@ export async function* openaiTurn(
 ): AsyncGenerator<OpenAITurnEvent> {
   // include_usage adds a final chunk carrying the round's token counts (it has
   // an empty `choices` array, so the parse loop below must read usage before it
-  // bails on a missing delta). Providers that don't honour the flag just never
-  // send that chunk, and usage comes back null.
+  // bails on a missing delta).
   const body: any = { model, messages, stream: true, stream_options: { include_usage: true } };
   if (tools.length) { body.tools = tools; body.tool_choice = "auto"; }
   if (temperature !== undefined) body.temperature = temperature;
   // Note: max-tokens param is omitted — OpenAI's o-series wants
   // max_completion_tokens while others want max_tokens; the defaults are ample.
 
+  // "OpenAI-compatible" is a family resemblance, not a contract: some servers
+  // ignore fields they don't know, others reject the request outright (Mistral
+  // answers 422 "Extra inputs are not permitted" to an unknown key). Losing all
+  // chat on a provider for the sake of a cost meter is a bad trade, so a
+  // rejection retries once without the flag and simply reports no usage.
   let response: Response;
-  try {
-    response = await fetch(`${baseUrl}/chat/completions`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
-      body: JSON.stringify(body),
-    });
-  } catch (err: any) {
-    yield { type: "error", message: `${baseUrl} unreachable: ${err?.message || "error"}` };
-    return;
+  let withUsage = true;
+  for (;;) {
+    try {
+      response = await fetch(`${baseUrl}/chat/completions`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
+        body: JSON.stringify(body),
+      });
+    } catch (err: any) {
+      yield { type: "error", message: `${baseUrl} unreachable: ${err?.message || "error"}` };
+      return;
+    }
+    // 400/422 are the shapes a strict server uses to refuse an unknown field.
+    if (response.ok || !withUsage || (response.status !== 400 && response.status !== 422)) break;
+    delete body.stream_options;
+    withUsage = false;
   }
   if (!response.ok || !response.body) {
     let detail = "";

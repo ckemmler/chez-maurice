@@ -64,13 +64,23 @@ export async function saveUploadedImage(dataUri: string): Promise<{ filename: st
   const path = join(imagesDir, filename);
 
   try {
-    const image = sharp(buffer, { failOn: "none" });
-    const { width, height } = await image.metadata();
-    const target = width && height ? targetSize(width, height) : null;
+    const { width, height, orientation } = await sharp(buffer, { failOn: "none" }).metadata();
+    // A phone holds a portrait photo as landscape pixels plus an EXIF tag saying
+    // "turn this a quarter". Measure the image as it will be *displayed*, or a
+    // portrait shot gets the landscape target and comes out the wrong shape.
+    const turned = (orientation ?? 1) >= 5;
+    const dw = turned ? height : width;
+    const dh = turned ? width : height;
+    const target = dw && dh ? targetSize(dw, dh) : null;
     if (!target) {
       writeFileSync(path, buffer); // small enough already — keep the bytes as sent
       return { filename };
     }
+    // .rotate() before resizing bakes that quarter-turn into the pixels and drops
+    // the now-meaningless tag. Without it sharp resizes the sideways buffer and
+    // writes no orientation at all — the photo was upright before the upload and
+    // lies on its side afterwards, both in the app and to the model.
+    const image = sharp(buffer, { failOn: "none" }).rotate();
     // PNG stays PNG. A PNG upload is usually a screenshot or a document, where
     // JPEG's ringing around glyphs is exactly the artifact the vision guidance
     // warns about; re-encoding one to JPEG would trade legible text for a few

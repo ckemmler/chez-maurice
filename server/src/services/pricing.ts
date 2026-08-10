@@ -31,6 +31,11 @@ const PRICES: Record<string, ModelPrice> = {
   "claude-opus-4-8": { input: 5, output: 25, ...ANTHROPIC_CACHE },
   "claude-opus-4-7": { input: 5, output: 25, ...ANTHROPIC_CACHE },
   "claude-opus-4-6": { input: 5, output: 25, ...ANTHROPIC_CACHE },
+  // Sonnet 5 carries an introductory rate of $2/$10 through 2026-08-31, after
+  // which it is the $3/$15 below. Deliberately priced at the standard rate: a
+  // cost meter that reads high is an annoyance, one that reads low is a false
+  // reassurance, and the intro rate would silently become the wrong number the
+  // moment it lapsed. Over the intro period this overstates by half.
   "claude-sonnet-5": { input: 3, output: 15, ...ANTHROPIC_CACHE },
   "claude-sonnet-4-6": { input: 3, output: 15, ...ANTHROPIC_CACHE },
   "claude-sonnet-4-5": { input: 3, output: 15, ...ANTHROPIC_CACHE },

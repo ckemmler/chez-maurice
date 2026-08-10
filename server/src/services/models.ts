@@ -106,16 +106,21 @@ export interface ModelInput {
   ram?: number | null;
   discovered?: boolean;
   descr?: string;
+  /** can read images. Off unless stated: sending image blocks to a text-only
+   *  model is a hard request error on the OpenAI-compatible path, so a model
+   *  opts in rather than out. */
+  vision?: boolean;
 }
 
 export function addModel(input: ModelInput): Model {
   const provider = input.provider ?? (input.tier === "local" ? "ollama" : "anthropic");
   db.run(
-    `INSERT INTO models (id, name, tier, vendor, provider, ctx, ram, discovered, descr, sort)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 100)
+    `INSERT INTO models (id, name, tier, vendor, provider, ctx, ram, discovered, descr, vision, sort)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 100)
      ON CONFLICT(id) DO UPDATE SET
        name = excluded.name, tier = excluded.tier, vendor = excluded.vendor,
-       provider = excluded.provider, ctx = excluded.ctx, ram = excluded.ram, descr = excluded.descr`,
+       provider = excluded.provider, ctx = excluded.ctx, ram = excluded.ram,
+       descr = excluded.descr, vision = excluded.vision`,
     [
       input.id,
       input.name,
@@ -126,9 +131,17 @@ export function addModel(input: ModelInput): Model {
       input.ram ?? null,
       input.discovered ? 1 : 0,
       input.descr ?? "",
+      input.vision ? 1 : 0,
     ],
   );
   return getModel(input.id)!;
+}
+
+/** Flip a model's image support. The seed only knows the models it shipped
+ *  with; anything added later — a new provider model, a local vision model —
+ *  needs a way to say so without hand-editing the database. */
+export function setModelVision(id: string, vision: boolean): boolean {
+  return db.run(`UPDATE models SET vision = ? WHERE id = ?`, [vision ? 1 : 0, id]).changes > 0;
 }
 
 export function removeModel(id: string): boolean {

@@ -508,6 +508,12 @@ function buildApiMessages(conversationId: string): any[] {
       }
       const textContent = (tag + m.content.replace(imagePattern, "")).trim();
       if (textContent) content.push({ type: "text", text: textContent });
+      // Every referenced image can fail to load (deleted file, bad path) while
+      // the turn was nothing but that image — which leaves an empty array, and
+      // the API rejects a message with no content. Say what happened instead.
+      if (content.length === 0) {
+        return { role, content: [{ type: "text", text: "[An image was attached here but could no longer be loaded.]" }] };
+      }
       return { role, content };
     });
 }
@@ -762,19 +768,26 @@ export async function* streamResponse(
         signal,
       });
 
+      // Every exit from here on reports first. A turn that dies in round three
+      // still spent rounds one and two, and a request that fails is exactly when
+      // someone wants to know what it cost — reporting only on the happy path
+      // makes an expensive failure look free.
       if (!response.ok) {
         const errBody = await response.text();
         if (errBody.includes("credit balance is too low")) {
           yield { type: "text_delta", text: t(userLang, "chat.out_of_credits") };
+          yield* reportUsage();
           yield { type: "done", message_id: crypto.randomUUID() };
           return;
         }
+        yield* reportUsage();
         yield { type: "error", message: `Anthropic API error ${response.status}: ${errBody}` };
         return;
       }
 
       const reader = response.body?.getReader();
       if (!reader) {
+        yield* reportUsage();
         yield { type: "error", message: "No response body" };
         return;
       }
@@ -864,6 +877,9 @@ export async function* streamResponse(
               roundOutput = event.usage.output_tokens;
             }
           } else if (event.type === "error") {
+            // message_start has already reported this round's input tokens, and
+            // earlier rounds are fully billed — report before bailing.
+            yield* reportUsage();
             yield { type: "error", message: event.error?.message || "Unknown error" };
             return;
           }
