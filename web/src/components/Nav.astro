@@ -38,7 +38,7 @@ const essayPosts = await getCollection("essays", ({ data }) => data.locale === l
 const hasEssays = essayPosts.length > 0;
 const essaysAllDrafts = hasEssays && essayPosts.every((p) => !isPublic(p.data));
 
-const allResourceCollections = ["books", "articles", "podcasts", "movies", "series", "people"] as const;
+const allResourceCollections = ["books", "articles", "podcasts", "movies", "games", "series", "people"] as const;
 let hasResources = false;
 let resourcesAllDrafts = true;
 for (const col of allResourceCollections) {

@@ -27,7 +27,7 @@ export const ui: Record<Locale, Record<string, string>> = {
 
     // Resources Hub
     "resources.title": "Resources",
-    "resources.description": "A curated collection of books, articles, movies, series, and people that have shaped my thinking.",
+    "resources.description": "A curated collection of books, articles, movies, games, series, and people that have shaped my thinking.",
     "resources.books": "Books",
     "resources.books.desc": "Notes and highlights from my reading",
     "resources.articles": "Articles",
@@ -36,6 +36,8 @@ export const ui: Record<Locale, Record<string, string>> = {
     "resources.podcasts.desc": "Podcast episodes worth revisiting",
     "resources.movies": "Movies",
     "resources.movies.desc": "Films that left an impression",
+    "resources.games": "Games",
+    "resources.games.desc": "Games worth the hours",
     "resources.series": "Series",
     "resources.series.desc": "TV series I've been watching",
     "resources.people": "People",
@@ -98,6 +100,13 @@ export const ui: Record<Locale, Record<string, string>> = {
     "movies.noMoviesYet": "No movies logged yet.",
     "movies.directedBy": "Directed by",
     "movies.backToMovies": "← Back to movies",
+
+    // Games
+    "games.title": "Games",
+    "games.description": "Games worth the hours.",
+    "games.noGamesYet": "No games logged yet.",
+    "games.developedBy": "Developed by",
+    "games.backToGames": "← Back to games",
 
     // Series
     "series.title": "Series",
@@ -167,7 +176,7 @@ export const ui: Record<Locale, Record<string, string>> = {
 
     // Resources Hub
     "resources.title": "Trouvailles",
-    "resources.description": "Une collection de livres, articles, films, séries et personnes qui ont nourri ma réflexion.",
+    "resources.description": "Une collection de livres, articles, films, jeux, séries et personnes qui ont nourri ma réflexion.",
     "resources.books": "Livres",
     "resources.books.desc": "Notes et passages marquants de mes lectures",
     "resources.articles": "Articles",
@@ -176,6 +185,8 @@ export const ui: Record<Locale, Record<string, string>> = {
     "resources.podcasts.desc": "Épisodes de podcasts à réécouter",
     "resources.movies": "Films",
     "resources.movies.desc": "Films qui m'ont marqué",
+    "resources.games": "Jeux",
+    "resources.games.desc": "Des jeux qui valaient les heures passées",
     "resources.series": "Séries",
     "resources.series.desc": "Séries que je regarde",
     "resources.people": "Personnes",
@@ -238,6 +249,13 @@ export const ui: Record<Locale, Record<string, string>> = {
     "movies.noMoviesYet": "Aucun film enregistré.",
     "movies.directedBy": "Réalisé par",
     "movies.backToMovies": "← Retour aux films",
+
+    // Games
+    "games.title": "Jeux",
+    "games.description": "Des jeux qui valaient les heures passées.",
+    "games.noGamesYet": "Aucun jeu enregistré.",
+    "games.developedBy": "Développé par",
+    "games.backToGames": "← Retour aux jeux",
 
     // Series
     "series.title": "Séries",

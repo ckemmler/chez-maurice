@@ -22,7 +22,7 @@ const pagesBase = `${gardenRoot}/pages`;
 
 const fichesPattern = process.env.NODE_ENV === "production"
   ? "___noop___"
-  : ["{books,articles,movies,series,podcasts,people}/**/*-fiche.md"];
+  : ["{books,articles,movies,games,series,podcasts,people}/**/*-fiche.md"];
 
 const books = defineCollection({
   loader: glob({ pattern: devOnly, base: `${gardenRoot}/books` }),
@@ -147,6 +147,27 @@ const movies = defineCollection({
   }),
 });
 
+const games = defineCollection({
+  loader: glob({ pattern: devOnly, base: `${gardenRoot}/games` }),
+  schema: z.object({
+    title: z.string(),
+    developer: z.string().optional(),
+    year: z.number().optional(),
+    platforms: z.array(z.string()).default([]),
+    date_played: z.coerce.date(),
+    tags: z.array(z.string()).default([]),
+    flags: flagsSchema,
+    rating: z.number().min(1).max(5).optional(),
+    image: z.string().optional(),
+    shared_twitter: z.boolean().default(false),
+    shared_linkedin: z.boolean().default(false),
+    shared_twitter_url: z.string().url().optional(),
+    shared_linkedin_urn: z.string().optional(),
+    locale: localeEnum,
+    translationKey: translationKey,
+  }),
+});
+
 const series = defineCollection({
   loader: glob({ pattern: devOnly, base: `${gardenRoot}/series` }),
   schema: z.object({
@@ -218,7 +239,7 @@ const fiches = defineCollection({
   loader: glob({ pattern: fichesPattern, base: gardenRoot }),
   schema: z.object({
     title: z.string(),
-    resource_collection: z.enum(["books", "articles", "movies", "series", "podcasts", "people"]),
+    resource_collection: z.enum(["books", "articles", "movies", "games", "series", "podcasts", "people"]),
     resource_id: z.string(),
     date: z.coerce.date(),
     tags: z.array(z.string()).default([]),
@@ -230,4 +251,4 @@ const fiches = defineCollection({
   }),
 });
 
-export const collections = { books, articles, blog, essays, notes, podcasts, movies, series, people, pages, fiches };
+export const collections = { books, articles, blog, essays, notes, podcasts, movies, games, series, people, pages, fiches };

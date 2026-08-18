@@ -7,6 +7,7 @@ import { glob } from "node:fs/promises";
 const COLLECTIONS = [
   "books",
   "movies",
+  "games",
   "series",
   "podcasts",
   "articles",
