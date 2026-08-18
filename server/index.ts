@@ -329,6 +329,33 @@ app.get("/api/avatars/:filename", (c) => {
   });
 });
 
+// ── Serve garden cover art (no auth, like avatars, so AsyncImage can load it) ──
+// The app's fiche card shows a downloaded poster. The garden itself serves these
+// under /g/<member>/images/…, but that path is session-gated and AsyncImage
+// sends no credentials — hence this /api/ mirror, which the gate treats as open.
+// Read-only, and confined to a member's images/ subtree.
+app.get("/api/garden-images/:member/*", (c) => {
+  const member = c.req.param("member");
+  const rest = c.req.path.split(`/api/garden-images/${member}/`)[1] || "";
+  if (!/^[a-z0-9][a-z0-9._-]*$/i.test(member) || rest.includes("..")) {
+    return c.json({ error: "Invalid path" }, 400);
+  }
+  const root = resolve(join(gardensRoot(), member, "images"));
+  const filePath = resolve(join(root, rest));
+  // resolve() both sides: a decoded traversal must not escape the subtree.
+  if (!filePath.startsWith(root + "/") || !existsSync(filePath)) {
+    return c.json({ error: "Not found" }, 404);
+  }
+  const ext = extname(filePath).toLowerCase();
+  const mime = ext === ".png" ? "image/png"
+    : ext === ".jpg" || ext === ".jpeg" ? "image/jpeg"
+    : ext === ".webp" ? "image/webp"
+    : "application/octet-stream";
+  return new Response(readFileSync(filePath), {
+    headers: { "Content-Type": mime, "Cache-Control": "public, max-age=86400" },
+  });
+});
+
 // ── Web themes a member can pick for their garden (web/themes/<id>/theme.json) ──
 app.get("/api/web-themes", (c) => {
   const dir = resolve(import.meta.dir, "../web/themes");

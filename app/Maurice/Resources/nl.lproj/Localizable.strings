@@ -351,3 +351,15 @@
 /* App Shortcut (Action Button / Shortcuts list) */
 "Dictate to Maurice" = "Dicteren aan Maurice";
 "Opens Maurice and starts listening, so you can speak a message instead of typing it." = "Opent Maurice en begint te luisteren, zodat je een bericht kunt inspreken in plaats van typen.";
+
+/* Fiche cards — the media picker and the fiche working surface */
+"fiche.pick_title" = "Welke?";
+"fiche.open_prefill" = "Open de fiche voor ‘%1$@’ (%2$@, %3$@)";
+"fiche.state_absent" = "nog geen kaart";
+"fiche.state_draft" = "kaart in concept";
+"fiche.state_published" = "kaart gepubliceerd";
+"fiche.counts" = "voorkant %1$d · achterkant %2$d tekens";
+"fiche.created" = "fiche zojuist aangemaakt";
+"fiche.open_fiche" = "Fiche openen";
+"fiche.open_card" = "Kaart openen";
+"fiche.seasons" = "%d seizoenen";

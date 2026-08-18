@@ -63,7 +63,7 @@ const META: Record<string, { title: string; icon: string; blurb: string }> = {
   "garden-journal":   { title: "Garden · Journal",   icon: "moon.stars",                   blurb: "Dreams and daily notes." },
   "garden-people":    { title: "Garden · People",    icon: "person.crop.rectangle.stack",  blurb: "Fiches, contacts, and people." },
   "garden-fragments": { title: "Garden · Fragments", icon: "text.append",                  blurb: "Fragments — capture and summarise." },
-  "garden-media":     { title: "Garden · Media",     icon: "play.rectangle.on.rectangle",  blurb: "Books, films, podcasts, series, articles." },
+  "garden-media":     { title: "Garden · Media",     icon: "play.rectangle.on.rectangle",  blurb: "Books, films, games, podcasts, series, articles — and the fiches you take notes in." },
   "garden-publish":   { title: "Garden · Publishing",icon: "paperplane",                   blurb: "Deploy and publish the site." },
   "garden-other":     { title: "Garden · Other",     icon: "leaf",                         blurb: "Other garden tools." },
   health:   { title: "Health",     icon: "heart",                          blurb: "Sleep, HRV, respiratory rate, summaries." },
@@ -91,8 +91,12 @@ function rawPrefix(toolName: string): string {
 function gardenSub(suffix: string): string {
   if (/dream|daily/.test(suffix)) return "garden-journal";
   if (/fragment/.test(suffix)) return "garden-fragments";
+  // open_fiche is the media note-taking surface: it pairs with the search_*
+  // tools, so it belongs with them rather than with the people fiches — one
+  // toggle has to cover the whole pick-then-open flow.
+  if (suffix === "open_fiche") return "garden-media";
   if (/fiche|person|contact/.test(suffix)) return "garden-people";
-  if (/resource|book|movie|podcast|series|article/.test(suffix)) return "garden-media";
+  if (/resource|book|movie|game|podcast|series|article/.test(suffix)) return "garden-media";
   if (/deploy|publish|site|content/.test(suffix)) return "garden-publish";
   if (/note|image|evocation|toggle/.test(suffix)) return "garden-notes";
   return "garden-other";
