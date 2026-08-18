@@ -80,6 +80,9 @@ final class ChatService {
     /// The in-flight streaming consumer, so ⏹ Stop can tear it down (which aborts
     /// the underlying request). nil when no generation is running.
     private var streamTask: Task<StreamEvent?, Never>?
+    /// The conversation `messages` actually holds, as opposed to the one merely
+    /// selected. Anything destructive has to key off this, not off emptiness.
+    private var messagesLoadedFor: String?
 
     private var api: APIClient? {
         guard let url = session.serverURL else { return nil }
@@ -137,6 +140,7 @@ final class ChatService {
 
     func selectConversation(_ id: String) async {
         activeConversationId = id
+        messagesLoadedFor = nil
         unread.remove(id)
         await loadMessages(for: id)
         // The thread's armed Maurice = its current maurice_id (sticky in-thread).
@@ -262,6 +266,9 @@ final class ChatService {
             )
             conversations.insert(convo, at: 0)
             activeConversationId = convo.id
+            // We just created it, so we know its contents: empty. Without this
+            // the discard-if-empty cleanup could never fire again.
+            messagesLoadedFor = convo.id
             currentMauriceId = mauriceId  // sticky for this thread; nil = everyday
             messages = []
             knownIds = []
@@ -306,6 +313,13 @@ final class ChatService {
     /// out of. Keeps abandoned "New conversation" rows from piling up.
     func discardActiveIfEmpty() async {
         guard let api, let token, let id = activeConversationId else { return }
+        // `messages.isEmpty` is not on its own evidence that the thread is empty:
+        // selectConversation sets activeConversationId and only THEN awaits
+        // loadMessages, so a fully populated thread looks empty for the length of
+        // that round-trip. The Action Button fires at arbitrary moments, and this
+        // path issues a DELETE — tapping a conversation and pressing the button
+        // before it loaded destroyed it on the server.
+        guard messagesLoadedFor == id else { return }
         guard messages.isEmpty, participants.count <= 1 else { return }
         try? await api.delete("/api/conversations/\(id)", token: token)
         conversations.removeAll { $0.id == id }
@@ -334,6 +348,7 @@ final class ChatService {
         socket = nil
         await discardActiveIfEmpty()
         activeConversationId = nil
+        messagesLoadedFor = nil
         messages = []
         participants = []
         knownIds = []
@@ -357,6 +372,7 @@ final class ChatService {
             messages = detail.messages
             participants = detail.participants ?? []
             knownIds = Set(messages.map { $0.id })
+            messagesLoadedFor = conversationId
             pendingSummon = false
             error = nil
             connectSocket(conversationId)

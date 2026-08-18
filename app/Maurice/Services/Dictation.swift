@@ -92,9 +92,12 @@ final class Dictation {
     private(set) var usingServer = false
     /// True between start() and the moment listening actually begins or fails.
     private var isStarting = false
-    /// Set when stop() lands while a start is still in flight, so the permission
-    /// callbacks abandon it instead of opening the microphone anyway.
-    private var startCancelled = false
+    /// Bumped on every start() and every stop(). Each async continuation
+    /// captures the value it began with and abandons itself if it no longer
+    /// matches — which a shared boolean could not do: a second start() reset the
+    /// flag and revived the first attempt's abandoned permission callback, so
+    /// two sessions ran at once, each spawning recognition tasks.
+    private var generation = 0
     /// Utterances the recogniser has already finalised this session. A pause
     /// ends an utterance, not the session, so these accumulate and the live
     /// partial is appended to them rather than replacing them.
@@ -143,7 +146,8 @@ final class Dictation {
         // reports final and tears down the session that replaced it.
         guard !isListening, !isStarting else { return }
         isStarting = true
-        startCancelled = false
+        generation &+= 1
+        let attempt = generation
         transcript = ""
         committed = ""
         // Back to idle before trying again. The composer reacts to `state`
@@ -158,15 +162,16 @@ final class Dictation {
         SFSpeechRecognizer.requestAuthorization { [weak self] speechAuth in
             Task { @MainActor in
                 guard let self else { return }
-                // Abandoned while we were waiting on the permission sheet.
-                guard !self.startCancelled else { self.startCancelled = false; return }
+                // Abandoned while we were waiting on the permission sheet — or
+                // superseded by a later attempt.
+                guard attempt == self.generation else { return }
                 guard speechAuth == .authorized else {
                     self.isStarting = false
                     self.state = .failed(.speechDenied)
                     return
                 }
                 self.requestMicrophone { granted in
-                    guard !self.startCancelled else { self.startCancelled = false; return }
+                    guard attempt == self.generation else { return }
                     guard granted else {
                         self.isStarting = false
                         self.state = .failed(.micDenied)
@@ -183,10 +188,10 @@ final class Dictation {
         // after two async permission callbacks, so a stop() arriving before that
         // — leaving the chat, backgrounding the app — used to be a no-op, and the
         // callbacks then went on to activate the audio session and open the mic
-        // with no composer on screen. beginListening checks this flag at each
-        // step it resumes from.
+        // with no composer on screen. Bumping the generation is what makes them
+        // abandon: they compare against the value they captured.
         if isStarting {
-            startCancelled = true
+            generation &+= 1
             isStarting = false
             state = .idle
             return
@@ -225,19 +230,10 @@ final class Dictation {
             return exact
         }
         guard let language = locale.language.languageCode?.identifier else { return nil }
-        let siblings = SFSpeechRecognizer.supportedLocales()
-            .filter { $0.language.languageCode?.identifier == language }
-            // Prefer the variant for the region the device is set to, then take
-            // the rest in a stable order. Enumeration order alone is arbitrary —
-            // it would answer an Irish-English request with Philippine English
-            // while the machine had British sitting right there.
-            .sorted { a, b in
-                let region = Locale.current.region?.identifier
-                let aHome = a.region?.identifier == region
-                let bHome = b.region?.identifier == region
-                return aHome == bHome ? a.identifier < b.identifier : aHome
-            }
-        for candidate in siblings {
+        // Region-qualified siblings, device region first — enumeration order
+        // alone would answer an Irish-English request with Philippine English
+        // while the machine had British sitting right there.
+        for candidate in Self.siblings(of: language) {
             if let rec = SFSpeechRecognizer(locale: candidate),
                rec.isAvailable, rec.supportsOnDeviceRecognition {
                 return rec
@@ -246,13 +242,43 @@ final class Dictation {
         return nil
     }
 
+    /// Any recogniser for this language, on-device or not.
+    ///
+    /// The app's language picker stores bare codes ("fr", "de"), while
+    /// SFSpeechRecognizer's supported set is region-qualified ("fr-FR",
+    /// "fr-BE"). Bare `SFSpeechRecognizer(locale:)` therefore returns nil for
+    /// every language the picker can produce — which made `exists` false, so the
+    /// classifier below always answered "Apple has no recogniser for this
+    /// language", `.needsServerConsent` was never reached, the consent alert
+    /// never appeared, and the allow-server toggle could not take effect at all.
+    private func anyRecognizer(for locale: Locale) -> SFSpeechRecognizer? {
+        if let exact = SFSpeechRecognizer(locale: locale) { return exact }
+        guard let language = locale.language.languageCode?.identifier else { return nil }
+        for candidate in Self.siblings(of: language) {
+            if let rec = SFSpeechRecognizer(locale: candidate) { return rec }
+        }
+        return nil
+    }
+
+    /// Locales for a language, device region first then stable order.
+    private static func siblings(of language: String) -> [Locale] {
+        SFSpeechRecognizer.supportedLocales()
+            .filter { $0.language.languageCode?.identifier == language }
+            .sorted { a, b in
+                let region = Locale.current.region?.identifier
+                let aHome = a.region?.identifier == region
+                let bHome = b.region?.identifier == region
+                return aHome == bHome ? a.identifier < b.identifier : aHome
+            }
+    }
+
     private func beginListening(locale: Locale, allowServer: Bool) {
         var onDevice = true
         var recognizer: SFSpeechRecognizer?
 
         if let rec = onDeviceRecognizer(for: locale) {
             recognizer = rec
-        } else if allowServer, let server = SFSpeechRecognizer(locale: locale) {
+        } else if allowServer, let server = anyRecognizer(for: locale) {
             // The user has agreed that audio may go to Apple for languages with
             // no local model. Only a recogniser *for this language* will do: the
             // old fallback to the device default meant agreeing to dictate in
@@ -267,7 +293,7 @@ final class Dictation {
             // recogniser exists but isn't available right now" — the first asks
             // the user to go install something, and sending them to Settings
             // over a transient outage wastes their time on the wrong errand.
-            let candidate = SFSpeechRecognizer(locale: locale)
+            let candidate = anyRecognizer(for: locale)
             let exists = candidate != nil
             let available = candidate?.isAvailable ?? false
             let language = locale.localizedString(forLanguageCode: locale.language.languageCode?.identifier ?? "")
@@ -370,9 +396,27 @@ final class Dictation {
         request = req
         requestBox.set(req)
 
+        let generation = self.generation
         task = rec.recognitionTask(with: req) { [weak self] result, error in
             Task { @MainActor in
                 guard let self, self.state == .listening else { return }
+                // A task outlives the session that created it; without this an
+                // orphan goes on writing the transcript of the session that
+                // replaced it.
+                guard generation == self.generation else { return }
+                // Error FIRST. SFSpeechRecognitionTask routinely delivers a
+                // non-nil result AND a non-nil error together (an on-device
+                // asset fault, a dropped connection in server mode). Testing
+                // `result` first made the error branch unreachable, so a final
+                // result carrying a persistent fault spawned a replacement task,
+                // which failed identically — an unbounded restart loop with the
+                // microphone open and nothing ever surfaced to the user.
+                if error != nil {
+                    // Whatever was heard is still worth keeping, so end rather
+                    // than restart.
+                    self.finish()
+                    return
+                }
                 if let result {
                     let segment = result.bestTranscription.formattedString
                     self.transcript = Self.join(self.committed, segment)
@@ -380,10 +424,6 @@ final class Dictation {
                         self.committed = self.transcript
                         self.listen(with: rec)   // next utterance
                     }
-                } else if error != nil {
-                    // Out of pauses and into a real failure. Whatever was heard
-                    // is still worth keeping, so end rather than restart.
-                    self.finish()
                 }
             }
         }
@@ -405,6 +445,9 @@ final class Dictation {
     /// again. The guard is what makes the doc comment above true.
     private func finish(userStopped: Bool = false) {
         guard state == .listening else { return }
+        // Retire this session's generation too, so a recognition callback still
+        // in flight can't reopen it after teardown.
+        generation &+= 1
         let text = transcript.trimmingCharacters(in: .whitespacesAndNewlines)
         teardown()
         state = .idle

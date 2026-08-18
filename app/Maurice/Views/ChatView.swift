@@ -1786,7 +1786,10 @@ private struct ComposerBar: View {
     /// request that has gone stale is dropped rather than honoured late.
     private func startDictationIfRequested() {
         #if os(iOS)
-        guard DictationRequest.shared.take(), !dictation.isListening else { return }
+        // isListening FIRST: take() clears the note unconditionally, so evaluating
+        // it first swallowed an Action Button press that arrived while dictation
+        // was already running — no dictation, no feedback, request gone.
+        guard !dictation.isListening, DictationRequest.shared.take() else { return }
         // The button is for capturing a thought, not for continuing whatever
         // conversation happened to be open — that one has a context and a
         // Maurice of its own, and dropping a stray dictated line into it is
