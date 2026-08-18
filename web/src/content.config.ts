@@ -8,10 +8,15 @@ const flagsSchema = z.array(z.enum(["public", "encrypted", "moc", "translation",
 const devOnly = ["**/!(*-fiche).md"];
 const devOnlyMdx = ["**/!(*-fiche).{md,mdx}"];
 
-// Every content collection lives under the member's garden (gardens/<member>/).
+// Every content collection lives under the member's garden (<gardens>/<member>/).
 // Defaults to the bundled `demo` garden so a plain build/dev renders out of the box.
+//
+// The root comes from MAURICE_GARDENS_DIR, the same variable lib/garden.ts and
+// the server read. It has to: a household's real gardens live outside the
+// checkout, and resolving this one relative to the cwd instead was enough to
+// leave every collection empty while SSR-rendered notes still worked.
 const member = process.env.GARDEN || "demo";
-const gardenRoot = `./gardens/${member}`;
+const gardenRoot = `${process.env.MAURICE_GARDENS_DIR || "./gardens"}/${member}`;
 const notesBase = `${gardenRoot}/notes`;
 const pagesBase = `${gardenRoot}/pages`;
 

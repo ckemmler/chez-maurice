@@ -48,7 +48,7 @@ for s in "${SERVICES[@]}"; do start_one "$s" || rc=1; done
 # idempotent (skips ones already running).
 if [[ $# -eq 0 ]]; then
   NODE="$(command -v node || echo "$HOME/.bun/bin/bun")"
-  members="$("$NODE" -e "const g=require('$REPO/web/gardens/gardens.json'); console.log(Object.entries(g).filter(([m,c])=>m!=='candide'&&(c.base||'').startsWith('/g/')).map(([m])=>m).join(' '))" 2>/dev/null || true)"
+  members="$("$NODE" -e "const g=require('$(gardens_root)/gardens.json'); console.log(Object.entries(g).filter(([m,c])=>m!=='candide'&&(c.base||'').startsWith('/g/')).map(([m])=>m).join(' '))" 2>/dev/null || true)"
   for m in $members; do
     "$REPO/scripts/start-garden.sh" "$m" || rc=1
   done
