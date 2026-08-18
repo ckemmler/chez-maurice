@@ -347,3 +347,7 @@
 "settings.dictation.group" = "DIKTAT";
 "settings.dictation.allow_server" = "Transkription durch Apple erlauben";
 "settings.dictation.caption" = "Das Diktat bleibt auf diesem Gerät, sobald die Sprache ein Offline-Modell hat. Erlaubst du dies, werden Sprachen ohne Modell stattdessen von Apple transkribiert — die Aufnahme verlässt dann dein Gerät. Währenddessen zeigt das Mikrofon eine Wolke.";
+
+/* App Shortcut (Action Button / Shortcuts list) */
+"Dictate to Maurice" = "Maurice diktieren";
+"Opens Maurice and starts listening, so you can speak a message instead of typing it." = "Öffnet Maurice und beginnt zuzuhören, damit Sie eine Nachricht sprechen statt tippen können.";

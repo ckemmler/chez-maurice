@@ -1747,7 +1747,14 @@ private struct ComposerBar: View {
     @State private var showFileImporter = false
     /// Speech-to-text, owned by the composer: it starts and stops with this
     /// view, so leaving the chat can't strand a live microphone.
-    @State private var dictation = Dictation()
+    // Deliberately an explicit State(wrappedValue:) in init? No — the initial
+    // value here is a plain expression, so Dictation() (and the AVAudioEngine
+    // graph inside it) is constructed on every ComposerBar init, which during a
+    // streaming reply is once per text delta. The instances are discarded
+    // immediately, but the churn lands on the main thread while the reply
+    // animates. A lazily-built holder keeps one engine per view lifetime.
+    @State private var dictationHolder = DictationHolder()
+    private var dictation: Dictation { dictationHolder.dictation }
     @State private var micPulse = false
     @State private var dictationError: String?
     /// The language a consent prompt is being shown for, or nil.
@@ -1827,7 +1834,7 @@ private struct ComposerBar: View {
     /// deliver into a field the send has just cleared, which put the sent
     /// sentence back in the composer as if it had failed.
     private func submit(_ action: () -> Void) {
-        if dictation.isListening { dictation.stop() }
+        if dictation.isListening { dictation.stop(userStopped: true) }
         action()
     }
 
@@ -2016,7 +2023,7 @@ private struct ComposerBar: View {
                     #if os(iOS)
                     Button {
                         if dictation.isListening {
-                            dictation.stop()
+                            dictation.stop(userStopped: true)
                         } else {
                             dictationAnchor = anchorAtSelection()
                             lastDictatedText = nil
@@ -2183,14 +2190,18 @@ private struct ComposerBar: View {
         // clumsy join. The anchor is where dictation writes, fixed when it
         // started, so each partial rewrites only the dictated tail.
         .onAppear {
-            dictation.onFinish = { text in
+            dictation.onFinish = { text, userStopped in
                 if let anchor = dictationAnchor {
                     let final = anchor.applying(text)
                     lastDictatedText = final
                     inputText = final
                 }
                 dictationAnchor = nil
-                isFocused = true
+                // Only when the user chose to stop. Leaving the chat and
+                // backgrounding both route through here too, and re-focusing
+                // there pops the keyboard on a screen they just left — or on
+                // their return from background, out of nowhere.
+                if userStopped { isFocused = true }
             }
             startDictationIfRequested()
         }
@@ -2235,12 +2246,27 @@ private struct ComposerBar: View {
         // the final delivery can rebuild the field from a snapshot that predates
         // the correction, and listening stops because carrying on would fight
         // them for the cursor.
+        // The anchor is taken when the mic is tapped, but listening only begins
+        // after two permission round-trips. Anything typed in that window is not
+        // yet protected by the manual-edit guard below — that one requires
+        // isListening — so the first partial would write straight over it.
+        // Re-basing here makes the anchor mean "where dictation actually starts".
+        .onChange(of: dictation.isListening) { _, listening in
+            if listening { dictationAnchor = anchorAtSelection() }
+        }
         .onChange(of: inputText) { _, current in
             guard dictation.isListening, current != lastDictatedText else { return }
             dictationAnchor = nil
-            dictation.stop()
+            dictation.stop(userStopped: true)
         }
-        .onDisappear { dictation.stop() }
+        .onDisappear {
+            dictation.stop()
+            // onFinish captures this view's State storage, which owns the
+            // Dictation that owns the closure — a cycle that leaks one
+            // AVAudioEngine per ComposerBar teardown. Dropping it here is what
+            // lets both sides go.
+            dictation.onFinish = nil
+        }
         .onChange(of: dictation.isListening) { _, listening in
             micPulse = listening
             #if os(iOS)

@@ -347,3 +347,7 @@
 "settings.dictation.group" = "DETTATURA";
 "settings.dictation.allow_server" = "Consenti la trascrizione di Apple";
 "settings.dictation.caption" = "La dettatura resta su questo dispositivo ogni volta che la lingua ha un modello offline. Se lo consenti, le lingue che non ne hanno uno vengono trascritte da Apple, il che significa che l'audio lascia il dispositivo. Mentre accade, il microfono mostra una nuvola.";
+
+/* App Shortcut (Action Button / Shortcuts list) */
+"Dictate to Maurice" = "Detta a Maurice";
+"Opens Maurice and starts listening, so you can speak a message instead of typing it." = "Apre Maurice e si mette in ascolto, così puoi dire un messaggio invece di scriverlo.";

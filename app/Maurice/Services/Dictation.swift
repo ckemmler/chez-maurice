@@ -18,6 +18,33 @@ import AVFoundation
 /// The text lands in the composer for the user to read and edit; nothing is sent
 /// on their behalf. Recognition mishears, and a mishearing that auto-sends costs
 /// a whole turn to undo.
+/// Holds the live recognition request for the audio tap, which runs off the
+/// main actor. Locked rather than actor-isolated: the tap must not await.
+private final class RequestBox: @unchecked Sendable {
+    private let lock = NSLock()
+    private var request: SFSpeechAudioBufferRecognitionRequest?
+
+    func set(_ value: SFSpeechAudioBufferRecognitionRequest?) {
+        lock.lock(); defer { lock.unlock() }
+        request = value
+    }
+
+    func get() -> SFSpeechAudioBufferRecognitionRequest? {
+        lock.lock(); defer { lock.unlock() }
+        return request
+    }
+}
+
+/// Holds the composer's Dictation, built once.
+///
+/// SwiftUI evaluates a @State default on every view init; wrapping the object
+/// means the AVAudioEngine is allocated once per view lifetime instead.
+@MainActor
+final class DictationHolder {
+    lazy var dictation = Dictation()
+    init() {}
+}
+
 @Observable @MainActor
 final class Dictation {
     /// Why dictation couldn't start. A case rather than a message: the view owns
@@ -65,6 +92,9 @@ final class Dictation {
     private(set) var usingServer = false
     /// True between start() and the moment listening actually begins or fails.
     private var isStarting = false
+    /// Set when stop() lands while a start is still in flight, so the permission
+    /// callbacks abandon it instead of opening the microphone anyway.
+    private var startCancelled = false
     /// Utterances the recogniser has already finalised this session. A pause
     /// ends an utterance, not the session, so these accumulate and the live
     /// partial is appended to them rather than replacing them.
@@ -77,17 +107,31 @@ final class Dictation {
 
     private var recognizer: SFSpeechRecognizer?
     private var request: SFSpeechAudioBufferRecognitionRequest?
+    /// The same request, reachable from the audio tap.
+    ///
+    /// The tap runs on a realtime audio thread and cannot touch main-actor
+    /// state, while listen() swaps a fresh request in for each utterance. A
+    /// small locked box is the whole of the synchronisation needed.
+    private nonisolated let requestBox = RequestBox()
     private var task: SFSpeechRecognitionTask?
     private let engine = AVAudioEngine()
 
     /// Called with the final text when listening stops for any reason, so the
     /// composer can append it in one piece.
-    var onFinish: ((String) -> Void)?
+    /// Called with the final text when listening stops for any reason. The flag
+    /// says whether the user asked for the stop — leaving the screen and
+    /// backgrounding end dictation too, and the composer must not treat those
+    /// like a deliberate "done".
+    var onFinish: ((String, Bool) -> Void)?
 
     // MARK: - Control
 
+    nonisolated func currentRequest() -> SFSpeechAudioBufferRecognitionRequest? {
+        requestBox.get()
+    }
+
     func toggle(locale: Locale, allowServer: Bool) {
-        isListening ? stop() : start(locale: locale, allowServer: allowServer)
+        isListening ? stop(userStopped: true) : start(locale: locale, allowServer: allowServer)
     }
 
     func start(locale: Locale, allowServer: Bool) {
@@ -99,6 +143,7 @@ final class Dictation {
         // reports final and tears down the session that replaced it.
         guard !isListening, !isStarting else { return }
         isStarting = true
+        startCancelled = false
         transcript = ""
         committed = ""
         // Back to idle before trying again. The composer reacts to `state`
@@ -113,12 +158,15 @@ final class Dictation {
         SFSpeechRecognizer.requestAuthorization { [weak self] speechAuth in
             Task { @MainActor in
                 guard let self else { return }
+                // Abandoned while we were waiting on the permission sheet.
+                guard !self.startCancelled else { self.startCancelled = false; return }
                 guard speechAuth == .authorized else {
                     self.isStarting = false
                     self.state = .failed(.speechDenied)
                     return
                 }
                 self.requestMicrophone { granted in
+                    guard !self.startCancelled else { self.startCancelled = false; return }
                     guard granted else {
                         self.isStarting = false
                         self.state = .failed(.micDenied)
@@ -130,9 +178,21 @@ final class Dictation {
         }
     }
 
-    func stop() {
+    func stop(userStopped: Bool = false) {
+        // A start in flight has to be cancellable. isListening only turns true
+        // after two async permission callbacks, so a stop() arriving before that
+        // — leaving the chat, backgrounding the app — used to be a no-op, and the
+        // callbacks then went on to activate the audio session and open the mic
+        // with no composer on screen. beginListening checks this flag at each
+        // step it resumes from.
+        if isStarting {
+            startCancelled = true
+            isStarting = false
+            state = .idle
+            return
+        }
         guard isListening else { return }
-        finish()
+        finish(userStopped: userStopped)
     }
 
     // MARK: - Machinery
@@ -239,7 +299,14 @@ final class Dictation {
             let session = AVAudioSession.sharedInstance()
             // .measurement keeps iOS from applying the processing it uses for
             // calls, which costs transcription accuracy.
-            try session.setCategory(.record, mode: .measurement, options: .duckOthers)
+            //
+            // No .duckOthers: the option is only valid on .playAndRecord,
+            // .playback and .multiRoute, and setting it on .record throws
+            // BadParam — which our catch turns into "couldn't take over the
+            // microphone", i.e. dictation that never works on a real device.
+            // The Simulator doesn't enforce the option/category pairing, so this
+            // stayed invisible in development.
+            try session.setCategory(.record, mode: .measurement)
             try session.setActive(true, options: .notifyOthersOnDeactivation)
         } catch {
             // Tear down like every other failure path: setCategory may have
@@ -259,8 +326,16 @@ final class Dictation {
         input.removeTap(onBus: 0)
         // Weak self, not the request: a new utterance swaps in a new request,
         // and a tap still feeding the old one would go into a task nobody reads.
+        // Append synchronously, inside the tap. The buffer belongs to the engine
+        // and its backing storage may be recycled the moment this block returns,
+        // so hopping to the main actor first hands the recogniser audio that has
+        // since been overwritten — garbled or dropped words rather than a crash.
+        // It also kept ~50 buffers a second off the main thread.
+        //
+        // `currentRequest` is read under a lock because the tap runs on a
+        // realtime audio thread while listen() swaps the request in per utterance.
         input.installTap(onBus: 0, bufferSize: 1024, format: format) { [weak self] buffer, _ in
-            Task { @MainActor in self?.request?.append(buffer) }
+            self?.currentRequest()?.append(buffer)
         }
 
         engine.prepare()
@@ -293,6 +368,7 @@ final class Dictation {
         req.shouldReportPartialResults = true
         req.requiresOnDeviceRecognition = !usingServer
         request = req
+        requestBox.set(req)
 
         task = rec.recognitionTask(with: req) { [weak self] result, error in
             Task { @MainActor in
@@ -327,7 +403,7 @@ final class Dictation {
     /// Twice was possible and it showed: a final result and an error can both
     /// arrive for the same session, and each delivery appended the same words
     /// again. The guard is what makes the doc comment above true.
-    private func finish() {
+    private func finish(userStopped: Bool = false) {
         guard state == .listening else { return }
         let text = transcript.trimmingCharacters(in: .whitespacesAndNewlines)
         teardown()
@@ -336,7 +412,7 @@ final class Dictation {
         // the field held before dictation started, and this is what tells it to
         // let go. Skipping the empty case leaves that note behind, and the next
         // dictation rebuilds the field from a stale starting point.
-        onFinish?(text)
+        onFinish?(text, userStopped)
         transcript = ""
     }
 
@@ -348,6 +424,7 @@ final class Dictation {
         request?.endAudio()
         task?.cancel()
         request = nil
+        requestBox.set(nil)
         task = nil
         recognizer = nil
         #if os(iOS)

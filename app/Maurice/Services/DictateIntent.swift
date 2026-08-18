@@ -68,6 +68,13 @@ struct MauriceShortcuts: AppShortcutsProvider {
     static var appShortcuts: [AppShortcut] {
         AppShortcut(
             intent: DictateIntent(),
+            // Phrases are NOT localized by Localizable.strings — App Shortcut
+            // phrases resolve only from an AppShortcuts.strings catalog, one per
+            // locale, which this target does not yet carry. Until it does these
+            // stay English, and the French one is kept because it is the
+            // household's other language; a German speaker seeing it is odd but
+            // harmless, whereas dropping it would cost French invocation
+            // entirely. `title` and `description` above DO localize.
             phrases: [
                 "Dictate to \(.applicationName)",
                 "Talk to \(.applicationName)",

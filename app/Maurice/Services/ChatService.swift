@@ -326,7 +326,7 @@ final class ChatService {
         // whatever `messages` now holds, which is the new empty thread. It also
         // keeps isStreaming true, disabling the composer in a conversation that
         // has nothing to do with it.
-        stop()
+        await stopAndWait()
         // Same for the room socket: it stays subscribed to the old room, and
         // nothing downstream checks which conversation an event belongs to, so
         // another member's message would land in the new thread's history.
@@ -631,6 +631,19 @@ final class ChatService {
         streamTask?.cancel()
     }
 
+    /// Cancel a running reply and wait for it to actually wind down.
+    ///
+    /// stop() only asks. Callers that go on to mutate the thread — starting a
+    /// new one, switching member — need the stream's own bookkeeping to have
+    /// run first, or `isStreaming` stays true and the composer of a brand-new
+    /// conversation comes up disabled.
+    func stopAndWait() async {
+        guard let task = streamTask else { return }
+        task.cancel()
+        _ = await task.value
+        isStreaming = false
+    }
+
     /// Re-answer the last user turn: drop the previous assistant message and
     /// stream a fresh response. No-op while streaming or with no answer to redo.
     func regenerate() async {
@@ -718,6 +731,22 @@ final class ChatService {
         streamTask = task
         let doneEvent = await task.value
         streamTask = nil
+
+        // Everything below belongs to the thread this stream was started for.
+        // Cancelling does not stop it: we are suspended at `await task.value`
+        // and resume at an unpredictable point, after startNewConversation has
+        // cleared `messages` — so the old thread's finished reply would be
+        // appended into the new, empty one, and knownIds having been cleared
+        // too, the dedupe check could not catch it.
+        guard activeConversationId == convoId else {
+            streamingText = ""
+            streamingData = []
+            streamingUsage = nil
+            isGeneratingImage = false
+            toolActivity = nil
+            pendingSummon = false
+            return
+        }
 
         if let event = doneEvent {
             let id = event.message_id ?? UUID().uuidString

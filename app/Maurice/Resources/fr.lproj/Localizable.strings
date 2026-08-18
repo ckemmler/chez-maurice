@@ -347,3 +347,7 @@
 "settings.dictation.group" = "DICTÉE";
 "settings.dictation.allow_server" = "Autoriser la transcription par Apple";
 "settings.dictation.caption" = "La dictée reste sur cet appareil dès que la langue dispose d'un modèle hors ligne. En autorisant ceci, les langues qui n'en ont pas sont transcrites par Apple, ce qui veut dire que l'audio quitte votre appareil. Le micro affiche un nuage pendant ce temps-là.";
+
+/* App Shortcut (Action Button / Shortcuts list) */
+"Dictate to Maurice" = "Dicter à Maurice";
+"Opens Maurice and starts listening, so you can speak a message instead of typing it." = "Ouvre Maurice et se met à écouter, pour dire un message au lieu de le taper.";

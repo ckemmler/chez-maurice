@@ -410,7 +410,7 @@
 				INFOPLIST_KEY_CFBundleDisplayName = "Chez Maurice";
 				INFOPLIST_KEY_NSCameraUsageDescription = "Maurice uses the camera so you can take a profile photo.";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Maurice uses the microphone so you can dictate a message instead of typing it.";
-				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Maurice turns your dictation into text on this device. Your voice is not sent to a server.";
+				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Maurice turns your dictation into text on this device whenever your language has an offline model. If it doesn't, Maurice asks you first before sending any audio to Apple.";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.education";
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
@@ -575,7 +575,7 @@
 				INFOPLIST_KEY_CFBundleDisplayName = "Chez Maurice";
 				INFOPLIST_KEY_NSCameraUsageDescription = "Maurice uses the camera so you can take a profile photo.";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Maurice uses the microphone so you can dictate a message instead of typing it.";
-				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Maurice turns your dictation into text on this device. Your voice is not sent to a server.";
+				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Maurice turns your dictation into text on this device whenever your language has an offline model. If it doesn't, Maurice asks you first before sending any audio to Apple.";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.education";
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
@@ -613,7 +613,7 @@
 				INFOPLIST_KEY_CFBundleDisplayName = "Chez Maurice";
 				INFOPLIST_KEY_NSCameraUsageDescription = "Maurice uses the camera so you can take a profile photo.";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Maurice uses the microphone so you can dictate a message instead of typing it.";
-				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Maurice turns your dictation into text on this device. Your voice is not sent to a server.";
+				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Maurice turns your dictation into text on this device whenever your language has an offline model. If it doesn't, Maurice asks you first before sending any audio to Apple.";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.education";
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
@@ -644,7 +644,7 @@
 				INFOPLIST_KEY_CFBundleDisplayName = "Chez Maurice";
 				INFOPLIST_KEY_NSCameraUsageDescription = "Maurice uses the camera so you can take a profile photo.";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Maurice uses the microphone so you can dictate a message instead of typing it.";
-				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Maurice turns your dictation into text on this device. Your voice is not sent to a server.";
+				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Maurice turns your dictation into text on this device whenever your language has an offline model. If it doesn't, Maurice asks you first before sending any audio to Apple.";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.education";
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";

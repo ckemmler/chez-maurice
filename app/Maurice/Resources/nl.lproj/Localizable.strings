@@ -347,3 +347,7 @@
 "settings.dictation.group" = "DICTEREN";
 "settings.dictation.allow_server" = "Transcriptie door Apple toestaan";
 "settings.dictation.caption" = "Dicteren blijft op dit apparaat zolang de taal een offline model heeft. Sta je dit toe, dan worden talen zonder model door Apple getranscribeerd, wat betekent dat de audio je apparaat verlaat. Zolang dat gebeurt, toont de microfoon een wolkje.";
+
+/* App Shortcut (Action Button / Shortcuts list) */
+"Dictate to Maurice" = "Dicteren aan Maurice";
+"Opens Maurice and starts listening, so you can speak a message instead of typing it." = "Opent Maurice en begint te luisteren, zodat je een bericht kunt inspreken in plaats van typen.";

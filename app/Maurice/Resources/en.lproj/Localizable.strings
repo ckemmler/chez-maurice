@@ -347,3 +347,7 @@
 "settings.dictation.group" = "DICTATION";
 "settings.dictation.allow_server" = "Allow Apple transcription";
 "settings.dictation.caption" = "Dictation stays on this device whenever the language has an offline model. Allow this and languages without one are transcribed by Apple instead, which means the audio leaves your device. The microphone shows a cloud while that is happening.";
+
+/* App Shortcut (Action Button / Shortcuts list) */
+"Dictate to Maurice" = "Dictate to Maurice";
+"Opens Maurice and starts listening, so you can speak a message instead of typing it." = "Opens Maurice and starts listening, so you can speak a message instead of typing it.";
