@@ -700,6 +700,7 @@ web.get("/dashboard", async (c) => {
               <div class="field"><input type="password" name="podcastindex_api_secret" autocomplete="off" placeholder="${household.podcastindex_api_secret ? escape(t(lang, "settings.saved_placeholder")) : escape(t(lang, "otherkeys.podcastindex_secret"))}" /></div>
             </div>
             <span class="hint">${escape(t(lang, "otherkeys.podcastindex_desc"))} ${escape(t(lang, "settings.leave_blank"))}</span>
+            ${envOverride("podcastindex_api_key")}${envOverride("podcastindex_api_secret")}
           </div>
           <div class="field" style="margin-top:16px">
             <label class="label">${escape(t(lang, "otherkeys.igdb"))} <span class="tag standard">${escape(t(lang, "otherkeys.optional"))}</span></label>
@@ -708,6 +709,7 @@ web.get("/dashboard", async (c) => {
               <div class="field"><input type="password" name="igdb_client_secret" autocomplete="off" placeholder="${household.igdb_client_secret ? escape(t(lang, "settings.saved_placeholder")) : escape(t(lang, "otherkeys.igdb_client_secret"))}" /></div>
             </div>
             <span class="hint">${escape(t(lang, "otherkeys.igdb_desc"))} ${escape(t(lang, "settings.leave_blank"))}</span>
+            ${envOverride("igdb_client_id")}${envOverride("igdb_client_secret")}
           </div>
           <p class="sec-desc" style="margin-top:18px">${escape(t(lang, "otherkeys.no_key_needed"))}</p>
           <div class="grid-actions"><button type="submit" class="btn primary">${escape(t(lang, "otherkeys.save"))}</button></div>

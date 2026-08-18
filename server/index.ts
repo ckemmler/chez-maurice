@@ -333,14 +333,17 @@ app.get("/api/avatars/:filename", (c) => {
 // The app's fiche card shows a downloaded poster. The garden itself serves these
 // under /g/<member>/images/…, but that path is session-gated and AsyncImage
 // sends no credentials — hence this /api/ mirror, which the gate treats as open.
-// Read-only, and confined to a member's images/ subtree.
+//
+// Rooted at images/RESOURCES, not images/: the sibling images/notes holds the
+// illustrations of private notes, and this route has no authentication at all.
+// Cover art is already public-facing metadata; a member's note images are not.
 app.get("/api/garden-images/:member/*", (c) => {
   const member = c.req.param("member");
   const rest = c.req.path.split(`/api/garden-images/${member}/`)[1] || "";
   if (!/^[a-z0-9][a-z0-9._-]*$/i.test(member) || rest.includes("..")) {
     return c.json({ error: "Invalid path" }, 400);
   }
-  const root = resolve(join(gardensRoot(), member, "images"));
+  const root = resolve(join(gardensRoot(), member, "images", "resources"));
   const filePath = resolve(join(root, rest));
   // resolve() both sides: a decoded traversal must not escape the subtree.
   if (!filePath.startsWith(root + "/") || !existsSync(filePath)) {

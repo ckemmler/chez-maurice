@@ -903,7 +903,7 @@ async def list_tools() -> list[Tool]:
                     "resource_collection": {"type": "string", "enum": ["books", "articles", "movies", "games", "series", "podcasts", "people"]},
                     "title": {"type": "string", "description": "Title of the work (used to search metadata and derive the slug)."},
                     "resource_id": {"type": "string", "description": "Existing resource slug, when known (skips slug derivation)."},
-                    "locale": {"type": "string", "enum": ["en", "fr"], "default": "fr"},
+                    "locale": {"type": "string", "enum": ["en", "fr"], "default": "en"},
                     "year": {"type": "integer", "description": "Year hint, to disambiguate the metadata lookup."},
                     "author": {"type": "string", "description": "Author hint for books."},
                     "url": {"type": "string", "description": "URL for articles (Open Graph extraction)."},
@@ -1116,6 +1116,9 @@ async def list_tools() -> list[Tool]:
                     "seasons_watched": {"type": "integer"},
                     "host": {"type": "string"},
                     "date_listened": {"type": "string", "description": "ISO date"},
+                    "developer": {"type": "string", "description": "Game studio"},
+                    "platforms": {"type": "array", "items": {"type": "string"}, "description": "Game platforms"},
+                    "date_played": {"type": "string", "description": "ISO date"},
                     "show": {"type": "string", "description": "Parent show slug (marks entry as episode)"},
                     "episode_title": {"type": "string"},
                     "episode_number": {"type": "integer"},
@@ -1437,6 +1440,9 @@ async def list_tools() -> list[Tool]:
                     "seasons_watched": {"type": "integer"},
                     "host": {"type": "string"},
                     "date_listened": {"type": "string"},
+                    "developer": {"type": "string"},
+                    "platforms": {"type": "array", "items": {"type": "string"}},
+                    "date_played": {"type": "string"},
                     "name": {"type": "string"},
                     "role": {"type": "string"},
                 },
@@ -2834,7 +2840,7 @@ def _fiche_cover(collection: str, locale: str, slug: str, meta: dict[str, Any]) 
     # but the URL handed to the client is the server's /api mirror: the garden's
     # own /g/<member>/images/… path is session-gated, and AsyncImage sends no
     # credentials, so a card would only ever show the grey placeholder.
-    dest_rel = f"/api/garden-images/{_garden_member()}/resources/{collection}/{locale}-{slug}.jpg"
+    dest_rel = f"/api/garden-images/{_garden_member()}/{collection}/{locale}-{slug}.jpg"
     dest = member_root() / "images" / "resources" / collection / f"{locale}-{slug}.jpg"
     if dest.exists():
         return dest_rel
@@ -2884,7 +2890,10 @@ def _handle_open_fiche(args: dict[str, Any]) -> dict[str, Any]:
     col = args["resource_collection"]
     if col not in _RESOURCE_COLLECTIONS:
         return {"error": f"invalid resource_collection: {col!r}"}
-    locale = args.get("locale", "fr")
+    # "en" to match get_fiche / update_fiche. Diverging meant a model that
+    # opened a fiche and then updated it without repeating the locale was told
+    # the fiche did not exist.
+    locale = args.get("locale", "en")
     title = args.get("title", "") or args.get("resource_id", "")
     if not title:
         return {"error": "one of title or resource_id is required"}
@@ -2905,9 +2914,15 @@ def _handle_open_fiche(args: dict[str, Any]) -> dict[str, Any]:
         # the-legend-of-zelda-breath-of-the-wild card, which then reads as absent.
         meta = {}
         if not args.get("skip_metadata"):
+            picked = any(args.get(k) for k in ("tmdb_id", "google_books_id", "podcastindex_id", "igdb_id"))
             try:
                 meta = _fetch_fiche_metadata(col, title, args)
             except Exception as exc:
+                # An explicit pick that could not be fetched is an error, not a
+                # reason to guess: creating the fiche anyway would file it under
+                # whatever a title search returned first.
+                if picked:
+                    return {"error": str(exc)}
                 LOGGER.warning("Failed to fetch metadata for fiche %s/%s: %s", col, slug, exc)
         canonical = meta.get("title") or meta.get("name") or ""
         if canonical:
@@ -3000,7 +3015,11 @@ def _fetch_by_provider_id(col: str, args: dict[str, Any]) -> dict[str, Any]:
             feed = _podcastindex_by_id(int(args["podcastindex_id"]), api_key, api_secret)
             return _podcast_meta_from_feed(feed) if feed else {}
     except Exception as exc:
-        LOGGER.warning("Lookup by provider id failed for %s: %s", col, exc)
+        # Raise, don't fall through. Returning {} here is indistinguishable from
+        # "no id was passed", so a transient TMDB blip after the reader picked
+        # Dune (1984) quietly re-searched by title and filed Dune (2021) under
+        # their explicit choice — the one outcome the picker exists to prevent.
+        raise RuntimeError(f"could not fetch the picked {col} entry: {exc}") from exc
     return {}
 
 
@@ -3476,6 +3495,19 @@ def _handle_promote_fiche(args: dict[str, Any]) -> dict[str, Any]:
             if image_rel:
                 publish_args["image"] = image_rel
 
+    elif col == "games":
+        publish_args["title"] = meta.get("title", fm.get("title", rid))
+        publish_args["developer"] = meta.get("developer", "")
+        if meta.get("year"):
+            publish_args["year"] = meta["year"]
+        if meta.get("platforms"):
+            publish_args["platforms"] = meta["platforms"]
+        publish_args["content"] = fiche_body or meta.get("overview", "")
+        if meta.get("cover_url"):
+            image_rel = _download_resource_image(meta["cover_url"], "games", locale, slug)
+            if image_rel:
+                publish_args["image"] = image_rel
+
     elif col == "series":
         publish_args["title"] = meta.get("title", fm.get("title", rid))
         if meta.get("year"):
@@ -3565,6 +3597,8 @@ def _promote_fiche_without_meta(
         result = _create_book_entry_sync(base_args)
     elif col == "movies":
         result = _create_movie_entry_sync(base_args)
+    elif col == "games":
+        result = _create_game_entry_sync(base_args)
     elif col == "series":
         result = _create_series_entry_sync(base_args)
     elif col == "podcasts":
@@ -4023,12 +4057,18 @@ def _handle_update_resource(args: dict[str, Any]) -> dict[str, Any]:
         "source", "url",
         "platform", "seasons_watched",
         "host", "date_listened",
+        "developer", "date_played",
         "name", "role",
     )
     for key in scalar_keys:
         if key in args:
             fm[key] = args[key]
             updated_fields.append(key)
+    # A game's platforms are a list; keeping them out of scalar_keys avoids
+    # writing a bare string into a field the schema types as an array.
+    if "platforms" in args:
+        fm["platforms"] = list(args["platforms"] or [])
+        updated_fields.append("platforms")
 
     if "image" in args:
         if args["image"]:
@@ -4464,7 +4504,10 @@ def _igdb_token(client_id: str, client_secret: str) -> str:
     import urllib.parse
     import urllib.request
 
-    cached = _igdb_token_cache.get(client_id)
+    # Keyed on both halves: rotating the Twitch secret while the id stays put
+    # would otherwise keep serving the stale token for up to an hour.
+    cache_key = f"{client_id}:{hash(client_secret)}"
+    cached = _igdb_token_cache.get(cache_key)
     if cached and cached["expires_at"] > time.monotonic():
         return str(cached["token"])
 
@@ -4483,7 +4526,7 @@ def _igdb_token(client_id: str, client_secret: str) -> str:
         raise RuntimeError("Twitch returned no access_token for the IGDB credentials")
     # Renew a minute early rather than racing the expiry on a slow call.
     ttl = max(60, int(data.get("expires_in", 3600)) - 60)
-    _igdb_token_cache[client_id] = {"token": token, "expires_at": time.monotonic() + ttl}
+    _igdb_token_cache[cache_key] = {"token": token, "expires_at": time.monotonic() + ttl}
     return token
 
 

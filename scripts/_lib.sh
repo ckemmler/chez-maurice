@@ -19,18 +19,45 @@ mkdir -p "$LOG_DIR" "$RUN_DIR"
 # installs) — so while the live manifest lived there, every branch switch
 # restored the stub and 404'd every garden. The repo fallback below is for a
 # fresh dev checkout that has no gardens of its own.
-if [[ -z "${MAURICE_GARDENS_DIR:-}" && -f "$REPO/.env" ]]; then
-  MAURICE_GARDENS_DIR="$(grep -E '^MAURICE_GARDENS_DIR=' "$REPO/.env" | tail -1 | cut -d= -f2- | tr -d "\"'")"
-fi
+_gardens_from_env_file() {
+  [[ -f "$REPO/.env" ]] || return 0
+  # `|| true` is load-bearing: grep exits 1 when the key is absent, and every
+  # script here runs under `set -euo pipefail`, so the failing pipeline aborted
+  # at source time — before any output, so the only symptom was a launch script
+  # exiting 1 with nothing said. .env.example ships this line commented out, so
+  # it hit every fresh install.
+  local line value
+  line="$(grep -E '^[[:space:]]*MAURICE_GARDENS_DIR=' "$REPO/.env" | tail -1 || true)"
+  [[ -n "$line" ]] || return 0
+  value="${line#*=}"
+  value="${value%%#*}"                              # trailing comment
+  value="${value#"${value%%[![:space:]]*}"}"        # leading space
+  value="${value%"${value##*[![:space:]]}"}"        # trailing space
+  value="${value#[\"\']}"; value="${value%[\"\']}"  # surrounding quotes
+  # `source` would expand these; grep does not, and a literal "$HOME/..." was
+  # passed verbatim to the astro child, which then matched nothing and rendered
+  # every collection empty.
+  value="${value/#\~/$HOME}"
+  value="${value//\$\{HOME\}/$HOME}"
+  value="${value//\$HOME/$HOME}"
+  printf '%s' "$value"
+}
+
 if [[ -z "${MAURICE_GARDENS_DIR:-}" ]]; then
-  if [[ -d "$REPO/web/gardens" ]]; then
-    MAURICE_GARDENS_DIR="$REPO/web/gardens"
-  else
-    MAURICE_GARDENS_DIR="$HOME/.maurice/gardens"
-  fi
+  MAURICE_GARDENS_DIR="$(_gardens_from_env_file)"
 fi
-export MAURICE_GARDENS_DIR
-gardens_root() { echo "$MAURICE_GARDENS_DIR"; }
+# Only an explicit answer is exported. Falling back to a default and exporting it
+# would beat config.toml's [paths] gardens_dir, which config_loader consults only
+# after the environment — an install configured by TOML would silently move.
+if [[ -n "${MAURICE_GARDENS_DIR:-}" ]]; then
+  export MAURICE_GARDENS_DIR
+  _MAURICE_GARDENS_RESOLVED="$MAURICE_GARDENS_DIR"
+elif [[ -d "$REPO/web/gardens" ]]; then
+  _MAURICE_GARDENS_RESOLVED="$REPO/web/gardens"
+else
+  _MAURICE_GARDENS_RESOLVED="$HOME/.maurice/gardens"
+fi
+gardens_root() { echo "$_MAURICE_GARDENS_RESOLVED"; }
 
 load_env() {
   if [[ -f "$REPO/.env" ]]; then
