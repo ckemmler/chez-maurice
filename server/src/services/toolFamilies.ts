@@ -97,7 +97,7 @@ function gardenSub(suffix: string): string {
   if (suffix === "open_fiche") return "garden-media";
   if (/fiche|person|contact/.test(suffix)) return "garden-people";
   if (/resource|book|movie|game|podcast|series|article/.test(suffix)) return "garden-media";
-  if (/deploy|publish|site|content/.test(suffix)) return "garden-publish";
+  if (/deploy|publish|site|content|flags/.test(suffix)) return "garden-publish";
   if (/note|image|evocation|toggle/.test(suffix)) return "garden-notes";
   return "garden-other";
 }

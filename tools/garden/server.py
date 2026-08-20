@@ -202,6 +202,28 @@ def _resolve_note_path(note_id: str, locale: str = "en") -> Path:
     return _assert_within(content_root() / locale / f"{note_id}.md", member_root())
 
 
+# The five the Astro schema accepts. An unknown flag doesn't fail one file — it
+# fails the whole collection's build, so it is worth refusing here.
+_CONTENT_FLAGS = ("public", "encrypted", "moc", "translation", "archived")
+
+# Collections that carry flags, and where their files live. Notes sit under
+# notes/<locale>/; everything else under <collection>/<locale>/.
+_FLAGGABLE_COLLECTIONS = (
+    "notes", "blog", "essays", "pages",
+    "books", "articles", "movies", "games", "series", "podcasts", "people",
+)
+
+
+def _resolve_content_path(collection: str, slug: str, locale: str = "en") -> Path:
+    """Path to any flaggable piece of content, whatever its collection."""
+    if collection not in _FLAGGABLE_COLLECTIONS:
+        raise ValueError(f"invalid collection: {collection!r}")
+    slug = _safe_slug(slug, "id")
+    locale = _safe_locale(locale)
+    base = content_root() if collection == "notes" else member_root() / collection
+    return _assert_within(base / locale / f"{slug}.md", member_root())
+
+
 def _parse_note(path: Path) -> tuple[dict[str, Any], str]:
     """Return (frontmatter_dict, body_str) from a markdown file."""
     text = path.read_text(encoding="utf-8")
@@ -1531,6 +1553,40 @@ async def list_tools() -> list[Tool]:
             },
         ),
         Tool(
+            name="set_flags",
+            description=(
+                "Add or remove content flags on any piece of content — blog posts, essays, "
+                "notes, pages and every resource collection. This is how something becomes "
+                "publishable: `public` is what makes an item appear in a production build; "
+                "without it the item is a draft, visible only when browsing the garden "
+                "locally. Additive by design, so setting `public` cannot silently drop an "
+                "`encrypted` or `moc` flag already there. Deploying the site is a separate "
+                "step (deploy_site)."
+            ),
+            inputSchema={
+                "type": "object",
+                "required": ["collection", "id"],
+                "properties": {
+                    "collection": {
+                        "type": "string",
+                        "enum": list(_FLAGGABLE_COLLECTIONS),
+                    },
+                    "id": {"type": "string", "description": "Slug — the file stem, without .md"},
+                    "locale": {"type": "string", "enum": ["en", "fr"], "default": "en"},
+                    "add": {
+                        "type": "array",
+                        "items": {"type": "string", "enum": list(_CONTENT_FLAGS)},
+                        "description": "Flags to add, e.g. [\"public\"] to make it publishable.",
+                    },
+                    "remove": {
+                        "type": "array",
+                        "items": {"type": "string", "enum": list(_CONTENT_FLAGS)},
+                        "description": "Flags to remove, e.g. [\"public\"] to pull it back to draft.",
+                    },
+                },
+            },
+        ),
+        Tool(
             name="deploy_site",
             description=(
                 "Build and deploy the Astro site to Cloudflare Pages. Runs the "
@@ -1794,6 +1850,8 @@ async def call_tool(name: str, arguments: Any) -> list[TextContent]:
             result = await asyncio.to_thread(_handle_generate_evocation, args)
         elif name == "generate_hero_image":
             result = await _handle_generate_hero_image(args)
+        elif name == "set_flags":
+            result = _handle_set_flags(args)
         elif name == "deploy_site":
             result = await asyncio.to_thread(_handle_deploy_site, args)
         else:
@@ -3917,6 +3975,43 @@ _FM_BUILDERS: dict[str, Any] = {
 _SLUG_FIELD: dict[str, str] = {
     "people": "name",
 }
+
+
+def _handle_set_flags(args: dict[str, Any]) -> dict[str, Any]:
+    collection = args["collection"]
+    slug = args["id"]
+    locale = args.get("locale", "en")
+    add = args.get("add") or []
+    remove = args.get("remove") or []
+    if not add and not remove:
+        return {"error": "nothing to do: pass add and/or remove"}
+
+    unknown = [f for f in [*add, *remove] if f not in _CONTENT_FLAGS]
+    if unknown:
+        # A flag outside the schema's enum fails the whole collection at build
+        # time, not just this file — worth refusing rather than writing.
+        return {"error": f"unknown flag(s): {', '.join(unknown)}. Allowed: {', '.join(_CONTENT_FLAGS)}"}
+
+    path = _resolve_content_path(collection, slug, locale)
+    if not path.exists():
+        return {"error": f"not found: {_rel(path)}"}
+
+    fm, body = _parse_note(path)
+    before = list(fm.get("flags") or [])
+    after = [f for f in before if f not in remove]
+    for flag in add:
+        if flag not in after:
+            after.append(flag)
+    if after == before:
+        return {"collection": collection, "id": slug, "locale": locale,
+                "flags": after, "public": "public" in after, "changed": False}
+
+    fm["flags"] = after
+    _write_note(path, fm, body)
+    _auto_commit([path], f"Set flags: {collection}/{locale}/{slug} -> [{', '.join(after)}]")
+    return {"collection": collection, "id": slug, "locale": locale,
+            "flags": after, "public": "public" in after, "changed": True,
+            "path": _rel(path)}
 
 
 def _handle_deploy_site(args: dict[str, Any]) -> dict[str, Any]:
