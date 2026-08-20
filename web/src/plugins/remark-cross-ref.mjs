@@ -4,6 +4,7 @@ const ROUTE_MAP = {
   en: {
     film: "/resources/movies",
     movie: "/resources/movies",
+    game: "/resources/games",
     series: "/resources/series",
     book: "/resources/books",
     article: "/resources/articles",
@@ -16,6 +17,7 @@ const ROUTE_MAP = {
   fr: {
     film: "/trouvailles/films",
     movie: "/trouvailles/films",
+    game: "/trouvailles/jeux",
     series: "/trouvailles/series",
     book: "/trouvailles/livres",
     article: "/trouvailles/articles",

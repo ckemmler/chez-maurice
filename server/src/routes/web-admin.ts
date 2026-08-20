@@ -584,6 +584,21 @@ web.get("/dashboard", async (c) => {
       </div>`;
   }).join("");
 
+  // ── 05 other API keys ──
+  // Same "leave blank to keep" convention as the model keys above; the badge
+  // says whether an entry type simply won't work without it.
+  // The MCP tools read the env var first, so a key set in .env silently wins over
+  // anything typed here — saying so beats a "saved" message that changes nothing.
+  const envOverride = (col: string) => (process.env[col.toUpperCase()] ? `<span class="hint" style="color:var(--caution)">${escape(t(lang, "otherkeys.env_override", col.toUpperCase()))}</span>` : "");
+
+  const otherKeyField = (col: string, labelKey: string, descKey: string, required: boolean) => `
+    <div class="field" style="margin-top:16px">
+      <label class="label">${escape(t(lang, labelKey))} <span class="tag ${required ? "admin" : "standard"}">${escape(t(lang, required ? "otherkeys.required" : "otherkeys.optional"))}</span></label>
+      <input type="password" name="${col}" autocomplete="off" placeholder="${household[col] ? escape(t(lang, "settings.saved_placeholder")) : "…"}" />
+      <span class="hint">${escape(t(lang, descKey))} ${escape(t(lang, "settings.leave_blank"))}</span>
+      ${envOverride(col)}
+    </div>`;
+
   return c.html(layout(t(lang, "dashboard.title"), `
     ${flash ? `<div class="flash">✓ ${escape(t(lang, "flash." + flash, c.req.query("n") || ""))}</div>` : ""}
     <div class="stack">
@@ -672,6 +687,34 @@ web.get("/dashboard", async (c) => {
           <span><span class="star">★</span> ${escape(t(lang, "access.household_default"))}</span>
         </div>
       </section>
+
+      <section id="sec-other-keys">
+        ${sectionHead(t(lang, "dashboard.kicker_keys"), t(lang, "otherkeys.title"), t(lang, "otherkeys.desc"))}
+        <form method="POST" action="/admin/other-keys" class="card pad">
+          ${otherKeyField("tmdb_api_key", "otherkeys.tmdb", "otherkeys.tmdb_desc", true)}
+          ${otherKeyField("google_books_api_key", "otherkeys.google_books", "otherkeys.google_books_desc", false)}
+          <div class="field" style="margin-top:16px">
+            <label class="label">${escape(t(lang, "otherkeys.podcastindex"))} <span class="tag standard">${escape(t(lang, "otherkeys.optional"))}</span></label>
+            <div class="grid2">
+              <div class="field"><input type="password" name="podcastindex_api_key" autocomplete="off" placeholder="${household.podcastindex_api_key ? escape(t(lang, "settings.saved_placeholder")) : escape(t(lang, "otherkeys.podcastindex"))}" /></div>
+              <div class="field"><input type="password" name="podcastindex_api_secret" autocomplete="off" placeholder="${household.podcastindex_api_secret ? escape(t(lang, "settings.saved_placeholder")) : escape(t(lang, "otherkeys.podcastindex_secret"))}" /></div>
+            </div>
+            <span class="hint">${escape(t(lang, "otherkeys.podcastindex_desc"))} ${escape(t(lang, "settings.leave_blank"))}</span>
+            ${envOverride("podcastindex_api_key")}${envOverride("podcastindex_api_secret")}
+          </div>
+          <div class="field" style="margin-top:16px">
+            <label class="label">${escape(t(lang, "otherkeys.igdb"))} <span class="tag standard">${escape(t(lang, "otherkeys.optional"))}</span></label>
+            <div class="grid2">
+              <div class="field"><input type="password" name="igdb_client_id" autocomplete="off" placeholder="${household.igdb_client_id ? escape(t(lang, "settings.saved_placeholder")) : escape(t(lang, "otherkeys.igdb_client_id"))}" /></div>
+              <div class="field"><input type="password" name="igdb_client_secret" autocomplete="off" placeholder="${household.igdb_client_secret ? escape(t(lang, "settings.saved_placeholder")) : escape(t(lang, "otherkeys.igdb_client_secret"))}" /></div>
+            </div>
+            <span class="hint">${escape(t(lang, "otherkeys.igdb_desc"))} ${escape(t(lang, "settings.leave_blank"))}</span>
+            ${envOverride("igdb_client_id")}${envOverride("igdb_client_secret")}
+          </div>
+          <p class="sec-desc" style="margin-top:18px">${escape(t(lang, "otherkeys.no_key_needed"))}</p>
+          <div class="grid-actions"><button type="submit" class="btn primary">${escape(t(lang, "otherkeys.save"))}</button></div>
+        </form>
+      </section>
     </div>`, true, adminName(c), lang));
 });
 
@@ -693,6 +736,32 @@ web.post("/settings", async (c) => {
   if (form.max_tokens) put("max_tokens", parseInt(form.max_tokens as string) || 4096);
   if (sets.length) db.run(`UPDATE households SET ${sets.join(", ")} WHERE id = 'default'`, params);
   return c.redirect("/admin/dashboard?msg=settings_saved#sec-settings");
+});
+
+// ── Other API keys (POST) ───────────────────────────────────────
+// Metadata/cover-art keys for the garden tools. Stored on the household row so
+// the Python MCP tools can read them out of maurice.db — no .env round-trip.
+const OTHER_KEY_COLUMNS = [
+  "tmdb_api_key",
+  "google_books_api_key",
+  "podcastindex_api_key",
+  "podcastindex_api_secret",
+  "igdb_client_id",
+  "igdb_client_secret",
+] as const;
+
+web.post("/other-keys", async (c) => {
+  const redir = requireWebAdmin(c);
+  if (redir) return redir;
+  const form = await c.req.parseBody();
+  const sets: string[] = [];
+  const params: any[] = [];
+  for (const col of OTHER_KEY_COLUMNS) {
+    const v = ((form[col] as string) || "").trim();
+    if (v) { sets.push(`${col} = ?`); params.push(v); }
+  }
+  if (sets.length) db.run(`UPDATE households SET ${sets.join(", ")} WHERE id = 'default'`, params);
+  return c.redirect("/admin/dashboard?msg=other_keys_saved#sec-other-keys");
 });
 
 // ── Models: rescan / add / delete ───────────────────────────────

@@ -8,16 +8,21 @@ const flagsSchema = z.array(z.enum(["public", "encrypted", "moc", "translation",
 const devOnly = ["**/!(*-fiche).md"];
 const devOnlyMdx = ["**/!(*-fiche).{md,mdx}"];
 
-// Every content collection lives under the member's garden (gardens/<member>/).
+// Every content collection lives under the member's garden (<gardens>/<member>/).
 // Defaults to the bundled `demo` garden so a plain build/dev renders out of the box.
+//
+// The root comes from MAURICE_GARDENS_DIR, the same variable lib/garden.ts and
+// the server read. It has to: a household's real gardens live outside the
+// checkout, and resolving this one relative to the cwd instead was enough to
+// leave every collection empty while SSR-rendered notes still worked.
 const member = process.env.GARDEN || "demo";
-const gardenRoot = `./gardens/${member}`;
+const gardenRoot = `${process.env.MAURICE_GARDENS_DIR || "./gardens"}/${member}`;
 const notesBase = `${gardenRoot}/notes`;
 const pagesBase = `${gardenRoot}/pages`;
 
 const fichesPattern = process.env.NODE_ENV === "production"
   ? "___noop___"
-  : ["{books,articles,movies,series,podcasts,people}/**/*-fiche.md"];
+  : ["{books,articles,movies,games,series,podcasts,people}/**/*-fiche.md"];
 
 const books = defineCollection({
   loader: glob({ pattern: devOnly, base: `${gardenRoot}/books` }),
@@ -142,6 +147,27 @@ const movies = defineCollection({
   }),
 });
 
+const games = defineCollection({
+  loader: glob({ pattern: devOnly, base: `${gardenRoot}/games` }),
+  schema: z.object({
+    title: z.string(),
+    developer: z.string().optional(),
+    year: z.number().optional(),
+    platforms: z.array(z.string()).default([]),
+    date_played: z.coerce.date(),
+    tags: z.array(z.string()).default([]),
+    flags: flagsSchema,
+    rating: z.number().min(1).max(5).optional(),
+    image: z.string().optional(),
+    shared_twitter: z.boolean().default(false),
+    shared_linkedin: z.boolean().default(false),
+    shared_twitter_url: z.string().url().optional(),
+    shared_linkedin_urn: z.string().optional(),
+    locale: localeEnum,
+    translationKey: translationKey,
+  }),
+});
+
 const series = defineCollection({
   loader: glob({ pattern: devOnly, base: `${gardenRoot}/series` }),
   schema: z.object({
@@ -213,7 +239,7 @@ const fiches = defineCollection({
   loader: glob({ pattern: fichesPattern, base: gardenRoot }),
   schema: z.object({
     title: z.string(),
-    resource_collection: z.enum(["books", "articles", "movies", "series", "podcasts", "people"]),
+    resource_collection: z.enum(["books", "articles", "movies", "games", "series", "podcasts", "people"]),
     resource_id: z.string(),
     date: z.coerce.date(),
     tags: z.array(z.string()).default([]),
@@ -225,4 +251,4 @@ const fiches = defineCollection({
   }),
 });
 
-export const collections = { books, articles, blog, essays, notes, podcasts, movies, series, people, pages, fiches };
+export const collections = { books, articles, blog, essays, notes, podcasts, movies, games, series, people, pages, fiches };

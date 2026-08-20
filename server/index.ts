@@ -1,5 +1,6 @@
 import { readFileSync, existsSync, readdirSync } from "node:fs";
 import { resolve, join, extname } from "node:path";
+import { gardensRoot } from "./src/services/gardensRoot";
 
 // ── Load .env before any other imports that read env ─────────────────────
 // Two locations, first-wins (and an already-set env var always wins):
@@ -130,8 +131,13 @@ app.use("/api/v1/*", async (c, next) => {
 // Candide is the root fallback (webPort), so he's not in this map.
 const GARDEN_PORTS: Record<string, number> = (() => {
   try {
+    // Via gardensRoot(), like every other reader of this tree. Hardcoding the
+    // repo path meant the manifest could not follow MAURICE_GARDENS_DIR, so the
+    // one file naming this household's members and ports had to live inside the
+    // checkout — where it is tracked, and where every branch switch restored the
+    // public demo placeholder and 404'd every garden.
     const manifest = JSON.parse(
-      readFileSync(resolve(import.meta.dir, "../web/gardens/gardens.json"), "utf8"),
+      readFileSync(join(gardensRoot(), "gardens.json"), "utf8"),
     ) as Record<string, { port: number; base?: string }>;
     const out: Record<string, number> = {};
     for (const [member, cfg] of Object.entries(manifest)) {
@@ -319,6 +325,36 @@ app.get("/api/avatars/:filename", (c) => {
   const ext = extname(filename).toLowerCase();
   const mime = ext === ".png" ? "image/png" : ext === ".jpg" || ext === ".jpeg" ? "image/jpeg" : "application/octet-stream";
   return new Response(file, {
+    headers: { "Content-Type": mime, "Cache-Control": "public, max-age=86400" },
+  });
+});
+
+// ── Serve garden cover art (no auth, like avatars, so AsyncImage can load it) ──
+// The app's fiche card shows a downloaded poster. The garden itself serves these
+// under /g/<member>/images/…, but that path is session-gated and AsyncImage
+// sends no credentials — hence this /api/ mirror, which the gate treats as open.
+//
+// Rooted at images/RESOURCES, not images/: the sibling images/notes holds the
+// illustrations of private notes, and this route has no authentication at all.
+// Cover art is already public-facing metadata; a member's note images are not.
+app.get("/api/garden-images/:member/*", (c) => {
+  const member = c.req.param("member");
+  const rest = c.req.path.split(`/api/garden-images/${member}/`)[1] || "";
+  if (!/^[a-z0-9][a-z0-9._-]*$/i.test(member) || rest.includes("..")) {
+    return c.json({ error: "Invalid path" }, 400);
+  }
+  const root = resolve(join(gardensRoot(), member, "images", "resources"));
+  const filePath = resolve(join(root, rest));
+  // resolve() both sides: a decoded traversal must not escape the subtree.
+  if (!filePath.startsWith(root + "/") || !existsSync(filePath)) {
+    return c.json({ error: "Not found" }, 404);
+  }
+  const ext = extname(filePath).toLowerCase();
+  const mime = ext === ".png" ? "image/png"
+    : ext === ".jpg" || ext === ".jpeg" ? "image/jpeg"
+    : ext === ".webp" ? "image/webp"
+    : "application/octet-stream";
+  return new Response(readFileSync(filePath), {
     headers: { "Content-Type": mime, "Cache-Control": "public, max-age=86400" },
   });
 });

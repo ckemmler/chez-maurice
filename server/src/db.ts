@@ -526,6 +526,18 @@ try { db.run(`ALTER TABLE households ADD COLUMN openai_api_key TEXT`); } catch {
 try { db.run(`ALTER TABLE households ADD COLUMN mistral_api_key TEXT`); } catch {}
 try { db.run(`ALTER TABLE households ADD COLUMN providers_seeded INTEGER NOT NULL DEFAULT 0`); } catch {}
 
+// Non-model API keys, for the tools that enrich garden entries with metadata
+// and cover art. The Python MCP tools read these columns straight out of
+// maurice.db (env vars of the same name still win, for headless setups).
+try { db.run(`ALTER TABLE households ADD COLUMN tmdb_api_key TEXT`); } catch {}
+try { db.run(`ALTER TABLE households ADD COLUMN google_books_api_key TEXT`); } catch {}
+try { db.run(`ALTER TABLE households ADD COLUMN podcastindex_api_key TEXT`); } catch {}
+try { db.run(`ALTER TABLE households ADD COLUMN podcastindex_api_secret TEXT`); } catch {}
+// IGDB authenticates through Twitch: the id/secret pair buys a short-lived
+// app token, so both halves are stored and the token is fetched on demand.
+try { db.run(`ALTER TABLE households ADD COLUMN igdb_client_id TEXT`); } catch {}
+try { db.run(`ALTER TABLE households ADD COLUMN igdb_client_secret TEXT`); } catch {}
+
 // Which API a model speaks: anthropic | openai | mistral | ollama.
 try { db.run(`ALTER TABLE models ADD COLUMN provider TEXT`); } catch {}
 try { db.run(`UPDATE models SET provider = CASE WHEN tier = 'local' THEN 'ollama' ELSE 'anthropic' END WHERE provider IS NULL OR provider = ''`); } catch {}
