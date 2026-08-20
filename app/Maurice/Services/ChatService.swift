@@ -80,6 +80,9 @@ final class ChatService {
     /// The in-flight streaming consumer, so ⏹ Stop can tear it down (which aborts
     /// the underlying request). nil when no generation is running.
     private var streamTask: Task<StreamEvent?, Never>?
+    /// The conversation `messages` actually holds, as opposed to the one merely
+    /// selected. Anything destructive has to key off this, not off emptiness.
+    private var messagesLoadedFor: String?
 
     private var api: APIClient? {
         guard let url = session.serverURL else { return nil }
@@ -137,6 +140,7 @@ final class ChatService {
 
     func selectConversation(_ id: String) async {
         activeConversationId = id
+        messagesLoadedFor = nil
         unread.remove(id)
         await loadMessages(for: id)
         // The thread's armed Maurice = its current maurice_id (sticky in-thread).
@@ -262,6 +266,9 @@ final class ChatService {
             )
             conversations.insert(convo, at: 0)
             activeConversationId = convo.id
+            // We just created it, so we know its contents: empty. Without this
+            // the discard-if-empty cleanup could never fire again.
+            messagesLoadedFor = convo.id
             currentMauriceId = mauriceId  // sticky for this thread; nil = everyday
             messages = []
             knownIds = []
@@ -306,12 +313,51 @@ final class ChatService {
     /// out of. Keeps abandoned "New conversation" rows from piling up.
     func discardActiveIfEmpty() async {
         guard let api, let token, let id = activeConversationId else { return }
+        // `messages.isEmpty` is not on its own evidence that the thread is empty:
+        // selectConversation sets activeConversationId and only THEN awaits
+        // loadMessages, so a fully populated thread looks empty for the length of
+        // that round-trip. The Action Button fires at arbitrary moments, and this
+        // path issues a DELETE — tapping a conversation and pressing the button
+        // before it loaded destroyed it on the server.
+        guard messagesLoadedFor == id else { return }
         guard messages.isEmpty, participants.count <= 1 else { return }
         try? await api.delete("/api/conversations/\(id)", token: token)
         conversations.removeAll { $0.id == id }
         activeConversationId = conversations.first?.id
         messages = []
         knownIds = []
+    }
+
+    /// Leave the current thread for a brand-new one.
+    ///
+    /// Clearing `activeConversationId` alone is not enough and looked like it
+    /// was: the previous thread's messages, participants and ids stay loaded, so
+    /// the screen goes on showing the old conversation while the app believes
+    /// none is selected. The conversation itself is created on first send.
+    func startNewConversation() async {
+        // A reply still streaming belongs to the thread being left. Left running
+        // it keeps writing — and on completion appends the finished answer into
+        // whatever `messages` now holds, which is the new empty thread. It also
+        // keeps isStreaming true, disabling the composer in a conversation that
+        // has nothing to do with it.
+        await stopAndWait()
+        // Same for the room socket: it stays subscribed to the old room, and
+        // nothing downstream checks which conversation an event belongs to, so
+        // another member's message would land in the new thread's history.
+        socket?.disconnect()
+        socket = nil
+        await discardActiveIfEmpty()
+        activeConversationId = nil
+        messagesLoadedFor = nil
+        messages = []
+        participants = []
+        knownIds = []
+        streamingText = ""
+        streamingData = []
+        streamingUsage = nil
+        toolActivity = nil
+        pendingSummon = false
+        currentMauriceId = defaultMauriceId
     }
 
     // MARK: - Messages
@@ -326,6 +372,7 @@ final class ChatService {
             messages = detail.messages
             participants = detail.participants ?? []
             knownIds = Set(messages.map { $0.id })
+            messagesLoadedFor = conversationId
             pendingSummon = false
             error = nil
             connectSocket(conversationId)
@@ -600,6 +647,19 @@ final class ChatService {
         streamTask?.cancel()
     }
 
+    /// Cancel a running reply and wait for it to actually wind down.
+    ///
+    /// stop() only asks. Callers that go on to mutate the thread — starting a
+    /// new one, switching member — need the stream's own bookkeeping to have
+    /// run first, or `isStreaming` stays true and the composer of a brand-new
+    /// conversation comes up disabled.
+    func stopAndWait() async {
+        guard let task = streamTask else { return }
+        task.cancel()
+        _ = await task.value
+        isStreaming = false
+    }
+
     /// Re-answer the last user turn: drop the previous assistant message and
     /// stream a fresh response. No-op while streaming or with no answer to redo.
     func regenerate() async {
@@ -687,6 +747,22 @@ final class ChatService {
         streamTask = task
         let doneEvent = await task.value
         streamTask = nil
+
+        // Everything below belongs to the thread this stream was started for.
+        // Cancelling does not stop it: we are suspended at `await task.value`
+        // and resume at an unpredictable point, after startNewConversation has
+        // cleared `messages` — so the old thread's finished reply would be
+        // appended into the new, empty one, and knownIds having been cleared
+        // too, the dedupe check could not catch it.
+        guard activeConversationId == convoId else {
+            streamingText = ""
+            streamingData = []
+            streamingUsage = nil
+            isGeneratingImage = false
+            toolActivity = nil
+            pendingSummon = false
+            return
+        }
 
         if let event = doneEvent {
             let id = event.message_id ?? UUID().uuidString

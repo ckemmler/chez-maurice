@@ -329,3 +329,25 @@
 "gardens.remove_hint" = "Vous ne pouvez retirer que vous-même — jamais les autres.";
 "gardens.in_garden_with" = "dans le jardin que vous entretenez avec %@";
 "gardens.in_your_garden" = "dans votre jardin personnel";
+
+/* Dictation */
+"chat.dictate" = "Dicter";
+"chat.dictate_stop" = "Arrêter la dictée";
+"dictation.error.speech_denied" = "La reconnaissance vocale est désactivée pour Maurice. Activez-la dans Réglages › Confidentialité › Reconnaissance vocale.";
+"dictation.error.mic_denied" = "L'accès au micro est désactivé pour Maurice. Activez-le dans Réglages › Confidentialité › Microphone.";
+"dictation.error.unavailable" = "La dictée n'est pas disponible pour le moment.";
+"dictation.error.no_offline_model" = "La dictée en %@ demande un modèle absent de cet appareil. Ajoutez-le dans Réglages › Général › Clavier › Langues de dictée, puis réessayez — Maurice n'enverra pas votre voix sur un serveur.";
+"dictation.error.audio_session" = "Impossible de prendre le micro.";
+"dictation.error.audio_engine" = "Impossible de démarrer l'enregistrement.";
+
+/* Dictation consent */
+"dictation.consent.title" = "Dicter en %@ ?";
+"dictation.consent.body" = "Cet appareil n'a pas de modèle de dictée hors ligne pour le %@ : Maurice ne peut le transcrire qu'en envoyant l'audio à Apple. Rien d'autre ne change — vos conversations restent sur votre serveur. Vous pourrez le désactiver dans les Réglages.";
+"dictation.consent.allow" = "Envoyer l'audio à Apple";
+"settings.dictation.group" = "DICTÉE";
+"settings.dictation.allow_server" = "Autoriser la transcription par Apple";
+"settings.dictation.caption" = "La dictée reste sur cet appareil dès que la langue dispose d'un modèle hors ligne. En autorisant ceci, les langues qui n'en ont pas sont transcrites par Apple, ce qui veut dire que l'audio quitte votre appareil. Le micro affiche un nuage pendant ce temps-là.";
+
+/* App Shortcut (Action Button / Shortcuts list) */
+"Dictate to Maurice" = "Dicter à Maurice";
+"Opens Maurice and starts listening, so you can speak a message instead of typing it." = "Ouvre Maurice et se met à écouter, pour dire un message au lieu de le taper.";

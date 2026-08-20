@@ -329,3 +329,25 @@
 "gardens.remove_hint" = "Je kunt alleen jezelf verwijderen — nooit anderen.";
 "gardens.in_garden_with" = "in de tuin die je met %@ verzorgt";
 "gardens.in_your_garden" = "in je persoonlijke tuin";
+
+/* Dictation */
+"chat.dictate" = "Dicteren";
+"chat.dictate_stop" = "Dicteren stoppen";
+"dictation.error.speech_denied" = "Spraakherkenning staat uit voor Maurice. Zet het aan via Instellingen › Privacy en beveiliging › Spraakherkenning.";
+"dictation.error.mic_denied" = "Toegang tot de microfoon staat uit voor Maurice. Zet het aan via Instellingen › Privacy en beveiliging › Microfoon.";
+"dictation.error.unavailable" = "Dicteren is op dit moment niet beschikbaar.";
+"dictation.error.no_offline_model" = "Dicteren in het %@ vraagt om een model dat niet op dit apparaat staat. Voeg het toe via Instellingen › Algemeen › Toetsenbord › Dicteertalen en probeer het opnieuw — Maurice stuurt je stem niet naar een server.";
+"dictation.error.audio_session" = "De microfoon kon niet worden overgenomen.";
+"dictation.error.audio_engine" = "De opname kon niet worden gestart.";
+
+/* Dictation consent */
+"dictation.consent.title" = "Dicteren in het %@?";
+"dictation.consent.body" = "Dit apparaat heeft geen offline dicteermodel voor het %@, dus Maurice kan het alleen transcriberen door de audio naar Apple te sturen. Verder verandert er niets — je gesprekken blijven op je eigen server. Je kunt dit weer uitzetten in de instellingen.";
+"dictation.consent.allow" = "Audio naar Apple sturen";
+"settings.dictation.group" = "DICTEREN";
+"settings.dictation.allow_server" = "Transcriptie door Apple toestaan";
+"settings.dictation.caption" = "Dicteren blijft op dit apparaat zolang de taal een offline model heeft. Sta je dit toe, dan worden talen zonder model door Apple getranscribeerd, wat betekent dat de audio je apparaat verlaat. Zolang dat gebeurt, toont de microfoon een wolkje.";
+
+/* App Shortcut (Action Button / Shortcuts list) */
+"Dictate to Maurice" = "Dicteren aan Maurice";
+"Opens Maurice and starts listening, so you can speak a message instead of typing it." = "Opent Maurice en begint te luisteren, zodat je een bericht kunt inspreken in plaats van typen.";

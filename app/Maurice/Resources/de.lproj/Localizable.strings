@@ -329,3 +329,25 @@
 "gardens.remove_hint" = "Du kannst nur dich selbst entfernen — nie andere.";
 "gardens.in_garden_with" = "im Garten, den du mit %@ pflegst";
 "gardens.in_your_garden" = "in deinem persönlichen Garten";
+
+/* Dictation */
+"chat.dictate" = "Diktieren";
+"chat.dictate_stop" = "Diktat beenden";
+"dictation.error.speech_denied" = "Die Spracherkennung ist für Maurice deaktiviert. Aktiviere sie unter Einstellungen › Datenschutz & Sicherheit › Spracherkennung.";
+"dictation.error.mic_denied" = "Der Mikrofonzugriff ist für Maurice deaktiviert. Aktiviere ihn unter Einstellungen › Datenschutz & Sicherheit › Mikrofon.";
+"dictation.error.unavailable" = "Das Diktat ist gerade nicht verfügbar.";
+"dictation.error.no_offline_model" = "Für das Diktat auf %@ fehlt ein Modell auf diesem Gerät. Füge es unter Einstellungen › Allgemein › Tastatur › Diktiersprachen hinzu und versuche es erneut — Maurice sendet deine Stimme nicht an einen Server.";
+"dictation.error.audio_session" = "Das Mikrofon konnte nicht übernommen werden.";
+"dictation.error.audio_engine" = "Die Aufnahme konnte nicht gestartet werden.";
+
+/* Dictation consent */
+"dictation.consent.title" = "Auf %@ diktieren?";
+"dictation.consent.body" = "Auf diesem Gerät gibt es kein Offline-Diktatmodell für %@. Maurice kann es nur transkribieren, indem er die Aufnahme an Apple sendet. Sonst ändert sich nichts — deine Unterhaltungen bleiben auf deinem Server. Du kannst das in den Einstellungen wieder ausschalten.";
+"dictation.consent.allow" = "Audio an Apple senden";
+"settings.dictation.group" = "DIKTAT";
+"settings.dictation.allow_server" = "Transkription durch Apple erlauben";
+"settings.dictation.caption" = "Das Diktat bleibt auf diesem Gerät, sobald die Sprache ein Offline-Modell hat. Erlaubst du dies, werden Sprachen ohne Modell stattdessen von Apple transkribiert — die Aufnahme verlässt dann dein Gerät. Währenddessen zeigt das Mikrofon eine Wolke.";
+
+/* App Shortcut (Action Button / Shortcuts list) */
+"Dictate to Maurice" = "Maurice diktieren";
+"Opens Maurice and starts listening, so you can speak a message instead of typing it." = "Öffnet Maurice und beginnt zuzuhören, damit Sie eine Nachricht sprechen statt tippen können.";

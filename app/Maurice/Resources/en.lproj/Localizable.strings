@@ -329,3 +329,25 @@
 "gardens.remove_hint" = "You can only ever remove yourself — never others.";
 "gardens.in_garden_with" = "in the garden you tend with %@";
 "gardens.in_your_garden" = "in your personal garden";
+
+/* Dictation */
+"chat.dictate" = "Dictate";
+"chat.dictate_stop" = "Stop dictating";
+"dictation.error.speech_denied" = "Speech recognition is off for Maurice. Turn it on in Settings › Privacy › Speech Recognition.";
+"dictation.error.mic_denied" = "Microphone access is off for Maurice. Turn it on in Settings › Privacy › Microphone.";
+"dictation.error.unavailable" = "Dictation isn't available right now.";
+"dictation.error.no_offline_model" = "Dictation for %@ needs a model that isn't on this device. Add it under Settings › General › Keyboard › Dictation Languages, then try again — Maurice won't send your voice to a server.";
+"dictation.error.audio_session" = "Couldn't take over the microphone.";
+"dictation.error.audio_engine" = "Couldn't start recording.";
+
+/* Dictation consent */
+"dictation.consent.title" = "Dictate in %@?";
+"dictation.consent.body" = "This device has no offline dictation model for %@, so Maurice can only transcribe it by sending the audio to Apple. Nothing else about Maurice changes — your conversations stay on your own server. You can turn this off again in Settings.";
+"dictation.consent.allow" = "Send audio to Apple";
+"settings.dictation.group" = "DICTATION";
+"settings.dictation.allow_server" = "Allow Apple transcription";
+"settings.dictation.caption" = "Dictation stays on this device whenever the language has an offline model. Allow this and languages without one are transcribed by Apple instead, which means the audio leaves your device. The microphone shows a cloud while that is happening.";
+
+/* App Shortcut (Action Button / Shortcuts list) */
+"Dictate to Maurice" = "Dictate to Maurice";
+"Opens Maurice and starts listening, so you can speak a message instead of typing it." = "Opens Maurice and starts listening, so you can speak a message instead of typing it.";

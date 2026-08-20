@@ -1012,6 +1012,55 @@ enum TurnCostPref {
     static let key = "maurice.showTurnCost"
 }
 
+/// Where a dictation session writes, fixed when it starts.
+///
+/// The recogniser revises as it listens, so each partial has to replace the last
+/// one rather than follow it. Holding the text as it was, plus the span being
+/// replaced, makes that a substitution instead of an ever-growing append — and
+/// the same structure puts the words at the caret, or over the selection, since
+/// an empty selection at the end is just the append case.
+private struct DictationAnchor {
+    let base: String
+    /// Character offsets, not String.Index. An index belongs to the string it
+    /// came from: the selection's indices address the field's live text, and
+    /// using them to slice the snapshot taken alongside it trapped in
+    /// validateScalarRange even though the two held equal contents. Offsets
+    /// survive the copy; they are resolved against `base` at the moment of use
+    /// and clamped, so a stale one can only be wrong, never fatal.
+    let offsets: Range<Int>
+
+    init(base: String, offsets: Range<Int>) {
+        self.base = base
+        let count = base.count
+        let lower = min(max(offsets.lowerBound, 0), count)
+        let upper = min(max(offsets.upperBound, lower), count)
+        self.offsets = lower..<upper
+    }
+
+    /// The field's contents with `dictated` in place of the anchored span.
+    /// Spacing is added only where the neighbouring text calls for it: a stray
+    /// space at either end is the kind of small mess that survives into the sent
+    /// message.
+    func applying(_ dictated: String) -> String {
+        let lower = base.index(base.startIndex, offsetBy: offsets.lowerBound)
+        let upper = base.index(base.startIndex, offsetBy: offsets.upperBound)
+        let text = dictated.trimmingCharacters(in: .whitespacesAndNewlines)
+        let before = base[base.startIndex..<lower]
+        let after = base[upper...]
+        if text.isEmpty { return String(before) + String(after) }
+        let lead = before.isEmpty || before.last?.isWhitespace == true ? "" : " "
+        let trail = after.isEmpty || after.first?.isWhitespace == true ? "" : " "
+        return before + lead + text + trail + after
+    }
+}
+
+/// Whether dictation may fall back to Apple's servers for languages with no
+/// on-device model. Off until the user says otherwise, and the one place the key
+/// is spelled so the composer and Settings can't drift apart.
+enum ServerDictationPref {
+    static let key = "maurice.allowServerDictation"
+}
+
 /// What a turn cost, under the reply. Hidden unless the user turns it on in
 /// Settings — most people don't want a meter on every message, but when you're
 /// tuning prompt caching you need to see whether it's biting, per turn, without
@@ -1696,6 +1745,31 @@ private struct ComposerBar: View {
     @State private var showCamera = false
     @State private var showPhotoPicker = false
     @State private var showFileImporter = false
+    /// Speech-to-text, owned by the composer: it starts and stops with this
+    /// view, so leaving the chat can't strand a live microphone.
+    // Deliberately an explicit State(wrappedValue:) in init? No — the initial
+    // value here is a plain expression, so Dictation() (and the AVAudioEngine
+    // graph inside it) is constructed on every ComposerBar init, which during a
+    // streaming reply is once per text delta. The instances are discarded
+    // immediately, but the churn lands on the main thread while the reply
+    // animates. A lazily-built holder keeps one engine per view lifetime.
+    @State private var dictationHolder = DictationHolder()
+    private var dictation: Dictation { dictationHolder.dictation }
+    @State private var micPulse = false
+    @State private var dictationError: String?
+    /// The language a consent prompt is being shown for, or nil.
+    @State private var consentLanguage: String?
+    /// Where the running dictation writes; nil when none is running, and nil
+    /// also means "don't write" — which is how a manual edit stops the final
+    /// delivery from landing on top of it.
+    @State private var dictationAnchor: DictationAnchor?
+    /// The exact text dictation last put in the field. Anything else appearing
+    /// there came from the person, and their edit outranks the transcript.
+    @State private var lastDictatedText: String?
+    #if os(iOS)
+    @Environment(\.scenePhase) private var scenePhase
+    #endif
+    @AppStorage(ServerDictationPref.key) private var allowServerDictation = false
     @FocusState var isFocused: Bool
     let onAddContext: () -> Void
     var onOpenTools: () -> Void = {}
@@ -1707,12 +1781,64 @@ private struct ComposerBar: View {
     /// The thread's armed Maurice (what ➤ summons; nil = everyday).
     private var currentMaurice: Maurice { maurices.maurice(for: chat.currentMauriceId) }
 
+    /// Start listening if something outside the app asked for it — the Action
+    /// Button, or the shortcut by voice. Silently does nothing otherwise, and a
+    /// request that has gone stale is dropped rather than honoured late.
+    private func startDictationIfRequested() {
+        #if os(iOS)
+        // isListening FIRST: take() clears the note unconditionally, so evaluating
+        // it first swallowed an Action Button press that arrived while dictation
+        // was already running — no dictation, no feedback, request gone.
+        guard !dictation.isListening, DictationRequest.shared.take() else { return }
+        // The button is for capturing a thought, not for continuing whatever
+        // conversation happened to be open — that one has a context and a
+        // Maurice of its own, and dropping a stray dictated line into it is
+        // rarely what someone reaching for a hardware button wants.
+        Task {
+            // Clear the draft too. Landing on a fresh thread while the previous
+            // dictation still sits in the field isn't a fresh start, and the new
+            // words pile onto the old ones.
+            inputText = ""
+            dictationAnchor = nil
+            await chat.startNewConversation()
+            dictationAnchor = anchorAtSelection()
+            lastDictatedText = nil
+            dictation.start(locale: session.resolvedLocale, allowServer: allowServerDictation)
+        }
+        #endif
+    }
+
     private var trimmed: String {
         inputText.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     private var canSend: Bool {
         (!trimmed.isEmpty || pendingImageData != nil) && !chat.isStreaming
+    }
+
+    /// Where the next dictation writes. The end of the field, for now.
+    ///
+    /// SwiftUI's TextSelection was the obvious source and it cannot be used:
+    /// its indices belong to a string value we don't hold, and converting them —
+    /// even inside the selection-change handler, where the two ought to be in
+    /// step — traps in String.distance. That crashed the app on launch. The
+    /// offsets path below is kept because it is sound; what is missing is a
+    /// caret we can read without a trap, which means a UIViewRepresentable over
+    /// UITextView and its integer NSRange.
+    private func anchorAtSelection() -> DictationAnchor {
+        let text = inputText
+        let end = text.count
+        return DictationAnchor(base: text, offsets: end..<end)
+    }
+
+    /// Send, closing dictation first. stop() delivers the final text
+    /// synchronously, so the words spoken up to the tap are in the field before
+    /// the send reads it — and, more to the point, dictation can no longer
+    /// deliver into a field the send has just cleared, which put the sent
+    /// sentence back in the composer as if it had failed.
+    private func submit(_ action: () -> Void) {
+        if dictation.isListening { dictation.stop(userStopped: true) }
+        action()
     }
 
     /// Has the user attached any context (live items or locked carry-over)?
@@ -1859,13 +1985,14 @@ private struct ComposerBar: View {
 
                 // Slightly larger than the body; ~2 lines tall by default,
                 // growing to ~10 lines before it scrolls.
-                TextField(session.localized("chat.composer.placeholder"), text: $inputText, axis: .vertical)
+                TextField(session.localized("chat.composer.placeholder"),
+                          text: $inputText, axis: .vertical)
+                    .onSubmit { submit(onSend) }
                     .textFieldStyle(.plain)
-                    .font(.system(size: kBodyFont + 2))
-                    .lineLimit(2...10)
-                    .focused($isFocused)
-                    .onSubmit { onSend() }
-                    .submitLabel(.send)
+                .font(.system(size: kBodyFont + 2))
+                .lineLimit(2...10)
+                .focused($isFocused)
+                .submitLabel(.send)
 
                 HStack(spacing: 4) {
                     Menu {
@@ -1888,6 +2015,55 @@ private struct ComposerBar: View {
                     .menuIndicator(.hidden)
                     .buttonStyle(.plain)   // no default menu-button background
                     .disabled(chat.isStreaming)
+
+                    // Dictate — fills the field, never sends. Recognition
+                    // mishears, and a mishearing that sent itself would cost a
+                    // whole turn to undo.
+                    //
+                    // iOS only: macOS would need the audio-input entitlement the
+                    // sandboxed target doesn't carry, so the button would be
+                    // present and fail every time.
+                    #if os(iOS)
+                    Button {
+                        if dictation.isListening {
+                            dictation.stop(userStopped: true)
+                        } else {
+                            dictationAnchor = anchorAtSelection()
+                            lastDictatedText = nil
+                            dictation.start(locale: session.resolvedLocale, allowServer: allowServerDictation)
+                        }
+                    } label: {
+                        Image(systemName: dictation.isListening ? "mic.fill" : "mic")
+                            .font(.system(size: 16))
+                            .foregroundStyle(dictation.isListening
+                                             ? (session.activeDeviceUser?.color ?? .blue).legible(onDark: theme.isDark)
+                                             : theme.inkSoft)
+                            .frame(width: 34, height: 34)
+                            .contentShape(Rectangle())
+                            // A cloud while the audio is going to Apple rather
+                            // than staying here. Consent was given once; this is
+                            // what makes it visible each time it applies.
+                            .overlay(alignment: .topTrailing) {
+                                if dictation.isListening && dictation.usingServer {
+                                    Image(systemName: "cloud.fill")
+                                        .font(.system(size: 8))
+                                        .foregroundStyle(theme.inkMute)
+                                        .offset(x: -4, y: 6)
+                                }
+                            }
+                            // A quiet pulse is the "I'm listening" tell. Without
+                            // one you can't distinguish listening from a button
+                            // that didn't take.
+                            .opacity(dictation.isListening && micPulse ? 0.45 : 1)
+                            .animation(dictation.isListening
+                                       ? .easeInOut(duration: 0.7).repeatForever(autoreverses: true)
+                                       : .default,
+                                       value: micPulse)
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(chat.isStreaming)
+                    .help(session.localized(dictation.isListening ? "chat.dictate_stop" : "chat.dictate"))
+                    #endif
 
                     // Tools — per-chat tool families (wrench).
                     Button(action: onOpenTools) {
@@ -1939,7 +2115,7 @@ private struct ComposerBar: View {
                     // 💬 no-one (group only) · 🎩 choose who · ➤ send to them.
                     HStack(spacing: 8) {
                         if chat.isRoom {
-                            Button { onPostBubble() } label: {
+                            Button { submit(onPostBubble) } label: {
                                 Image(systemName: "bubble.left")
                                     .font(.system(size: 18, weight: .medium))
                                     .foregroundStyle(canSend ? theme.inkSoft : theme.inkMute)
@@ -1960,7 +2136,7 @@ private struct ComposerBar: View {
                             // Draft present: tap sends to the armed Maurice;
                             // long-press opens the picker to choose someone else,
                             // then sends to them ("Send" in the picker).
-                            Button { onSend() } label: { actionAvatar(sending: true) }
+                            Button { submit(onSend) } label: { actionAvatar(sending: true) }
                             .buttonStyle(.plain)
                             .keyboardShortcut(.return, modifiers: .command)
                             .simultaneousGesture(
@@ -2012,6 +2188,139 @@ private struct ComposerBar: View {
         .padding(.horizontal, 10)
         .padding(.vertical, 12)
         #endif
+        // Dictated text is appended, not assigned: you may have typed a few words
+        // before reaching for the mic, and losing them would be worse than a
+        // clumsy join. The anchor is where dictation writes, fixed when it
+        // started, so each partial rewrites only the dictated tail.
+        .onAppear {
+            dictation.onFinish = { text, userStopped in
+                if let anchor = dictationAnchor {
+                    let final = anchor.applying(text)
+                    lastDictatedText = final
+                    inputText = final
+                }
+                dictationAnchor = nil
+                // Only when the user chose to stop. Leaving the chat and
+                // backgrounding both route through here too, and re-focusing
+                // there pops the keyboard on a screen they just left — or on
+                // their return from background, out of nowhere.
+                if userStopped { isFocused = true }
+            }
+            startDictationIfRequested()
+        }
+        #if os(iOS)
+        // The Action Button leaves a note and opens the app; the composer picks
+        // it up here. Both hooks are needed: a cold launch arrives through
+        // onAppear, a warm one through the scene coming back to the foreground,
+        // and which of the two happens is not ours to predict.
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active {
+                startDictationIfRequested()
+            } else if phase == .background {
+                // The audio session has no background mode, so leaving the app
+                // suspends the engine while the state still says "listening" —
+                // the mic goes on pulsing over a recording that stopped.
+                //
+                // .background only, never .inactive: that one fires for a
+                // notification banner, Control Centre, or the app switcher
+                // preview, none of which stop the recording. Cutting on it would
+                // truncate a long sentence because a message happened to arrive.
+                dictation.stop()
+            }
+        }
+        // The intent may fire before this view exists or long after it settled;
+        // observing the request covers both, where checking on appearance only
+        // catches the first.
+        .onChange(of: DictationRequest.shared.token) { _, _ in
+            startDictationIfRequested()
+        }
+        #endif
+        // The recogniser revises as it goes, so the tail is rewritten on every
+        // partial rather than appended to. Without this the field stays empty
+        // until you stop, which reads as the button having done nothing.
+        .onChange(of: dictation.transcript) { _, partial in
+            guard dictation.isListening, let anchor = dictationAnchor else { return }
+            let next = anchor.applying(partial)
+            lastDictatedText = next
+            inputText = next
+        }
+        // A change to the field that dictation didn't make came from the person.
+        // Their edit wins: the anchor is dropped so neither the next partial nor
+        // the final delivery can rebuild the field from a snapshot that predates
+        // the correction, and listening stops because carrying on would fight
+        // them for the cursor.
+        // The anchor is taken when the mic is tapped, but listening only begins
+        // after two permission round-trips. Anything typed in that window is not
+        // yet protected by the manual-edit guard below — that one requires
+        // isListening — so the first partial would write straight over it.
+        // Re-basing here makes the anchor mean "where dictation actually starts".
+        .onChange(of: dictation.isListening) { _, listening in
+            if listening { dictationAnchor = anchorAtSelection() }
+        }
+        .onChange(of: inputText) { _, current in
+            guard dictation.isListening, current != lastDictatedText else { return }
+            dictationAnchor = nil
+            dictation.stop(userStopped: true)
+        }
+        .onDisappear {
+            dictation.stop()
+            // onFinish captures this view's State storage, which owns the
+            // Dictation that owns the closure — a cycle that leaks one
+            // AVAudioEngine per ComposerBar teardown. Dropping it here is what
+            // lets both sides go.
+            dictation.onFinish = nil
+        }
+        .onChange(of: dictation.isListening) { _, listening in
+            micPulse = listening
+            #if os(iOS)
+            // The haptic is the "I'm listening" cue, and it matters more than it
+            // looks: the microphone takes a moment to come up, and speaking into
+            // the gap clips your first word.
+            UIImpactFeedbackGenerator(style: listening ? .medium : .light).impactOccurred()
+            #endif
+        }
+        .onChange(of: dictation.state) { _, state in
+            // Localize here, not in the service: session.localized honours the
+            // language chosen inside the app, which is what the rest of the UI
+            // speaks. The missing-model case names the language it tried.
+            guard case .failed(let failure) = state else { return }
+            switch failure {
+            case .needsServerConsent(let language):
+                // A decision, not an error: ask it where the user already is,
+                // instead of sending them to Settings to find a switch.
+                consentLanguage = language
+            case .noOnDeviceModel(let language):
+                dictationError = session.localized(failure.messageKey, language)
+            default:
+                dictationError = session.localized(failure.messageKey)
+            }
+        }
+        .alert(session.localized("chat.dictate"),
+               isPresented: Binding(get: { dictationError != nil },
+                                    set: { if !$0 { dictationError = nil } })) {
+            Button(L("common.done"), role: .cancel) {}
+        } message: {
+            Text(dictationError ?? "")
+        }
+        // Consent is asked once, at the moment it's needed, and states plainly
+        // what changes: the audio leaves the device. Saying yes starts dictating
+        // straight away — making someone ask twice for the same thing is its own
+        // small insult.
+        .alert(session.localized("dictation.consent.title", consentLanguage ?? ""),
+               isPresented: Binding(get: { consentLanguage != nil },
+                                    set: { if !$0 { consentLanguage = nil } })) {
+            Button(session.localized("dictation.consent.allow")) {
+                allowServerDictation = true
+                let language = consentLanguage
+                consentLanguage = nil
+                if language != nil {
+                    dictation.start(locale: session.resolvedLocale, allowServer: true)
+                }
+            }
+            Button(L("common.cancel"), role: .cancel) { consentLanguage = nil }
+        } message: {
+            Text(session.localized("dictation.consent.body", consentLanguage ?? ""))
+        }
         .onChange(of: selectedPhoto) {
             Task {
                 guard let item = selectedPhoto else { return }
@@ -2044,7 +2353,7 @@ private struct ComposerBar: View {
         .onChange(of: studio.pendingSend) {
             guard studio.pendingSend else { return }
             studio.pendingSend = false
-            onSend()
+            submit(onSend)
         }
     }
 }
