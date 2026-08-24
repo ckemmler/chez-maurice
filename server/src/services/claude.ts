@@ -285,24 +285,108 @@ function parseToolData(text: string): unknown {
   }
 }
 
+/** One line per tool call, to stdout (→ the service's log file under
+ *  launchd/service.sh). This is the only record of what a turn actually did —
+ *  messages.data captures a successful call's structured result, but nothing
+ *  captures arguments, timing, or a failed call's own reasoning about why it
+ *  tried what it tried. Diagnosing a turn that went sideways otherwise means
+ *  reconstructing it by hand from messages.data, which has no timing and
+ *  silently drops any call whose result wasn't JSON.
+ *
+ *  Truncated, not omitted: a fiche body or a search result can run long, and
+ *  an autopsy specifically wants to see what was actually passed — capped
+ *  rather than dropped keeps the log from blowing up on one enormous call. */
+function truncate(v: unknown, max = 300): string {
+  const s = typeof v === "string" ? v : JSON.stringify(v);
+  return s.length > max ? s.slice(0, max) + `…(${s.length})` : s;
+}
+
+interface ToolCallLog {
+  tool: string;
+  ok: boolean;
+}
+
+/** Many garden tools report failure as an ordinary `{error: "..."}` JSON
+ *  payload rather than an MCP-protocol error — `update_resource_entry` on a
+ *  slug that doesn't exist, for instance — so `r.isError` alone under-reports
+ *  what actually went wrong in a turn. Both the per-call log line and the
+ *  round-cap summary need to see through that. */
+function toolFailed(r: { isError: boolean; data?: unknown }): boolean {
+  if (r.isError) return true;
+  return !!r.data && typeof r.data === "object" && !Array.isArray(r.data) && "error" in (r.data as any);
+}
+
+function logToolCall(
+  ctx: { conversationId: string; provider: string; round: number },
+  name: string,
+  input: any,
+  r: { isError: boolean; text: string; data?: unknown },
+  ms: number,
+): void {
+  const failed = toolFailed(r);
+  console.log(
+    "[tool]",
+    JSON.stringify({
+      convo: ctx.conversationId,
+      provider: ctx.provider,
+      round: ctx.round,
+      tool: name,
+      ms: Math.round(ms),
+      ok: !failed,
+      args: truncate(input),
+      // The MCP-protocol error text if there is one; else the tool's own
+      // {error: "..."} field, which is where update_resource_entry-style
+      // soft failures actually put their message.
+      ...(failed ? { error: truncate(r.isError ? r.text : (r.data as any)?.error) } : {}),
+    }),
+  );
+}
+
+/** Logged when a turn hits MAX_TOOL_ROUNDS — the one signal today's silent
+ *  "stopped after several tool steps" message gives the user nothing about.
+ *  The ordered call list is exactly what a by-hand autopsy has to otherwise
+ *  reconstruct from messages.data across several turns. */
+function logToolCapHit(
+  conversationId: string,
+  provider: string,
+  rounds: number,
+  calls: ToolCallLog[],
+): void {
+  console.warn(
+    "[tool-cap]",
+    JSON.stringify({
+      convo: conversationId,
+      provider,
+      rounds,
+      calls: calls.map((c) => (c.ok ? c.tool : `${c.tool}!`)),
+    }),
+  );
+}
+
 async function executeTool(
   name: string,
   input: any,
   mcp: McpSession | null,
+  ctx: { conversationId: string; provider: string; round: number },
 ): Promise<{ text: string; isError: boolean; data?: unknown }> {
-  try {
-    if (name === "web_search") {
-      return { text: formatWebSearch(await webSearch(input?.query || "")), isError: false };
+  const start = performance.now();
+  const result = await (async (): Promise<{ text: string; isError: boolean; data?: unknown }> => {
+    try {
+      if (name === "web_search") {
+        return { text: formatWebSearch(await webSearch(input?.query || "")), isError: false };
+      }
+      if (mcp) {
+        const r = await mcp.callTool(name, input || {});
+        const text = compactToolText(r.text);
+        return { text, isError: r.isError, data: r.isError ? null : parseToolData(text) };
+      }
+      return { text: `Tool ${name} is unavailable.`, isError: true };
+    } catch (err: any) {
+      return { text: `Tool error: ${err?.message || "failed"}`, isError: true };
     }
-    if (mcp) {
-      const r = await mcp.callTool(name, input || {});
-      const text = compactToolText(r.text);
-      return { text, isError: r.isError, data: r.isError ? null : parseToolData(text) };
-    }
-    return { text: `Tool ${name} is unavailable.`, isError: true };
-  } catch (err: any) {
-    return { text: `Tool error: ${err?.message || "failed"}`, isError: true };
-  }
+  })();
+  logToolCall(ctx, name, input, result, performance.now() - start);
+  return result;
 }
 
 /** Agentic loop for a local (Ollama) model: stream text, run any tool calls,
@@ -316,8 +400,10 @@ async function* runOllamaAgentic(
   mcp: McpSession | null,
   maxTokens: number,
   lang: string,
+  conversationId: string,
 ): AsyncGenerator<StreamEvent> {
   const convo: any[] = [{ role: "system", content: system }, ...baseMessages];
+  const calls: ToolCallLog[] = [];
   let useTools = tools.length > 0;
   for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
     let content = "";
@@ -352,12 +438,14 @@ async function* runOllamaAgentic(
     for (const tc of toolCalls) {
       const name = tc.function?.name || "";
       yield { type: "tool_call", tool: name, status: "start" };
-      const r = await executeTool(name, tc.function?.arguments || {}, mcp);
+      const r = await executeTool(name, tc.function?.arguments || {}, mcp, { conversationId, provider: "ollama", round });
       yield { type: "tool_call", tool: name, status: "end" };
+      calls.push({ tool: name, ok: !toolFailed(r) });
       if (r.data != null) yield { type: "tool_data", tool: name, data: r.data };
       convo.push({ role: "tool", content: r.text });
     }
   }
+  logToolCapHit(conversationId, "ollama", MAX_TOOL_ROUNDS, calls);
   yield { type: "text_delta", text: t(lang, "chat.stopped_tool_steps") };
   yield { type: "done", message_id: crypto.randomUUID() };
 }
@@ -376,8 +464,10 @@ async function* runOpenAIAgentic(
   temperature: number | undefined,
   lang: string,
   provider: string,
+  conversationId: string,
 ): AsyncGenerator<StreamEvent> {
   const convo: any[] = [{ role: "system", content: system }, ...baseMessages];
+  const calls: ToolCallLog[] = [];
   const usage = newUsage(provider, model);
   function* reportUsage(): Generator<StreamEvent> {
     if (hasUsage(usage)) yield { type: "usage", usage: priceUsage(usage) };
@@ -420,12 +510,14 @@ async function* runOpenAIAgentic(
       let args: any = {};
       try { args = JSON.parse(tc.function.arguments || "{}"); } catch {}
       yield { type: "tool_call", tool: name, status: "start" };
-      const r = await executeTool(name, args, mcp);
+      const r = await executeTool(name, args, mcp, { conversationId, provider, round });
       yield { type: "tool_call", tool: name, status: "end" };
+      calls.push({ tool: name, ok: !toolFailed(r) });
       if (r.data != null) yield { type: "tool_data", tool: name, data: r.data };
       convo.push({ role: "tool", tool_call_id: tc.id, content: r.text });
     }
   }
+  logToolCapHit(conversationId, provider, MAX_TOOL_ROUNDS, calls);
   yield { type: "text_delta", text: t(lang, "chat.stopped_tool_steps") };
   yield* reportUsage();
   yield { type: "done", message_id: crypto.randomUUID() };
@@ -680,7 +772,7 @@ export async function* streamResponse(
   if (provider === "ollama") {
     const tools = mcpTools.map(mcpToolToFunction);
     if (wantsWeb && hasWebSearch()) tools.push(WEB_SEARCH_FUNCTION);
-    yield* runOllamaAgentic(resolved, systemPrompt, toTextMessages(messages), tools, mcp, config.maxTokens, userLang);
+    yield* runOllamaAgentic(resolved, systemPrompt, toTextMessages(messages), tools, mcp, config.maxTokens, userLang, conversationId);
     return;
   }
 
@@ -699,7 +791,7 @@ export async function* streamResponse(
     yield* runOpenAIAgentic(
       baseUrl, key, resolved, systemPrompt,
       toOpenAIMessages(messages, !!rec?.vision),
-      tools, mcp, temperature, userLang, provider,
+      tools, mcp, temperature, userLang, provider, conversationId,
     );
     return;
   }
@@ -737,6 +829,7 @@ export async function* streamResponse(
   // Token/cost accounting for this turn, accumulated across every agentic round
   // (each round is a separate billed request) and reported once at the end.
   const usage = newUsage("anthropic", resolved);
+  const calls: ToolCallLog[] = [];
   function* reportUsage(): Generator<StreamEvent> {
     if (hasUsage(usage)) yield { type: "usage", usage: priceUsage(usage) };
   }
@@ -900,8 +993,9 @@ export async function* streamResponse(
       const toolResults: any[] = [];
       for (const tu of toolUses) {
         yield { type: "tool_call", tool: tu.name, status: "start" };
-        const r = await executeTool(tu.name, tu.input || {}, mcp);
+        const r = await executeTool(tu.name, tu.input || {}, mcp, { conversationId, provider: "anthropic", round });
         yield { type: "tool_call", tool: tu.name, status: "end" };
+        calls.push({ tool: tu.name, ok: !toolFailed(r) });
         // Surface the structured result on a model-untouched channel so the
         // client can render the actual rows next to Maurice's narration.
         if (r.data != null) yield { type: "tool_data", tool: tu.name, data: r.data };
@@ -926,6 +1020,7 @@ export async function* streamResponse(
     }
 
     // Hit the round cap.
+    logToolCapHit(conversationId, "anthropic", MAX_TOOL_ROUNDS, calls);
     yield {
       type: "text_delta",
       text: t(userLang, "chat.stopped_tool_steps_more"),

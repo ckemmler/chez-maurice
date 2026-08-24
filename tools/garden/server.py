@@ -953,7 +953,21 @@ async def list_tools() -> list[Tool]:
         ),
         Tool(
             name="update_fiche",
-            description="Update an existing fiche's frontmatter and/or body. Call get_user_guide for link syntax and conventions.",
+            description=(
+                "Update an existing fiche's frontmatter and/or body. Call get_user_guide for "
+                "link syntax and conventions.\n"
+                "\n"
+                "To ADD to what's already written — the normal case while taking notes over "
+                "several sessions — use append_body, not body: body REPLACES the note wholesale, "
+                "which loses everything before it unless you first get_fiche and reconstruct the "
+                "full text yourself.\n"
+                "\n"
+                "If open_fiche pulled the wrong edition or the wrong person (wrong year, wrong "
+                "language, a same-titled remake), do not create a new resource entry or edit one "
+                "— none exists yet, and trying to make one is not how a fiche gets corrected. "
+                "Pass the right tmdb_id/google_books_id/podcastindex_id/igdb_id (from the matching "
+                "search_* tool) and this re-fetches metadata and overwrites it in place."
+            ),
             inputSchema={
                 "type": "object",
                 "required": ["resource_collection", "resource_id"],
@@ -962,8 +976,13 @@ async def list_tools() -> list[Tool]:
                     "resource_id": {"type": "string"},
                     "locale": {"type": "string", "enum": ["en", "fr"], "default": "en"},
                     "title": {"type": "string"},
-                    "body": {"type": "string", "description": "Replace markdown body."},
+                    "body": {"type": "string", "description": "Replace the markdown body wholesale."},
+                    "append_body": {"type": "string", "description": "Add to the end of the markdown body, after a blank line. Use this to take notes incrementally."},
                     "tags": {"type": "array", "items": {"type": "string"}},
+                    "tmdb_id": {"type": "integer", "description": "Re-fetch metadata from this TMDB id and overwrite it — corrects a wrong pick."},
+                    "google_books_id": {"type": "string", "description": "Re-fetch metadata from this Google Books id and overwrite it — corrects a wrong pick."},
+                    "podcastindex_id": {"type": "integer", "description": "Re-fetch metadata from this Podcast Index id and overwrite it — corrects a wrong pick."},
+                    "igdb_id": {"type": "integer", "description": "Re-fetch metadata from this IGDB id and overwrite it — corrects a wrong pick."},
                 },
             },
         ),
@@ -1173,6 +1192,7 @@ async def list_tools() -> list[Tool]:
                 "properties": {
                     "title": {"type": "string", "description": "Book title to search"},
                     "author": {"type": "string", "description": "Author name to narrow results"},
+                    "locale": {"type": "string", "enum": ["en", "fr"], "description": "Bias results toward this language's edition (Google Books otherwise mixes translations, sorted arbitrarily)."},
                     "limit": {"type": "integer", "default": 5, "description": "Max results to return"},
                 },
                 "required": ["title"],
@@ -1711,7 +1731,17 @@ they want to take notes on one — the procedure is:
 3. **Show the basics.** Title, identity facts, and whether a public card already
    exists. The client renders this as a card, so do not repeat it in prose —
    say what is worth saying and get out of the way.
-4. **Then take the notes.** Append to the fiche body with `update_fiche`.
+4. **Then take the notes.** Use `update_fiche`'s `append_body` — not `body`,
+   which replaces the note wholesale and would discard everything written in
+   an earlier session.
+
+**If the pick was wrong** — open_fiche's automatic match got the wrong edition,
+wrong language, or wrong person of the same name — do not reach for a
+resource-entry tool (get/update/create_resource_entry, create_*_entry): none
+of that exists yet for a fiche, and trying to make it exist is not how a
+fiche gets corrected. Run the matching `search_*` tool, and pass the right id
+(tmdb_id / google_books_id / podcastindex_id / igdb_id) to `update_fiche`,
+which re-fetches and overwrites the metadata in place.
 
 `promote_fiche` turns a fiche into a card, later, when a verdict exists. Never
 promote unasked.
@@ -3087,7 +3117,7 @@ def _fetch_fiche_metadata(col: str, title: str, args: dict[str, Any]) -> dict[st
     if picked:
         return picked
     if col == "books":
-        return _fetch_book_metadata(title, args.get("author"))
+        return _fetch_book_metadata(title, args.get("author"), args.get("locale", "en"))
     elif col == "movies":
         return _fetch_movie_metadata(title, args.get("year"))
     elif col == "games":
@@ -3197,9 +3227,9 @@ def _podcast_meta_from_feed(feed: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _fetch_book_metadata(title: str, author: str | None) -> dict[str, Any]:
+def _fetch_book_metadata(title: str, author: str | None, locale: str = "en") -> dict[str, Any]:
     api_key = _api_key("GOOGLE_BOOKS_API_KEY", "google_books_api_key")
-    results = _google_books_search(title, author, api_key)
+    results = _google_books_search(title, author, api_key, lang=locale)
     if not results:
         return {}
     meta = _book_meta_from_volume(results[0])
@@ -3336,6 +3366,28 @@ def _handle_update_fiche(args: dict[str, Any]) -> dict[str, Any]:
         if not body.startswith("\n"):
             body = f"\n{body}\n"
         updated_fields.append("body")
+    elif args.get("append_body"):
+        addition = args["append_body"].strip()
+        separator = "\n\n" if body.strip() else "\n"
+        body = f"{body.rstrip()}{separator}{addition}\n"
+        updated_fields.append("body")
+
+    provider_id_args = {
+        k: args[k] for k in ("tmdb_id", "google_books_id", "podcastindex_id", "igdb_id") if k in args
+    }
+    if provider_id_args:
+        # Reuses the exact lookup open_fiche's initial pick goes through, so a
+        # correction and a fresh creation can't disagree about what a given
+        # provider id resolves to.
+        refreshed = _fetch_by_provider_id(col, provider_id_args)
+        if not refreshed:
+            return {"error": f"could not fetch metadata for the given id in {col}"}
+        fm["meta"] = refreshed
+        if refreshed.get("title") and "title" not in args:
+            fm["title"] = refreshed["title"]
+            if "title" not in updated_fields:
+                updated_fields.append("title")
+        updated_fields.append("meta")
 
     _write_note(path, fm, body)
     _auto_commit([path], f"Update fiche: {col}/{rid}")
@@ -4275,7 +4327,7 @@ async def _handle_search_book(args: dict[str, Any]) -> dict[str, Any]:
 
 def _search_book_sync(args: dict[str, Any]) -> dict[str, Any]:
     api_key = _api_key("GOOGLE_BOOKS_API_KEY", "google_books_api_key")
-    results = _google_books_search(args["title"], args.get("author"), api_key)
+    results = _google_books_search(args["title"], args.get("author"), api_key, lang=args.get("locale"))
     limit = args.get("limit", 5)
     candidates = []
     for r in results[:limit]:
@@ -4442,7 +4494,9 @@ def _google_books_volume(volume_id: str) -> dict[str, Any]:
         return json.loads(resp.read())
 
 
-def _google_books_search(title: str, author: str | None, api_key: str | None) -> list[dict[str, Any]]:
+def _google_books_search(
+    title: str, author: str | None, api_key: str | None, lang: str | None = None
+) -> list[dict[str, Any]]:
     import urllib.request
     import urllib.parse
 
@@ -4450,13 +4504,34 @@ def _google_books_search(title: str, author: str | None, api_key: str | None) ->
     if author:
         q += f"+inauthor:{author}"
     params: dict[str, str] = {"q": q}
+    if lang:
+        params["langRestrict"] = lang
     if api_key:
         params["key"] = api_key
     url = f"https://www.googleapis.com/books/v1/volumes?{urllib.parse.urlencode(params)}"
     req = urllib.request.Request(url)
     with urllib.request.urlopen(req) as resp:
         data = json.loads(resp.read())
-    return data.get("items", [])
+    items = data.get("items", [])
+    # Two independent problems, one fix: langRestrict narrows the search but
+    # does not reliably exclude other languages ("Humus" by Gaspard Koenig, a
+    # French book, returned the German translation first even with
+    # langRestrict=fr) — and `intitle:` narrows relevance without enforcing an
+    # actual title match, so an unrelated book by the same author can still
+    # outrank the real one (a French "Agrophilosophie" outranked the French
+    # "Humus"). A stable sort preferring language match, then title match, is
+    # the belt to both: whichever pick a caller takes unreviewed (results[0],
+    # in _fetch_book_metadata) is the household's language AND the right book,
+    # not just whichever edition the API's relevance ranking favoured.
+    wanted_title = title.strip().casefold()
+    items = sorted(
+        items,
+        key=lambda it: (
+            (it.get("volumeInfo", {}).get("language") != lang) if lang else False,
+            it.get("volumeInfo", {}).get("title", "").strip().casefold() != wanted_title,
+        ),
+    )
+    return items
 
 
 # ---------------------------------------------------------------------------
@@ -4961,7 +5036,7 @@ def _create_book_entry_sync(args: dict[str, Any]) -> dict[str, Any]:
             book_data = json.loads(resp.read())
         volume = book_data.get("volumeInfo", {})
     else:
-        results = _google_books_search(title, author, api_key)
+        results = _google_books_search(title, author, api_key, lang=args.get("locale"))
         if not results:
             return {"error": f"No Google Books results for '{title}'" + (f" by {author}" if author else "")}
         volume = results[0].get("volumeInfo", {})
