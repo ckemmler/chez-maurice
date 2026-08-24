@@ -1012,7 +1012,17 @@ async def list_tools() -> list[Tool]:
         ),
         Tool(
             name="promote_fiche",
-            description="Promote a fiche to a full resource entry using its pre-fetched metadata. Downloads cover images and creates the resource file. The fiche body becomes the resource content.",
+            description=(
+                "Promote a fiche to a full resource entry using its pre-fetched metadata. "
+                "Downloads cover images and creates the resource file. The fiche body becomes "
+                "the resource content.\n"
+                "\n"
+                "Only ever on an explicit request, and note what it implies: the fiche's prose "
+                "becomes the card's prose. A card is the reader's own public verdict, in their "
+                "voice — so promoting a fiche Maurice wrote publishes Maurice's words as theirs. "
+                "When the fiche body is not the reader's own, say so and offer to create the "
+                "card's frontmatter with an empty body for them to write."
+            ),
             inputSchema={
                 "type": "object",
                 "required": ["resource_collection", "resource_id"],
@@ -1121,7 +1131,12 @@ async def list_tools() -> list[Tool]:
                 "Publish content to the website (web Astro site). "
                 "Writes a markdown file with proper frontmatter. Supports all content types: "
                 "blog, essay, book, article, movie, series, podcast, people. "
-                "Content body can come from 'content' param or from a dossier via 'dossierId'."
+                "Content body can come from 'content' param or from a dossier via 'dossierId'.\n"
+                "\n"
+                "For a resource card (book, movie, series, podcast, people), do not draft the "
+                "body: a card is the reader's own public verdict, in their voice. Write the "
+                "frontmatter and leave the body to them, and put anything you have to say in "
+                "the fiche instead."
             ),
             inputSchema={
                 "type": "object",
@@ -1286,7 +1301,7 @@ async def list_tools() -> list[Tool]:
                     "tmdb_id": {"type": "integer", "description": "TMDB movie ID (skip search if provided, from search_movie)"},
                     "year": {"type": "integer", "description": "Release year to disambiguate"},
                     "rating": {"type": "integer", "minimum": 1, "maximum": 5, "description": "User's rating"},
-                    "content": {"type": "string", "description": "Review body markdown"},
+                    "content": {"type": "string", "description": "Review body markdown. Leave EMPTY unless the reader supplied the words: a card is their public verdict, in their voice, and is not Maurice's to draft. Metadata is a fact; a verdict is theirs."},
                     "locale": {"type": "string", "enum": ["en", "fr"], "default": "fr"},
                     "flags": {"type": "array", "items": {"type": "string"}, "default": [], "description": "Flags array (e.g. ['public'])"},
                     "tags": {"type": "array", "items": {"type": "string"}, "default": []},
@@ -1308,7 +1323,7 @@ async def list_tools() -> list[Tool]:
                     "igdb_id": {"type": "integer", "description": "IGDB game ID (skip search if provided, from search_game)"},
                     "year": {"type": "integer", "description": "Release year to disambiguate"},
                     "rating": {"type": "integer", "minimum": 1, "maximum": 5, "description": "User's rating"},
-                    "content": {"type": "string", "description": "Review body markdown"},
+                    "content": {"type": "string", "description": "Review body markdown. Leave EMPTY unless the reader supplied the words: a card is their public verdict, in their voice, and is not Maurice's to draft. Metadata is a fact; a verdict is theirs."},
                     "locale": {"type": "string", "enum": ["en", "fr"], "default": "fr"},
                     "flags": {"type": "array", "items": {"type": "string"}, "default": [], "description": "Flags array (e.g. ['public'])"},
                     "tags": {"type": "array", "items": {"type": "string"}, "default": []},
@@ -1330,7 +1345,7 @@ async def list_tools() -> list[Tool]:
                     "google_books_id": {"type": "string", "description": "Google Books volume ID (skip search if provided, from search_book)"},
                     "author": {"type": "string", "description": "Author name to disambiguate"},
                     "rating": {"type": "integer", "minimum": 1, "maximum": 5},
-                    "content": {"type": "string", "description": "Review body markdown"},
+                    "content": {"type": "string", "description": "Review body markdown. Leave EMPTY unless the reader supplied the words: a card is their public verdict, in their voice, and is not Maurice's to draft. Metadata is a fact; a verdict is theirs."},
                     "locale": {"type": "string", "enum": ["en", "fr"], "default": "fr"},
                     "flags": {"type": "array", "items": {"type": "string"}, "default": [], "description": "Flags array (e.g. ['public'])"},
                     "tags": {"type": "array", "items": {"type": "string"}, "default": []},
@@ -1353,7 +1368,7 @@ async def list_tools() -> list[Tool]:
                     "tmdb_id": {"type": "integer", "description": "TMDB TV series ID (skip search if provided, from search_series)"},
                     "year": {"type": "integer", "description": "First air date year to disambiguate"},
                     "rating": {"type": "integer", "minimum": 1, "maximum": 5},
-                    "content": {"type": "string", "description": "Review body markdown"},
+                    "content": {"type": "string", "description": "Review body markdown. Leave EMPTY unless the reader supplied the words: a card is their public verdict, in their voice, and is not Maurice's to draft. Metadata is a fact; a verdict is theirs."},
                     "locale": {"type": "string", "enum": ["en", "fr"], "default": "fr"},
                     "flags": {"type": "array", "items": {"type": "string"}, "default": [], "description": "Flags array (e.g. ['public'])"},
                     "tags": {"type": "array", "items": {"type": "string"}, "default": []},
@@ -1378,7 +1393,7 @@ async def list_tools() -> list[Tool]:
                 "properties": {
                     "title": {"type": "string", "description": "Podcast title to search"},
                     "podcastindex_id": {"type": "integer", "description": "Podcast Index feed ID (skip search if provided, from search_podcast)"},
-                    "content": {"type": "string", "description": "Review body markdown"},
+                    "content": {"type": "string", "description": "Review body markdown. Leave EMPTY unless the reader supplied the words: a card is their public verdict, in their voice, and is not Maurice's to draft. Metadata is a fact; a verdict is theirs."},
                     "locale": {"type": "string", "enum": ["en", "fr"], "default": "fr"},
                     "flags": {"type": "array", "items": {"type": "string"}, "default": [], "description": "Flags array (e.g. ['public'])"},
                     "tags": {"type": "array", "items": {"type": "string"}, "default": []},
@@ -1400,7 +1415,7 @@ async def list_tools() -> list[Tool]:
                 "type": "object",
                 "properties": {
                     "url": {"type": "string", "description": "Article URL to fetch OG metadata from"},
-                    "content": {"type": "string", "description": "Review body markdown"},
+                    "content": {"type": "string", "description": "Review body markdown. Leave EMPTY unless the reader supplied the words: a card is their public verdict, in their voice, and is not Maurice's to draft. Metadata is a fact; a verdict is theirs."},
                     "locale": {"type": "string", "enum": ["en", "fr"], "default": "fr"},
                     "flags": {"type": "array", "items": {"type": "string"}, "default": [], "description": "Flags array (e.g. ['public'])"},
                     "tags": {"type": "array", "items": {"type": "string"}, "default": []},
@@ -1734,6 +1749,16 @@ they want to take notes on one — the procedure is:
 4. **Then take the notes.** Use `update_fiche`'s `append_body` — not `body`,
    which replaces the note wholesale and would discard everything written in
    an earlier session.
+
+**Never write the card's prose.** The front of a card is the reader's own
+public verdict, in their own voice — Maurice does not draft it, not even as a
+starting point, and not even when asked to "write the card". Offer to fill the
+fiche instead, or to set up the card's frontmatter (title, year, cover, rating)
+and leave the body empty for them. Metadata is a fact; a verdict is theirs.
+
+The fiche is the exception: Maurice writes there freely — summaries,
+reconstructions, analysis — because the fiche is working material, not a
+published position.
 
 **If the pick was wrong** — open_fiche's automatic match got the wrong edition,
 wrong language, or wrong person of the same name — do not reach for a
