@@ -314,7 +314,7 @@
 "gardens.search" = "In diesen Notizen suchen…";
 "gardens.webtheme" = "Web-Thema";
 "gardens.webtheme_hint" = "So sieht dieser Garten im Web aus — alle Gärtner sehen es.";
-"gardens.all_notes" = "Alle Notizen";
+"gardens.all_notes" = "Alles in diesem Garten";
 "gardens.notes" = "Notizen";
 "gardens.empty" = "Noch nichts hier — teile eine Notiz, um diesen Garten zu beginnen.";
 "gardens.no_match" = "Keine passenden Notizen.";

@@ -620,7 +620,19 @@ struct ServerGardenNote: Decodable, Identifiable {
     let title: String
     let updated_at: String?
     let web_path: String
-    var id: String { "\(owner_id)/\(slug)" }
+    /// note | fiche | card. A garden is all three: the notes, the fiches where
+    /// reading accumulates, and the cards those may become.
+    let kind: String?
+    /// The resource collection for a fiche or a card; nil for a note.
+    let collection: String?
+
+    /// Kind is part of the identity, not decoration: a note and a card can hold
+    /// the same slug, and a duplicate id makes SwiftUI drop rows from the list.
+    var id: String { "\(owner_id)/\(kind ?? "note")/\(slug)" }
+
+    /// Fiches and cards are the owner's own; only notes can be shared today, so
+    /// only they open the access sheet.
+    var isNote: Bool { (kind ?? "note") == "note" }
 }
 
 struct ServerGarden: Decodable, Identifiable {
@@ -1321,11 +1333,21 @@ private struct GardenNoteRow: View {
     #endif
 
     var body: some View {
-        Button(action: onAccess) {
+        Button(action: note.isNote ? onAccess : { gardens.browseNote(note) }) {
             HStack(spacing: 11) {
-                HairlineLeaf()
-                    .stroke(theme.inkMute, style: StrokeStyle(lineWidth: 1.3, lineCap: .round, lineJoin: .round))
-                    .frame(width: 13, height: 13)
+                // The leaf marks a note. A fiche and a card get their own glyph:
+                // in one mixed list, what a row IS matters more than its title.
+                Group {
+                    if note.isNote {
+                        HairlineLeaf()
+                            .stroke(theme.inkMute, style: StrokeStyle(lineWidth: 1.3, lineCap: .round, lineJoin: .round))
+                    } else {
+                        Image(systemName: note.kind == "fiche" ? "text.page" : "rectangle.portrait")
+                            .font(.system(size: 11))
+                            .foregroundStyle(theme.inkMute)
+                    }
+                }
+                .frame(width: 13, height: 13)
                 Text(note.title)
                     .font(.system(size: 13.5))
                     .foregroundStyle(theme.ink)

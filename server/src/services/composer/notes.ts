@@ -268,3 +268,97 @@ export function readNoteBody(memberId: string, slug: string): { title: string; b
   }
   return null;
 }
+
+// ── Garden content beyond notes (fiches + resource cards) ───────────
+//
+// The app's garden view lists what a member tends, and that is not only their
+// notes: a fiche is where notes on a work accumulate, and a card is the public
+// entry it may become. Both live outside notes/ — <collection>/<locale>/ — so
+// the notes scanner above never sees them.
+//
+// Deliberately a separate function rather than a wider scanNotes(): that one
+// feeds the composer's note-context picker and its wiki-link graph, where a
+// fiche has no business appearing.
+
+/** Collections that hold fiches and cards, mirroring the garden MCP's set. */
+const RESOURCE_COLLECTIONS = [
+  "books", "articles", "movies", "games", "series", "podcasts", "people",
+] as const;
+
+/** French URL segment per collection, mirroring web/src/i18n/config.ts. */
+const FR_SEGMENT: Record<string, string> = {
+  books: "livres", articles: "articles", podcasts: "podcasts",
+  movies: "films", games: "jeux", series: "series", people: "personnes",
+};
+
+export type GardenItemKind = "note" | "fiche" | "card";
+
+export interface GardenItem {
+  kind: GardenItemKind;
+  /** null for notes; the resource collection otherwise */
+  collection: string | null;
+  slug: string;
+  locale: string;
+  title: string;
+  flags: string[];
+  /** absolute path on disk, for mtime */
+  file: string;
+}
+
+/** Fiches and cards for a member, in file order. Notes are NOT included. */
+export function scanResources(memberId: string): GardenItem[] {
+  const user = getUser(memberId);
+  if (!user) return [];
+  const out: GardenItem[] = [];
+
+  for (const collection of RESOURCE_COLLECTIONS) {
+    const collDir = path.join(GARDENS, user.username, collection);
+    if (!fs.existsSync(collDir)) continue;
+    for (const locale of fs.readdirSync(collDir)) {
+      const dir = path.join(collDir, locale);
+      try {
+        if (!fs.statSync(dir).isDirectory()) continue;
+      } catch {
+        continue;
+      }
+      for (const file of fs.readdirSync(dir)) {
+        if (!file.endsWith(".md") && !file.endsWith(".mdx")) continue;
+        const stem = file.replace(/\.mdx?$/, "");
+        const isFiche = stem.endsWith("-fiche");
+        const full = path.join(dir, file);
+        let raw: string;
+        try {
+          raw = fs.readFileSync(full, "utf8");
+        } catch {
+          continue;
+        }
+        const fm = raw.match(/^---\n([\s\S]*?)\n---/);
+        if (!fm) continue;
+        out.push({
+          kind: isFiche ? "fiche" : "card",
+          collection,
+          slug: stem,
+          locale,
+          // people carry `name` where everything else carries `title`.
+          title: field(fm[1], "title") || field(fm[1], "name") || stem,
+          flags: parseFlags(fm[1]),
+          file: full,
+        });
+      }
+    }
+  }
+  return out;
+}
+
+/** Signed-in web path for a fiche or a card. */
+export function resourceWebPath(ownerUsername: string, item: GardenItem): string {
+  const prefix = item.locale === "en" ? "" : `/${item.locale}`;
+  const collection = item.collection ?? "";
+  if (item.kind === "fiche") {
+    // /fiches is not locale-renamed, unlike the resource routes below.
+    return `/g/${ownerUsername}${prefix}/fiches/${collection}/${item.slug}`;
+  }
+  return item.locale === "fr"
+    ? `/g/${ownerUsername}/fr/trouvailles/${FR_SEGMENT[collection] ?? collection}/${item.slug}`
+    : `/g/${ownerUsername}/resources/${collection}/${item.slug}`;
+}
