@@ -947,15 +947,30 @@ struct GardenPageView: View {
     var onToggleSidebar: () -> Void = {}
 
     @State private var query = ""
+    /// How many rows are currently built. A garden runs to a few hundred
+    /// entries once fiches and cards join the notes, and building them all up
+    /// front costs a visible beat on entry and on every keystroke in the search
+    /// field. Grows as the reader reaches the end.
+    @State private var visibleCount = GardenPageView.pageSize
     @State private var webThemes: [(id: String, label: String)] = [("default", "Default")]
     @State private var accessNote: ServerGardenNote?
 
     private var accent: Color { session.activeDeviceUser?.color ?? .blue }
 
+    /// One page's worth of rows, and how far a scroll-to-end grows the window.
+    fileprivate static let pageSize = 60
+
     private var filteredNotes: [ServerGardenNote] {
         let q = query.trimmingCharacters(in: .whitespaces).lowercased()
         guard !q.isEmpty else { return garden.notes }
         return garden.notes.filter { $0.title.lowercased().contains(q) || $0.slug.contains(q) }
+    }
+
+    /// The slice actually rendered. Search filters the whole garden, not the
+    /// window — otherwise a match further down than the current page would
+    /// simply not be found.
+    private var visibleNotes: ArraySlice<ServerGardenNote> {
+        filteredNotes.prefix(visibleCount)
     }
 
     var body: some View {
@@ -1177,10 +1192,16 @@ struct GardenPageView: View {
     }
 
     private var notesCard: some View {
-        VStack(spacing: 0) {
-            ForEach(Array(filteredNotes.enumerated()), id: \.element.id) { i, n in
+        LazyVStack(spacing: 0) {
+            ForEach(Array(visibleNotes.enumerated()), id: \.element.id) { i, n in
                 GardenNoteRow(note: n, last: i == filteredNotes.count - 1) {
                     accessNote = n
+                }
+                .onAppear {
+                    // Reaching the last built row grows the window. No paging
+                    // request behind it: the garden arrives in one payload, so
+                    // this is purely about how much is built at once.
+                    if i == visibleCount - 1 { revealMore() }
                 }
             }
             if filteredNotes.isEmpty {
@@ -1193,6 +1214,13 @@ struct GardenPageView: View {
         .background(theme.surface, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous)
             .strokeBorder(theme.rule, lineWidth: 0.5))
+        // A new search starts from the top of its own results.
+        .onChange(of: query) { _, _ in visibleCount = Self.pageSize }
+    }
+
+    private func revealMore() {
+        guard visibleCount < filteredNotes.count else { return }
+        visibleCount = min(visibleCount + Self.pageSize, filteredNotes.count)
     }
 
     private func loadWebThemes() async {
