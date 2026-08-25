@@ -86,6 +86,9 @@ data/
 /web/public/images/*
 !/web/public/images/demo
 
+# The member's avatar, linked in from the data dir by the same integration.
+/web/public/avatars
+
 # Gardens hold personal content — default-deny. The public repo ships ONLY the
 # synthetic `demo` garden + the gardens.json manifest; every real/seed garden
 # (candide, family members, demo-household fixtures, anything new) stays private.

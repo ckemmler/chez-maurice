@@ -60,6 +60,59 @@ async function ensureImageLink(
   }
 }
 
+/** Link this member's avatar into public/avatars so the SITE serves it.
+ *
+ * gardens.json points at /api/avatars/<file>, which is the server's route: not
+ * reachable under a garden base (Astro prefixes it), and absent entirely from
+ * the public build, which is static files on Cloudflare Pages. See
+ * siteAvatarPath in lib/garden.ts for the other half.
+ *
+ * Only this member's file is linked, never the directory: the household's other
+ * avatars are real family photos and have no business in a public build.
+ */
+async function ensureAvatarLink(
+  member: string,
+  gardensRoot: string,
+  logger: { info: (m: string) => void; warn: (m: string) => void },
+): Promise<void> {
+  let configured: string | undefined;
+  try {
+    const manifest = JSON.parse(
+      await readFile(join(gardensRoot, "gardens.json"), "utf-8"),
+    );
+    configured = manifest?.[member]?.avatar;
+  } catch {
+    return; // no manifest, nothing to link
+  }
+  const file = configured?.split("/").filter(Boolean).pop();
+  if (!file) return;
+
+  // Avatars sit in the app's data dir, beside the gardens rather than inside
+  // them. Try the sibling first, then the default install location.
+  const candidates = [
+    resolve(gardensRoot, "..", "avatars", file),
+    resolve(process.env.HOME || "", ".maurice", "avatars", file),
+  ];
+  const source = candidates.find((c) => existsSync(c));
+  if (!source) {
+    logger.warn(`Avatar ${file} not found — the header will fall back to initials`);
+    return;
+  }
+
+  const dir = resolve(process.cwd(), "public", "avatars");
+  const link = join(dir, file);
+  try {
+    await mkdir(dir, { recursive: true });
+    const current = await readlink(link).catch(() => null);
+    if (current === source) return;
+    if (current !== null || existsSync(link)) await rm(link, { force: true });
+    await symlink(source, link);
+    logger.info(`Linked /avatars/${file} → ${source}`);
+  } catch (err) {
+    logger.warn(`Could not link /avatars/${file}: ${err}`);
+  }
+}
+
 export default function downloadImages(): AstroIntegration {
   return {
     name: "download-images",
@@ -80,6 +133,7 @@ export default function downloadImages(): AstroIntegration {
         // from the same config the collections themselves are loaded from, so
         // the two can't disagree about where a garden lives.
         await ensureImageLink(member, gardenDir, logger, command === "build");
+        await ensureAvatarLink(member, gardensRoot, logger);
 
         let downloaded = 0;
 
