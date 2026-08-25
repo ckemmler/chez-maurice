@@ -8,7 +8,7 @@ set -euo pipefail
 source "$(dirname "$0")/_lib.sh"
 
 member="${1:?usage: start-garden.sh <member>}"
-manifest="$REPO/web/gardens/gardens.json"
+manifest="$(gardens_root)/gardens.json"
 [[ -f "$manifest" ]] || { echo "missing $manifest"; exit 1; }
 
 NODE="$(command -v node || echo "$HOME/.bun/bin/bun")"

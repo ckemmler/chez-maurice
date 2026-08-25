@@ -80,6 +80,12 @@ data/
 # in the public build.
 /web/themes/candide
 
+# Per-member image links into the gardens dir, recreated on every dev/build by
+# src/integrations/download-images.ts. Machine-specific (they follow
+# MAURICE_GARDENS_DIR); only the bundled demo link is tracked.
+/web/public/images/*
+!/web/public/images/demo
+
 # Gardens hold personal content — default-deny. The public repo ships ONLY the
 # synthetic `demo` garden + the gardens.json manifest; every real/seed garden
 # (candide, family members, demo-household fixtures, anything new) stays private.

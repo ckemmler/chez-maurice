@@ -9,6 +9,7 @@ export const routeMap: Record<string, string> = {
   articles: "articles",
   podcasts: "podcasts",
   movies: "films",
+  games: "jeux",
   series: "series",
   people: "personnes",
   essays: "essais",

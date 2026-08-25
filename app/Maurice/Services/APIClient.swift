@@ -333,6 +333,45 @@ indirect enum JSONValue: Decodable, Equatable {
     }
 }
 
+/// Keyed access, for the tool payloads that DO carry a shape.
+///
+/// Most tool data is rendered by the generic key/value fallback, which needs no
+/// schema. A few tools instead return a payload stamped with a `card` kind —
+/// those get a purpose-built view, and these accessors are how it reads them.
+extension JSONValue {
+    subscript(key: String) -> JSONValue? {
+        if case .object(let pairs) = self { return pairs.first { $0.key == key }?.value }
+        return nil
+    }
+
+    var stringValue: String? {
+        if case .string(let s) = self { return s }
+        return nil
+    }
+
+    var intValue: Int? {
+        if case .number(let n) = self { return Int(n) }
+        return nil
+    }
+
+    var arrayValue: [JSONValue]? {
+        if case .array(let a) = self { return a }
+        return nil
+    }
+
+    /// A string field, or "" — the card views treat absent and empty alike.
+    func string(_ key: String) -> String { self[key]?.stringValue ?? "" }
+
+    func int(_ key: String) -> Int { self[key]?.intValue ?? 0 }
+
+    func strings(_ key: String) -> [String] {
+        self[key]?.arrayValue?.compactMap { $0.stringValue } ?? []
+    }
+
+    /// The discriminator a typed payload carries, e.g. "candidates" or "media".
+    var cardKind: String? { self["card"]?.stringValue }
+}
+
 // MARK: - API Errors
 
 enum APIError: LocalizedError {

@@ -71,7 +71,7 @@ export async function buildSearchIndex(locale: Locale): Promise<SearchEntry[]> {
   }
 
   // Resource collections
-  const resourceCollections = ["books", "articles", "podcasts", "movies", "series", "people"] as const;
+  const resourceCollections = ["books", "articles", "podcasts", "movies", "games", "series", "people"] as const;
   for (const col of resourceCollections) {
     const items = await getCollection(col, ({ data }) =>
       (data as any).locale === locale && (isDev || isPublic(data as any))

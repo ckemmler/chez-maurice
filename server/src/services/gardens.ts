@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import db from "../db";
 import { getUser, listUsers, type User } from "./users";
-import { scanNotes, type NoteMeta } from "./composer/notes";
+import { scanNotes, scanResources, resourceWebPath, type NoteMeta, type GardenItemKind } from "./composer/notes";
 import { gardensRoot } from "./gardensRoot";
 
 // Shared gardens — the per-NOTE sharing model (Claude Design handoff,
@@ -34,6 +34,10 @@ export interface GardenNote {
   updated_at: string | null;
   /** signed-in web path of the note (relative to the server origin) */
   web_path: string;
+  /** note | fiche | card — a garden is all three, not only its notes */
+  kind: GardenItemKind;
+  /** the resource collection for a fiche or a card; null for a note */
+  collection: string | null;
 }
 
 export interface Garden {
@@ -129,6 +133,15 @@ export function setGardenTheme(id: string, webTheme: string): void {
 
 // ── Derivation ──────────────────────────────────────────────────────────────
 
+function fileMtime(file: string): string | null {
+  try {
+    // Second precision — the app's parseServerDate doesn't read fractional ISO.
+    return fs.statSync(file).mtime.toISOString().replace(/\.\d{3}Z$/, "Z");
+  } catch {
+    return null;
+  }
+}
+
 function noteMtime(ownerUsername: string, note: NoteMeta): string | null {
   for (const ext of [".md", ".mdx"]) {
     const p = path.join(GARDENS_FS, ownerUsername, "notes", note.locale, note.slug + ext);
@@ -183,6 +196,26 @@ export function gardensFor(memberId: string): Garden[] {
         title: note.title,
         updated_at: noteMtime(owner.username, note),
         web_path: noteWebPath(owner.username, note),
+        kind: "note",
+        collection: null,
+      });
+    }
+
+    // Fiches and cards are the owner's alone. note_shares is keyed by slug in
+    // the notes namespace, so consulting it here could hand another member a
+    // card that merely shares a slug with a note shared with them.
+    if (owner.id !== memberId) continue;
+    for (const item of scanResources(owner.id)) {
+      buckets.get(mineKey)!.push({
+        owner_id: owner.id,
+        owner_username: owner.username,
+        slug: item.slug,
+        locale: item.locale,
+        title: item.title,
+        updated_at: fileMtime(item.file),
+        web_path: resourceWebPath(owner.username, item),
+        kind: item.kind,
+        collection: item.collection,
       });
     }
   }

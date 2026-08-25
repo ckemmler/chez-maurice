@@ -63,6 +63,32 @@ def _garden_member() -> str:
     return slug
 
 
+def _api_key(env_var: str, column: str) -> str:
+    """A metadata-provider key (TMDB, Google Books, Podcast Index).
+
+    The admin UI stores these on the household row, so an admin can add a key
+    from the browser without editing .env or restarting the gateway — hence the
+    read every call rather than a cached lookup. An env var of the same name
+    still wins, which keeps headless/CI setups working with no database.
+    """
+    env = os.environ.get(env_var)
+    if env:
+        return env
+    try:
+        import contextlib
+        import sqlite3
+
+        # closing(), not a bare close(): an older DB without these columns raises
+        # OperationalError mid-statement, and this runs once per key per call.
+        with contextlib.closing(sqlite3.connect(f"file:{_MAURICE_DB}?mode=ro", uri=True)) as con:
+            row = con.execute(f"SELECT {column} FROM households WHERE id = 'default'").fetchone()
+        if row and row[0]:
+            return str(row[0])
+    except Exception:
+        pass
+    return ""
+
+
 def member_root() -> Path:
     """Root of the calling member's garden (gardens/<member>/).
 
@@ -82,7 +108,7 @@ def content_root() -> Path:
 # escapes the per-member garden into another member's tree (read/write/unlink).
 _SLUG_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
 _LOCALE_RE = re.compile(r"^[a-z]{2}$")
-_RESOURCE_COLLECTIONS = {"books", "articles", "movies", "series", "podcasts", "people"}
+_RESOURCE_COLLECTIONS = {"books", "articles", "movies", "games", "series", "podcasts", "people"}
 
 
 def _safe_slug(value: str, kind: str = "id") -> str:
@@ -174,6 +200,28 @@ def _resolve_note_path(note_id: str, locale: str = "en") -> Path:
     note_id = _safe_slug(note_id, "note_id")
     locale = _safe_locale(locale)
     return _assert_within(content_root() / locale / f"{note_id}.md", member_root())
+
+
+# The five the Astro schema accepts. An unknown flag doesn't fail one file — it
+# fails the whole collection's build, so it is worth refusing here.
+_CONTENT_FLAGS = ("public", "encrypted", "moc", "translation", "archived")
+
+# Collections that carry flags, and where their files live. Notes sit under
+# notes/<locale>/; everything else under <collection>/<locale>/.
+_FLAGGABLE_COLLECTIONS = (
+    "notes", "blog", "essays", "pages",
+    "books", "articles", "movies", "games", "series", "podcasts", "people",
+)
+
+
+def _resolve_content_path(collection: str, slug: str, locale: str = "en") -> Path:
+    """Path to any flaggable piece of content, whatever its collection."""
+    if collection not in _FLAGGABLE_COLLECTIONS:
+        raise ValueError(f"invalid collection: {collection!r}")
+    slug = _safe_slug(slug, "id")
+    locale = _safe_locale(locale)
+    base = content_root() if collection == "notes" else member_root() / collection
+    return _assert_within(base / locale / f"{slug}.md", member_root())
 
 
 def _parse_note(path: Path) -> tuple[dict[str, Any], str]:
@@ -278,19 +326,28 @@ def _write_note(path: Path, fm: dict[str, Any], body: str) -> None:
     _push_note_to_corpus(path)
 
 
-def _gardens_git_root() -> Path | None:
-    """Git work-tree top-level containing GARDENS_ROOT, or None if the gardens
-    dir isn't version-controlled (the normal case for a production data dir —
-    notes are persisted as plain files; git is only a dev/source-repo nicety)."""
-    try:
-        out = subprocess.run(
-            ["git", "rev-parse", "--show-toplevel"],
-            cwd=GARDENS_ROOT, capture_output=True, text=True,
-        )
-        if out.returncode == 0 and out.stdout.strip():
-            return Path(out.stdout.strip())
-    except Exception:
-        pass
+def _gardens_git_root(start: Path | None = None) -> Path | None:
+    """Git work-tree top-level for a garden path, or None if not versioned.
+
+    Resolution starts at the CALLING MEMBER's garden, not at GARDENS_ROOT.
+    Gardens are versioned one repo per member, because git's unit of access is
+    the repository: a single repo over all gardens would hand every member
+    everyone else's notes. Starting at the root would therefore find nothing and
+    silently disable every commit. Falls back to GARDENS_ROOT so a dev checkout
+    with one repo over the whole tree still works.
+    """
+    for cwd in (start or member_root(), GARDENS_ROOT):
+        try:
+            if not cwd.exists():
+                continue
+            out = subprocess.run(
+                ["git", "rev-parse", "--show-toplevel"],
+                cwd=cwd, capture_output=True, text=True,
+            )
+            if out.returncode == 0 and out.stdout.strip():
+                return Path(out.stdout.strip())
+        except Exception:
+            continue
     return None
 
 
@@ -310,7 +367,11 @@ def _auto_commit(paths: list[Path], message: str) -> None:
     if root is None:
         return
     try:
-        rel_paths = [str(p.relative_to(root)) for p in paths]
+        # Skip anything outside this member's repo rather than aborting the whole
+        # commit on one stray path.
+        rel_paths = [str(p.relative_to(root)) for p in paths if p.is_relative_to(root)]
+        if not rel_paths:
+            return
         subprocess.run(["git", "add"] + rel_paths, cwd=root, check=True)
         result = subprocess.run(["git", "diff", "--cached", "--quiet"], cwd=root)
         if result.returncode != 0:  # there are staged changes
@@ -342,7 +403,9 @@ def _remove_paths(paths: list[Path], message: str) -> bool:
     if root is None:
         return False
     try:
-        rel = [str(p.relative_to(root)) for p in paths]
+        rel = [str(p.relative_to(root)) for p in paths if p.is_relative_to(root)]
+        if not rel:
+            return False
         subprocess.run(["git", "rm", "-r"] + rel, cwd=root, check=True)
         subprocess.run(["git", "commit", "-m", message], cwd=root, check=True)
         if _git_has_remote(root):
@@ -816,12 +879,12 @@ async def list_tools() -> list[Tool]:
         # ── Fiche tools ──
         Tool(
             name="create_fiche",
-            description="Create a personal fiche (sidecar note) for a resource. Pre-fetches metadata from external APIs (Google Books, TMDB, Podcast Index, OG tags, Wikidata) and stores it in the fiche for later promotion to a full resource entry. Call get_user_guide for link syntax and conventions.",
+            description="Create a personal fiche (sidecar note) for a resource. Pre-fetches metadata from external APIs (Google Books, TMDB, IGDB, Podcast Index, OG tags, Wikidata) and stores it in the fiche for later promotion to a full resource entry. Call get_user_guide for link syntax and conventions.",
             inputSchema={
                 "type": "object",
                 "required": ["resource_collection", "resource_id"],
                 "properties": {
-                    "resource_collection": {"type": "string", "enum": ["books", "articles", "movies", "series", "podcasts", "people"]},
+                    "resource_collection": {"type": "string", "enum": ["books", "articles", "movies", "games", "series", "podcasts", "people"]},
                     "resource_id": {"type": "string", "description": "Resource slug matching the sibling file stem."},
                     "title": {"type": "string", "description": "Fiche title (defaults to resource_id). Also used as the search query for metadata APIs."},
                     "locale": {"type": "string", "enum": ["en", "fr"], "default": "en"},
@@ -829,8 +892,49 @@ async def list_tools() -> list[Tool]:
                     "tags": {"type": "array", "items": {"type": "string"}, "default": []},
                     "url": {"type": "string", "description": "URL for articles (OG metadata extraction)."},
                     "author": {"type": "string", "description": "Author hint for books (improves Google Books search)."},
-                    "year": {"type": "integer", "description": "Year hint for movies/series (improves TMDB search)."},
+                    "year": {"type": "integer", "description": "Year hint for movies/series (TMDB) and games (IGDB)."},
                     "skip_metadata": {"type": "boolean", "default": False, "description": "Skip external API calls; create fiche with empty meta."},
+                },
+            },
+        ),
+        Tool(
+            name="open_fiche",
+            description=(
+                "Open the working fiche for a resource, creating it if absent. Use this whenever the "
+                "user asks for a fiche, or wants to take notes on something they just watched, read "
+                "or listened to — before any verdict exists.\n"
+                "\n"
+                "PROCEDURE — follow it in this order:\n"
+                "1. Call this tool first. If a fiche already exists it is returned as-is, with no "
+                "external lookup and nothing overwritten. Never call search_* before checking.\n"
+                "2. Only if no fiche came back (fiche_created is true) and you are unsure the right "
+                "work was matched — an ambiguous or very common title, a wrong year, the user "
+                "hesitating between a film and a series — call the matching search_* tool and let "
+                "the user pick from the candidates before going further.\n"
+                "3. Always show the user what came back: the title, the identity facts, and whether "
+                "a public card already exists. The card renders itself; do not restate it at length.\n"
+                "\n"
+                "Returns the fiche plus the state of the public-facing card — whether one exists, "
+                "whether it is published, how much is written on each side, and a browser URL for "
+                "each face."
+            ),
+            inputSchema={
+                "type": "object",
+                "required": ["resource_collection"],
+                "properties": {
+                    "resource_collection": {"type": "string", "enum": ["books", "articles", "movies", "games", "series", "podcasts", "people"]},
+                    "title": {"type": "string", "description": "Title of the work (used to search metadata and derive the slug)."},
+                    "resource_id": {"type": "string", "description": "Existing resource slug, when known (skips slug derivation)."},
+                    "locale": {"type": "string", "enum": ["en", "fr"], "default": "en"},
+                    "year": {"type": "integer", "description": "Year hint, to disambiguate the metadata lookup."},
+                    "author": {"type": "string", "description": "Author hint for books."},
+                    "url": {"type": "string", "description": "URL for articles (Open Graph extraction)."},
+                    # When the user picked from a search_* candidate list, pass its id
+                    # through: it pins the exact work, where a title alone re-guesses.
+                    "tmdb_id": {"type": "integer", "description": "TMDB id from search_movie / search_series — pass it whenever the user picked a candidate."},
+                    "google_books_id": {"type": "string", "description": "Volume id from search_book — pass it whenever the user picked a candidate."},
+                    "podcastindex_id": {"type": "integer", "description": "Feed id from search_podcast — pass it whenever the user picked a candidate."},
+                    "igdb_id": {"type": "integer", "description": "IGDB id from search_game — pass it whenever the user picked a candidate."},
                 },
             },
         ),
@@ -841,7 +945,7 @@ async def list_tools() -> list[Tool]:
                 "type": "object",
                 "required": ["resource_collection", "resource_id"],
                 "properties": {
-                    "resource_collection": {"type": "string", "enum": ["books", "articles", "movies", "series", "podcasts", "people"]},
+                    "resource_collection": {"type": "string", "enum": ["books", "articles", "movies", "games", "series", "podcasts", "people"]},
                     "resource_id": {"type": "string"},
                     "locale": {"type": "string", "enum": ["en", "fr"], "default": "en"},
                 },
@@ -849,17 +953,36 @@ async def list_tools() -> list[Tool]:
         ),
         Tool(
             name="update_fiche",
-            description="Update an existing fiche's frontmatter and/or body. Call get_user_guide for link syntax and conventions.",
+            description=(
+                "Update an existing fiche's frontmatter and/or body. Call get_user_guide for "
+                "link syntax and conventions.\n"
+                "\n"
+                "To ADD to what's already written — the normal case while taking notes over "
+                "several sessions — use append_body, not body: body REPLACES the note wholesale, "
+                "which loses everything before it unless you first get_fiche and reconstruct the "
+                "full text yourself.\n"
+                "\n"
+                "If open_fiche pulled the wrong edition or the wrong person (wrong year, wrong "
+                "language, a same-titled remake), do not create a new resource entry or edit one "
+                "— none exists yet, and trying to make one is not how a fiche gets corrected. "
+                "Pass the right tmdb_id/google_books_id/podcastindex_id/igdb_id (from the matching "
+                "search_* tool) and this re-fetches metadata and overwrites it in place."
+            ),
             inputSchema={
                 "type": "object",
                 "required": ["resource_collection", "resource_id"],
                 "properties": {
-                    "resource_collection": {"type": "string", "enum": ["books", "articles", "movies", "series", "podcasts", "people"]},
+                    "resource_collection": {"type": "string", "enum": ["books", "articles", "movies", "games", "series", "podcasts", "people"]},
                     "resource_id": {"type": "string"},
                     "locale": {"type": "string", "enum": ["en", "fr"], "default": "en"},
                     "title": {"type": "string"},
-                    "body": {"type": "string", "description": "Replace markdown body."},
+                    "body": {"type": "string", "description": "Replace the markdown body wholesale."},
+                    "append_body": {"type": "string", "description": "Add to the end of the markdown body, after a blank line. Use this to take notes incrementally."},
                     "tags": {"type": "array", "items": {"type": "string"}},
+                    "tmdb_id": {"type": "integer", "description": "Re-fetch metadata from this TMDB id and overwrite it — corrects a wrong pick."},
+                    "google_books_id": {"type": "string", "description": "Re-fetch metadata from this Google Books id and overwrite it — corrects a wrong pick."},
+                    "podcastindex_id": {"type": "integer", "description": "Re-fetch metadata from this Podcast Index id and overwrite it — corrects a wrong pick."},
+                    "igdb_id": {"type": "integer", "description": "Re-fetch metadata from this IGDB id and overwrite it — corrects a wrong pick."},
                 },
             },
         ),
@@ -869,7 +992,7 @@ async def list_tools() -> list[Tool]:
             inputSchema={
                 "type": "object",
                 "properties": {
-                    "resource_collection": {"type": "string", "enum": ["books", "articles", "movies", "series", "podcasts", "people"]},
+                    "resource_collection": {"type": "string", "enum": ["books", "articles", "movies", "games", "series", "podcasts", "people"]},
                     "locale": {"type": "string", "enum": ["en", "fr"], "default": "en"},
                 },
             },
@@ -881,7 +1004,7 @@ async def list_tools() -> list[Tool]:
                 "type": "object",
                 "required": ["resource_collection", "resource_id"],
                 "properties": {
-                    "resource_collection": {"type": "string", "enum": ["books", "articles", "movies", "series", "podcasts", "people"]},
+                    "resource_collection": {"type": "string", "enum": ["books", "articles", "movies", "games", "series", "podcasts", "people"]},
                     "resource_id": {"type": "string"},
                     "locale": {"type": "string", "enum": ["en", "fr"], "default": "en"},
                 },
@@ -889,12 +1012,22 @@ async def list_tools() -> list[Tool]:
         ),
         Tool(
             name="promote_fiche",
-            description="Promote a fiche to a full resource entry using its pre-fetched metadata. Downloads cover images and creates the resource file. The fiche body becomes the resource content.",
+            description=(
+                "Promote a fiche to a full resource entry using its pre-fetched metadata. "
+                "Downloads cover images and creates the resource file. The fiche body becomes "
+                "the resource content.\n"
+                "\n"
+                "Only ever on an explicit request, and note what it implies: the fiche's prose "
+                "becomes the card's prose. A card is the reader's own public verdict, in their "
+                "voice — so promoting a fiche Maurice wrote publishes Maurice's words as theirs. "
+                "When the fiche body is not the reader's own, say so and offer to create the "
+                "card's frontmatter with an empty body for them to write."
+            ),
             inputSchema={
                 "type": "object",
                 "required": ["resource_collection", "resource_id"],
                 "properties": {
-                    "resource_collection": {"type": "string", "enum": ["books", "articles", "movies", "series", "podcasts", "people"]},
+                    "resource_collection": {"type": "string", "enum": ["books", "articles", "movies", "games", "series", "podcasts", "people"]},
                     "resource_id": {"type": "string"},
                     "locale": {"type": "string", "enum": ["en", "fr"], "default": "en"},
                     "rating": {"type": "integer", "minimum": 1, "maximum": 5},
@@ -915,7 +1048,7 @@ async def list_tools() -> list[Tool]:
                     "parent_id": {"type": "string", "description": "Resource ID (for fiches) or note slug (for notes)."},
                     "content": {"type": "string", "description": "Markdown content for the fragment."},
                     "summary": {"type": "string", "description": "Short summary displayed as the collapsible header."},
-                    "collection": {"type": "string", "enum": ["books", "articles", "movies", "series", "podcasts", "people", "notes"], "default": "books"},
+                    "collection": {"type": "string", "enum": ["books", "articles", "movies", "games", "series", "podcasts", "people", "notes"], "default": "books"},
                     "locale": {"type": "string", "enum": ["en", "fr"], "default": "en"},
                 },
             },
@@ -928,7 +1061,7 @@ async def list_tools() -> list[Tool]:
                 "required": ["parent_id"],
                 "properties": {
                     "parent_id": {"type": "string"},
-                    "collection": {"type": "string", "enum": ["books", "articles", "movies", "series", "podcasts", "people", "notes"], "default": "books"},
+                    "collection": {"type": "string", "enum": ["books", "articles", "movies", "games", "series", "podcasts", "people", "notes"], "default": "books"},
                     "locale": {"type": "string", "enum": ["en", "fr"], "default": "en"},
                 },
             },
@@ -942,7 +1075,7 @@ async def list_tools() -> list[Tool]:
                 "properties": {
                     "parent_id": {"type": "string"},
                     "fragment_id": {"type": "string", "description": "Fragment number as zero-padded string (e.g. '001')."},
-                    "collection": {"type": "string", "enum": ["books", "articles", "movies", "series", "podcasts", "people", "notes"], "default": "books"},
+                    "collection": {"type": "string", "enum": ["books", "articles", "movies", "games", "series", "podcasts", "people", "notes"], "default": "books"},
                     "locale": {"type": "string", "enum": ["en", "fr"], "default": "en"},
                 },
             },
@@ -957,7 +1090,7 @@ async def list_tools() -> list[Tool]:
                     "parent_id": {"type": "string"},
                     "fragment_id": {"type": "string", "description": "Fragment number as zero-padded string (e.g. '001')."},
                     "content": {"type": "string", "description": "New markdown content."},
-                    "collection": {"type": "string", "enum": ["books", "articles", "movies", "series", "podcasts", "people", "notes"], "default": "books"},
+                    "collection": {"type": "string", "enum": ["books", "articles", "movies", "games", "series", "podcasts", "people", "notes"], "default": "books"},
                     "locale": {"type": "string", "enum": ["en", "fr"], "default": "en"},
                 },
             },
@@ -971,7 +1104,7 @@ async def list_tools() -> list[Tool]:
                 "properties": {
                     "parent_id": {"type": "string"},
                     "fragment_id": {"type": "string", "description": "Fragment number as zero-padded string (e.g. '001')."},
-                    "collection": {"type": "string", "enum": ["books", "articles", "movies", "series", "podcasts", "people", "notes"], "default": "books"},
+                    "collection": {"type": "string", "enum": ["books", "articles", "movies", "games", "series", "podcasts", "people", "notes"], "default": "books"},
                     "locale": {"type": "string", "enum": ["en", "fr"], "default": "en"},
                 },
             },
@@ -986,7 +1119,7 @@ async def list_tools() -> list[Tool]:
                     "parent_id": {"type": "string"},
                     "fragment_id": {"type": "string", "description": "Fragment number as zero-padded string (e.g. '001')."},
                     "summary": {"type": "string", "description": "New summary text."},
-                    "collection": {"type": "string", "enum": ["books", "articles", "movies", "series", "podcasts", "people", "notes"], "default": "books"},
+                    "collection": {"type": "string", "enum": ["books", "articles", "movies", "games", "series", "podcasts", "people", "notes"], "default": "books"},
                     "locale": {"type": "string", "enum": ["en", "fr"], "default": "en"},
                 },
             },
@@ -998,14 +1131,19 @@ async def list_tools() -> list[Tool]:
                 "Publish content to the website (web Astro site). "
                 "Writes a markdown file with proper frontmatter. Supports all content types: "
                 "blog, essay, book, article, movie, series, podcast, people. "
-                "Content body can come from 'content' param or from a dossier via 'dossierId'."
+                "Content body can come from 'content' param or from a dossier via 'dossierId'.\n"
+                "\n"
+                "For a resource card (book, movie, series, podcast, people), do not draft the "
+                "body: a card is the reader's own public verdict, in their voice. Write the "
+                "frontmatter and leave the body to them, and put anything you have to say in "
+                "the fiche instead."
             ),
             inputSchema={
                 "type": "object",
                 "properties": {
                     "collection": {
                         "type": "string",
-                        "enum": ["blog", "essays", "books", "articles", "movies", "series", "podcasts", "people"],
+                        "enum": ["blog", "essays", "books", "articles", "movies", "games", "series", "podcasts", "people"],
                         "description": "Content collection to publish to",
                     },
                     "content": {"type": "string", "description": "Markdown body"},
@@ -1034,6 +1172,9 @@ async def list_tools() -> list[Tool]:
                     "seasons_watched": {"type": "integer"},
                     "host": {"type": "string"},
                     "date_listened": {"type": "string", "description": "ISO date"},
+                    "developer": {"type": "string", "description": "Game studio"},
+                    "platforms": {"type": "array", "items": {"type": "string"}, "description": "Game platforms"},
+                    "date_played": {"type": "string", "description": "ISO date"},
                     "show": {"type": "string", "description": "Parent show slug (marks entry as episode)"},
                     "episode_title": {"type": "string"},
                     "episode_number": {"type": "integer"},
@@ -1066,6 +1207,7 @@ async def list_tools() -> list[Tool]:
                 "properties": {
                     "title": {"type": "string", "description": "Book title to search"},
                     "author": {"type": "string", "description": "Author name to narrow results"},
+                    "locale": {"type": "string", "enum": ["en", "fr"], "description": "Bias results toward this language's edition (Google Books otherwise mixes translations, sorted arbitrarily)."},
                     "limit": {"type": "integer", "default": 5, "description": "Max results to return"},
                 },
                 "required": ["title"],
@@ -1079,6 +1221,19 @@ async def list_tools() -> list[Tool]:
                 "properties": {
                     "title": {"type": "string", "description": "Series title to search"},
                     "year": {"type": "integer", "description": "First air date year to narrow results"},
+                    "limit": {"type": "integer", "default": 5, "description": "Max results to return"},
+                },
+                "required": ["title"],
+            },
+        ),
+        Tool(
+            name="search_game",
+            description="Search IGDB for video games. Returns candidates to review before creating an entry.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "title": {"type": "string", "description": "Game title to search"},
+                    "year": {"type": "integer", "description": "Release year to narrow results"},
                     "limit": {"type": "integer", "default": 5, "description": "Max results to return"},
                 },
                 "required": ["title"],
@@ -1146,10 +1301,33 @@ async def list_tools() -> list[Tool]:
                     "tmdb_id": {"type": "integer", "description": "TMDB movie ID (skip search if provided, from search_movie)"},
                     "year": {"type": "integer", "description": "Release year to disambiguate"},
                     "rating": {"type": "integer", "minimum": 1, "maximum": 5, "description": "User's rating"},
-                    "content": {"type": "string", "description": "Review body markdown"},
+                    "content": {"type": "string", "description": "Review body markdown. Leave EMPTY unless the reader supplied the words: a card is their public verdict, in their voice, and is not Maurice's to draft. Metadata is a fact; a verdict is theirs."},
                     "locale": {"type": "string", "enum": ["en", "fr"], "default": "fr"},
                     "flags": {"type": "array", "items": {"type": "string"}, "default": [], "description": "Flags array (e.g. ['public'])"},
                     "tags": {"type": "array", "items": {"type": "string"}, "default": []},
+                },
+                "required": ["title"],
+            },
+        ),
+        Tool(
+            name="create_game_entry",
+            description=(
+                "Create a video game entry by looking up metadata on IGDB. "
+                "Searches for the game, fetches details (developer, release year, summary, "
+                "platforms), downloads the cover art, and creates a full game entry."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "title": {"type": "string", "description": "Game title to search IGDB"},
+                    "igdb_id": {"type": "integer", "description": "IGDB game ID (skip search if provided, from search_game)"},
+                    "year": {"type": "integer", "description": "Release year to disambiguate"},
+                    "rating": {"type": "integer", "minimum": 1, "maximum": 5, "description": "User's rating"},
+                    "content": {"type": "string", "description": "Review body markdown. Leave EMPTY unless the reader supplied the words: a card is their public verdict, in their voice, and is not Maurice's to draft. Metadata is a fact; a verdict is theirs."},
+                    "locale": {"type": "string", "enum": ["en", "fr"], "default": "fr"},
+                    "flags": {"type": "array", "items": {"type": "string"}, "default": [], "description": "Flags array (e.g. ['public'])"},
+                    "tags": {"type": "array", "items": {"type": "string"}, "default": []},
+                    "platforms": {"type": "array", "items": {"type": "string"}, "description": "Platforms played on (defaults to what IGDB lists)"},
                 },
                 "required": ["title"],
             },
@@ -1167,7 +1345,7 @@ async def list_tools() -> list[Tool]:
                     "google_books_id": {"type": "string", "description": "Google Books volume ID (skip search if provided, from search_book)"},
                     "author": {"type": "string", "description": "Author name to disambiguate"},
                     "rating": {"type": "integer", "minimum": 1, "maximum": 5},
-                    "content": {"type": "string", "description": "Review body markdown"},
+                    "content": {"type": "string", "description": "Review body markdown. Leave EMPTY unless the reader supplied the words: a card is their public verdict, in their voice, and is not Maurice's to draft. Metadata is a fact; a verdict is theirs."},
                     "locale": {"type": "string", "enum": ["en", "fr"], "default": "fr"},
                     "flags": {"type": "array", "items": {"type": "string"}, "default": [], "description": "Flags array (e.g. ['public'])"},
                     "tags": {"type": "array", "items": {"type": "string"}, "default": []},
@@ -1190,7 +1368,7 @@ async def list_tools() -> list[Tool]:
                     "tmdb_id": {"type": "integer", "description": "TMDB TV series ID (skip search if provided, from search_series)"},
                     "year": {"type": "integer", "description": "First air date year to disambiguate"},
                     "rating": {"type": "integer", "minimum": 1, "maximum": 5},
-                    "content": {"type": "string", "description": "Review body markdown"},
+                    "content": {"type": "string", "description": "Review body markdown. Leave EMPTY unless the reader supplied the words: a card is their public verdict, in their voice, and is not Maurice's to draft. Metadata is a fact; a verdict is theirs."},
                     "locale": {"type": "string", "enum": ["en", "fr"], "default": "fr"},
                     "flags": {"type": "array", "items": {"type": "string"}, "default": [], "description": "Flags array (e.g. ['public'])"},
                     "tags": {"type": "array", "items": {"type": "string"}, "default": []},
@@ -1215,7 +1393,7 @@ async def list_tools() -> list[Tool]:
                 "properties": {
                     "title": {"type": "string", "description": "Podcast title to search"},
                     "podcastindex_id": {"type": "integer", "description": "Podcast Index feed ID (skip search if provided, from search_podcast)"},
-                    "content": {"type": "string", "description": "Review body markdown"},
+                    "content": {"type": "string", "description": "Review body markdown. Leave EMPTY unless the reader supplied the words: a card is their public verdict, in their voice, and is not Maurice's to draft. Metadata is a fact; a verdict is theirs."},
                     "locale": {"type": "string", "enum": ["en", "fr"], "default": "fr"},
                     "flags": {"type": "array", "items": {"type": "string"}, "default": [], "description": "Flags array (e.g. ['public'])"},
                     "tags": {"type": "array", "items": {"type": "string"}, "default": []},
@@ -1237,7 +1415,7 @@ async def list_tools() -> list[Tool]:
                 "type": "object",
                 "properties": {
                     "url": {"type": "string", "description": "Article URL to fetch OG metadata from"},
-                    "content": {"type": "string", "description": "Review body markdown"},
+                    "content": {"type": "string", "description": "Review body markdown. Leave EMPTY unless the reader supplied the words: a card is their public verdict, in their voice, and is not Maurice's to draft. Metadata is a fact; a verdict is theirs."},
                     "locale": {"type": "string", "enum": ["en", "fr"], "default": "fr"},
                     "flags": {"type": "array", "items": {"type": "string"}, "default": [], "description": "Flags array (e.g. ['public'])"},
                     "tags": {"type": "array", "items": {"type": "string"}, "default": []},
@@ -1277,7 +1455,7 @@ async def list_tools() -> list[Tool]:
                 "properties": {
                     "collection": {
                         "type": "string",
-                        "enum": ["books", "articles", "movies", "series", "podcasts", "people"],
+                        "enum": ["books", "articles", "movies", "games", "series", "podcasts", "people"],
                     },
                     "id": {"type": "string", "description": "Filename slug (no extension)"},
                     "locale": {"type": "string", "enum": ["en", "fr"], "default": "en"},
@@ -1296,7 +1474,7 @@ async def list_tools() -> list[Tool]:
                 "properties": {
                     "collection": {
                         "type": "string",
-                        "enum": ["books", "articles", "movies", "series", "podcasts", "people"],
+                        "enum": ["books", "articles", "movies", "games", "series", "podcasts", "people"],
                     },
                     "id": {"type": "string", "description": "Filename slug (no extension)"},
                     "locale": {"type": "string", "enum": ["en", "fr"], "default": "en"},
@@ -1319,6 +1497,9 @@ async def list_tools() -> list[Tool]:
                     "seasons_watched": {"type": "integer"},
                     "host": {"type": "string"},
                     "date_listened": {"type": "string"},
+                    "developer": {"type": "string"},
+                    "platforms": {"type": "array", "items": {"type": "string"}},
+                    "date_played": {"type": "string"},
                     "name": {"type": "string"},
                     "role": {"type": "string"},
                 },
@@ -1336,7 +1517,7 @@ async def list_tools() -> list[Tool]:
                 "properties": {
                     "collection": {
                         "type": "string",
-                        "enum": ["books", "articles", "movies", "series", "podcasts", "people"],
+                        "enum": ["books", "articles", "movies", "games", "series", "podcasts", "people"],
                     },
                     "locale": {"type": "string", "enum": ["en", "fr"], "default": "en"},
                     "flag": {"type": "string", "description": "Filter: only entries with this flag (e.g. 'public')."},
@@ -1407,6 +1588,40 @@ async def list_tools() -> list[Tool]:
             },
         ),
         Tool(
+            name="set_flags",
+            description=(
+                "Add or remove content flags on any piece of content — blog posts, essays, "
+                "notes, pages and every resource collection. This is how something becomes "
+                "publishable: `public` is what makes an item appear in a production build; "
+                "without it the item is a draft, visible only when browsing the garden "
+                "locally. Additive by design, so setting `public` cannot silently drop an "
+                "`encrypted` or `moc` flag already there. Deploying the site is a separate "
+                "step (deploy_site)."
+            ),
+            inputSchema={
+                "type": "object",
+                "required": ["collection", "id"],
+                "properties": {
+                    "collection": {
+                        "type": "string",
+                        "enum": list(_FLAGGABLE_COLLECTIONS),
+                    },
+                    "id": {"type": "string", "description": "Slug — the file stem, without .md"},
+                    "locale": {"type": "string", "enum": ["en", "fr"], "default": "en"},
+                    "add": {
+                        "type": "array",
+                        "items": {"type": "string", "enum": list(_CONTENT_FLAGS)},
+                        "description": "Flags to add, e.g. [\"public\"] to make it publishable.",
+                    },
+                    "remove": {
+                        "type": "array",
+                        "items": {"type": "string", "enum": list(_CONTENT_FLAGS)},
+                        "description": "Flags to remove, e.g. [\"public\"] to pull it back to draft.",
+                    },
+                },
+            },
+        ),
+        Tool(
             name="deploy_site",
             description=(
                 "Build and deploy the Astro site to Cloudflare Pages. Runs the "
@@ -1448,15 +1663,21 @@ Locales: `en`, `fr`. Default is `en` but most content is in French (`fr`).
 
 ## URL Patterns
 
-| Content type | URL |
-|---|---|
-| Note | `/{locale}/notes/{slug}` |
-| Resource | `/{locale}/resources/{collection}/{slug}` |
-| Fiche | `/{locale}/fiches/{collection}/{slug}-fiche` |
-| Essay | `/{locale}/essays/{slug}` |
-| Blog | `/{locale}/blog/{slug}` |
+| Content type | English | French |
+|---|---|---|
+| Note | `/notes/{slug}` | `/fr/notes/{slug}` |
+| Resource | `/resources/{collection}/{slug}` | `/fr/trouvailles/{segment}/{slug}` |
+| Fiche | `/fiches/{collection}/{slug}-fiche` | `/fr/fiches/{collection}/{slug}-fiche` |
+| Essay | `/essays/{slug}` | `/fr/essais/{slug}` |
+| Blog | `/blog/{slug}` | `/fr/blog/{slug}` |
 
-Note: `{locale}` is omitted for English (e.g. `/notes/foo` not `/en/notes/foo`).
+The English prefix is omitted entirely (`/notes/foo`, never `/en/notes/foo`).
+
+**French route segments are translated** — this is the easy mistake to make.
+`/fr/resources/...` and `/fr/essays/...` do not exist. The collection segment maps:
+books→livres, articles→articles, podcasts→podcasts, movies→films, games→jeux,
+series→series, people→personnes. Fiches are the exception: `/fiches` stays
+`/fiches` in both languages.
 
 ## Link Syntax
 
@@ -1474,7 +1695,7 @@ Use standard markdown links with full paths:
 
 Examples:
 - `[Marc Zimmermann](/fr/fiches/people/marc-zimmermann-fiche)`
-- `[What the Buddha Taught](/fr/resources/books/what-the-buddha-taught)`
+- `[What the Buddha Taught](/fr/trouvailles/livres/what-the-buddha-taught)`
 - `[Enquête personnelle](/fr/notes/enquete-personnelle)`
 
 ### Cross-references in notes
@@ -1503,6 +1724,52 @@ Notes also support typed cross-refs in link URLs:
 - `extra_frontmatter` (object) — arbitrary key/value pairs merged into frontmatter. Keys must not collide with known fields.
 
 In `update_note`, passing `null` for any of these removes the key from frontmatter. Omitting the parameter leaves it untouched.
+
+## Taking Notes on a Work — the Fiche Workflow
+
+A fiche is the back of a card. The card (the resource entry) is the eventual
+public verdict; the fiche is where notes accumulate while the reader is still
+watching, reading or listening. Most fiches never become cards, and that is fine.
+
+When the user asks for a fiche on a film, series, book, podcast or game — or says
+they want to take notes on one — the procedure is:
+
+1. **`open_fiche` first.** It finds an existing fiche or creates one, fetching
+   metadata and cover art. Checking is not a separate step; this IS the check.
+   Never call `search_*` before it: searching first risks creating a duplicate
+   fiche under a slightly different slug.
+2. **Confirm the match only when it is genuinely in doubt.** If `fiche_created`
+   is true and the title is ambiguous — a remake, a very common title, a film and
+   a series sharing a name — call the matching `search_*` tool and let the user
+   pick from the candidates. If the fiche already existed, there is nothing to
+   confirm: it is the one they meant.
+3. **Show the basics.** Title, identity facts, and whether a public card already
+   exists. The client renders this as a card, so do not repeat it in prose —
+   say what is worth saying and get out of the way.
+4. **Then take the notes.** Use `update_fiche`'s `append_body` — not `body`,
+   which replaces the note wholesale and would discard everything written in
+   an earlier session.
+
+**Never write the card's prose.** The front of a card is the reader's own
+public verdict, in their own voice — Maurice does not draft it, not even as a
+starting point, and not even when asked to "write the card". Offer to fill the
+fiche instead, or to set up the card's frontmatter (title, year, cover, rating)
+and leave the body empty for them. Metadata is a fact; a verdict is theirs.
+
+The fiche is the exception: Maurice writes there freely — summaries,
+reconstructions, analysis — because the fiche is working material, not a
+published position.
+
+**If the pick was wrong** — open_fiche's automatic match got the wrong edition,
+wrong language, or wrong person of the same name — do not reach for a
+resource-entry tool (get/update/create_resource_entry, create_*_entry): none
+of that exists yet for a fiche, and trying to make it exist is not how a
+fiche gets corrected. Run the matching `search_*` tool, and pass the right id
+(tmdb_id / google_books_id / podcastindex_id / igdb_id) to `update_fiche`,
+which re-fetches and overwrites the metadata in place.
+
+`promote_fiche` turns a fiche into a card, later, when a verdict exists. Never
+promote unasked.
 
 ## Fiches Conventions
 
@@ -1569,6 +1836,8 @@ async def call_tool(name: str, arguments: Any) -> list[TextContent]:
             result = {"guide": _USER_GUIDE}
         elif name == "create_fiche":
             result = await asyncio.to_thread(_handle_create_fiche, args)
+        elif name == "open_fiche":
+            result = await asyncio.to_thread(_handle_open_fiche, args)
         elif name == "get_fiche":
             result = _handle_get_fiche(args)
         elif name == "update_fiche":
@@ -1597,6 +1866,8 @@ async def call_tool(name: str, arguments: Any) -> list[TextContent]:
             result = _handle_publish_content(args)
         elif name == "search_movie":
             result = await _handle_search_movie(args)
+        elif name == "search_game":
+            result = await _handle_search_game(args)
         elif name == "search_book":
             result = await _handle_search_book(args)
         elif name == "search_series":
@@ -1611,6 +1882,8 @@ async def call_tool(name: str, arguments: Any) -> list[TextContent]:
             result = await _handle_search_podcast_episodes(args)
         elif name == "create_movie_entry":
             result = await _handle_create_movie_entry(args)
+        elif name == "create_game_entry":
+            result = await _handle_create_game_entry(args)
         elif name == "create_book_entry":
             result = await _handle_create_book_entry(args)
         elif name == "create_series_entry":
@@ -1632,6 +1905,8 @@ async def call_tool(name: str, arguments: Any) -> list[TextContent]:
             result = await asyncio.to_thread(_handle_generate_evocation, args)
         elif name == "generate_hero_image":
             result = await _handle_generate_hero_image(args)
+        elif name == "set_flags":
+            result = _handle_set_flags(args)
         elif name == "deploy_site":
             result = await asyncio.to_thread(_handle_deploy_site, args)
         else:
@@ -2578,7 +2853,7 @@ def _handle_list_backlog(args: dict[str, Any]) -> dict[str, Any]:
 # Fiche handlers
 # ---------------------------------------------------------------------------
 
-FICHE_COLLECTIONS = ["books", "articles", "movies", "series", "podcasts", "people"]
+FICHE_COLLECTIONS = ["books", "articles", "movies", "games", "series", "podcasts", "people"]
 
 
 def _handle_create_fiche(args: dict[str, Any]) -> dict[str, Any]:
@@ -2594,9 +2869,11 @@ def _handle_create_fiche(args: dict[str, Any]) -> dict[str, Any]:
     path.parent.mkdir(parents=True, exist_ok=True)
 
     title = args.get("title", rid)
-    meta: dict[str, Any] = {}
+    # open_fiche resolves metadata first (it needs the canonical title to pick
+    # the slug); passing it through avoids a second round-trip to the provider.
+    meta: dict[str, Any] = args.get("prefetched_meta") or {}
 
-    if not args.get("skip_metadata"):
+    if not meta and not args.get("skip_metadata"):
         try:
             meta = _fetch_fiche_metadata(col, title, args)
         except Exception as exc:
@@ -2622,12 +2899,254 @@ def _handle_create_fiche(args: dict[str, Any]) -> dict[str, Any]:
     return {"created": f"{col}/{locale}/{rid}", "path": _rel(path), "meta": meta}
 
 
+# ---------------------------------------------------------------------------
+# open_fiche — the fiche as a working surface
+# ---------------------------------------------------------------------------
+#
+# The reader's loop is: watch something, then take notes on it before any
+# verdict exists. The fiche is the back of a card whose front may never be
+# written. So this reports both sides — whether a card exists at all, whether
+# it is published, and how much has been written on each face — and it opens
+# the fiche whether or not one was there a moment ago.
+
+# French URL segments, mirroring web/src/i18n/config.ts routeMap. Kept here so
+# the card can link straight to a published front without the client guessing.
+_FR_ROUTE_SEGMENT = {
+    "books": "livres",
+    "articles": "articles",
+    "podcasts": "podcasts",
+    "movies": "films",
+    "games": "jeux",
+    "series": "series",
+    "people": "personnes",
+}
+
+
+def _garden_base() -> str:
+    """Where this member's garden is mounted behind the Maurice server."""
+    return f"/g/{_garden_member()}"
+
+
+def _card_url(collection: str, slug: str, locale: str) -> str:
+    """Browser path for the front of the card (the published resource entry)."""
+    if locale == "fr":
+        path = f"/fr/trouvailles/{_FR_ROUTE_SEGMENT.get(collection, collection)}/{slug}"
+    else:
+        path = f"/resources/{collection}/{slug}"
+    return _garden_base() + path
+
+
+def _fiche_url(collection: str, slug: str, locale: str) -> str:
+    """Browser path for the back — the fiche. Not locale-renamed, unlike
+    resources: /fiches stays /fiches in both languages."""
+    prefix = "/fr" if locale == "fr" else ""
+    return f"{_garden_base()}{prefix}/fiches/{collection}/{slug}-fiche"
+
+
+def _fiche_cover(collection: str, locale: str, slug: str, meta: dict[str, Any]) -> str:
+    """Download the cover once, where promote_fiche already expects to find it.
+
+    A fiche that never becomes a card costs one image; one that does is spared a
+    second download later.
+    """
+    # The file lands where promote_fiche expects it (the garden's images tree),
+    # but the URL handed to the client is the server's /api mirror: the garden's
+    # own /g/<member>/images/… path is session-gated, and AsyncImage sends no
+    # credentials, so a card would only ever show the grey placeholder.
+    dest_rel = f"/api/garden-images/{_garden_member()}/{collection}/{locale}-{slug}.jpg"
+    dest = member_root() / "images" / "resources" / collection / f"{locale}-{slug}.jpg"
+    if dest.exists():
+        return dest_rel
+
+    # TMDB hands back a path; everyone else a full URL.
+    poster_path = meta.get("poster_path")
+    if poster_path:
+        # _download_resource_poster returns the garden-relative path; the file is
+        # what matters here, the URL is the /api mirror above.
+        return dest_rel if _download_resource_poster(poster_path, collection, locale, slug) else ""
+
+    url = meta.get("cover_url") or meta.get("thumbnail") or meta.get("artwork") or meta.get("image")
+    if not url or not str(url).startswith("http"):
+        return ""
+    try:
+        _download_image(str(url), dest)
+        return dest_rel
+    except Exception as exc:
+        LOGGER.warning("Failed to download cover for %s/%s: %s", collection, slug, exc)
+        return ""
+
+
+def _recto_state(collection: str, slug: str, locale: str) -> tuple[str, int, str]:
+    """(state, characters written, url) for the front of the card.
+
+    absent — nothing written yet; draft — written but not flagged public;
+    published — live on the site.
+    """
+    path = member_root() / collection / locale / f"{slug}.md"
+    # The URL is returned even when nothing is written yet: the card offers the
+    # link so you can see where the front will live.
+    if not path.exists():
+        return "absent", 0, _card_url(collection, slug, locale)
+    # The URL is returned for a draft too: drafts are browsable in the garden's
+    # dev view, and being able to look is the point of the link.
+    url = _card_url(collection, slug, locale)
+    try:
+        fm, body = _parse_note(path)
+    except Exception:
+        return "draft", 0, url
+    flags = fm.get("flags") or []
+    state = "published" if "public" in flags else "draft"
+    return state, len(body.strip()), url
+
+
+def _handle_open_fiche(args: dict[str, Any]) -> dict[str, Any]:
+    col = args["resource_collection"]
+    if col not in _RESOURCE_COLLECTIONS:
+        return {"error": f"invalid resource_collection: {col!r}"}
+    # "en" to match get_fiche / update_fiche. Diverging meant a model that
+    # opened a fiche and then updated it without repeating the locale was told
+    # the fiche did not exist.
+    locale = args.get("locale", "en")
+    title = args.get("title", "") or args.get("resource_id", "")
+    if not title:
+        return {"error": "one of title or resource_id is required"}
+
+    slug = _slugify(args.get("resource_id") or title)
+    path = _resolve_fiche_path(col, slug, locale)
+
+    created = False
+    if path.exists():
+        fm, body = _parse_note(path)
+        meta = fm.get("meta") or {}
+        title = fm.get("title", title)
+    else:
+        # Nothing under the caller's wording. Fetch the metadata BEFORE writing
+        # anything, so the fiche is filed under the provider's canonical title —
+        # the same slug create_movie_entry & co. use for the card. Otherwise
+        # "Zelda BOTW" files a second fiche beside an existing
+        # the-legend-of-zelda-breath-of-the-wild card, which then reads as absent.
+        meta = {}
+        if not args.get("skip_metadata"):
+            picked = any(args.get(k) for k in ("tmdb_id", "google_books_id", "podcastindex_id", "igdb_id"))
+            try:
+                meta = _fetch_fiche_metadata(col, title, args)
+            except Exception as exc:
+                # An explicit pick that could not be fetched is an error, not a
+                # reason to guess: creating the fiche anyway would file it under
+                # whatever a title search returned first.
+                if picked:
+                    return {"error": str(exc)}
+                LOGGER.warning("Failed to fetch metadata for fiche %s/%s: %s", col, slug, exc)
+        canonical = meta.get("title") or meta.get("name") or ""
+        if canonical:
+            canonical_slug = _slugify(canonical)
+            if canonical_slug and canonical_slug != slug:
+                slug = canonical_slug
+                path = _resolve_fiche_path(col, slug, locale)
+
+        if path.exists():
+            # The canonical slug already had a fiche; open it rather than fail.
+            fm, body = _parse_note(path)
+            meta = fm.get("meta") or meta
+            title = fm.get("title", title)
+        else:
+            create_args = dict(args)
+            create_args.update({
+                "resource_collection": col, "resource_id": slug, "locale": locale,
+                "title": canonical or title, "prefetched_meta": meta,
+            })
+            result = _handle_create_fiche(create_args)
+            if "error" in result:
+                return result
+            created = True
+            fm, body = _parse_note(path)
+            meta = fm.get("meta") or {}
+            title = fm.get("title", title)
+
+    image = _fiche_cover(col, locale, slug, meta) if meta else ""
+    state, recto_chars, url = _recto_state(col, slug, locale)
+
+    return {
+        "card": "media",
+        "collection": col,
+        "resource_id": slug,
+        "locale": locale,
+        "title": title,
+        # Identity facts — the client's per-collection view picks what it shows.
+        "year": meta.get("year"),
+        "director": meta.get("director", ""),
+        "developer": meta.get("developer", ""),
+        "author": meta.get("author", ""),
+        "host": meta.get("host", ""),
+        "platform": meta.get("platform", ""),
+        "seasons": meta.get("number_of_seasons"),
+        "platforms": meta.get("platforms") or [],
+        "overview": (meta.get("overview") or meta.get("description") or "")[:280],
+        "image": image,
+        # The two faces, each openable in the browser.
+        "card_state": state,
+        "card_url": url,
+        "fiche_url": _fiche_url(col, slug, locale),
+        "recto_chars": recto_chars,
+        "verso_chars": len(body.strip()),
+        "fiche_created": created,
+    }
+
+
+def _fetch_by_provider_id(col: str, args: dict[str, Any]) -> dict[str, Any]:
+    """Metadata for the exact entry the reader picked, or {} if none was picked.
+
+    The candidate picker exists to settle ambiguity; re-searching by title
+    afterwards would throw that decision away and take results[0] — which for a
+    remake or a common title is the wrong work.
+    """
+    try:
+        if col in ("movies", "series") and args.get("tmdb_id"):
+            api_key = _api_key("TMDB_API_KEY", "tmdb_api_key")
+            if not api_key:
+                return {}
+            tmdb_id = int(args["tmdb_id"])
+            if col == "movies":
+                return _movie_meta_from_details(_tmdb_details(tmdb_id, api_key), tmdb_id)
+            return _series_meta_from_details(_tmdb_tv_details(tmdb_id, api_key), tmdb_id)
+
+        if col == "games" and args.get("igdb_id"):
+            client_id, client_secret = _igdb_credentials()
+            if not client_id or not client_secret:
+                return {}
+            game = _igdb_by_id(int(args["igdb_id"]), client_id, client_secret)
+            return _game_meta_from_details(game) if game else {}
+
+        if col == "books" and args.get("google_books_id"):
+            return _book_meta_from_volume(_google_books_volume(str(args["google_books_id"])))
+
+        if col == "podcasts" and args.get("podcastindex_id"):
+            api_key = _api_key("PODCASTINDEX_API_KEY", "podcastindex_api_key")
+            api_secret = _api_key("PODCASTINDEX_API_SECRET", "podcastindex_api_secret")
+            if not api_key or not api_secret:
+                return {}
+            feed = _podcastindex_by_id(int(args["podcastindex_id"]), api_key, api_secret)
+            return _podcast_meta_from_feed(feed) if feed else {}
+    except Exception as exc:
+        # Raise, don't fall through. Returning {} here is indistinguishable from
+        # "no id was passed", so a transient TMDB blip after the reader picked
+        # Dune (1984) quietly re-searched by title and filed Dune (2021) under
+        # their explicit choice — the one outcome the picker exists to prevent.
+        raise RuntimeError(f"could not fetch the picked {col} entry: {exc}") from exc
+    return {}
+
+
 def _fetch_fiche_metadata(col: str, title: str, args: dict[str, Any]) -> dict[str, Any]:
     """Fetch metadata from external APIs based on resource collection type."""
+    picked = _fetch_by_provider_id(col, args)
+    if picked:
+        return picked
     if col == "books":
-        return _fetch_book_metadata(title, args.get("author"))
+        return _fetch_book_metadata(title, args.get("author"), args.get("locale", "en"))
     elif col == "movies":
         return _fetch_movie_metadata(title, args.get("year"))
+    elif col == "games":
+        return _fetch_game_metadata(title, args.get("year"))
     elif col == "series":
         return _fetch_series_metadata(title, args.get("year"))
     elif col == "podcasts":
@@ -2643,42 +3162,13 @@ def _fetch_fiche_metadata(col: str, title: str, args: dict[str, Any]) -> dict[st
     return {}
 
 
-def _fetch_book_metadata(title: str, author: str | None) -> dict[str, Any]:
-    api_key = os.environ.get("GOOGLE_BOOKS_API_KEY")
-    results = _google_books_search(title, author, api_key)
-    if not results:
-        return {}
-    volume = results[0].get("volumeInfo", {})
-    book_author = volume.get("authors", [""])[0] if volume.get("authors") else ""
-    pub_date = volume.get("publishedDate", "")
-    year = int(pub_date[:4]) if pub_date and len(pub_date) >= 4 else None
-    thumbnail = volume.get("imageLinks", {}).get("thumbnail", "")
-    if thumbnail:
-        thumbnail = thumbnail.replace("zoom=1", "zoom=2").replace("http://", "https://")
-    meta: dict[str, Any] = {
-        "google_books_id": results[0].get("id", ""),
-        "title": volume.get("title", title),
-        "author": book_author,
-        "description": (volume.get("description", "") or "")[:500],
-        "thumbnail": thumbnail,
-    }
-    if year:
-        meta["year"] = year
-    return meta
+# ── Metadata builders ──────────────────────────────────────────────────────
+# Shared by the title-search path and the by-id path (the reader's pick), so the
+# two can never disagree about what a movie/series/book/game/podcast looks like.
 
 
-def _fetch_movie_metadata(title: str, year: int | None) -> dict[str, Any]:
-    api_key = os.environ.get("TMDB_API_KEY")
-    if not api_key:
-        LOGGER.warning("TMDB_API_KEY not set; skipping movie metadata")
-        return {}
-    results = _tmdb_search(title, year, api_key)
-    if not results:
-        return {}
-    movie_id = results[0]["id"]
-    details = _tmdb_details(movie_id, api_key)
+def _movie_meta_from_details(details: dict[str, Any], movie_id: int) -> dict[str, Any]:
     release_date = details.get("release_date", "")
-    movie_year = int(release_date[:4]) if release_date and len(release_date) >= 4 else None
     director = ""
     for crew_member in details.get("credits", {}).get("crew", []):
         if crew_member.get("job") == "Director":
@@ -2686,18 +3176,121 @@ def _fetch_movie_metadata(title: str, year: int | None) -> dict[str, Any]:
             break
     meta: dict[str, Any] = {
         "tmdb_id": movie_id,
-        "title": details.get("title", title),
+        "title": details.get("title", ""),
         "director": director,
         "overview": (details.get("overview", "") or "")[:500],
         "poster_path": details.get("poster_path", ""),
     }
-    if movie_year:
-        meta["year"] = movie_year
+    if release_date and len(release_date) >= 4:
+        meta["year"] = int(release_date[:4])
+    return meta
+
+
+def _series_meta_from_details(details: dict[str, Any], series_id: int) -> dict[str, Any]:
+    first_air = details.get("first_air_date", "")
+    networks = details.get("networks", [])
+    meta: dict[str, Any] = {
+        "tmdb_id": series_id,
+        "title": details.get("name", ""),
+        "overview": (details.get("overview", "") or "")[:500],
+        "poster_path": details.get("poster_path", ""),
+        "number_of_seasons": details.get("number_of_seasons"),
+    }
+    if first_air and len(first_air) >= 4:
+        meta["year"] = int(first_air[:4])
+    if networks and networks[0].get("name"):
+        meta["platform"] = networks[0]["name"]
+    return meta
+
+
+def _game_meta_from_details(game: dict[str, Any]) -> dict[str, Any]:
+    meta: dict[str, Any] = {
+        "igdb_id": game.get("id"),
+        "title": game.get("name", ""),
+        "developer": _igdb_developer(game),
+        "platforms": _igdb_platforms(game),
+        "overview": (game.get("summary", "") or "")[:500],
+        "cover_url": _igdb_cover_url(game),
+    }
+    year = _igdb_year(game)
+    if year:
+        meta["year"] = year
+    return meta
+
+
+def _book_meta_from_volume(item: dict[str, Any]) -> dict[str, Any]:
+    if not item:
+        return {}
+    volume = item.get("volumeInfo", {})
+    authors = volume.get("authors") or []
+    pub_date = volume.get("publishedDate", "")
+    thumbnail = volume.get("imageLinks", {}).get("thumbnail", "")
+    if thumbnail:
+        thumbnail = thumbnail.replace("zoom=1", "zoom=2").replace("http://", "https://")
+    meta: dict[str, Any] = {
+        "google_books_id": item.get("id", ""),
+        "title": volume.get("title", ""),
+        "author": authors[0] if authors else "",
+        "description": (volume.get("description", "") or "")[:500],
+        "thumbnail": thumbnail,
+    }
+    if pub_date and len(pub_date) >= 4:
+        meta["year"] = int(pub_date[:4])
+    return meta
+
+
+def _podcast_meta_from_feed(feed: dict[str, Any]) -> dict[str, Any]:
+    if not feed:
+        return {}
+    return {
+        "podcastindex_id": feed.get("id"),
+        "title": feed.get("title", ""),
+        "host": feed.get("author", ""),
+        "description": (feed.get("description", "") or "")[:500],
+        "artwork": feed.get("artwork", ""),
+        "url": feed.get("url", ""),
+    }
+
+
+def _fetch_book_metadata(title: str, author: str | None, locale: str = "en") -> dict[str, Any]:
+    api_key = _api_key("GOOGLE_BOOKS_API_KEY", "google_books_api_key")
+    results = _google_books_search(title, author, api_key, lang=locale)
+    if not results:
+        return {}
+    meta = _book_meta_from_volume(results[0])
+    meta["title"] = meta.get("title") or title
+    return meta
+
+
+def _fetch_movie_metadata(title: str, year: int | None) -> dict[str, Any]:
+    api_key = _api_key("TMDB_API_KEY", "tmdb_api_key")
+    if not api_key:
+        LOGGER.warning("TMDB_API_KEY not set; skipping movie metadata")
+        return {}
+    results = _tmdb_search(title, year, api_key)
+    if not results:
+        return {}
+    movie_id = results[0]["id"]
+    meta = _movie_meta_from_details(_tmdb_details(movie_id, api_key), movie_id)
+    meta["title"] = meta.get("title") or title
+    return meta
+
+
+def _fetch_game_metadata(title: str, year: int | None) -> dict[str, Any]:
+    client_id, client_secret = _igdb_credentials()
+    if not client_id or not client_secret:
+        LOGGER.warning("IGDB credentials not set; skipping game metadata")
+        return {}
+    results = _igdb_search(title, year, client_id, client_secret, 1)
+    if not results:
+        return {}
+    meta = _game_meta_from_details(results[0])
+    meta["title"] = meta.get("title") or title
     return meta
 
 
 def _fetch_series_metadata(title: str, year: int | None) -> dict[str, Any]:
-    api_key = os.environ.get("TMDB_API_KEY")
+    api_key = _api_key("TMDB_API_KEY", "tmdb_api_key")
     if not api_key:
         LOGGER.warning("TMDB_API_KEY not set; skipping series metadata")
         return {}
@@ -2705,45 +3298,23 @@ def _fetch_series_metadata(title: str, year: int | None) -> dict[str, Any]:
     if not results:
         return {}
     series_id = results[0]["id"]
-    details = _tmdb_tv_details(series_id, api_key)
-    first_air = details.get("first_air_date", "")
-    series_year = int(first_air[:4]) if first_air and len(first_air) >= 4 else None
-    platform = None
-    networks = details.get("networks", [])
-    if networks:
-        platform = networks[0].get("name")
-    meta: dict[str, Any] = {
-        "tmdb_id": series_id,
-        "title": details.get("name", title),
-        "overview": (details.get("overview", "") or "")[:500],
-        "poster_path": details.get("poster_path", ""),
-        "number_of_seasons": details.get("number_of_seasons"),
-    }
-    if series_year:
-        meta["year"] = series_year
-    if platform:
-        meta["platform"] = platform
+    meta = _series_meta_from_details(_tmdb_tv_details(series_id, api_key), series_id)
+    meta["title"] = meta.get("title") or title
     return meta
 
 
 def _fetch_podcast_metadata(title: str) -> dict[str, Any]:
-    api_key = os.environ.get("PODCASTINDEX_API_KEY")
-    api_secret = os.environ.get("PODCASTINDEX_API_SECRET")
+    api_key = _api_key("PODCASTINDEX_API_KEY", "podcastindex_api_key")
+    api_secret = _api_key("PODCASTINDEX_API_SECRET", "podcastindex_api_secret")
     if not api_key or not api_secret:
         LOGGER.warning("PODCASTINDEX credentials not set; skipping podcast metadata")
         return {}
     results = _podcastindex_search(title, api_key, api_secret)
     if not results:
         return {}
-    podcast = results[0]
-    return {
-        "podcastindex_id": podcast.get("id"),
-        "title": podcast.get("title", title),
-        "host": podcast.get("author", ""),
-        "description": (podcast.get("description", "") or "")[:500],
-        "artwork": podcast.get("artwork", ""),
-        "url": podcast.get("url", ""),
-    }
+    meta = _podcast_meta_from_feed(results[0])
+    meta["title"] = meta.get("title") or title
+    return meta
 
 
 def _fetch_article_metadata(url: str) -> dict[str, Any]:
@@ -2820,6 +3391,28 @@ def _handle_update_fiche(args: dict[str, Any]) -> dict[str, Any]:
         if not body.startswith("\n"):
             body = f"\n{body}\n"
         updated_fields.append("body")
+    elif args.get("append_body"):
+        addition = args["append_body"].strip()
+        separator = "\n\n" if body.strip() else "\n"
+        body = f"{body.rstrip()}{separator}{addition}\n"
+        updated_fields.append("body")
+
+    provider_id_args = {
+        k: args[k] for k in ("tmdb_id", "google_books_id", "podcastindex_id", "igdb_id") if k in args
+    }
+    if provider_id_args:
+        # Reuses the exact lookup open_fiche's initial pick goes through, so a
+        # correction and a fresh creation can't disagree about what a given
+        # provider id resolves to.
+        refreshed = _fetch_by_provider_id(col, provider_id_args)
+        if not refreshed:
+            return {"error": f"could not fetch metadata for the given id in {col}"}
+        fm["meta"] = refreshed
+        if refreshed.get("title") and "title" not in args:
+            fm["title"] = refreshed["title"]
+            if "title" not in updated_fields:
+                updated_fields.append("title")
+        updated_fields.append("meta")
 
     _write_note(path, fm, body)
     _auto_commit([path], f"Update fiche: {col}/{rid}")
@@ -3037,6 +3630,19 @@ def _handle_promote_fiche(args: dict[str, Any]) -> dict[str, Any]:
             if image_rel:
                 publish_args["image"] = image_rel
 
+    elif col == "games":
+        publish_args["title"] = meta.get("title", fm.get("title", rid))
+        publish_args["developer"] = meta.get("developer", "")
+        if meta.get("year"):
+            publish_args["year"] = meta["year"]
+        if meta.get("platforms"):
+            publish_args["platforms"] = meta["platforms"]
+        publish_args["content"] = fiche_body or meta.get("overview", "")
+        if meta.get("cover_url"):
+            image_rel = _download_resource_image(meta["cover_url"], "games", locale, slug)
+            if image_rel:
+                publish_args["image"] = image_rel
+
     elif col == "series":
         publish_args["title"] = meta.get("title", fm.get("title", rid))
         if meta.get("year"):
@@ -3126,6 +3732,8 @@ def _promote_fiche_without_meta(
         result = _create_book_entry_sync(base_args)
     elif col == "movies":
         result = _create_movie_entry_sync(base_args)
+    elif col == "games":
+        result = _create_game_entry_sync(base_args)
     elif col == "series":
         result = _create_series_entry_sync(base_args)
     elif col == "podcasts":
@@ -3176,7 +3784,7 @@ def _download_resource_poster(poster_path: str, collection: str, locale: str, sl
 # Resource publishing helpers
 # ---------------------------------------------------------------------------
 
-_RESOURCE_COLLECTIONS = {"books", "articles", "movies", "series", "podcasts", "people"}
+_RESOURCE_COLLECTIONS = {"books", "articles", "movies", "games", "series", "podcasts", "people"}
 
 # Images dir is inside content repo, stage it with auto-commit
 # (image dir is per-member: member_root() / "images")
@@ -3335,6 +3943,27 @@ def _fm_movies(args: dict[str, Any], today: str) -> tuple[list[str], list[str]]:
     return lines, []
 
 
+def _fm_games(args: dict[str, Any], today: str) -> tuple[list[str], list[str]]:
+    if not args.get("title"):
+        return [], ["title"]
+    lines = [
+        f"title: {_yaml_str(args['title'])}",
+        f"date_played: {args.get('date_played', today)}",
+        f"flags: [{', '.join(_yaml_str(f) for f in args.get('flags', []))}]",
+    ]
+    if args.get("developer"):
+        lines.append(f"developer: {_yaml_str(args['developer'])}")
+    if args.get("year"):
+        lines.append(f"year: {args['year']}")
+    if args.get("platforms"):
+        lines.append(f"platforms: [{', '.join(_yaml_str(p) for p in args['platforms'])}]")
+    if args.get("rating"):
+        lines.append(f"rating: {args['rating']}")
+    if args.get("image"):
+        lines.append(f"image: {_yaml_str(args['image'])}")
+    return lines, []
+
+
 def _fm_series(args: dict[str, Any], today: str) -> tuple[list[str], list[str]]:
     if not args.get("title"):
         return [], ["title"]
@@ -3414,6 +4043,7 @@ _FM_BUILDERS: dict[str, Any] = {
     "books": _fm_books,
     "articles": _fm_articles,
     "movies": _fm_movies,
+    "games": _fm_games,
     "series": _fm_series,
     "podcasts": _fm_podcasts,
     "people": _fm_people,
@@ -3422,6 +4052,43 @@ _FM_BUILDERS: dict[str, Any] = {
 _SLUG_FIELD: dict[str, str] = {
     "people": "name",
 }
+
+
+def _handle_set_flags(args: dict[str, Any]) -> dict[str, Any]:
+    collection = args["collection"]
+    slug = args["id"]
+    locale = args.get("locale", "en")
+    add = args.get("add") or []
+    remove = args.get("remove") or []
+    if not add and not remove:
+        return {"error": "nothing to do: pass add and/or remove"}
+
+    unknown = [f for f in [*add, *remove] if f not in _CONTENT_FLAGS]
+    if unknown:
+        # A flag outside the schema's enum fails the whole collection at build
+        # time, not just this file — worth refusing rather than writing.
+        return {"error": f"unknown flag(s): {', '.join(unknown)}. Allowed: {', '.join(_CONTENT_FLAGS)}"}
+
+    path = _resolve_content_path(collection, slug, locale)
+    if not path.exists():
+        return {"error": f"not found: {_rel(path)}"}
+
+    fm, body = _parse_note(path)
+    before = list(fm.get("flags") or [])
+    after = [f for f in before if f not in remove]
+    for flag in add:
+        if flag not in after:
+            after.append(flag)
+    if after == before:
+        return {"collection": collection, "id": slug, "locale": locale,
+                "flags": after, "public": "public" in after, "changed": False}
+
+    fm["flags"] = after
+    _write_note(path, fm, body)
+    _auto_commit([path], f"Set flags: {collection}/{locale}/{slug} -> [{', '.join(after)}]")
+    return {"collection": collection, "id": slug, "locale": locale,
+            "flags": after, "public": "public" in after, "changed": True,
+            "path": _rel(path)}
 
 
 def _handle_deploy_site(args: dict[str, Any]) -> dict[str, Any]:
@@ -3474,7 +4141,7 @@ def _handle_publish_content(args: dict[str, Any]) -> dict[str, Any]:
         return {"error": f"Missing required fields for {collection}: {', '.join(missing)}"}
 
     # Auto-set translationKey for resource collections
-    if not args.get("translationKey") and not args.get("show") and collection in ("books", "articles", "movies", "series", "podcasts", "people"):
+    if not args.get("translationKey") and not args.get("show") and collection in ("books", "articles", "movies", "games", "series", "podcasts", "people"):
         args["translationKey"] = slug
 
     tags = args.get("tags", [])
@@ -3562,12 +4229,18 @@ def _handle_update_resource(args: dict[str, Any]) -> dict[str, Any]:
         "source", "url",
         "platform", "seasons_watched",
         "host", "date_listened",
+        "developer", "date_played",
         "name", "role",
     )
     for key in scalar_keys:
         if key in args:
             fm[key] = args[key]
             updated_fields.append(key)
+    # A game's platforms are a list; keeping them out of scalar_keys avoids
+    # writing a bare string into a field the schema types as an array.
+    if "platforms" in args:
+        fm["platforms"] = list(args["platforms"] or [])
+        updated_fields.append("platforms")
 
     if "image" in args:
         if args["image"]:
@@ -3629,9 +4302,9 @@ async def _handle_search_movie(args: dict[str, Any]) -> dict[str, Any]:
 
 
 def _search_movie_sync(args: dict[str, Any]) -> dict[str, Any]:
-    api_key = os.environ.get("TMDB_API_KEY")
+    api_key = _api_key("TMDB_API_KEY", "tmdb_api_key")
     if not api_key:
-        return {"error": "TMDB_API_KEY environment variable is not set"}
+        return {"error": 'No TMDB API key configured — add one under "Other API keys" in the admin dashboard.'}
 
     results = _tmdb_search(args["title"], args.get("year"), api_key)
     limit = args.get("limit", 5)
@@ -3645,7 +4318,32 @@ def _search_movie_sync(args: dict[str, Any]) -> dict[str, Any]:
             "overview": (r.get("overview", "") or "")[:200],
             "poster_path": r.get("poster_path"),
         })
-    return {"query": args["title"], "results": candidates, "count": len(candidates)}
+    return _candidates_card("movies", args["title"], candidates)
+
+
+async def _handle_search_game(args: dict[str, Any]) -> dict[str, Any]:
+    return await asyncio.to_thread(_search_game_sync, args)
+
+
+def _search_game_sync(args: dict[str, Any]) -> dict[str, Any]:
+    client_id, client_secret = _igdb_credentials()
+    if not client_id or not client_secret:
+        return {"error": IGDB_NO_KEY_ERROR}
+
+    limit = args.get("limit", 5)
+    results = _igdb_search(args["title"], args.get("year"), client_id, client_secret, limit)
+    candidates = []
+    for game in results[:limit]:
+        candidates.append({
+            "igdb_id": game.get("id"),
+            "title": game.get("name", ""),
+            "year": _igdb_year(game),
+            "developer": _igdb_developer(game),
+            "platforms": _igdb_platforms(game),
+            "summary": (game.get("summary", "") or "")[:200],
+            "cover_url": _igdb_cover_url(game),
+        })
+    return _candidates_card("games", args["title"], candidates)
 
 
 async def _handle_search_book(args: dict[str, Any]) -> dict[str, Any]:
@@ -3653,8 +4351,8 @@ async def _handle_search_book(args: dict[str, Any]) -> dict[str, Any]:
 
 
 def _search_book_sync(args: dict[str, Any]) -> dict[str, Any]:
-    api_key = os.environ.get("GOOGLE_BOOKS_API_KEY")
-    results = _google_books_search(args["title"], args.get("author"), api_key)
+    api_key = _api_key("GOOGLE_BOOKS_API_KEY", "google_books_api_key")
+    results = _google_books_search(args["title"], args.get("author"), api_key, lang=args.get("locale"))
     limit = args.get("limit", 5)
     candidates = []
     for r in results[:limit]:
@@ -3668,7 +4366,7 @@ def _search_book_sync(args: dict[str, Any]) -> dict[str, Any]:
             "description": (vol.get("description", "") or "")[:200],
             "thumbnail": vol.get("imageLinks", {}).get("thumbnail"),
         })
-    return {"query": args["title"], "results": candidates, "count": len(candidates)}
+    return _candidates_card("books", args["title"], candidates)
 
 
 async def _handle_search_series(args: dict[str, Any]) -> dict[str, Any]:
@@ -3676,9 +4374,9 @@ async def _handle_search_series(args: dict[str, Any]) -> dict[str, Any]:
 
 
 def _search_series_sync(args: dict[str, Any]) -> dict[str, Any]:
-    api_key = os.environ.get("TMDB_API_KEY")
+    api_key = _api_key("TMDB_API_KEY", "tmdb_api_key")
     if not api_key:
-        return {"error": "TMDB_API_KEY environment variable is not set"}
+        return {"error": 'No TMDB API key configured — add one under "Other API keys" in the admin dashboard.'}
 
     results = _tmdb_tv_search(args["title"], args.get("year"), api_key)
     limit = args.get("limit", 5)
@@ -3692,7 +4390,7 @@ def _search_series_sync(args: dict[str, Any]) -> dict[str, Any]:
             "overview": (r.get("overview", "") or "")[:200],
             "poster_path": r.get("poster_path"),
         })
-    return {"query": args["title"], "results": candidates, "count": len(candidates)}
+    return _candidates_card("series", args["title"], candidates)
 
 
 async def _handle_search_podcast(args: dict[str, Any]) -> dict[str, Any]:
@@ -3700,10 +4398,10 @@ async def _handle_search_podcast(args: dict[str, Any]) -> dict[str, Any]:
 
 
 def _search_podcast_sync(args: dict[str, Any]) -> dict[str, Any]:
-    api_key = os.environ.get("PODCASTINDEX_API_KEY")
-    api_secret = os.environ.get("PODCASTINDEX_API_SECRET")
+    api_key = _api_key("PODCASTINDEX_API_KEY", "podcastindex_api_key")
+    api_secret = _api_key("PODCASTINDEX_API_SECRET", "podcastindex_api_secret")
     if not api_key or not api_secret:
-        return {"error": "PODCASTINDEX_API_KEY and PODCASTINDEX_API_SECRET environment variables are required"}
+        return {"error": 'No Podcast Index key configured — add the key and secret under "Other API keys" in the admin dashboard.'}
 
     results = _podcastindex_search(args["title"], api_key, api_secret)
     limit = args.get("limit", 5)
@@ -3717,7 +4415,7 @@ def _search_podcast_sync(args: dict[str, Any]) -> dict[str, Any]:
             "artwork": r.get("artwork"),
             "url": r.get("url", ""),
         })
-    return {"query": args["title"], "results": candidates, "count": len(candidates)}
+    return _candidates_card("podcasts", args["title"], candidates)
 
 
 async def _handle_search_person(args: dict[str, Any]) -> dict[str, Any]:
@@ -3734,7 +4432,7 @@ def _search_person_sync(args: dict[str, Any]) -> dict[str, Any]:
             "name": r.get("label", ""),
             "description": r.get("description", ""),
         })
-    return {"query": args["name"], "results": candidates, "count": len(candidates)}
+    return _candidates_card("people", args["name"], candidates)
 
 
 # ---------------------------------------------------------------------------
@@ -3808,7 +4506,22 @@ def _tmdb_tv_details(series_id: int, api_key: str) -> dict[str, Any]:
 # Google Books helpers
 # ---------------------------------------------------------------------------
 
-def _google_books_search(title: str, author: str | None, api_key: str | None) -> list[dict[str, Any]]:
+def _google_books_volume(volume_id: str) -> dict[str, Any]:
+    import urllib.parse
+    import urllib.request
+
+    api_key = _api_key("GOOGLE_BOOKS_API_KEY", "google_books_api_key")
+    url = f"https://www.googleapis.com/books/v1/volumes/{urllib.parse.quote(volume_id)}"
+    if api_key:
+        url += f"?key={urllib.parse.quote(api_key)}"
+    req = urllib.request.Request(url)
+    with urllib.request.urlopen(req) as resp:
+        return json.loads(resp.read())
+
+
+def _google_books_search(
+    title: str, author: str | None, api_key: str | None, lang: str | None = None
+) -> list[dict[str, Any]]:
     import urllib.request
     import urllib.parse
 
@@ -3816,18 +4529,53 @@ def _google_books_search(title: str, author: str | None, api_key: str | None) ->
     if author:
         q += f"+inauthor:{author}"
     params: dict[str, str] = {"q": q}
+    if lang:
+        params["langRestrict"] = lang
     if api_key:
         params["key"] = api_key
     url = f"https://www.googleapis.com/books/v1/volumes?{urllib.parse.urlencode(params)}"
     req = urllib.request.Request(url)
     with urllib.request.urlopen(req) as resp:
         data = json.loads(resp.read())
-    return data.get("items", [])
+    items = data.get("items", [])
+    # Two independent problems, one fix: langRestrict narrows the search but
+    # does not reliably exclude other languages ("Humus" by Gaspard Koenig, a
+    # French book, returned the German translation first even with
+    # langRestrict=fr) — and `intitle:` narrows relevance without enforcing an
+    # actual title match, so an unrelated book by the same author can still
+    # outrank the real one (a French "Agrophilosophie" outranked the French
+    # "Humus"). A stable sort preferring language match, then title match, is
+    # the belt to both: whichever pick a caller takes unreviewed (results[0],
+    # in _fetch_book_metadata) is the household's language AND the right book,
+    # not just whichever edition the API's relevance ranking favoured.
+    wanted_title = title.strip().casefold()
+    items = sorted(
+        items,
+        key=lambda it: (
+            (it.get("volumeInfo", {}).get("language") != lang) if lang else False,
+            it.get("volumeInfo", {}).get("title", "").strip().casefold() != wanted_title,
+        ),
+    )
+    return items
 
 
 # ---------------------------------------------------------------------------
 # Podcast Index helpers
 # ---------------------------------------------------------------------------
+
+def _podcastindex_by_id(feed_id: int, api_key: str, api_secret: str) -> dict[str, Any]:
+    import urllib.parse
+    import urllib.request
+
+    headers = _podcastindex_auth_headers(api_key, api_secret)
+    url = f"https://api.podcastindex.org/api/1.0/podcasts/byfeedid?{urllib.parse.urlencode({'id': feed_id})}"
+    req = urllib.request.Request(url, headers=headers)
+    with urllib.request.urlopen(req) as resp:
+        data = json.loads(resp.read())
+    feed = data.get("feed")
+    # byfeedid returns [] rather than null when nothing matches.
+    return feed if isinstance(feed, dict) else {}
+
 
 def _podcastindex_auth_headers(api_key: str, api_secret: str) -> dict[str, str]:
     import hashlib
@@ -3854,6 +4602,201 @@ def _podcastindex_search(title: str, api_key: str, api_secret: str) -> list[dict
     with urllib.request.urlopen(req) as resp:
         data = json.loads(resp.read())
     return data.get("feeds", [])
+
+
+# ---------------------------------------------------------------------------
+# Candidate normalisation (the disambiguation step)
+# ---------------------------------------------------------------------------
+#
+# Each provider names its fields differently — tmdb_id/poster_path,
+# google_books_id/thumbnail, podcastindex_id/artwork. The client renders ONE
+# candidate picker, so the shape is levelled here rather than four near-identical
+# views in the app. Provider keys are kept alongside: the follow-up call needs
+# them to pin the exact entry the reader picked.
+
+
+def _tmdb_thumb(poster_path: str | None) -> str:
+    return f"https://image.tmdb.org/t/p/w185{poster_path}" if poster_path else ""
+
+
+def _normalise_candidates(collection: str, candidates: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    for c in candidates:
+        if collection in ("movies", "series"):
+            c["id"] = c.get("tmdb_id")
+            c["subtitle"] = ""
+            c["image"] = _tmdb_thumb(c.get("poster_path"))
+            c["summary"] = c.get("overview", "")
+        elif collection == "books":
+            c["id"] = c.get("google_books_id")
+            c["subtitle"] = ", ".join(c.get("authors") or [])
+            c["image"] = c.get("thumbnail") or ""
+            c["summary"] = c.get("description", "")
+        elif collection == "podcasts":
+            c["id"] = c.get("podcastindex_id")
+            c["subtitle"] = c.get("host", "")
+            c["image"] = c.get("artwork") or ""
+            c["summary"] = c.get("description", "")
+        elif collection == "games":
+            c["id"] = c.get("igdb_id")
+            c["subtitle"] = c.get("developer", "")
+            c["image"] = c.get("cover_url") or ""
+            c["summary"] = c.get("summary", "")
+        elif collection == "people":
+            c["id"] = c.get("wikidata_id")
+            # Wikidata calls it `name`; every other provider calls it `title`.
+            c["title"] = c.get("name", "")
+            c["subtitle"] = c.get("description", "")
+            c["image"] = c.get("image") or ""
+            c["summary"] = c.get("description", "")
+        c.setdefault("year", None)
+    return candidates
+
+
+def _candidates_card(collection: str, query: str, candidates: list[dict[str, Any]]) -> dict[str, Any]:
+    """The envelope the client keys its candidate picker off."""
+    return {
+        "card": "candidates",
+        "collection": collection,
+        "query": query,
+        "results": _normalise_candidates(collection, candidates),
+        "count": len(candidates),
+    }
+
+
+# ---------------------------------------------------------------------------
+# IGDB helpers (games)
+# ---------------------------------------------------------------------------
+#
+# IGDB is the odd one out: it has no plain API key. A Twitch application's
+# client id/secret buy a short-lived app token, which is what actually
+# authorises the calls, so every request goes through _igdb_query below.
+
+_IGDB_FIELDS = (
+    "name,first_release_date,summary,url,cover.image_id,genres.name,"
+    "platforms.abbreviation,platforms.name,"
+    "involved_companies.developer,involved_companies.company.name"
+)
+
+# client_id -> {"token": str, "expires_at": monotonic deadline}
+_igdb_token_cache: dict[str, dict[str, Any]] = {}
+
+
+def _igdb_credentials() -> tuple[str, str]:
+    return (
+        _api_key("IGDB_CLIENT_ID", "igdb_client_id"),
+        _api_key("IGDB_CLIENT_SECRET", "igdb_client_secret"),
+    )
+
+
+IGDB_NO_KEY_ERROR = (
+    'No IGDB credentials configured — add the client id and secret under '
+    '"Other API keys" in the admin dashboard.'
+)
+
+
+def _igdb_token(client_id: str, client_secret: str) -> str:
+    """A Twitch app token for IGDB, cached until shortly before it expires."""
+    import urllib.parse
+    import urllib.request
+
+    # Keyed on both halves: rotating the Twitch secret while the id stays put
+    # would otherwise keep serving the stale token for up to an hour.
+    cache_key = f"{client_id}:{hash(client_secret)}"
+    cached = _igdb_token_cache.get(cache_key)
+    if cached and cached["expires_at"] > time.monotonic():
+        return str(cached["token"])
+
+    body = urllib.parse.urlencode({
+        "client_id": client_id,
+        "client_secret": client_secret,
+        "grant_type": "client_credentials",
+    }).encode()
+    req = urllib.request.Request("https://id.twitch.tv/oauth2/token", data=body, method="POST")
+    with urllib.request.urlopen(req) as resp:
+        data = json.loads(resp.read())
+    token = str(data.get("access_token", ""))
+    if not token:
+        # Caching "" here would 401 every call for the full TTL, and fixing the
+        # credentials in the dashboard would appear to do nothing.
+        raise RuntimeError("Twitch returned no access_token for the IGDB credentials")
+    # Renew a minute early rather than racing the expiry on a slow call.
+    ttl = max(60, int(data.get("expires_in", 3600)) - 60)
+    _igdb_token_cache[cache_key] = {"token": token, "expires_at": time.monotonic() + ttl}
+    return token
+
+
+def _igdb_query(client_id: str, client_secret: str, body: str) -> list[dict[str, Any]]:
+    import urllib.request
+
+    token = _igdb_token(client_id, client_secret)
+    req = urllib.request.Request(
+        "https://api.igdb.com/v4/games",
+        data=body.encode(),
+        headers={
+            "Client-ID": client_id,
+            "Authorization": f"Bearer {token}",
+            "Accept": "application/json",
+        },
+        method="POST",
+    )
+    with urllib.request.urlopen(req) as resp:
+        data = json.loads(resp.read())
+    return data if isinstance(data, list) else []
+
+
+def _igdb_search(
+    name: str, year: int | None, client_id: str, client_secret: str, limit: int = 5
+) -> list[dict[str, Any]]:
+    import calendar
+
+    # APICalypse offers no escaping inside a quoted search term, so a title
+    # containing a quote would end the string early — drop them.
+    term = name.replace('"', " ").strip()
+    query = f'search "{term}"; fields {_IGDB_FIELDS}; limit {max(1, int(limit))};'
+    if year:
+        start = calendar.timegm((int(year), 1, 1, 0, 0, 0))
+        end = calendar.timegm((int(year) + 1, 1, 1, 0, 0, 0))
+        query += f" where first_release_date >= {start} & first_release_date < {end};"
+    return _igdb_query(client_id, client_secret, query)
+
+
+def _igdb_by_id(game_id: int, client_id: str, client_secret: str) -> dict[str, Any]:
+    rows = _igdb_query(
+        client_id, client_secret, f"fields {_IGDB_FIELDS}; where id = {int(game_id)}; limit 1;"
+    )
+    return rows[0] if rows else {}
+
+
+def _igdb_year(game: dict[str, Any]) -> int | None:
+    ts = game.get("first_release_date")
+    if not ts:
+        return None
+    try:
+        return time.gmtime(int(ts)).tm_year
+    except (ValueError, OverflowError, OSError):
+        return None
+
+
+def _igdb_developer(game: dict[str, Any]) -> str:
+    """The first company credited as developer (IGDB also lists publishers)."""
+    for involved in game.get("involved_companies") or []:
+        if involved.get("developer"):
+            return str((involved.get("company") or {}).get("name", ""))
+    return ""
+
+
+def _igdb_platforms(game: dict[str, Any]) -> list[str]:
+    out: list[str] = []
+    for platform in game.get("platforms") or []:
+        label = platform.get("abbreviation") or platform.get("name")
+        if label and label not in out:
+            out.append(str(label))
+    return out
+
+
+def _igdb_cover_url(game: dict[str, Any]) -> str:
+    image_id = (game.get("cover") or {}).get("image_id")
+    return f"https://images.igdb.com/igdb/image/upload/t_cover_big/{image_id}.jpg" if image_id else ""
 
 
 # ---------------------------------------------------------------------------
@@ -3940,9 +4883,9 @@ async def _handle_create_movie_entry(args: dict[str, Any]) -> dict[str, Any]:
 
 
 def _create_movie_entry_sync(args: dict[str, Any]) -> dict[str, Any]:
-    api_key = os.environ.get("TMDB_API_KEY")
+    api_key = _api_key("TMDB_API_KEY", "tmdb_api_key")
     if not api_key:
-        return {"error": "TMDB_API_KEY environment variable is not set"}
+        return {"error": 'No TMDB API key configured — add one under "Other API keys" in the admin dashboard.'}
 
     title = args["title"]
     year = args.get("year")
@@ -4013,6 +4956,87 @@ def _create_movie_entry_sync(args: dict[str, Any]) -> dict[str, Any]:
 
 
 # ---------------------------------------------------------------------------
+# Game entry creation handler
+# ---------------------------------------------------------------------------
+
+async def _handle_create_game_entry(args: dict[str, Any]) -> dict[str, Any]:
+    return await asyncio.to_thread(_create_game_entry_sync, args)
+
+
+def _create_game_entry_sync(args: dict[str, Any]) -> dict[str, Any]:
+    client_id, client_secret = _igdb_credentials()
+    if not client_id or not client_secret:
+        return {"error": IGDB_NO_KEY_ERROR}
+
+    title = args["title"]
+    year = args.get("year")
+
+    game_id = args.get("igdb_id")
+    if game_id:
+        game = _igdb_by_id(game_id, client_id, client_secret)
+        if not game:
+            return {"error": f"No IGDB game with id {game_id}"}
+    else:
+        results = _igdb_search(title, year, client_id, client_secret, 1)
+        if not results:
+            return {"error": f"No IGDB results found for '{title}'" + (f" ({year})" if year else "")}
+        game = results[0]
+        game_id = game.get("id")
+
+    game_title = game.get("name", title)
+    game_year = _igdb_year(game) or year
+    summary = game.get("summary", "") or ""
+    developer = _igdb_developer(game)
+    platforms = args.get("platforms") or _igdb_platforms(game)
+    cover_url = _igdb_cover_url(game)
+
+    locale = args.get("locale", "fr")
+    slug = _slugify(game_title)
+
+    image_rel = ""
+    if cover_url:
+        cover_filename = f"{locale}-{slug}.jpg"
+        cover_dest = member_root() / "images" / "resources" / "games" / cover_filename
+        try:
+            _download_image(cover_url, cover_dest)
+            image_rel = f"/images/{_garden_member()}/resources/games/{cover_filename}"
+        except Exception as exc:
+            LOGGER.warning("Failed to download cover for %s: %s", game_title, exc)
+
+    publish_args: dict[str, Any] = {
+        "collection": "games",
+        "title": game_title,
+        "developer": developer,
+        "year": game_year,
+        "platforms": platforms,
+        "locale": locale,
+        "slug": slug,
+        "flags": args.get("flags", []),
+        "content": args.get("content") or summary,
+        "translationKey": slug,
+    }
+    if image_rel:
+        publish_args["image"] = image_rel
+    if args.get("rating"):
+        publish_args["rating"] = args["rating"]
+    if args.get("tags"):
+        publish_args["tags"] = args["tags"]
+
+    result = _handle_publish_content(publish_args)
+    result["igdb"] = {
+        "id": game_id,
+        "title": game_title,
+        "year": game_year,
+        "developer": developer,
+        "platforms": platforms,
+        "summary": summary,
+        "cover_url": cover_url,
+        "url": game.get("url", ""),
+    }
+    return result
+
+
+# ---------------------------------------------------------------------------
 # Book entry creation handler
 # ---------------------------------------------------------------------------
 
@@ -4021,7 +5045,7 @@ async def _handle_create_book_entry(args: dict[str, Any]) -> dict[str, Any]:
 
 
 def _create_book_entry_sync(args: dict[str, Any]) -> dict[str, Any]:
-    api_key = os.environ.get("GOOGLE_BOOKS_API_KEY")
+    api_key = _api_key("GOOGLE_BOOKS_API_KEY", "google_books_api_key")
 
     title = args["title"]
     author = args.get("author")
@@ -4037,7 +5061,7 @@ def _create_book_entry_sync(args: dict[str, Any]) -> dict[str, Any]:
             book_data = json.loads(resp.read())
         volume = book_data.get("volumeInfo", {})
     else:
-        results = _google_books_search(title, author, api_key)
+        results = _google_books_search(title, author, api_key, lang=args.get("locale"))
         if not results:
             return {"error": f"No Google Books results for '{title}'" + (f" by {author}" if author else "")}
         volume = results[0].get("volumeInfo", {})
@@ -4104,9 +5128,9 @@ async def _handle_create_series_entry(args: dict[str, Any]) -> dict[str, Any]:
 
 
 def _create_series_entry_sync(args: dict[str, Any]) -> dict[str, Any]:
-    api_key = os.environ.get("TMDB_API_KEY")
+    api_key = _api_key("TMDB_API_KEY", "tmdb_api_key")
     if not api_key:
-        return {"error": "TMDB_API_KEY environment variable is not set"}
+        return {"error": 'No TMDB API key configured — add one under "Other API keys" in the admin dashboard.'}
 
     title = args["title"]
     year = args.get("year")
@@ -4241,10 +5265,10 @@ async def _handle_create_podcast_entry(args: dict[str, Any]) -> dict[str, Any]:
 
 
 def _create_podcast_entry_sync(args: dict[str, Any]) -> dict[str, Any]:
-    api_key = os.environ.get("PODCASTINDEX_API_KEY")
-    api_secret = os.environ.get("PODCASTINDEX_API_SECRET")
+    api_key = _api_key("PODCASTINDEX_API_KEY", "podcastindex_api_key")
+    api_secret = _api_key("PODCASTINDEX_API_SECRET", "podcastindex_api_secret")
     if not api_key or not api_secret:
-        return {"error": "PODCASTINDEX_API_KEY and PODCASTINDEX_API_SECRET environment variables are required"}
+        return {"error": 'No Podcast Index key configured — add the key and secret under "Other API keys" in the admin dashboard.'}
 
     title = args["title"]
 
@@ -4374,10 +5398,10 @@ def _search_podcast_episodes_sync(args: dict[str, Any]) -> dict[str, Any]:
     import urllib.request
     import urllib.parse
 
-    api_key = os.environ.get("PODCASTINDEX_API_KEY")
-    api_secret = os.environ.get("PODCASTINDEX_API_SECRET")
+    api_key = _api_key("PODCASTINDEX_API_KEY", "podcastindex_api_key")
+    api_secret = _api_key("PODCASTINDEX_API_SECRET", "podcastindex_api_secret")
     if not api_key or not api_secret:
-        return {"error": "PODCASTINDEX_API_KEY and PODCASTINDEX_API_SECRET environment variables are required"}
+        return {"error": 'No Podcast Index key configured — add the key and secret under "Other API keys" in the admin dashboard.'}
 
     feed_id = args["podcastindex_id"]
     limit = args.get("limit", 20)
@@ -4409,9 +5433,9 @@ async def _handle_search_series_episodes(args: dict[str, Any]) -> dict[str, Any]
 def _search_series_episodes_sync(args: dict[str, Any]) -> dict[str, Any]:
     import urllib.request
 
-    api_key = os.environ.get("TMDB_API_KEY")
+    api_key = _api_key("TMDB_API_KEY", "tmdb_api_key")
     if not api_key:
-        return {"error": "TMDB_API_KEY environment variable is not set"}
+        return {"error": 'No TMDB API key configured — add one under "Other API keys" in the admin dashboard.'}
 
     tmdb_id = args["tmdb_id"]
     season_num = args["season"]

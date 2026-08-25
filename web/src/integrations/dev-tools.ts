@@ -537,7 +537,7 @@ export default function devTools(): AstroIntegration {
   };
 }
 
-const SHAREABLE_COLLECTIONS = new Set(["blog", "essays", "books", "movies", "series", "podcasts", "articles"]);
+const SHAREABLE_COLLECTIONS = new Set(["blog", "essays", "books", "movies", "games", "series", "podcasts", "articles"]);
 
 const URL_PREFIX_MAP: Record<string, string> = {
   blog: "blog",
@@ -549,6 +549,8 @@ const URL_PREFIX_MAP: Record<string, string> = {
 const RESOURCE_PREFIX_MAP: Record<string, string> = {
   movies: "movies",
   films: "movies",
+  games: "games",
+  jeux: "games",
   books: "books",
   livres: "books",
   articles: "articles",

@@ -967,22 +967,42 @@ private struct DataCardStack: View {
     let blocks: [DataBlock]
     @State private var expanded = false
 
+    /// Payloads stamped with a `card` kind get a purpose-built view, shown open:
+    /// they ARE the answer, not evidence for it. Everything else keeps the
+    /// generic collapsed dump.
+    private var typedBlocks: [DataBlock] { blocks.filter { $0.data.cardKind != nil } }
+    private var plainBlocks: [DataBlock] { blocks.filter { $0.data.cardKind == nil } }
+
     private var label: String {
-        if blocks.count == 1 { return blockTitle(blocks[0]) }
-        let names = blocks.map(serverName)
+        if plainBlocks.count == 1 { return blockTitle(plainBlocks[0]) }
+        let names = plainBlocks.map(serverName)
         if let first = names.first, names.allSatisfy({ $0 == first }) {
-            return "\(first) · \(blocks.count) calls"
+            return "\(first) · \(plainBlocks.count) calls"
         }
         return names.joined(separator: ", ")
     }
 
     var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            ForEach(Array(typedBlocks.enumerated()), id: \.offset) { _, block in
+                switch block.data.cardKind {
+                case "candidates": CandidatePickerCard(data: block.data)
+                case "media": MediaFicheCard(data: block.data)
+                default: EmptyView()
+                }
+            }
+            if !plainBlocks.isEmpty { genericStack }
+        }
+    }
+
+    @ViewBuilder
+    private var genericStack: some View {
         DisclosureGroup(isExpanded: $expanded) {
             VStack(alignment: .leading, spacing: 12) {
-                ForEach(Array(blocks.enumerated()), id: \.offset) { _, block in
+                ForEach(Array(plainBlocks.enumerated()), id: \.offset) { _, block in
                     VStack(alignment: .leading, spacing: 4) {
                         // Per-call header only when grouped, so the calls stay distinct.
-                        if blocks.count > 1 {
+                        if plainBlocks.count > 1 {
                             Text(blockTitle(block))
                                 .font(.system(size: 11, weight: .semibold))
                                 .foregroundStyle(theme.inkMute)
@@ -1139,6 +1159,238 @@ struct TurnUsageFooter: View {
                 .font(.system(size: 11))
                 .foregroundStyle(theme.inkSoft)
             Spacer(minLength: 0)
+        }
+    }
+}
+
+// MARK: - Typed tool cards
+
+/// A cover thumbnail. Candidates carry a provider CDN URL (nothing is on disk
+/// yet); an opened fiche carries a path served by Maurice itself.
+private struct CardThumb: View {
+    @Environment(\.mauriceTheme) private var theme
+    @Environment(SessionStore.self) private var session
+    let path: String
+    var width: CGFloat = 44
+
+    private var url: URL? {
+        guard !path.isEmpty else { return nil }
+        if path.hasPrefix("http") { return URL(string: path) }
+        guard let base = session.serverURL else { return nil }
+        return URL(string: base + path)
+    }
+
+    var body: some View {
+        Group {
+            if let url {
+                AsyncImage(url: url) { phase in
+                    switch phase {
+                    case .success(let image): image.resizable().aspectRatio(contentMode: .fill)
+                    default: placeholder
+                    }
+                }
+            } else {
+                placeholder
+            }
+        }
+        .frame(width: width, height: width * 3 / 2)
+        .clipShape(RoundedRectangle(cornerRadius: 4))
+    }
+
+    private var placeholder: some View {
+        RoundedRectangle(cornerRadius: 4).fill(theme.inkMute.opacity(0.15))
+    }
+}
+
+/// The disambiguation step: which of these did you mean?
+///
+/// Tapping sends the choice as an ordinary message. That keeps the pick visible
+/// in the transcript and needs no back-channel — the reply is the fiche itself.
+private struct CandidatePickerCard: View {
+    @Environment(\.mauriceTheme) private var theme
+    @Environment(ChatService.self) private var chat
+    let data: JSONValue
+
+    private var collection: String { data.string("collection") }
+    private var rows: [JSONValue] { data["results"]?.arrayValue ?? [] }
+
+    /// The provider's own identifier, spelled so the model can act on it.
+    private func idToken(_ row: JSONValue) -> String {
+        let id = row["id"]?.intValue.map(String.init) ?? row["id"]?.stringValue ?? ""
+        guard !id.isEmpty else { return "" }
+        switch collection {
+        case "movies", "series": return "tmdb \(id)"
+        case "books": return "google books \(id)"
+        case "podcasts": return "podcast index \(id)"
+        case "games": return "igdb \(id)"
+        case "people": return "wikidata \(id)"
+        default: return id
+        }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(L("fiche.pick_title"))
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(theme.inkMute)
+            ForEach(Array(rows.prefix(8).enumerated()), id: \.offset) { _, row in
+                Button { pick(row) } label: { candidateRow(row) }
+                    .buttonStyle(.plain)
+            }
+        }
+        .padding(10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(RoundedRectangle(cornerRadius: 8).fill(theme.inkMute.opacity(0.06)))
+    }
+
+    private func candidateRow(_ row: JSONValue) -> some View {
+        HStack(alignment: .top, spacing: 10) {
+            CardThumb(path: row.string("image"))
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: 5) {
+                    Text(row.string("title"))
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundStyle(theme.ink)
+                    if let year = row["year"]?.intValue {
+                        Text(String(year))
+                            .font(.system(size: 12))
+                            .foregroundStyle(theme.inkMute)
+                    }
+                }
+                let subtitle = row.string("subtitle")
+                if !subtitle.isEmpty {
+                    Text(subtitle).font(.system(size: 11)).foregroundStyle(theme.inkSoft)
+                }
+                let summary = row.string("summary")
+                if !summary.isEmpty {
+                    Text(summary).font(.system(size: 11)).foregroundStyle(theme.inkMute).lineLimit(2)
+                }
+            }
+            Spacer(minLength: 0)
+        }
+        .contentShape(Rectangle())
+    }
+
+    private func pick(_ row: JSONValue) {
+        let message = L("fiche.open_prefill", row.string("title"), collection, idToken(row))
+        Task { await chat.send(message) }
+    }
+}
+
+/// The fiche as a working surface: what this is, and how far each face has got.
+private struct MediaFicheCard: View {
+    @Environment(\.mauriceTheme) private var theme
+    @Environment(SessionStore.self) private var session
+    let data: JSONValue
+
+    private var accent: Color { session.activeDeviceUser?.color ?? .blue }
+
+    private var state: String { data.string("card_state") }
+
+    private var stateLabel: String {
+        switch state {
+        case "published": return L("fiche.state_published")
+        case "draft": return L("fiche.state_draft")
+        default: return L("fiche.state_absent")
+        }
+    }
+
+    private var stateColor: Color {
+        switch state {
+        case "published": return theme.ink
+        case "draft": return theme.inkSoft
+        default: return theme.inkMute
+        }
+    }
+
+    private var stateSymbol: String {
+        switch state {
+        case "published": return "largecircle.fill.circle"
+        case "draft": return "circle.lefthalf.filled"
+        default: return "circle"
+        }
+    }
+
+    /// The identity line — enough to confirm this is the same work, no more.
+    /// Which facts matter depends on the medium, so each collection picks its own.
+    private var facts: [String] {
+        var out: [String] = []
+        if let year = data["year"]?.intValue { out.append(String(year)) }
+        switch data.string("collection") {
+        case "movies": out.append(data.string("director"))
+        case "series":
+            // TMDB gives a series a network and a season count, never a director —
+            // and a bare year is the weakest possible confirmation for exactly the
+            // film-vs-series collision this card exists to settle.
+            out.append(data.string("platform"))
+            if let seasons = data["seasons"]?.intValue, seasons > 0 {
+                out.append(L("fiche.seasons", seasons))
+            }
+        case "books": out.append(data.string("author"))
+        case "podcasts": out.append(data.string("host"))
+        case "games":
+            out.append(data.string("developer"))
+            out.append(data.strings("platforms").joined(separator: ", "))
+        default: break
+        }
+        return out.filter { !$0.isEmpty }
+    }
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 12) {
+            CardThumb(path: data.string("image"), width: 58)
+            VStack(alignment: .leading, spacing: 4) {
+                Text(data.string("title"))
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(theme.ink)
+                if !facts.isEmpty {
+                    Text(facts.joined(separator: " · "))
+                        .font(.system(size: 12))
+                        .foregroundStyle(theme.inkSoft)
+                }
+                HStack(spacing: 5) {
+                    Image(systemName: stateSymbol).font(.system(size: 10))
+                    Text(stateLabel).font(.system(size: 11))
+                }
+                .foregroundStyle(stateColor)
+                .padding(.top, 2)
+                Text(L("fiche.counts", data.int("recto_chars"), data.int("verso_chars")))
+                    .font(.system(size: 11, design: .monospaced))
+                    .foregroundStyle(theme.inkMute)
+                if data["fiche_created"] == .bool(true) {
+                    Text(L("fiche.created")).font(.system(size: 11)).foregroundStyle(theme.inkMute)
+                }
+                openRow
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(RoundedRectangle(cornerRadius: 8).fill(theme.inkMute.opacity(0.06)))
+    }
+
+    /// Straight into the browser, at either face — including a card front that
+    /// holds nothing yet, so you can see where it will live.
+    @ViewBuilder
+    private var openRow: some View {
+        HStack(spacing: 14) {
+            openLink(L("fiche.open_fiche"), path: data.string("fiche_url"))
+            openLink(L("fiche.open_card"), path: data.string("card_url"))
+        }
+        .padding(.top, 4)
+    }
+
+    @ViewBuilder
+    private func openLink(_ label: String, path: String) -> some View {
+        if !path.isEmpty, let base = session.serverURL, let url = URL(string: base + path) {
+            Link(destination: url) {
+                HStack(spacing: 4) {
+                    Image(systemName: "arrow.up.forward.square").font(.system(size: 10))
+                    Text(label).font(.system(size: 11, weight: .medium))
+                }
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(accent.legible(onDark: theme.isDark))
         }
     }
 }

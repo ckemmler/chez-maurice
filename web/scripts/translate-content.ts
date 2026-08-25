@@ -35,7 +35,7 @@ const STATE_FILE = path.join(PROJECT_ROOT, ".translation-state.json");
 
 const COLLECTIONS = [
   "books", "articles", "blog", "essays",
-  "podcasts", "movies", "series", "people", "pages",
+  "podcasts", "movies", "games", "series", "people", "pages",
 ];
 const LOCALES = ["en", "fr"] as const;
 type Locale = (typeof LOCALES)[number];

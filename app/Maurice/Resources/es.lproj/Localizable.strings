@@ -314,7 +314,7 @@
 "gardens.search" = "Buscar en estas notas…";
 "gardens.webtheme" = "Tema web";
 "gardens.webtheme_hint" = "Cómo se ve este jardín en la web — todos los jardineros lo ven.";
-"gardens.all_notes" = "Todas las notas";
+"gardens.all_notes" = "Todo en este jardín";
 "gardens.notes" = "notas";
 "gardens.empty" = "Nada por aquí todavía — comparte una nota para empezar este jardín.";
 "gardens.no_match" = "Ninguna nota coincide.";
@@ -351,3 +351,15 @@
 /* App Shortcut (Action Button / Shortcuts list) */
 "Dictate to Maurice" = "Dictar a Maurice";
 "Opens Maurice and starts listening, so you can speak a message instead of typing it." = "Abre Maurice y empieza a escuchar, para que digas un mensaje en vez de escribirlo.";
+
+/* Fiche cards — the media picker and the fiche working surface */
+"fiche.pick_title" = "¿Cuál?";
+"fiche.open_prefill" = "Abre la ficha de «%1$@» (%2$@, %3$@)";
+"fiche.state_absent" = "aún sin tarjeta";
+"fiche.state_draft" = "tarjeta en borrador";
+"fiche.state_published" = "tarjeta publicada";
+"fiche.counts" = "anverso %1$d · reverso %2$d caracteres";
+"fiche.created" = "ficha recién creada";
+"fiche.open_fiche" = "Abrir la ficha";
+"fiche.open_card" = "Abrir la tarjeta";
+"fiche.seasons" = "%d temporadas";

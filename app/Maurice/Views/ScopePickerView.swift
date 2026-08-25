@@ -620,7 +620,19 @@ struct ServerGardenNote: Decodable, Identifiable {
     let title: String
     let updated_at: String?
     let web_path: String
-    var id: String { "\(owner_id)/\(slug)" }
+    /// note | fiche | card. A garden is all three: the notes, the fiches where
+    /// reading accumulates, and the cards those may become.
+    let kind: String?
+    /// The resource collection for a fiche or a card; nil for a note.
+    let collection: String?
+
+    /// Kind is part of the identity, not decoration: a note and a card can hold
+    /// the same slug, and a duplicate id makes SwiftUI drop rows from the list.
+    var id: String { "\(owner_id)/\(kind ?? "note")/\(slug)" }
+
+    /// Fiches and cards are the owner's own; only notes can be shared today, so
+    /// only they open the access sheet.
+    var isNote: Bool { (kind ?? "note") == "note" }
 }
 
 struct ServerGarden: Decodable, Identifiable {
@@ -935,15 +947,30 @@ struct GardenPageView: View {
     var onToggleSidebar: () -> Void = {}
 
     @State private var query = ""
+    /// How many rows are currently built. A garden runs to a few hundred
+    /// entries once fiches and cards join the notes, and building them all up
+    /// front costs a visible beat on entry and on every keystroke in the search
+    /// field. Grows as the reader reaches the end.
+    @State private var visibleCount = GardenPageView.pageSize
     @State private var webThemes: [(id: String, label: String)] = [("default", "Default")]
     @State private var accessNote: ServerGardenNote?
 
     private var accent: Color { session.activeDeviceUser?.color ?? .blue }
 
+    /// One page's worth of rows, and how far a scroll-to-end grows the window.
+    fileprivate static let pageSize = 60
+
     private var filteredNotes: [ServerGardenNote] {
         let q = query.trimmingCharacters(in: .whitespaces).lowercased()
         guard !q.isEmpty else { return garden.notes }
         return garden.notes.filter { $0.title.lowercased().contains(q) || $0.slug.contains(q) }
+    }
+
+    /// The slice actually rendered. Search filters the whole garden, not the
+    /// window — otherwise a match further down than the current page would
+    /// simply not be found.
+    private var visibleNotes: ArraySlice<ServerGardenNote> {
+        filteredNotes.prefix(visibleCount)
     }
 
     var body: some View {
@@ -1165,10 +1192,16 @@ struct GardenPageView: View {
     }
 
     private var notesCard: some View {
-        VStack(spacing: 0) {
-            ForEach(Array(filteredNotes.enumerated()), id: \.element.id) { i, n in
+        LazyVStack(spacing: 0) {
+            ForEach(Array(visibleNotes.enumerated()), id: \.element.id) { i, n in
                 GardenNoteRow(note: n, last: i == filteredNotes.count - 1) {
                     accessNote = n
+                }
+                .onAppear {
+                    // Reaching the last built row grows the window. No paging
+                    // request behind it: the garden arrives in one payload, so
+                    // this is purely about how much is built at once.
+                    if i == visibleCount - 1 { revealMore() }
                 }
             }
             if filteredNotes.isEmpty {
@@ -1181,6 +1214,13 @@ struct GardenPageView: View {
         .background(theme.surface, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous)
             .strokeBorder(theme.rule, lineWidth: 0.5))
+        // A new search starts from the top of its own results.
+        .onChange(of: query) { _, _ in visibleCount = Self.pageSize }
+    }
+
+    private func revealMore() {
+        guard visibleCount < filteredNotes.count else { return }
+        visibleCount = min(visibleCount + Self.pageSize, filteredNotes.count)
     }
 
     private func loadWebThemes() async {
@@ -1321,11 +1361,21 @@ private struct GardenNoteRow: View {
     #endif
 
     var body: some View {
-        Button(action: onAccess) {
+        Button(action: note.isNote ? onAccess : { gardens.browseNote(note) }) {
             HStack(spacing: 11) {
-                HairlineLeaf()
-                    .stroke(theme.inkMute, style: StrokeStyle(lineWidth: 1.3, lineCap: .round, lineJoin: .round))
-                    .frame(width: 13, height: 13)
+                // The leaf marks a note. A fiche and a card get their own glyph:
+                // in one mixed list, what a row IS matters more than its title.
+                Group {
+                    if note.isNote {
+                        HairlineLeaf()
+                            .stroke(theme.inkMute, style: StrokeStyle(lineWidth: 1.3, lineCap: .round, lineJoin: .round))
+                    } else {
+                        Image(systemName: note.kind == "fiche" ? "text.page" : "rectangle.portrait")
+                            .font(.system(size: 11))
+                            .foregroundStyle(theme.inkMute)
+                    }
+                }
+                .frame(width: 13, height: 13)
                 Text(note.title)
                     .font(.system(size: 13.5))
                     .foregroundStyle(theme.ink)
