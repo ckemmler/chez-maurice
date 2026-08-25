@@ -338,6 +338,7 @@
 "dictation.error.unavailable" = "La dettatura non è disponibile al momento.";
 "dictation.error.no_offline_model" = "La dettatura in %@ richiede un modello che non è su questo dispositivo. Aggiungilo in Impostazioni › Generali › Tastiera › Lingue di dettatura e riprova: Maurice non invierà la tua voce a un server.";
 "dictation.error.audio_session" = "Non è stato possibile acquisire il microfono.";
+"dictation.error.interrupted" = "Dettatura interrotta — il microfono è passato ad altro. Ciò che è stato sentito è conservato.";
 "dictation.error.audio_engine" = "Non è stato possibile avviare la registrazione.";
 
 /* Dictation consent */
