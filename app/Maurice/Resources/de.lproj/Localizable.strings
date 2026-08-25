@@ -338,6 +338,7 @@
 "dictation.error.unavailable" = "Das Diktat ist gerade nicht verfügbar.";
 "dictation.error.no_offline_model" = "Für das Diktat auf %@ fehlt ein Modell auf diesem Gerät. Füge es unter Einstellungen › Allgemein › Tastatur › Diktiersprachen hinzu und versuche es erneut — Maurice sendet deine Stimme nicht an einen Server.";
 "dictation.error.audio_session" = "Das Mikrofon konnte nicht übernommen werden.";
+"dictation.error.interrupted" = "Diktat unterbrochen — das Mikrofon wurde anderweitig belegt. Das Gehörte bleibt erhalten.";
 "dictation.error.audio_engine" = "Die Aufnahme konnte nicht gestartet werden.";
 
 /* Dictation consent */

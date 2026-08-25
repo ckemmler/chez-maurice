@@ -338,6 +338,7 @@
 "dictation.error.unavailable" = "Dictation isn't available right now.";
 "dictation.error.no_offline_model" = "Dictation for %@ needs a model that isn't on this device. Add it under Settings › General › Keyboard › Dictation Languages, then try again — Maurice won't send your voice to a server.";
 "dictation.error.audio_session" = "Couldn't take over the microphone.";
+"dictation.error.interrupted" = "Dictation stopped — something else took the microphone. What was heard is kept.";
 "dictation.error.audio_engine" = "Couldn't start recording.";
 
 /* Dictation consent */

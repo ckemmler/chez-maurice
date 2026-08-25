@@ -23,15 +23,49 @@ import AVFoundation
 private final class RequestBox: @unchecked Sendable {
     private let lock = NSLock()
     private var request: SFSpeechAudioBufferRecognitionRequest?
+    /// Audio captured while no request is installed, replayed into the next one.
+    ///
+    /// A pause ends an utterance, and the replacement request is only created
+    /// once the recogniser's final result has travelled to the main actor —
+    /// silence timeout plus delivery latency. Buffers arriving in that window
+    /// used to be appended to a request that had already finished, which
+    /// discards them: start speaking again promptly and the first syllables
+    /// were gone. They are held here instead.
+    private var pending: [AVAudioPCMBuffer] = []
 
-    func set(_ value: SFSpeechAudioBufferRecognitionRequest?) {
+    /// ~1024 frames each, so roughly two seconds at 44.1kHz. Enough to cover the
+    /// handover; bounded so a stuck session can't grow without limit.
+    private static let maxPending = 90
+
+    /// Append to the live request, or hold the audio until one is installed.
+    func append(_ buffer: AVAudioPCMBuffer) {
         lock.lock(); defer { lock.unlock() }
-        request = value
+        if let request {
+            request.append(buffer)
+        } else if pending.count < Self.maxPending {
+            pending.append(buffer)
+        }
     }
 
-    func get() -> SFSpeechAudioBufferRecognitionRequest? {
+    /// Install a request, replaying anything captured during the handover.
+    func install(_ value: SFSpeechAudioBufferRecognitionRequest) {
         lock.lock(); defer { lock.unlock() }
-        return request
+        request = value
+        for buffer in pending { value.append(buffer) }
+        pending.removeAll(keepingCapacity: true)
+    }
+
+    /// Detach the current request without discarding what arrives next.
+    func detach() {
+        lock.lock(); defer { lock.unlock() }
+        request = nil
+    }
+
+    /// Teardown: no request, and nothing held for a session that has ended.
+    func clear() {
+        lock.lock(); defer { lock.unlock() }
+        request = nil
+        pending.removeAll()
     }
 }
 
@@ -64,6 +98,11 @@ final class Dictation {
         case needsServerConsent(language: String)
         case audioSession
         case audioEngine
+        /// The system took the microphone mid-sentence — a call, Siri, a
+        /// headset connecting. Distinct from the two above because nothing went
+        /// wrong and nothing needs fixing: what was heard is kept, and the only
+        /// thing to say is that dictation stopped there.
+        case interrupted
 
         var messageKey: String {
             switch self {
@@ -74,6 +113,7 @@ final class Dictation {
             case .needsServerConsent: return "dictation.consent.body"
             case .audioSession:    return "dictation.error.audio_session"
             case .audioEngine:     return "dictation.error.audio_engine"
+            case .interrupted:     return "dictation.error.interrupted"
             }
         }
     }
@@ -98,6 +138,8 @@ final class Dictation {
     /// flag and revived the first attempt's abandoned permission callback, so
     /// two sessions ran at once, each spawning recognition tasks.
     private var generation = 0
+    private var interruptionObserver: NSObjectProtocol?
+    private var configObserver: NSObjectProtocol?
     /// Utterances the recogniser has already finalised this session. A pause
     /// ends an utterance, not the session, so these accumulate and the live
     /// partial is appended to them rather than replacing them.
@@ -128,10 +170,6 @@ final class Dictation {
     var onFinish: ((String, Bool) -> Void)?
 
     // MARK: - Control
-
-    nonisolated func currentRequest() -> SFSpeechAudioBufferRecognitionRequest? {
-        requestBox.get()
-    }
 
     func toggle(locale: Locale, allowServer: Bool) {
         isListening ? stop(userStopped: true) : start(locale: locale, allowServer: allowServer)
@@ -358,10 +396,11 @@ final class Dictation {
         // since been overwritten — garbled or dropped words rather than a crash.
         // It also kept ~50 buffers a second off the main thread.
         //
-        // `currentRequest` is read under a lock because the tap runs on a
-        // realtime audio thread while listen() swaps the request in per utterance.
+        // The box is locked because the tap runs on a realtime audio thread
+        // while listen() swaps the request in per utterance — and it holds the
+        // audio when no request is installed, rather than dropping it.
         input.installTap(onBus: 0, bufferSize: 1024, format: format) { [weak self] buffer, _ in
-            self?.currentRequest()?.append(buffer)
+            self?.requestBox.append(buffer)
         }
 
         engine.prepare()
@@ -374,11 +413,74 @@ final class Dictation {
             return
         }
 
+        observeInterruptions()
+
         // State first: the task callback ignores anything arriving outside a
         // listening session, and the first result can land immediately.
         isStarting = false
         state = .listening
         listen(with: rec)
+    }
+
+    /// Notice when the system takes the microphone away.
+    ///
+    /// A call, a Siri invocation or a headset connecting stops the engine
+    /// underneath us. Nothing tells the session: `state` stayed `.listening`,
+    /// so the mic went on pulsing over a recording that had ended, the
+    /// transcript quietly stopped growing, and everything said from that moment
+    /// was lost with no indication at all. Ending the session honestly is worth
+    /// more than trying to resume one whose audio already has a hole in it —
+    /// what was heard is delivered to the composer either way.
+    private func observeInterruptions() {
+        // Idempotent: registering twice would leave an observer behind that
+        // outlives the session and stops the next one on a stale notification.
+        removeInterruptionObservers()
+        let centre = NotificationCenter.default
+
+        // The engine's own signal: the input format changed under it (a route
+        // change, a headset arriving). It also covers macOS, which has no
+        // AVAudioSession at all.
+        configObserver = centre.addObserver(
+            forName: .AVAudioEngineConfigurationChange, object: engine, queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in
+                guard let self else { return }
+                // This fires for any I/O change, and the engine survives most of
+                // them — plugging in headphones mid-sentence should not end the
+                // dictation. Only a change that actually stopped the engine has
+                // taken the microphone away.
+                guard !self.engine.isRunning else { return }
+                self.interrupted()
+            }
+        }
+
+        #if os(iOS)
+        interruptionObserver = centre.addObserver(
+            forName: AVAudioSession.interruptionNotification,
+            object: AVAudioSession.sharedInstance(), queue: .main
+        ) { [weak self] note in
+            let raw = note.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt
+            guard raw == AVAudioSession.InterruptionType.began.rawValue else { return }
+            Task { @MainActor in self?.interrupted() }
+        }
+        #endif
+    }
+
+    private func removeInterruptionObservers() {
+        let centre = NotificationCenter.default
+        if let configObserver { centre.removeObserver(configObserver) }
+        if let interruptionObserver { centre.removeObserver(interruptionObserver) }
+        configObserver = nil
+        interruptionObserver = nil
+    }
+
+    /// Deliver what was heard, then say why it stopped.
+    private func interrupted() {
+        guard state == .listening else { return }
+        finish()
+        // After finish(), which resets to .idle — the composer has the text by
+        // then, so this only has to explain the stop.
+        state = .failed(.interrupted)
     }
 
     /// Run one utterance, and start the next when it ends.
@@ -394,7 +496,7 @@ final class Dictation {
         req.shouldReportPartialResults = true
         req.requiresOnDeviceRecognition = !usingServer
         request = req
-        requestBox.set(req)
+        requestBox.install(req)
 
         let generation = self.generation
         task = rec.recognitionTask(with: req) { [weak self] result, error in
@@ -422,6 +524,12 @@ final class Dictation {
                     self.transcript = Self.join(self.committed, segment)
                     if result.isFinal {
                         self.committed = self.transcript
+                        // Close the finished request and let the box hold what
+                        // arrives until the replacement is installed a line
+                        // later — the recogniser has stopped consuming, and
+                        // appending to it now would silently drop the audio.
+                        self.request?.endAudio()
+                        self.requestBox.detach()
                         self.listen(with: rec)   // next utterance
                     }
                 }
@@ -460,6 +568,7 @@ final class Dictation {
     }
 
     private func teardown() {
+        removeInterruptionObservers()
         usingServer = false
         committed = ""
         if engine.isRunning { engine.stop() }
@@ -467,7 +576,7 @@ final class Dictation {
         request?.endAudio()
         task?.cancel()
         request = nil
-        requestBox.set(nil)
+        requestBox.clear()
         task = nil
         recognizer = nil
         #if os(iOS)

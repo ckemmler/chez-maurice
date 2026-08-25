@@ -338,6 +338,7 @@
 "dictation.error.unavailable" = "Dicteren is op dit moment niet beschikbaar.";
 "dictation.error.no_offline_model" = "Dicteren in het %@ vraagt om een model dat niet op dit apparaat staat. Voeg het toe via Instellingen › Algemeen › Toetsenbord › Dicteertalen en probeer het opnieuw — Maurice stuurt je stem niet naar een server.";
 "dictation.error.audio_session" = "De microfoon kon niet worden overgenomen.";
+"dictation.error.interrupted" = "Dictaat onderbroken — de microfoon ging naar iets anders. Wat gehoord is, blijft bewaard.";
 "dictation.error.audio_engine" = "De opname kon niet worden gestart.";
 
 /* Dictation consent */
