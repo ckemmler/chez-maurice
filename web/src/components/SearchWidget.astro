@@ -12,7 +12,7 @@ const noResults = t(locale, "search.noResults");
 const indexUrl = locale === "fr" ? "/fr/search-index.json" : "/search-index.json";
 ---
 
-<div class="search-widget" data-index-url={indexUrl} data-no-results={noResults} data-base={import.meta.env.BASE_URL}>
+<div class="search-widget" data-index-url={indexUrl} data-no-results={noResults} data-base={import.meta.env.BASE_URL} data-drafts={import.meta.env.DEV ? "1" : "0"}>
   <button class="search-toggle" aria-label="Search" type="button">
     <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
   </button>
@@ -49,12 +49,19 @@ const indexUrl = locale === "fr" ? "/fr/search-index.json" : "/search-index.json
     var locale = indexUrl.startsWith('/fr/') ? 'fr' : 'en';
     var labels = LABELS[locale] || LABELS.en;
 
-    function isAuthed() {
+    // Whether drafts may show. Guessing from the hostname was the bug: the list
+    // knew localhost, the Tailnet and the LAN, but not the tunnel a member
+    // actually browses through — so on a real garden every draft was filtered
+    // out, and since virtually nothing here is flagged public, every query
+    // answered "no results" for notes plainly on screen.
+    //
+    // The index itself already draws this line: a production build carries only
+    // public entries, a dev/garden build carries everything. So the question is
+    // simply which build this is, which the server knows for certain.
+    // The preview button still overrides, to see the site as a visitor does.
+    function canSeeDrafts() {
       if (sessionStorage.getItem('preview') === '1') return false;
-      return document.cookie.indexOf('CF_Authorization') !== -1
-        || location.hostname === 'localhost'
-        || location.hostname.endsWith('.ts.net')
-        || location.hostname.startsWith('192.168.');
+      return widget.dataset.drafts === '1';
     }
 
     function open() {
@@ -123,7 +130,7 @@ const indexUrl = locale === "fr" ? "/fr/search-index.json" : "/search-index.json
       if (!query) { resultsList.innerHTML = ''; return; }
 
       var results = fuse.search(query, { limit: 10 });
-      var authed = isAuthed();
+      var authed = canSeeDrafts();
 
       if (!authed) {
         results = results.filter(function(r) { return r.item.public !== false; });
