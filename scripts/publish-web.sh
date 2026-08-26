@@ -23,6 +23,15 @@ THEME="${THEME:-$GARDEN}"
 # garden, or the reverse — silently, since wrangler would just accept it.
 : "${GARDEN_PAGES_PROJECT:?set GARDEN_PAGES_PROJECT (the Cloudflare Pages project this garden publishes to) in .env}"
 
+# Which Pages environment this lands in. Wrangler otherwise infers it from the
+# CURRENT GIT BRANCH of this checkout — which has nothing to do with what is
+# being published: the site's content comes from the member's garden, not from
+# the source tree. Publishing while a feature branch happened to be checked out
+# therefore produced a preview URL and left the live site untouched, saying
+# nothing about it. A publish is a publish; say so rather than infer it.
+# Override with GARDEN_PAGES_BRANCH to push a preview deliberately.
+DEPLOY_BRANCH="${GARDEN_PAGES_BRANCH:-main}"
+
 garden_dir="$(gardens_root)/$GARDEN"
 [[ -d "$garden_dir" ]] || { echo "✗ no garden at $garden_dir"; exit 1; }
 
@@ -43,5 +52,5 @@ cd "$REPO/web"
 echo "→ building $GARDEN (theme: $THEME)"
 NODE_ENV=production GARDEN="$GARDEN" THEME="$THEME" npm run build
 
-echo "→ deploying to Cloudflare Pages project '$GARDEN_PAGES_PROJECT'"
-npx wrangler pages deploy dist --project-name="$GARDEN_PAGES_PROJECT"
+echo "→ deploying to Cloudflare Pages project '$GARDEN_PAGES_PROJECT' (branch: $DEPLOY_BRANCH)"
+npx wrangler pages deploy dist --project-name="$GARDEN_PAGES_PROJECT" --branch="$DEPLOY_BRANCH"
