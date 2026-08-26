@@ -44,11 +44,30 @@ export function gardenConfig(): GardenConfig {
   _config = {
     name: cfg.name || GARDEN,
     title: cfg.title || `${GARDEN}'s garden`,
-    avatar: cfg.avatar ?? null,
+    avatar: siteAvatarPath(cfg.avatar ?? null),
     base: cfg.base,
     domain: cfg.domain,
   };
   return _config;
+}
+
+/**
+ * The avatar as a path this SITE serves, not one the API does.
+ *
+ * gardens.json stores `/api/avatars/<file>` — right for the app and the server,
+ * wrong here twice over. Under a garden base Astro prefixes `src`, so it asks
+ * for /g/<member>/api/avatars/… which the engine does not serve; and on the
+ * public build there is no API at all, only static files on Cloudflare Pages.
+ * Either way the header showed a broken image.
+ *
+ * The integration links the file into public/avatars, so a plain site-relative
+ * path is correct in both: Astro prefixes the base in dev, and leaves it alone
+ * for the public build where BASE_URL is "/".
+ */
+function siteAvatarPath(configured: string | null): string | null {
+  if (!configured) return null;
+  const file = configured.split("/").filter(Boolean).pop();
+  return file ? `/avatars/${file}` : null;
 }
 
 /** Initials for the avatar fallback when no image is configured. */
