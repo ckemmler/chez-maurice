@@ -73,7 +73,9 @@
     border-top: 1px solid #45475a;
   }
 
-  @media (min-width: 769px) {
+  /* 768px exactly is iPad portrait, and the toolbar is how you get to Working
+     Copy from there — so the breakpoint has to include it, not start above it. */
+  @media (min-width: 768px) {
     #dev-toolbar {
       display: flex;
     }
@@ -427,18 +429,33 @@
   });
 
   // --- Edit in external editor ---
+  // Working Copy on iPad, Obsidian on the Mac. Obsidian is addressed by
+  // absolute path so nothing depends on the vault's name here; Working Copy
+  // wants <repo>/<path-inside-the-repo>, which the endpoint resolves from the
+  // garden's git checkout.
   const editLink = document.getElementById("dev-edit") as HTMLAnchorElement;
+  // iPadOS reports itself as a Mac; only maxTouchPoints gives it away.
+  const iPad =
+    /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+    (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
   fetch("/_dev/content-path", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ path: location.pathname }),
   }).then(async (res) => {
     if (!res.ok) return;
-    const { contentPath } = await res.json();
-    const iOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
-    editLink.href = iOS
-      ? `ia-writer://open?path=${encodeURIComponent("akita-content: /" + contentPath)}&edit=true`
-      : `obsidian://open?vault=content&file=${contentPath.replace(/\.md$/, "")}`;
+    const { absPath, repo, repoPath } = await res.json();
+    if (iPad) {
+      // Not versioned — Working Copy has nothing to open.
+      if (!repo || !repoPath) return;
+      editLink.href = `working-copy://open?repo=${encodeURIComponent(repo)}&path=${encodeURIComponent(repoPath)}`;
+      editLink.textContent = "Working Copy";
+      editLink.title = `Open ${repo}/${repoPath} in Working Copy`;
+    } else {
+      editLink.href = `obsidian://open?path=${encodeURIComponent(absPath)}`;
+      editLink.textContent = "Obsidian";
+      editLink.title = `Open ${absPath} in Obsidian`;
+    }
     editLink.style.display = "";
   });
 

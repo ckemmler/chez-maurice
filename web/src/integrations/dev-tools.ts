@@ -156,11 +156,8 @@ export default function devTools(): AstroIntegration {
                 res.end(JSON.stringify({ error: "No content file found" }));
                 return;
               }
-              // Return path relative to content root
-              const contentRoot = path.resolve(import.meta.dirname, "../content");
-              const rel = path.relative(contentRoot, result.filePath);
               res.setHeader("Content-Type", "application/json");
-              res.end(JSON.stringify({ contentPath: rel }));
+              res.end(JSON.stringify(editorTargets(result.filePath)));
             } catch (err) {
               res.statusCode = 500;
               res.setHeader("Content-Type", "application/json");
@@ -485,7 +482,9 @@ export default function devTools(): AstroIntegration {
             try {
               const { path: urlPath } = JSON.parse(body);
               const result = resolveContentFile(urlPath);
-              if (!result) {
+              // Standalone pages have no publication state — their route renders
+              // them either way — so the toggle stays hidden there.
+              if (!result || result.collection === "pages") {
                 res.statusCode = 404;
                 res.setHeader("Content-Type", "application/json");
                 res.end(JSON.stringify({ error: "No content file found" }));
@@ -649,6 +648,77 @@ function autoCommit(files: string[], message: string): void {
   }
 }
 
+/**
+ * Everything the toolbar needs to hand a note to a *native* editor.
+ *
+ * Two apps, two addressing schemes, and neither takes the URL path:
+ *   - Obsidian (Mac) opens an absolute filesystem path — `?path=` rather than
+ *     `?vault=&file=`, so nothing depends on how the vault happens to be named
+ *     on this machine.
+ *   - Working Copy (iPad) opens <repo>/<path-inside-the-repo>. Gardens are one
+ *     git repo per member, so the repo name is the remote's basename (that is
+ *     what Working Copy calls a clone of it) with the checkout directory as
+ *     fallback. Override with WORKING_COPY_REPO when the iPad names it
+ *     differently.
+ *
+ * This used to return a path relative to web/src/content — a directory left
+ * empty when gardens moved out to MAURICE_GARDENS_DIR, so every Edit link was
+ * a stack of `../..` pointing nowhere.
+ */
+function editorTargets(filePath: string): {
+  contentPath: string;
+  absPath: string;
+  repo: string | null;
+  repoPath: string | null;
+} {
+  const member = process.env.GARDEN || "demo";
+  const gardensRoot =
+    process.env.MAURICE_GARDENS_DIR || path.join(process.cwd(), "gardens");
+  const gardenRoot = path.join(gardensRoot, member);
+
+  const root = gitRoot(filePath);
+  const repo = root ? process.env.WORKING_COPY_REPO || gitRepoName(root) : null;
+
+  return {
+    contentPath: path.relative(gardenRoot, filePath),
+    absPath: filePath,
+    repo,
+    repoPath: root ? path.relative(root, filePath) : null,
+  };
+}
+
+/** The name Working Copy gives a clone: the remote's basename, else the dir's. */
+function gitRepoName(root: string): string {
+  try {
+    const url = execFileSync("git", ["remote", "get-url", "origin"], {
+      cwd: root,
+      encoding: "utf-8",
+      stdio: ["ignore", "pipe", "ignore"],
+    }).trim();
+    if (url) return path.basename(url).replace(/\.git$/, "");
+  } catch {
+    /* no remote — the directory name is the best guess */
+  }
+  return path.basename(root);
+}
+
+/** The page in `dir` whose frontmatter declares this translationKey, if any. */
+function findPageByTranslationKey(dir: string, key: string): string | null {
+  let entries: string[];
+  try {
+    entries = fs.readdirSync(dir);
+  } catch {
+    return null; // garden without a pages/ tree
+  }
+  for (const entry of entries) {
+    if (!entry.endsWith(".md")) continue;
+    const filePath = path.join(dir, entry);
+    const fm = parseFrontmatter(fs.readFileSync(filePath, "utf-8"));
+    if (fm.translationKey === key) return filePath;
+  }
+  return null;
+}
+
 function resolveContentFile(
   urlPath: string
 ): { filePath: string; isNotes: boolean; collection: string } | null {
@@ -666,16 +736,35 @@ function resolveContentFile(
   // below would match.
   urlPath = urlPath.replace(new RegExp(`^/g/${member}(?=/|$)`), "") || "/";
 
-  // Strip locale prefix
+  // Strip locale prefix. `/fr` on its own is the French home page, so it has to
+  // match too — not just `/fr/...`.
   let locale = "en";
-  const localeMatch = urlPath.match(/^\/fr(\/.*)/);
+  const localeMatch = urlPath.match(/^\/fr(\/.*)?$/);
   if (localeMatch) {
     locale = "fr";
-    urlPath = localeMatch[1];
+    urlPath = localeMatch[1] || "/";
   }
 
   // Remove trailing slash
   urlPath = urlPath.replace(/\/$/, "");
+
+  // Standalone pages (about, home) live in pages/<locale>/ and are rendered by
+  // hand-written .astro routes, so they never match the /prefix/{id} shape
+  // below. Their URL segment is the filename — /about → pages/en/about.md,
+  // /fr/a-propos → pages/fr/a-propos.md — while the site root is whichever page
+  // carries `translationKey: home` (home.md in English, accueil.md in French).
+  const singleSegment = urlPath.match(/^\/([^/]+)$/);
+  if (!urlPath || singleSegment) {
+    const pagesDir = path.join(contentRoot, "pages", locale);
+    const filePath = singleSegment
+      ? path.join(pagesDir, `${singleSegment[1]}.md`)
+      : findPageByTranslationKey(pagesDir, "home");
+    if (filePath && fs.existsSync(filePath)) {
+      return { filePath, isNotes: false, collection: "pages" };
+    }
+    // Not a page — fall through: a bare /notes or /books is a collection index,
+    // which has no content file of its own and resolves to null as before.
+  }
 
   // Check /fiches/{collection}/{slug} — re-insert locale to find content file
   const ficheMatch = urlPath.match(/^\/fiches\/([^/]+)\/(.+)$/);
