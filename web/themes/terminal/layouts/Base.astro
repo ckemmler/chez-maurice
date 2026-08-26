@@ -90,6 +90,10 @@ const alternateAvailable = alternatePath !== null;
       html.dark .icon-moon { display: none !important; }
       .icon-sun { display: none; }
     </style>
+    {/* The green dot is an authoring cue: it marks which items are published.
+        On the built site every visible item is public by definition, so the dot
+        says nothing and just shows up next to every title. Keep it in dev. */}
+    {!import.meta.env.DEV && <style is:inline set:html=".public-dot { display: none !important; }" />}
     <script is:inline>
       // Prevent FOUC: apply dark mode before paint
       (function() {
