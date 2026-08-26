@@ -16,7 +16,12 @@ load_env
 GARDEN="${GARDEN:-candide}"
 THEME="${THEME:-$GARDEN}"
 
-: "${CF_PAGES_PROJECT:?set CF_PAGES_PROJECT (the Cloudflare Pages project name) in .env}"
+# Deliberately NOT called CF_PAGES_PROJECT: deploy-landing.sh already reads that
+# name, defaulting to the product landing site. Sharing one variable between two
+# scripts that publish different sites to different projects means a shell that
+# happens to have .env loaded would push the landing page over the personal
+# garden, or the reverse — silently, since wrangler would just accept it.
+: "${GARDEN_PAGES_PROJECT:?set GARDEN_PAGES_PROJECT (the Cloudflare Pages project this garden publishes to) in .env}"
 
 garden_dir="$(gardens_root)/$GARDEN"
 [[ -d "$garden_dir" ]] || { echo "✗ no garden at $garden_dir"; exit 1; }
@@ -38,5 +43,5 @@ cd "$REPO/web"
 echo "→ building $GARDEN (theme: $THEME)"
 NODE_ENV=production GARDEN="$GARDEN" THEME="$THEME" npm run build
 
-echo "→ deploying to Cloudflare Pages project '$CF_PAGES_PROJECT'"
-npx wrangler pages deploy dist --project-name="$CF_PAGES_PROJECT"
+echo "→ deploying to Cloudflare Pages project '$GARDEN_PAGES_PROJECT'"
+npx wrangler pages deploy dist --project-name="$GARDEN_PAGES_PROJECT"

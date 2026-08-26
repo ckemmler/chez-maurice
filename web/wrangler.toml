@@ -1,11 +1,16 @@
-# Cloudflare Pages configuration
-name = "akita-web"
+# Cloudflare Pages configuration for the garden site.
+#
+# Nothing reads this today: scripts/publish-web.sh passes the target explicitly
+# (`wrangler pages deploy dist --project-name=…`), and wrangler ignores a Pages
+# config that declares no `pages_build_output_dir`. It is kept correct rather
+# than deleted so `wrangler pages dev` has somewhere to read its port from, and
+# so the next person to open it isn't misled about where this site goes.
+#
+# `pages_build_output_dir` is deliberately absent. Adding it is what makes
+# wrangler honour this file for deploys — at which point the name below would
+# start competing with the --project-name the script passes, for no gain.
+name = "candide-me"
 compatibility_date = "2024-01-01"
-
-# R2 bucket binding for snapshots
-[[r2_buckets]]
-binding = "SNAPSHOTS"
-bucket_name = "akita-web-snapshots"
 
 # For local development with wrangler pages dev
 [dev]
