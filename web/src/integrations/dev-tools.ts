@@ -562,7 +562,19 @@ const RESOURCE_PREFIX_MAP: Record<string, string> = {
 function resolveContentFile(
   urlPath: string
 ): { filePath: string; isNotes: boolean; collection: string } | null {
-  const contentRoot = path.resolve(import.meta.dirname, "../content");
+  // The member's garden, wherever it is configured to live. This used to point
+  // at web/src/content — a directory that is now empty, content having moved to
+  // MAURICE_GARDENS_DIR. Every lookup failed, so every toolbar control that
+  // depends on one (public, private, delete, share) stayed hidden: the bar was
+  // left with only the two buttons that ask nothing of the filesystem.
+  const member = process.env.GARDEN || "demo";
+  const gardensRoot = process.env.MAURICE_GARDENS_DIR || path.join(process.cwd(), "gardens");
+  const contentRoot = path.join(gardensRoot, member);
+
+  // Strip the garden base. A member's garden is served at /g/<member>/, so the
+  // browser sends location.pathname with that prefix and none of the patterns
+  // below would match.
+  urlPath = urlPath.replace(new RegExp(`^/g/${member}(?=/|$)`), "") || "/";
 
   // Strip locale prefix
   let locale = "en";
