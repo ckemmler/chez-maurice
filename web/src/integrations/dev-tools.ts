@@ -1,5 +1,5 @@
 import type { AstroIntegration } from "astro";
-import { spawn } from "node:child_process";
+import { spawn, execFileSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 
@@ -196,6 +196,7 @@ export default function devTools(): AstroIntegration {
                 "../content"
               );
               const updated: string[] = [];
+              const touched: string[] = [];
 
               for (const { slug, order } of items) {
                 // Try en first, then fr
@@ -226,8 +227,12 @@ export default function devTools(): AstroIntegration {
 
                 fs.writeFileSync(filePath, content, "utf-8");
                 updated.push(slug);
+                touched.push(filePath);
               }
 
+              // One commit for the whole reorder: the children only make sense
+              // renumbered together.
+              autoCommit(touched, `Reorder ${updated.length} child note(s)`);
               res.setHeader("Content-Type", "application/json");
               res.end(JSON.stringify({ updated, count: updated.length }));
             } catch (err) {
@@ -371,6 +376,7 @@ export default function devTools(): AstroIntegration {
                       }
                     }
                     fs.writeFileSync(content_path, fileContent, "utf-8");
+                    autoCommit([content_path], `Record social share: ${path.basename(content_path)}`);
                   }
 
                   res.setHeader("Content-Type", "application/json");
@@ -412,19 +418,28 @@ export default function devTools(): AstroIntegration {
 
               // Delete the note file
               fs.unlinkSync(result.filePath);
+              const touched: string[] = [result.filePath];
 
-              // Delete associated image if it exists
+              // Delete associated image if it exists. Same stale root as
+              // resolveContentFile had: ../content is empty since gardens moved
+              // out of the checkout, so the image and the wikilinks below were
+              // silently left behind on every delete.
               const noteId = path.basename(result.filePath, path.extname(result.filePath));
-              const imagesDir = path.resolve(import.meta.dirname, "../content/images/notes");
+              const gardenRoot = path.join(
+                process.env.MAURICE_GARDENS_DIR || path.join(process.cwd(), "gardens"),
+                process.env.GARDEN || "demo",
+              );
+              const imagesDir = path.join(gardenRoot, "images", "notes");
               for (const ext of [".jpg", ".png", ".svg", ".webp"]) {
                 const imgPath = path.join(imagesDir, `${noteId}${ext}`);
                 if (fs.existsSync(imgPath)) {
                   fs.unlinkSync(imgPath);
+                  touched.push(imgPath);
                 }
               }
 
               // Remove wikilinks referencing this note from other .md files
-              const contentRoot = path.resolve(import.meta.dirname, "../content");
+              const contentRoot = gardenRoot;
               const notesDir = path.join(contentRoot, "notes");
               const wikiLinkPattern = new RegExp(`^\\[\\[${noteId}(\\|[^\\]]*)?\\]\\]\\s*\\n?`, "gm");
               for (const locale of ["en", "fr"]) {
@@ -437,10 +452,15 @@ export default function devTools(): AstroIntegration {
                   if (content.includes(`[[${noteId}`)) {
                     const updated = content.replace(wikiLinkPattern, "");
                     fs.writeFileSync(filePath, updated, "utf-8");
+                    touched.push(filePath);
                   }
                 }
               }
 
+              // One commit: the note, its image, and the links that pointed at
+              // it are a single edit, and splitting them would leave the repo in
+              // a state where a link outlives its target.
+              autoCommit(touched, `Delete note: ${noteId}`);
               res.setHeader("Content-Type", "application/json");
               res.end(JSON.stringify({ deleted: noteId }));
             } catch (err) {
@@ -559,6 +579,76 @@ const RESOURCE_PREFIX_MAP: Record<string, string> = {
   people: "people",
 };
 
+
+// ── Auto-commit ─────────────────────────────────────────────────────
+//
+// The toolbar writes straight to the garden through this middleware, which for
+// a long time committed nothing: flipping a post to public left the change on
+// disk only, and a pull from another device would quietly work from a version
+// that never saw it. Maurice's own tools have always committed their writes
+// (tools/garden/server.py:_auto_commit); this is the same contract for the
+// browser's writes, deliberately mirroring its rules — commit only inside a
+// repo, push only when there's a remote, and never fail the caller over git.
+
+function gitRoot(file: string): string | null {
+  try {
+    const out = execFileSync("git", ["rev-parse", "--show-toplevel"], {
+      cwd: path.dirname(file),
+      encoding: "utf-8",
+      stdio: ["ignore", "pipe", "ignore"],
+    });
+    return out.trim() || null;
+  } catch {
+    return null; // not versioned — the files are still written
+  }
+}
+
+/**
+ * Commit (and push, if there's a remote) files the toolbar just changed.
+ *
+ * Best-effort by design: a garden that isn't a repo, a divergence, a missing
+ * remote — none of these should turn a working toggle into a failed request.
+ * Deletions are handled too, hence `git add -A` on the specific paths rather
+ * than a plain add.
+ */
+function autoCommit(files: string[], message: string): void {
+  const existing = files.filter((f) => f);
+  if (!existing.length) return;
+  const root = gitRoot(existing[0]!);
+  if (!root) return;
+
+  try {
+    const rel = existing
+      .filter((f) => path.resolve(f).startsWith(root + path.sep))
+      .map((f) => path.relative(root, f));
+    if (!rel.length) return;
+
+    const run = (args: string[]) =>
+      execFileSync("git", args, { cwd: root, encoding: "utf-8", stdio: ["ignore", "pipe", "pipe"] });
+
+    run(["add", "-A", "--", ...rel]);
+    // Nothing staged means nothing changed — a toggle that ended where it
+    // started, say. `git commit` would fail on that; treat it as success.
+    try {
+      execFileSync("git", ["diff", "--cached", "--quiet"], { cwd: root, stdio: "ignore" });
+      return;
+    } catch {
+      /* there are staged changes — carry on */
+    }
+    run(["commit", "-m", message]);
+    const remotes = run(["remote"]).trim();
+    if (remotes) {
+      try {
+        run(["push"]);
+      } catch {
+        // A divergence needs a human. The commit is safe locally either way.
+      }
+    }
+  } catch {
+    /* never let git break the toolbar */
+  }
+}
+
 function resolveContentFile(
   urlPath: string
 ): { filePath: string; isNotes: boolean; collection: string } | null {
@@ -637,6 +727,7 @@ function resolveAndTogglePublic(
   let content = fs.readFileSync(result.filePath, "utf-8");
   const { content: updated, enabled } = toggleFlag(content, "public");
   fs.writeFileSync(result.filePath, updated, "utf-8");
+  autoCommit([result.filePath], `Set public ${enabled ? "on" : "off"}: ${path.basename(result.filePath)}`);
   return { file: result.filePath, public: enabled };
 }
 
@@ -649,6 +740,7 @@ function resolveAndTogglePrivate(
   let content = fs.readFileSync(result.filePath, "utf-8");
   const { content: updated, enabled } = toggleFlag(content, "encrypted");
   fs.writeFileSync(result.filePath, updated, "utf-8");
+  autoCommit([result.filePath], `Set encrypted ${enabled ? "on" : "off"}: ${path.basename(result.filePath)}`);
   return { file: result.filePath, private: enabled };
 }
 
