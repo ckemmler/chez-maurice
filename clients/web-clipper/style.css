@@ -1,0 +1,108 @@
+/* Maurice's editorial palette: warm monochrome, hairlines, no gradients.
+   Mirrors the token vocabulary in the garden's tokens.css, kept small and
+   self-contained — an extension loads no external stylesheet or font. */
+
+:root {
+  --paper: #faf7f2;
+  --paper-warm: #f4efe7;
+  --ink: #2b2724;
+  --ink-soft: #5c554e;
+  --ink-faint: #8a827a;
+  --rule: rgba(43, 39, 36, 0.14);
+  --good: #4a6b52;
+  --bad: #8a3a3a;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --paper: #1c1a18;
+    --paper-warm: #24211e;
+    --ink: #ece7df;
+    --ink-soft: #b3aca3;
+    --ink-faint: #857d74;
+    --rule: rgba(236, 231, 223, 0.16);
+    --good: #7fa688;
+    --bad: #c98080;
+  }
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font: 13px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, system-ui, sans-serif;
+}
+
+h1 {
+  margin: 0 0 2px;
+  font-family: Iowan Old Style, "Palatino Linotype", Georgia, serif;
+  font-style: italic;
+  font-weight: 400;
+  font-size: 17px;
+  letter-spacing: 0.01em;
+}
+
+.eyebrow {
+  font-family: ui-monospace, SFMono-Regular, "JetBrains Mono", Menlo, monospace;
+  font-size: 10px;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+
+label { display: block; }
+
+input[type="text"],
+input[type="url"],
+input[type="password"],
+textarea {
+  width: 100%;
+  margin-top: 4px;
+  padding: 7px 9px;
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  background: var(--paper-warm);
+  color: var(--ink);
+  font: inherit;
+}
+
+textarea { resize: vertical; min-height: 70px; }
+
+input:focus, textarea:focus {
+  outline: none;
+  border-color: var(--ink-soft);
+}
+
+button {
+  padding: 7px 14px;
+  border: 1px solid var(--ink);
+  border-radius: 6px;
+  background: var(--ink);
+  color: var(--paper);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+button.ghost {
+  background: transparent;
+  color: var(--ink-soft);
+  border-color: var(--rule);
+  font-weight: 400;
+}
+
+button:disabled { opacity: 0.45; cursor: default; }
+
+hr {
+  border: 0;
+  border-top: 1px solid var(--rule);
+  margin: 14px 0;
+}
+
+a { color: var(--ink-soft); }
+
+.muted { color: var(--ink-faint); }
+.good { color: var(--good); }
+.bad { color: var(--bad); }
