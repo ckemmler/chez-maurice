@@ -73,6 +73,11 @@ class MetadataConfig(BaseModel):
 class SourceConfig(BaseModel):
     path: Path
     pattern: str = "**/*"
+    # Glob patterns, matched against the source-relative path, that this source
+    # must NOT claim. Needed because pathlib globs have no negation: the garden
+    # tree nests notes, fiches and published cards at the same depth, so the
+    # cards source can only be expressed as "everything at that depth, except".
+    exclude: List[str] = Field(default_factory=list)
     recursive: bool = True
     chunking: ChunkingConfig
     metadata: MetadataConfig

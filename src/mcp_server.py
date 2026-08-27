@@ -65,12 +65,37 @@ class CorpusMCPServer:
             return [
                 Tool(
                     name="search",
-                    description="Semantic search across indexed corpus",
+                    description=(
+                        "Semantic search across the indexed corpus: garden notes, fiches "
+                        "(books, films, series, podcasts, articles, people) and the long "
+                        "text hanging off them, book chapters, thoughts, dossiers.\n\n"
+                        "`filters` narrows by any metadata field a document carries, which "
+                        "for a fiche is its whole frontmatter — flattened, so the nested "
+                        "`meta:` block is reachable at the top level. A string matches as a "
+                        "substring (case-insensitive), a list matches any of its values, a "
+                        "number or boolean matches exactly.\n\n"
+                        "Useful keys: source_type (note | fiche | fragment | book | thought | "
+                        "dossier), collection (books | articles | movies | games | series | "
+                        "podcasts | people), author, publication, title, tags, year, "
+                        "published_at, status, locale.\n\n"
+                        'Examples: {"source_type": "fiche", "collection": "books"} — only book '
+                        'fiches. {"author": "Seth"} — anything by an author whose name contains '
+                        'Seth. {"collection": ["articles", "podcasts"], "publication": "Monde"}.'
+                    ),
                     inputSchema={
                         "type": "object",
                         "properties": {
                             "query": {"type": "string"},
                             "limit": {"type": "integer", "default": 10},
+                            "filters": {
+                                "type": "object",
+                                "description": (
+                                    "Metadata constraints, ANDed together. Keys must be plain "
+                                    "identifiers; values are a string (substring match), a list "
+                                    "(match any), or a number/boolean (exact)."
+                                ),
+                                "additionalProperties": True,
+                            },
                         },
                         "required": ["query"],
                     },
@@ -150,6 +175,33 @@ class CorpusMCPServer:
                     name="corpus_stats",
                     description="Get corpus statistics",
                     inputSchema={"type": "object", "properties": {}},
+                ),
+                Tool(
+                    name="index_path",
+                    description=(
+                        "Index one file into a named source, now. The push hook for writers "
+                        "that live outside this process — the Bun server writes article "
+                        "fiches straight to disk, and the gateway runs the corpus with its "
+                        "file watcher off, so nothing would otherwise pick them up.\n\n"
+                        "The path must sit under that source's root and match its glob; "
+                        "anything else is a no-op, never an error."
+                    ),
+                    inputSchema={
+                        "type": "object",
+                        "properties": {
+                            "source": {
+                                "type": "string",
+                                "description": "Source name, e.g. garden-fiches, garden-fragments, garden-notes",
+                            },
+                            "path": {"type": "string", "description": "Absolute path of the file"},
+                            "deleted": {
+                                "type": "boolean",
+                                "default": False,
+                                "description": "Drop the file's chunks instead of indexing it",
+                            },
+                        },
+                        "required": ["source", "path"],
+                    },
                 ),
                 Tool(
                     name="reindex",
@@ -305,11 +357,15 @@ class CorpusMCPServer:
             if name == "search":
                 query = arguments.get("query")
                 limit = arguments.get("limit", 10)
+                filters = arguments.get("filters") or None
+                if filters is not None and not isinstance(filters, dict):
+                    raise ValueError("filters must be an object")
                 results = await semantic_search(
                     query,
                     embedder=self.orchestrator.embedder,
                     indexer=self.orchestrator.indexer,
                     limit=limit,
+                    filters=filters,
                 )
                 payload = {"results": results}
             elif name == "search_in_book":
@@ -356,6 +412,14 @@ class CorpusMCPServer:
             elif name == "corpus_stats":
                 stats = await corpus_stats(indexer=self.orchestrator.indexer)
                 payload = stats
+            elif name == "index_path":
+                source = arguments.get("source")
+                target = Path(str(arguments.get("path")))
+                if arguments.get("deleted"):
+                    self.orchestrator.remove_single(source, target)
+                else:
+                    await self.orchestrator.index_single(source, target)
+                payload = {"source": source, "path": str(target)}
             elif name == "reindex":
                 await self.orchestrator.initial_index(arguments.get("sources"))
                 payload = {"status": "reindex started"}

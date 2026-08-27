@@ -5,13 +5,19 @@ from __future__ import annotations
 import hashlib
 import asyncio
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 from .chunker import Chunk, paragraph_chunks, fixed_chunks, heading_chunks, semantic_chunks
 from .config import SourceConfig
 from .embedder import Embedder
 from .store import VectorStore
-from .utils import read_text_with_frontmatter, apply_path_extractors
+from .utils import (
+    apply_path_extractors,
+    build_metadata_head,
+    build_metadata_prose,
+    flatten_frontmatter,
+    read_text_with_frontmatter,
+)
 from .hash_store import HashStore
 
 
@@ -64,19 +70,43 @@ async def process_file(
     )
     text = text_meta.text
 
-    base_metadata: Dict[str, str] = {
+    base_metadata: Dict[str, Any] = {
         "source": source_name,
         "source_type": metadata_cfg.source_type,
     }
-    base_metadata.update(text_meta.payload)
+    # Flattened, so a fiche's `meta:` fields become filterable payload keys —
+    # the store builds predicates over `$.<key>` and rejects dotted ones.
+    base_metadata.update(flatten_frontmatter(text_meta.payload))
     if metadata_cfg.extract_from_path:
         base_metadata.update(apply_path_extractors(file_path, metadata_cfg.extract_from_path))
 
-    chunks = _chunk_text(text, source_config)
-    if not chunks:
-        return 0
+    from_frontmatter = metadata_cfg.extract_from_frontmatter
+    head = build_metadata_head(base_metadata) if from_frontmatter else ""
+    prose = build_metadata_prose(base_metadata) if from_frontmatter else ""
 
-    vectors = await embedder.embed_batch(chunk.text for chunk in chunks)
+    chunks = _chunk_text(text, source_config)
+
+    # The document's own prose about itself — subtitle, summary, blurb — as one
+    # chunk. Stored, so a hit on it can be quoted; separate, so it is not
+    # repeated on top of every body chunk.
+    if prose:
+        chunks.append(Chunk(text=prose, index=len(chunks)))
+
+    if not chunks:
+        # A fiche can legitimately have an empty body — capture first, verdict
+        # later. Its identity is still worth finding, so index that alone rather
+        # than dropping the document.
+        if not head:
+            return 0
+        chunks = [Chunk(text=head, index=0)]
+        head = ""
+
+    # The head rides along with every chunk at embed time but is never stored:
+    # search matches on title/author/publication/year wherever the hit lands in
+    # a long document, while quoted results stay the real text.
+    vectors = await embedder.embed_batch(
+        (f"{head}\n\n{chunk.text}" if head else chunk.text) for chunk in chunks
+    )
 
     await asyncio.to_thread(indexer.delete_unit, unit_key=str(file_path), member_id=member_id)
 

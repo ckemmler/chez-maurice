@@ -278,6 +278,8 @@ class CorpusOrchestrator:
         # semantics consistent with Path.glob (which *does* return those files), we
         # try both the original pattern and, when it starts with "**/", a version
         # without that prefix so "*.md" also matches root-level files.
+        if any(rel.match(ex) for ex in cfg.exclude):
+            return False
         if rel.match(pattern):
             return True
         if pattern.startswith("**/"):
