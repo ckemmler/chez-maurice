@@ -3,6 +3,7 @@ import type { Locale } from "../i18n/config";
 import { localizedPath, resourceItemPath, stripLocalePrefix } from "../i18n/utils";
 import { isPublic, isEncrypted, isMoc as isMocFlag } from "../lib/flags";
 import { listNotes } from "../lib/notes-fs";
+import { ficheHeadline } from "../lib/fiche";
 
 export interface SearchEntry {
   id: string;
@@ -97,13 +98,19 @@ export async function buildSearchIndex(locale: Locale): Promise<SearchEntry[]> {
       data.locale === locale
     );
     for (const fiche of fiches) {
+      // A fiche's substance lives in its `meta:` block. Indexing the title
+      // alone made a shelf of books searchable by title and by nothing else —
+      // not the author, not the publication, not the summary.
+      const head = ficheHeadline(fiche.data);
       entries.push({
         id: fiche.id,
         title: fiche.data.title,
         collection: "fiches",
         tags: fiche.data.tags ?? [],
+        description: [head.subtitle, head.summary || head.excerpt].filter(Boolean).join(" — ") || undefined,
         url: `${locale === "en" ? "" : `/${locale}`}/fiches/${fiche.id.replace(/\/(fr|en)\//, "/")}`,
         public: false,
+        author: head.byline.join(", ") || undefined,
       });
     }
   }
