@@ -281,14 +281,34 @@ def _atomic_write(path: Path, content: str) -> None:
 _corpus_bg_tasks: set = set()
 
 
+def _corpus_source_for(path: Path) -> str:
+    """Which corpus source owns this path.
+
+    Three shapes live under a garden and each has its own source, so a pushed
+    write has to name the right one: index_single looks the source up by name
+    and silently no-ops when the path does not match its glob. Pushing
+    everything as 'garden-notes' — as this did before fiches were indexed at all
+    — meant every fiche and fragment write was thrown away.
+    """
+    if path.suffix == ".frag":
+        return "garden-fragments"
+    if path.stem.endswith("-fiche"):
+        return "garden-fiches"
+    # <member>/notes/<locale>/<slug>.md — anything else at that depth is a
+    # published card (a resource entry, a blog post, an essay, a page).
+    if path.parent.parent.name == "notes":
+        return "garden-notes"
+    return "garden-cards"
+
+
 def _push_note_to_corpus(path: Path, *, deleted: bool = False) -> None:
-    """Best-effort: keep the corpus vector index in sync with a note write/delete.
+    """Best-effort: keep the corpus vector index in sync with a write/delete.
 
     The corpus tool runs in-process in the same MCP gateway but with its file
-    watcher off, so note edits must be pushed explicitly (mirrors how live
+    watcher off, so edits must be pushed explicitly (mirrors how live
     conversations are re-indexed post-turn). No-op when the corpus tool isn't
-    present (public-repo build). The corpus 'garden-notes' source filters
-    non-note paths, so passing any content path here is safe."""
+    present (public-repo build). Each source filters paths that are not its own,
+    so a mis-routed push costs nothing but is indexed nowhere."""
     try:
         # Prefer the gateway's module name ("tools.corpus.server") so we share its
         # already-loaded orchestrator instance; fall back to the top-level name for
@@ -299,19 +319,20 @@ def _push_note_to_corpus(path: Path, *, deleted: bool = False) -> None:
             from corpus.server import index_path, remove_path
     except Exception:
         return
+    source = _corpus_source_for(path)
     try:
         if deleted:
-            remove_path("garden-notes", path)
+            remove_path(source, path)
             return
         loop = asyncio.get_running_loop()
-        task = loop.create_task(index_path("garden-notes", path))
+        task = loop.create_task(index_path(source, path))
         _corpus_bg_tasks.add(task)
         task.add_done_callback(_corpus_bg_tasks.discard)
     except RuntimeError:
-        # No running loop (a to_thread worker or CLI). Non-note paths no-op
-        # before touching the store; index synchronously so we never lose a note.
+        # No running loop (a to_thread worker or CLI). Non-matching paths no-op
+        # before touching the store; index synchronously so we never lose a write.
         try:
-            asyncio.run(index_path("garden-notes", path))
+            asyncio.run(index_path(source, path))
         except Exception:
             LOGGER.exception("corpus index failed for %s", path)
     except Exception:
@@ -456,6 +477,7 @@ def _parse_fragment(path: Path) -> tuple[str, str]:
 def _write_fragment(path: Path, summary: str, body: str) -> None:
     escaped = summary.replace('"', '\\"')
     _atomic_write(path, f'---\nsummary: "{escaped}"\n---\n{body}')
+    _push_note_to_corpus(path)
 
 
 def _resolve_fragment_parent(args: dict[str, Any]) -> Path:
@@ -4171,6 +4193,9 @@ def _handle_publish_content(args: dict[str, Any]) -> dict[str, Any]:
     _atomic_write(file_path, file_content)
     if collection == "notes":
         _mark_activity(slug)  # signal the live edit-activity indicator for new notes too
+    # A published card is now indexed too — the front of the card carries the
+    # finished verdict, and it was as invisible to search as the fiche was.
+    _push_note_to_corpus(file_path)
     _auto_commit_with_images([file_path], f"Publish {collection}: {slug}")
 
     return {
