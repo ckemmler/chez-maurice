@@ -130,6 +130,7 @@ export const ui: Record<Locale, Record<string, string>> = {
     "fiches.noFichesYet": "No fiches yet.",
     "fiches.backToFiches": "← Back to fiches",
     "fiches.viewFiche": "View fiche",
+    "fiches.savedOn": "saved",
 
     // About
     "about.title": "About",
@@ -279,6 +280,7 @@ export const ui: Record<Locale, Record<string, string>> = {
     "fiches.noFichesYet": "Aucune fiche pour le moment.",
     "fiches.backToFiches": "← Retour aux fiches",
     "fiches.viewFiche": "Voir la fiche",
+    "fiches.savedOn": "gardée le",
 
     // About
     "about.title": "À propos",

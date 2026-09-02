@@ -1,0 +1,71 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <link rel="stylesheet" href="style.css" />
+    <style>
+      body { width: 340px; padding: 14px; }
+      .page-title {
+        margin: 0 0 1px;
+        font-weight: 600;
+        font-size: 13px;
+        line-height: 1.35;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+      }
+      .page-host { font-size: 11px; }
+      .field { margin-top: 12px; }
+      .row { display: flex; gap: 8px; align-items: center; margin-top: 14px; }
+      .row button { flex: 1; }
+      .row button.ghost { flex: 0 0 auto; }
+      #status { margin-top: 10px; font-size: 12px; min-height: 1.5em; }
+      #already {
+        margin-top: 10px;
+        padding: 7px 9px;
+        border: 1px solid var(--rule);
+        border-left: 2px solid var(--ink-soft);
+        border-radius: 4px;
+        font-size: 12px;
+        background: var(--paper-warm);
+      }
+      [hidden] { display: none !important; }
+    </style>
+  </head>
+  <body>
+    <div class="eyebrow">Save to Maurice</div>
+
+    <section id="setup" hidden>
+      <h1>Not connected yet</h1>
+      <p class="muted">Point the clipper at your Maurice server and paste an API token.</p>
+      <div class="row"><button id="open-options">Open settings</button></div>
+    </section>
+
+    <section id="main" hidden>
+      <h1 class="page-title" id="title">…</h1>
+      <div class="page-host muted" id="host"></div>
+
+      <div id="already" hidden></div>
+
+      <div class="field">
+        <label class="eyebrow" for="comment">Why keep this?</label>
+        <textarea id="comment" placeholder="Optional — a note to your future self"></textarea>
+      </div>
+
+      <div class="field">
+        <label class="eyebrow" for="tags">Tags</label>
+        <input type="text" id="tags" placeholder="comma-separated, optional" />
+      </div>
+
+      <div class="row">
+        <button id="save">Save</button>
+        <button class="ghost" id="settings" title="Settings">⚙</button>
+      </div>
+
+      <div id="status"></div>
+    </section>
+
+    <script type="module" src="popup.js"></script>
+  </body>
+</html>
