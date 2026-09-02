@@ -66,8 +66,25 @@ async def corpus_server_context(config_path: Path | None = None, *, watch: bool 
 @asynccontextmanager
 async def gateway_context():
     """MCP-gateway entrypoint: yields the low-level Server, config self-resolved
-    (MAURICE_CORPUS_CONFIG / AKITA_CORPUS_CONFIG / default), no file watcher."""
-    async with corpus_server_context(watch=False) as server:
+    (MAURICE_CORPUS_CONFIG / AKITA_CORPUS_CONFIG / default), watching for edits.
+
+    The watcher runs *here* rather than as its own service, because the store is
+    a per-member sqlite file and this process already holds it open — a second
+    process would be a second writer.
+
+    It was off, and the explicit push hooks (the garden MCP tool, and the Bun
+    server through `index_path`) covered every write those two make. What they
+    cannot cover is the rest: a fiche edited by hand in Vim, a `git pull` into
+    the garden, a file dropped in by anything else. The garden's whole premise
+    is plain markdown you own and edit directly, so that gap was the common case
+    rather than the exotic one, and the index drifted from the files silently.
+
+    A push and a watcher event for the same write cost nothing: `process_file`
+    hashes the file first and the second pass is a no-op. Set
+    MAURICE_CORPUS_WATCH=0 to turn it back off.
+    """
+    watch = os.environ.get("MAURICE_CORPUS_WATCH", "1") not in {"0", "false", "no"}
+    async with corpus_server_context(watch=watch) as server:
         yield server.app
 
 
