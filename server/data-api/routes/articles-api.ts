@@ -49,7 +49,7 @@ app.post("/scrape", async (c) => {
       html: body.html,
       source_client: "legacy-scrape",
     });
-    if (!saved.duplicate) scheduleArticleSummary(memberId, saved);
+    if (!saved.duplicate && !saved.needs_capture) scheduleArticleSummary(memberId, saved);
     // The shape the old route returned, so existing callers keep parsing it.
     return c.json(
       {

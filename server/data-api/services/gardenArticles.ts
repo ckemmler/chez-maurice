@@ -60,7 +60,11 @@ export interface SaveArticleInput {
   locale?: string;
   /** ios-share | chrome | mcp | web — how it got here, for later triage. */
   source_client?: string;
-  /** Overrides extraction when the caller knows better (rare). */
+  /**
+   * Fallback title, used only when extraction yields none — a browser clipper
+   * sends `document.title` on every save, and that is "Real Title | Le Monde"
+   * where og:title is the real one. Extraction wins where it has an answer.
+   */
   title?: string;
 }
 
@@ -271,20 +275,24 @@ export async function saveArticleFiche(
     }
   }
 
-  const title = (input.title || article.title).trim();
+  const title = (article.title || input.title || "").trim();
   if (!title) throw new ArticleSaveError("Could not extract a title from the URL", 422);
 
   const publication = article.site_name || parsedUrl.hostname.replace(/^www\./, "");
-  // Completing a bookmark keeps its path, so links and its comment history hold.
-  const slug = stub ? stub.slug : uniqueSlug(garden, locale, slugify(title) || slugify(publication) || "article");
-  const file = stub ? stub.file : fichePath(garden, COLLECTION, locale, slug);
+  // Completing a bookmark keeps its path, so links and its comment history hold
+  // — and therefore its locale too. Taking the locale from the request instead
+  // would stamp `locale: en` on a fiche sitting in `fr/`, write its cover under
+  // the other prefix, and answer with web paths that do not exist.
+  const fileLocale = stub ? stub.locale : locale;
+  const slug = stub ? stub.slug : uniqueSlug(garden, fileLocale, slugify(title) || slugify(publication) || "article");
+  const file = stub ? stub.file : fichePath(garden, COLLECTION, fileLocale, slug);
   const written: string[] = [];
 
   // Cover — best effort, an article without one is still worth keeping.
   let imageUrl = "";
   if (article.image) {
     const abs = absolutizeImage(article.image, rawUrl);
-    const dest = resourceImagePaths(garden, COLLECTION, locale, slug);
+    const dest = resourceImagePaths(garden, COLLECTION, fileLocale, slug);
     if (abs && (await downloadImage(abs, dest.file))) {
       imageUrl = dest.url;
       written.push(dest.file);
@@ -319,7 +327,7 @@ export async function saveArticleFiche(
       resource_id: slug,
       date: savedAt,
       tags,
-      locale,
+      locale: fileLocale,
       meta,
     },
     stub
@@ -344,7 +352,7 @@ export async function saveArticleFiche(
   return {
     kind: "fiche",
     slug,
-    locale,
+    locale: fileLocale,
     file,
     title,
     url: rawUrl,
@@ -365,8 +373,8 @@ export async function saveArticleFiche(
     word_count: article.word_count,
     summary: null,
     fiche_path: path.relative(garden.root, file),
-    fiche_web_path: ficheWebPath(garden, COLLECTION, locale, slug),
-    card_web_path: cardWebPath(garden, COLLECTION, locale, slug),
+    fiche_web_path: ficheWebPath(garden, COLLECTION, fileLocale, slug),
+    card_web_path: cardWebPath(garden, COLLECTION, fileLocale, slug),
   };
 }
 
@@ -558,7 +566,11 @@ function uniqueSlug(garden: GardenRef, locale: string, base: string): string {
     fs.existsSync(path.join(dir, `${slug}-fiche.md`)) || fs.existsSync(path.join(dir, `${slug}.md`));
   if (!taken(base)) return base;
   for (let n = 2; n < 100; n++) {
-    const candidate = `${base.slice(0, 76)}-${n}`;
+    // Re-strip after the cut: slugify only trimmed a trailing hyphen at its own
+    // 80-char boundary, so slicing to 76 can expose another one and produce
+    // `…derni--2`, which assertSlug rejects — a 500 for a save that needed a
+    // suffix.
+    const candidate = `${base.slice(0, 76).replace(/-+$/, "")}-${n}`;
     if (!taken(candidate)) return candidate;
   }
   throw new ArticleSaveError("Could not find a free slug for this article", 422);

@@ -246,13 +246,13 @@ export function extractArticleFromHtml(url: string, html: string): ArticleMeta {
   const subtitle = jsonLd.alternativeHeadline || meta.subtitle || "";
   const author = og.author || jsonLd.author || article?.byline || meta.author || "";
   const description = og.description || jsonLd.description || article?.excerpt || meta.description || "";
-  const image = og.image || jsonLd.image || meta.image || "";
-  const site_name = og.site_name || jsonLd.publisher || meta.site_name || article?.siteName || "";
+  const image = og.image || jsonLd.image || "";
+  const site_name = og.site_name || jsonLd.publisher || article?.siteName || "";
   const published_at = normalizeDate(
     og.published_time || jsonLd.datePublished || meta.published_time || "",
   );
   const canonical_url = meta.canonical || og.url || url;
-  const lang = (html.match(/<html[^>]*\blang=["']([a-zA-Z-]{2,8})["']/i)?.[1] || meta.lang || "")
+  const lang = (html.match(/<html[^>]*\blang=["']([a-zA-Z-]{2,8})["']/i)?.[1] || "")
     .slice(0, 8)
     .toLowerCase();
 
@@ -425,9 +425,21 @@ export function decodeEntities(s: string): string {
     .replace(/&#x27;/gi, "'")
     .replace(/&#x2F;/gi, "/")
     .replace(/&nbsp;/g, " ")
-    .replace(/&#(\d+);/g, (_, n: string) => String.fromCharCode(Number(n)))
-    .replace(/&#x([0-9a-f]+);/gi, (_, h: string) => String.fromCharCode(parseInt(h, 16)))
+    // fromCodePoint, not fromCharCode: an emoji in a headline is above U+FFFF,
+    // and fromCharCode would truncate it to a lone private-use character — in
+    // the fiche's title, and in the slug derived from it.
+    .replace(/&#(\d+);/g, (m, n: string) => codePoint(Number(n)) ?? m)
+    .replace(/&#x([0-9a-f]+);/gi, (m, h: string) => codePoint(parseInt(h, 16)) ?? m)
     .replace(/&amp;/g, "&"); // last: so &amp;lt; decodes to &lt;, not <
+}
+
+function codePoint(n: number): string | null {
+  if (!Number.isInteger(n) || n < 0 || n > 0x10ffff) return null;
+  try {
+    return String.fromCodePoint(n);
+  } catch {
+    return null;
+  }
 }
 
 // ── URL handling ──

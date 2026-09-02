@@ -100,19 +100,33 @@ async function save() {
     setStatus("Page too large to send — letting the server fetch it…", "muted");
   }
 
+  const comment = el("comment").value.trim() || undefined;
   const payload = {
     url: captured.url,
     html,
     title: captured.title || undefined,
-    selection: captured.selection || undefined,
-    comment: el("comment").value.trim() || undefined,
+    // The selection pre-fills the comment box, so sending it as well would
+    // write the same passage into the fiche twice — once as the lead quote,
+    // once as the reader's note.
+    selection: captured.selection && captured.selection !== comment ? captured.selection : undefined,
+    comment,
     tags: splitTags(el("tags").value),
     locale: config.locale,
     source_client: "chrome",
   };
 
   // Handed to the service worker so it survives this popup closing.
-  const reply = await chrome.runtime.sendMessage({ type: "save-article", payload });
+  let reply;
+  try {
+    reply = await chrome.runtime.sendMessage({ type: "save-article", payload });
+  } catch (err) {
+    // sendMessage rejects when the service worker cannot start or the channel
+    // closes before it answers — routine after worker eviction. Unhandled, it
+    // left the popup stuck on "Saving…" with the button disabled for good.
+    setStatus(`Could not reach the extension's worker: ${err?.message ?? err}`, "bad");
+    el("save").disabled = false;
+    return;
+  }
 
   if (!reply?.ok) {
     setStatus(reply?.error ?? "Save failed", "bad");

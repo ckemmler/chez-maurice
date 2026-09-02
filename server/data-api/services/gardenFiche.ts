@@ -89,7 +89,12 @@ type Yamlish = string | number | boolean | null | undefined | Yamlish[] | { [k: 
 function yamlScalar(value: string): string {
   if (value === "") return '""';
   const risky =
-    /^[\s>|*&!%@`#-]/.test(value) ||        // indicator at the start
+    // Every YAML indicator that can open a value, not just the ones that came
+    // to mind: a title of the form "[Analyse] …" or "{Tribune} …" — ordinary in
+    // the French press — opened a flow sequence and made the whole fiche
+    // unparseable, which silently took it out of dedup, out of the index, and
+    // out of Astro's schema.
+    /^[\s>|*&!%@`#,?[\]{}-]/.test(value) ||  // indicator at the start
     /[:#]\s/.test(value) ||                  // key-ish or comment-ish inside
     /:$/.test(value) ||
     /[\n\r\t"']/.test(value) ||
@@ -179,7 +184,10 @@ export function writeFragment(ficheFile: string, summary: string, body: string):
     .filter((n) => Number.isInteger(n));
   const next = String((nums.length ? Math.max(...nums) : 0) + 1).padStart(3, "0");
   const target = path.join(dir, `${next}.frag`);
-  atomicWrite(target, `---\nsummary: "${summary.replace(/"/g, '\\"')}"\n---\n${body}`);
+  // Backslash first, then quotes, and no newline can survive inside a
+  // double-quoted scalar — the Python side parses this block as YAML.
+  const escaped = summary.replace(/\\/g, "\\\\").replace(/"/g, '\\"').replace(/[\r\n]+/g, " ");
+  atomicWrite(target, `---\nsummary: "${escaped}"\n---\n${body}`);
   return target;
 }
 

@@ -122,6 +122,13 @@ export async function summarizeArticleText(input: SummaryInput): Promise<string>
     .trim();
 
   if (!summary) throw new Error("model returned an empty summary");
+  // A truncated paragraph is non-empty, so it would pass the check above, get
+  // committed, and stick — `summarizeAndStore` skips regeneration once a
+  // summary exists, so a retry without `force` would hand back the same stub of
+  // a sentence.
+  if (result.stop_reason === "max_tokens") {
+    throw new Error("the summary hit the token ceiling and would be cut off mid-sentence");
+  }
   return summary;
 }
 

@@ -45,7 +45,11 @@ app.post("/", async (c) => {
     const result = await saveArticleFiche(memberId, body);
     // Answer now, summarise after. A share sheet has to close immediately, and
     // the summary is worth several seconds we are not going to make it wait.
-    if (!result.duplicate) scheduleArticleSummary(memberId, result);
+    //
+    // Never for a bookmark: it has no text, so the summariser would fall back to
+    // fetching the URL — the very call that just refused us, which is why the
+    // bookmark exists.
+    if (!result.duplicate && !result.needs_capture) scheduleArticleSummary(memberId, result);
     return c.json(result, result.duplicate ? 200 : 201);
   } catch (e) {
     if (e instanceof ArticleSaveError) return c.json({ error: e.message }, e.status);

@@ -475,7 +475,9 @@ def _parse_fragment(path: Path) -> tuple[str, str]:
 
 
 def _write_fragment(path: Path, summary: str, body: str) -> None:
-    escaped = summary.replace('"', '\\"')
+    # Backslash first, then quotes, and no newline survives inside a
+    # double-quoted scalar — the Bun side writes the same shape.
+    escaped = summary.replace("\\", "\\\\").replace('"', '\\"').replace("\n", " ").replace("\r", " ")
     _atomic_write(path, f'---\nsummary: "{escaped}"\n---\n{body}')
     _push_note_to_corpus(path)
 
