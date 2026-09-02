@@ -91,12 +91,13 @@ blurb) is indexed once as its own chunk. See defect #18 for why.
 
 ## Defects found along the way
 
-Twenty-two were fixed as part of the work. They are listed because most were
-long-standing and silent, and because the pattern in several of them —
-a path that stopped being true when gardens moved out of the checkout — is
-likely to recur elsewhere.
+Thirty-seven were fixed. They are grouped by how they were found, because that
+turns out to be the useful axis: the ones caught while building share a cause
+(a path that stopped being true when gardens moved out of the checkout), the
+ones a review caught were mostly invisible from inside, and the last one was
+found only by writing the suite.
 
-### Fixed
+### Fixed while building
 
 | # | Where | What was wrong |
 |---|---|---|
@@ -123,6 +124,33 @@ likely to recur elsewhere.
 | 22 | `gardenArticles.ts` | The page's `rel=canonical` was extracted and then discarded — dedup ran on the shared URL alone, so the same article saved from a tracking link, an AMP variant or a mobile host produced a second fiche. The page's own name for itself is now the key, and a match is tried against both |
 | 19 | the garden itself | `articles/fr/client-challenge.md` and `security-verification.md` — a Cloudflare interstitial and an FT 403 page, saved as articles in April 2026 by the route defect #3 describes. Both were already flagged `status: discarded`. Removed from the garden (commit `bf56cd9`, pushed) and unindexed. Their two URLs are real articles and can be captured again: the Le Monde one now extracts cleanly, the FT one needs the browser extension |
 
+### Fixed by code review
+
+Two passes, one over the Carnet commit and one over the PR.
+
+| # | Where | What was wrong |
+|---|---|---|
+| 23 | `ShareViewController` | `completeRequest` fired 0.8s after Save while the send ran in a fire-and-forget `Task` — and completeRequest tears the process down, so the Task went with it. Survivable when the payload was a bare URL and the request usually won that race; with megabytes of rendered DOM it never does. The item stayed queued, the app re-sent the same megabytes, and the "bookmark" outcome was never seen |
+| 24 | `SharedContent.swift` | Reading attachments gave up on a provider as soon as one of its types matched. One attachment often carries several representations, so when Safari's JavaScript results came back unusable the URL on that same provider was never tried and the share was reported as "nothing shareable" |
+| 25 | `ShareViewController` | The highlighted passage was pre-filled into the comment box *and* sent as `selection`, writing the same text into the fiche twice |
+| 26 | `gardenFiche.ts` | **`yamlScalar` omitted the YAML indicators `[` and `{`.** A title of the form "[Analyse] …" or "{Tribune} …" — ordinary in the French press — opened a flow sequence and made the whole fiche unparseable: invisible to dedup (so every re-share made a twin), empty to `isStub` and `readStoredSummary`, rejected by Astro's schema. The highest-severity defect in the whole build, and it shipped |
+| 27 | `gardenArticles.ts` | A slug collision on a long title produced `…derni--2`, which `assertSlug` rejects — a 500 for a save that only needed a suffix |
+| 28 | `gardenArticles.ts` | Completing a bookmark kept the stub's path but took the locale from the request, so a completion from a differently-configured client stamped `locale: en` on a fiche living in `fr/`, wrote its cover under the other prefix, and answered with paths that do not exist |
+| 29 | `gardenArticles.ts` | `input.title` overrode extraction, and the browser clipper sends `document.title` on every save — so `og:title` lost to "Real Title \| Le Monde", in the fiche and in the slug derived from it. It is a fallback now |
+| 30 | `garden-articles.ts` | Summarisation was scheduled for bookmarks, guaranteeing a re-fetch of the site that had just refused us — which is the reason the bookmark exists |
+| 31 | `web-clipper/popup.js` | Same selection duplication as 25, on the browser side |
+| 32 | `web-clipper/popup.js` | `chrome.runtime.sendMessage` *rejects* when the service worker cannot start — routine after eviction. Unhandled, it left the popup stuck on "Saving…" with the button disabled for good |
+| 33 | `articleSummary.ts` | A summary that hit `max_tokens` was committed as if complete — and stuck, since regeneration is skipped when a summary exists, so a retry without `force` returns the same half sentence |
+| 34 | `gardenFiche.ts`, `tools/garden` | `writeFragment` escaped only `"`, so a backslash or a newline in the publication name broke the scalar the Python side parses as YAML. Both sides fixed |
+| 35 | `articleExtract.ts` | Three fallbacks referenced meta keys the extractor never sets, one of them ahead of a term that could therefore never lose to it — the code read as if a meta-tag publication name took precedence when it could not participate |
+| 36 | `articleExtract.ts` | `decodeEntities` used `String.fromCharCode`, mangling any codepoint above U+FFFF: an emoji in a headline became a lone private-use character, in the title and in the slug |
+
+### Fixed by writing the suite
+
+| # | Where | What was wrong |
+|---|---|---|
+| 37 | `src/services/gardensRoot.ts` | The function cached `MAURICE_GARDENS_DIR`, so it kept answering with whatever the first caller in the process resolved. Under `bun test`, where every file shares one process, a suite setting the variable got someone else's answer — and wrote its fixtures into the checkout at `web/gardens/candide/`. Found by this suite doing exactly that. The variable is now read on every call; the cache remains for the filesystem probe it was actually for |
+
 ### Open
 
 | # | What | Why it is not fixed |
@@ -136,13 +164,16 @@ likely to recur elsewhere.
 | H | `server/` has 110 pre-existing `tsc` errors, `web/` 153 (no `@types/node`) | Pre-existing. The rewrite of `articles-api.ts` removed 39 of them |
 | I | Chrome removed `--load-extension` in v137 | Testing only. Loading unpacked from `chrome://extensions` still works. The extension test suite runs on Chrome for Testing 127 |
 | J | The corpus `reindex` tool replies `"reindex started"` but actually awaits completion | Cosmetic |
+| L | `test/composer` has two failing tests on `main`, unrelated to this work (`an encrypted note resolves…`, `encrypted flag survives…`) | Confirmed pre-existing by stashing this branch's changes and re-running. Not investigated |
+| M | Six of the eight suites written during the build lived in a temp directory that has since been wiped — the HTTP routes, the summary, the Chrome extension driven over CDP, the corpus indexing, the Swift-to-server round trip | Only `server/test/articles.test.ts` (23 tests) and the iOS share-payload test survive. The lost ones passed, but cannot be re-run. Rewriting the corpus and extension ones into their repos would be the highest-value recovery |
 | K | The web clipper is untested on Firefox | `background.service_worker` needs to become `background.scripts` for Firefox's MV3 |
 
 ---
 
 ## Verification
 
-243 assertions, all passing:
+277 assertions ran during the build and passed. Only some are still runnable —
+see open point M:
 
 | Suite | Assertions | What it covers |
 |---|---|---|
@@ -154,6 +185,12 @@ likely to recur elsewhere.
 | Chrome extension | 35 | Real Chrome over CDP: options page, DOM capture, worker save, dedup, failure reporting |
 | iOS share parsing | 16 | Fabricated `NSExtensionItem`s: Safari's shape, DOM-vs-URL precedence, oversized page, file fallback |
 | Corpus | 22 | Real garden indexed into an isolated store: flattening, preamble, filters, empty-body fiches |
+
+Of those, what lives in a repo and can be run again: `server/test/articles.test.ts`
+(23 tests, 52 assertions — `bun test`), covering the frontmatter titles that used
+to break parsing, slug collisions, canonical-URL dedup, the bookmark and its
+completion, and extraction from JSON-LD `@graph`. Plus the iOS share-payload test
+(16 assertions), which needs re-homing.
 
 Live checks after deployment: the API answers 401 (not 404) on the new routes;
 the gateway exposes `corpus__index_path` and a `corpus__search` carrying
