@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import os
 import fnmatch
 import logging
 from pathlib import Path
@@ -27,14 +28,24 @@ if _repo_root not in _sys.path:
 from tools.shared.context import member_id_var
 
 
+def _data_dir() -> Path:
+    """Where index state and import history live. MAURICE_CORPUS_DATA_DIR wins."""
+    env = os.environ.get("MAURICE_CORPUS_DATA_DIR")
+    directory = Path(env) if env else Path(__file__).resolve().parents[1] / "data"
+    directory.mkdir(parents=True, exist_ok=True)
+    return directory
+
+
 class CorpusOrchestrator:
     def __init__(self, config: CorpusConfig, vector_size: int) -> None:
         self.config = config
         self.embedder = Embedder(config.embedding)
         # `indexer` holds a VectorStore (Qdrant today; sqlite-vec in Phase 2).
         self.indexer = make_store(config, vector_size=vector_size)
-        state_path = Path(__file__).resolve().parents[1] / "data" / "index_state.db"
-        self.hash_store = HashStore(state_path)
+        # Overridable so a test suite does not write its state into the real
+        # data dir — the same trap gardensRoot fell into, where fixtures ended up
+        # in the checkout because a path could not be pointed elsewhere.
+        self.hash_store = HashStore(_data_dir() / "index_state.db")
         self.watcher: Watcher | None = None
         self.tasks: Dict[Path, asyncio.Task] = {}
         self.logger = logging.getLogger(__name__)
@@ -42,8 +53,7 @@ class CorpusOrchestrator:
         self.conversations = MauriceConversations()
         # slug -> member UUID, resolved from maurice.db for member_lookup sources.
         self._member_uuid_cache: Dict[str, Optional[str]] = {}
-        data_dir = Path(__file__).resolve().parents[1] / "data"
-        self.import_history = ImportHistoryStore(data_dir / "import_history.db")
+        self.import_history = ImportHistoryStore(_data_dir() / "import_history.db")
         self.archive_importer = ChatArchiveImporter()  # writes maurice.db conversations
 
     def start_import(

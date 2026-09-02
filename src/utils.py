@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+import logging
 import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, Any
 
 import frontmatter
+
+_LOG = logging.getLogger(__name__)
 
 
 @dataclass
@@ -20,9 +23,17 @@ def read_text_with_frontmatter(path: Path, *, extract_frontmatter: bool = False)
     text = path.read_text(encoding="utf-8")
     payload: Dict[str, Any] = {}
     if extract_frontmatter and text.startswith("---"):
-        parsed = frontmatter.loads(text)
-        payload.update(parsed.metadata or {})
-        text = parsed.content
+        try:
+            parsed = frontmatter.loads(text)
+        except Exception as exc:  # noqa: BLE001 — malformed YAML, not a reason to lose the file
+            # A typo in a hand-edited frontmatter used to raise here, and the
+            # caller logged it and moved on — so the whole document dropped out
+            # of the index, findable by nothing, with one line in a log nobody
+            # reads. Its body is still worth indexing; only the metadata is lost.
+            _LOG.warning("unreadable frontmatter in %s (%s); indexing the raw text", path, exc)
+        else:
+            payload.update(parsed.metadata or {})
+            text = parsed.content
     return FileMetadata(text=text.strip(), payload=payload)
 
 
@@ -80,9 +91,15 @@ _COLLECTION_WORDS = {
 }
 
 _IDENTITY_KEYS = ("title", "name", "headline")
+# `source` is deliberately absent: it names the corpus source that indexed the
+# document ("garden-fiches"), not anything about the work. It used to hold a
+# card's publication and read sensibly here — until the corpus's own vocabulary
+# was made to win, after which every preamble said "… — Anil Seth, Dutton,
+# garden-fiches — book". The alias in flatten_frontmatter already carries a
+# card's publication across as `publication`, so nothing is lost.
 _FACET_KEYS = (
     "author", "director", "creator", "host", "artist",
-    "publication", "source", "site_name", "publisher", "platform",
+    "publication", "site_name", "publisher", "platform",
 )
 _WHEN_KEYS = ("year", "published_at", "date_read", "date_watched", "date")
 _PROSE_KEYS = ("subtitle", "summary", "description", "excerpt", "overview", "role")

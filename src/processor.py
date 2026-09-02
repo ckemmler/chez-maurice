@@ -92,7 +92,12 @@ async def process_file(
     head = build_metadata_head(base_metadata) if from_frontmatter else ""
     prose = build_metadata_prose(base_metadata) if from_frontmatter else ""
 
-    chunks = _chunk_text(text, source_config)
+    # A blank chunk is never useful and is actively harmful: the embedder drops
+    # blank strings, so one would leave the vectors shorter than the chunks and
+    # every payload after it carrying someone else's vector. Chunking an empty
+    # body returns exactly that — one empty chunk — which also masked the
+    # empty-body fallback below.
+    chunks = [c for c in _chunk_text(text, source_config) if c.text.strip()]
 
     # The document's own prose about itself — subtitle, summary, blurb — as one
     # chunk. Stored, so a hit on it can be quoted; separate, so it is not
