@@ -204,6 +204,25 @@ class CorpusMCPServer:
                     },
                 ),
                 Tool(
+                    name="prune",
+                    description=(
+                        "Drop index entries whose file no longer exists on disk. The watcher "
+                        "handles deletions it sees; this cleans up the ones that happened while "
+                        "nothing was watching — a tree moved, a git rm — whose chunks would "
+                        "otherwise answer searches forever with content that is gone."
+                    ),
+                    inputSchema={
+                        "type": "object",
+                        "properties": {
+                            "sources": {
+                                "type": "array",
+                                "items": {"type": "string"},
+                                "description": "Limit to these sources; omit to scan all file-backed ones",
+                            },
+                        },
+                    },
+                ),
+                Tool(
                     name="reindex",
                     description="Re-index sources (optionally limited)",
                     inputSchema={
@@ -430,6 +449,8 @@ class CorpusMCPServer:
                 else:
                     await self.orchestrator.index_single(source, target)
                 payload = {"source": source, "path": str(target)}
+            elif name == "prune":
+                payload = self.orchestrator.prune_missing(arguments.get("sources"))
             elif name == "reindex":
                 await self.orchestrator.initial_index(
                     arguments.get("sources"), force=bool(arguments.get("force"))

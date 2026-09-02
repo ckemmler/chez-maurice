@@ -228,6 +228,49 @@ class CorpusOrchestrator:
             for path in files:
                 await self.index_file(path, name, source, force=force)
 
+    def prune_missing(self, sources: Optional[List[str]] = None) -> dict:
+        """Drop index entries whose file is gone from disk.
+
+        Nothing did this. The watcher removes a file it sees deleted, but a
+        deletion that happens while nothing is watching — a `git rm`, a tree
+        moved wholesale — leaves its chunks behind forever. The gardens moving
+        out of the checkout left 62 notes indexed under a path that no longer
+        exists, so search kept answering with stale copies of the reader's own
+        notes, invisibly.
+
+        Only filesystem-backed units are considered: a conversation's unit key
+        is `msg:<uuid>`, not a path, and must never be treated as missing.
+        """
+        wanted = set(sources or [])
+        units: dict[str, str] = {}
+        for payload in self.indexer.iter_chunks(limit=1_000_000):
+            key = payload.get("file_path")
+            if not isinstance(key, str) or not key.startswith("/"):
+                continue
+            source = str(payload.get("source", ""))
+            if wanted and source not in wanted:
+                continue
+            units[key] = source
+
+        removed = [k for k in units if not Path(k).exists()]
+        for key in removed:
+            self.indexer.delete_unit(unit_key=key)
+            try:
+                self.hash_store.delete(Path(key))
+            except Exception:  # noqa: BLE001 — a stale hash row is not worth failing over
+                self.logger.debug("hash purge failed for %s", key)
+
+        by_source: dict[str, int] = {}
+        for key in removed:
+            by_source[units[key]] = by_source.get(units[key], 0) + 1
+        self.logger.info("Pruned %d missing files of %d scanned", len(removed), len(units))
+        return {
+            "scanned": len(units),
+            "removed": len(removed),
+            "by_source": by_source,
+            "examples": removed[:10],
+        }
+
     def start_watching(self) -> None:
         if self.watcher is None:
             loop = asyncio.get_running_loop()
