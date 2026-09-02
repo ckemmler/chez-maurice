@@ -52,6 +52,7 @@ async def process_file(
     indexer: VectorStore,
     hash_store: HashStore | None = None,
     member_id: Optional[str] = None,
+    force: bool = False,
 ) -> int:
     if not file_path.exists() or not file_path.is_file():
         raise FileNotFoundError(file_path)
@@ -61,7 +62,11 @@ async def process_file(
 
     previous_hash = hash_store.get(file_path) if hash_store else None
 
-    if previous_hash and previous_hash == file_hash:
+    # `force` re-embeds a file whose bytes have not changed — which is the only
+    # way to pick up a change in how metadata is *rendered* rather than in the
+    # document itself. Without it, improving the payload or the preamble left
+    # every existing document on the old shape.
+    if not force and previous_hash and previous_hash == file_hash:
         return 0
 
     text_meta = read_text_with_frontmatter(
@@ -70,15 +75,18 @@ async def process_file(
     )
     text = text_meta.text
 
-    base_metadata: Dict[str, Any] = {
-        "source": source_name,
-        "source_type": metadata_cfg.source_type,
-    }
     # Flattened, so a fiche's `meta:` fields become filterable payload keys —
     # the store builds predicates over `$.<key>` and rejects dotted ones.
-    base_metadata.update(flatten_frontmatter(text_meta.payload))
+    base_metadata: Dict[str, Any] = dict(flatten_frontmatter(text_meta.payload))
     if metadata_cfg.extract_from_path:
         base_metadata.update(apply_path_extractors(file_path, metadata_cfg.extract_from_path))
+
+    # The corpus's own vocabulary is written last, so a document cannot overwrite
+    # it: an article card's `source:` names its publication, and it was silently
+    # replacing which source had indexed the file — the payload said
+    # "the Guardian" where it meant "garden-cards".
+    base_metadata["source"] = source_name
+    base_metadata["source_type"] = metadata_cfg.source_type
 
     from_frontmatter = metadata_cfg.extract_from_frontmatter
     head = build_metadata_head(base_metadata) if from_frontmatter else ""

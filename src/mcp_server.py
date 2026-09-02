@@ -214,6 +214,16 @@ class CorpusMCPServer:
                                 "items": {"type": "string"},
                                 "description": "Specific sources to reindex",
                             },
+                            "force": {
+                                "type": "boolean",
+                                "default": False,
+                                "description": (
+                                    "Re-embed files whose bytes have not changed. Needed when what "
+                                    "changed is how metadata is rendered into the index rather than "
+                                    "the documents themselves — otherwise every existing file keeps "
+                                    "the old shape."
+                                ),
+                            },
                         },
                     },
                 ),
@@ -421,7 +431,9 @@ class CorpusMCPServer:
                     await self.orchestrator.index_single(source, target)
                 payload = {"source": source, "path": str(target)}
             elif name == "reindex":
-                await self.orchestrator.initial_index(arguments.get("sources"))
+                await self.orchestrator.initial_index(
+                    arguments.get("sources"), force=bool(arguments.get("force"))
+                )
                 payload = {"status": "reindex started"}
             elif name == "index_conversation":
                 payload = await self.orchestrator.index_conversations(arguments.get("conversation_id"))

@@ -172,7 +172,9 @@ class CorpusOrchestrator:
             return self._resolve_member_uuid(raw)
         return raw
 
-    async def index_file(self, path: Path, source_name: str, source_config: SourceConfig) -> None:
+    async def index_file(
+        self, path: Path, source_name: str, source_config: SourceConfig, force: bool = False
+    ) -> None:
         if self._should_ignore(path) or not self._matches_source(source_config, path):
             return
         member_id = self._member_for(source_config, path)
@@ -188,6 +190,7 @@ class CorpusOrchestrator:
                 self.indexer,
                 self.hash_store,
                 member_id=member_id,
+                force=force,
             )
             if written:
                 self.logger.info("Indexed %s (%s)", path, source_name)
@@ -214,7 +217,7 @@ class CorpusOrchestrator:
             return
         remove_file(path, self.indexer, self.hash_store, member_id=member_id)
 
-    async def initial_index(self, sources: Optional[List[str]] = None) -> None:
+    async def initial_index(self, sources: Optional[List[str]] = None, force: bool = False) -> None:
         names = sources or list(self.config.sources.keys())
         for name in names:
             if name not in self.config.sources:
@@ -223,7 +226,7 @@ class CorpusOrchestrator:
             source = self.config.sources[name]
             files = self._iter_source_files(source)
             for path in files:
-                await self.index_file(path, name, source)
+                await self.index_file(path, name, source, force=force)
 
     def start_watching(self) -> None:
         if self.watcher is None:

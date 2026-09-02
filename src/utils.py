@@ -56,7 +56,17 @@ def flatten_frontmatter(payload: Dict[str, Any]) -> Dict[str, Any]:
         if key == "meta":
             continue
         flat[key] = value
+
+    # One vocabulary for one thing. A published article card names its
+    # publication `source` (the Astro schema's word); a fiche names it
+    # `publication`. A filter on either used to see only half the collection.
+    for src, dst in _FRONTMATTER_ALIASES.items():
+        if src in flat and dst not in flat:
+            flat[dst] = flat[src]
     return flat
+
+
+_FRONTMATTER_ALIASES = {"source": "publication"}
 
 
 _COLLECTION_WORDS = {
