@@ -49,6 +49,15 @@ data/
 !/tools/garden/
 !/tools/shared/
 !/tools/mcp_gateway/
+!/tools/corpus/
+
+# The corpus's own artefacts: the per-member vector store, the index state, and
+# the config, which names absolute paths on the machine it runs on. The config
+# ships as corpus.example.yaml instead.
+/tools/corpus/data/
+/tools/corpus/logs/
+/tools/corpus/.venv/
+/tools/corpus/config/corpus.yaml
 
 # Private-tool infrastructure (qdrant is only used by private tools).
 /scripts/start-qdrant.sh
