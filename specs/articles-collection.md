@@ -91,11 +91,11 @@ blurb) is indexed once as its own chunk. See defect #18 for why.
 
 ## Defects found along the way
 
-Thirty-seven were fixed. They are grouped by how they were found, because that
-turns out to be the useful axis: the ones caught while building share a cause
-(a path that stopped being true when gardens moved out of the checkout), the
-ones a review caught were mostly invisible from inside, and the last one was
-found only by writing the suite.
+Forty-five were fixed. They are grouped by how they were found, because that
+turns out to be the useful axis — and by the end the axis says something
+uncomfortable: only 22 of the 45 were caught while building. The rest surfaced
+when someone read the code, when a query was watched instead of assumed, or when
+a test was finally written for the input a hand-edited garden really contains.
 
 ### Fixed while building
 
@@ -151,13 +151,33 @@ Two passes, one over the Carnet commit and one over the PR.
 |---|---|---|
 | 37 | `src/services/gardensRoot.ts` | The function cached `MAURICE_GARDENS_DIR`, so it kept answering with whatever the first caller in the process resolved. Under `bun test`, where every file shares one process, a suite setting the variable got someone else's answer — and wrote its fixtures into the checkout at `web/gardens/candide/`. Found by this suite doing exactly that. The variable is now read on every call; the cache remains for the filesystem probe it was actually for |
 
+### Fixed by verifying something else worked
+
+Point C asked whether the model reaches for `filters` (it does, 4 questions out
+of 4). Getting an answer meant watching real queries, and two of them came back
+wrong for reasons that had nothing to do with the model.
+
+| # | Where | What was wrong |
+|---|---|---|
+| 38 | `corpus/src/utils.py` | A published card names its publication `source`; a fiche names it `publication`. A filter on either saw half the collection — and the model, reading the documented keys, reasonably chose `publication` and got nothing |
+| 39 | `corpus/src/processor.py` | That same frontmatter key was overwriting the corpus's own: the payload said `source: "the Guardian"` where it meant `garden-cards`, so filtering by which source indexed a document was broken and the provenance was a lie |
+| 40 | `corpus/src/orchestrator.py` | Nothing ever removed index entries for files that no longer exist. The gardens moving out of the checkout had left **171 notes** indexed under the old path, so search had been answering with stale copies of the reader's own notes — invisibly, since a result carries its text, not its age. `prune` finds and drops them; only filesystem-backed units are considered, since a conversation's key is `msg:<uuid>` |
+| 41 | `corpus/src/mcp_server.py` | No way to apply a change in how metadata is *rendered* into the index: the hash store skips unchanged files, so 38 and 39 could not take effect on anything already indexed, and neither could the metadata preamble on notes indexed before it existed. Hence `force` on reindex |
+
+### Fixed by the suite, on its first run
+
+| # | Where | What was wrong |
+|---|---|---|
+| 42 | `corpus/src/utils.py` | Malformed frontmatter raised; the caller logged it and moved on, so the **whole document dropped out of the index** — findable by nothing, with one line in a log nobody reads. A typo in a hand-edited file was enough |
+| 43 | `corpus/src/processor.py` | Chunking an empty body returned one *blank* chunk rather than none. It masked the empty-body fallback, and it is a misalignment waiting to happen: the embedder drops blank strings, so the vectors would be shorter than the chunks and every payload after it would carry someone else's vector |
+| 44 | `corpus/src/utils.py` | `source` sat in the preamble's facet list. Fixing 39 filled that key with the source *name*, so every preamble had been reading "… — Anil Seth, Dutton, garden-fiches — book" — constant noise in every vector. A regression two commits old, caught on the suite's first run |
+| 45 | `corpus/src/orchestrator.py` | The index-state path was hardcoded, so a suite had nowhere to put its own but the real one — the same shape of trap that sent an earlier suite's fixtures into the checkout. `MAURICE_CORPUS_DATA_DIR` now overrides it |
+
 ### Open
 
 | # | What | Why it is not fixed |
 |---|---|---|
-| B | The corpus file watcher is off in the gateway (`corpus_server_context(watch=False)`) and no separate watcher runs | Mitigated: the Bun server and the garden MCP tool both push explicitly. But a **hand edit in Vim, or a `git pull` into the garden, is still not indexed** until the next `reindex` |
-| C | Unfiltered semantic search is dominated by conversations — 85 849 chunks against 196 for the garden. "Le livre d'Anil Seth" returns conversation messages, not the fiche | Filters answer it (`{source_type: "fiche"}`), and the tool description documents them so the model reaches for them. If that proves insufficient in use, the fix is a dedicated `search_garden` tool pre-filtered to fiche/card/fragment |
-| D | Notes carry no metadata preamble | The hash store skips unchanged files, so a `reindex` does not re-embed them. Needs a hash purge and a re-embed of 172 notes |
+| C | Conversations still outnumber the garden 85,849 chunks to 1,220, so an unfiltered semantic search is dominated by them | **Measured, not assumed.** Given the real tool schemas and five questions a reader would actually ask, the model narrowed on 4 of the 4 garden questions — twice with `filters`, twice by choosing a better tool (`search_by_author`, `list_fiches`) — and correctly left the one conversation question unfiltered. Replaying its calls against the household index returned the right documents. The imbalance is still there; the bet that the model works around it holds. Watch it in use; if it slips, a dedicated `search_garden` pre-filtered to fiche/card/fragment is the fix |
 | E | The share extension's on-screen layout with the keyboard up is unverified | Accessibility automation cannot see inside the iOS share sheet. Verify on first real use; if cramped, shrink the field to ~72pt or wrap it in a `UIScrollView` |
 | F | The first real Safari capture stored a **truncated URL** — `…/make-ai-work-for-everyone/rea`, apparently a cut-off `/reader`. The article extracted correctly, so the DOM was whole; only `document.URL` was short | Cause unknown — possibly captured mid-navigation. Watch whether it recurs. Defect 22 limits the damage for ordinary variants but cannot match a truncated URL against the full one, so a re-capture would make a second fiche |
 | G | `data-api/services/signalParser.ts` pins `claude-sonnet-4-5-20250929` | Out of scope. Stale relative to the current family; `budget_tokens` is now rejected on 4.7+ |
@@ -165,7 +185,7 @@ Two passes, one over the Carnet commit and one over the PR.
 | I | Chrome removed `--load-extension` in v137 | Testing only. Loading unpacked from `chrome://extensions` still works. The extension test suite runs on Chrome for Testing 127 |
 | J | The corpus `reindex` tool replies `"reindex started"` but actually awaits completion | Cosmetic |
 | L | `test/composer` has two failing tests on `main`, unrelated to this work (`an encrypted note resolves…`, `encrypted flag survives…`) | Confirmed pre-existing by stashing this branch's changes and re-running. Not investigated |
-| M | Six of the eight suites written during the build lived in a temp directory that has since been wiped — the HTTP routes, the summary, the Chrome extension driven over CDP, the corpus indexing, the Swift-to-server round trip | Only `server/test/articles.test.ts` (23 tests) and the iOS share-payload test survive. The lost ones passed, but cannot be re-run. Rewriting the corpus and extension ones into their repos would be the highest-value recovery |
+| M | Four of the eight suites written during the build are still gone — the HTTP routes, the summary, the Chrome extension driven over CDP, the Swift-to-server round trip. And the iOS share-payload test (16 assertions) still lives in a temp directory | Two have been rewritten into their repos: `server/test/articles.test.ts` (23 tests) and `corpus/tests/test_indexing.py` (42 checks). The share-payload one needs an Xcode test target in `carnet`; the others are lower value — the Chrome one especially, being expensive and brittle for 400 lines of extension |
 | K | The web clipper is untested on Firefox | `background.service_worker` needs to become `background.scripts` for Firefox's MV3 |
 
 ---
@@ -186,11 +206,18 @@ see open point M:
 | iOS share parsing | 16 | Fabricated `NSExtensionItem`s: Safari's shape, DOM-vs-URL precedence, oversized page, file fallback |
 | Corpus | 22 | Real garden indexed into an isolated store: flattening, preamble, filters, empty-body fiches |
 
-Of those, what lives in a repo and can be run again: `server/test/articles.test.ts`
-(23 tests, 52 assertions — `bun test`), covering the frontmatter titles that used
-to break parsing, slug collisions, canonical-URL dedup, the bookmark and its
-completion, and extraction from JSON-LD `@graph`. Plus the iOS share-payload test
-(16 assertions), which needs re-homing.
+Of those, what lives in a repo and can be run again:
+
+- `server/test/articles.test.ts` — 23 tests, 52 assertions, `bun test`. The
+  frontmatter titles that used to break parsing, slug collisions, canonical-URL
+  dedup, the bookmark and its completion, JSON-LD `@graph`.
+- `corpus/tests/test_indexing.py` — 42 checks, no framework and no network.
+  Source routing and its exclusions, the corpus vocabulary being unoverwritable,
+  the preamble riding along without being stored, `force`, `prune`, filters, and
+  the frontmatter a hand-edited garden really produces. Found three defects on
+  its first run.
+
+The iOS share-payload test (16 assertions) still needs a home.
 
 Live checks after deployment: the API answers 401 (not 404) on the new routes;
 the gateway exposes `corpus__index_path` and a `corpus__search` carrying
