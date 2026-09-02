@@ -1,3 +1,13 @@
+# Corpus configuration — copy to corpus.yaml and adjust.
+#
+# corpus.yaml itself is gitignored: it names absolute paths on the machine it
+# runs on. This example keeps the shape and the reasoning; only the paths are
+# placeholders.
+#
+# Sources are read-only. A source whose path does not exist is dropped with a
+# warning at load, so an install that has no Calibre library simply indexes
+# less rather than failing.
+
 # Vector store backend. sqlite_vec keeps one DB file per member under `store.path`
 # (default tools/corpus/data/vectors/). The qdrant block below is retained only as
 # a migration reference — the daemon is no longer required at runtime.
@@ -27,7 +37,7 @@ watcher:
 
 sources:
   calibre-summaries:
-    path: /Users/candide/media/Livres
+    path: ${CALIBRE_LIBRARY:-~/media/Books}
     pattern: "**/chapter_summaries/*.txt"
     recursive: true
     chunking:
@@ -42,7 +52,7 @@ sources:
         chapter: stem
 
   calibre-chapters:
-    path: /Users/candide/media/Livres
+    path: ${CALIBRE_LIBRARY:-~/media/Books}
     pattern: "**/chapters/*.txt"
     recursive: true
     chunking:
@@ -57,7 +67,7 @@ sources:
         chapter: stem
 
   journal-thoughts:
-    path: /Users/candide/perso/workspaces/akita/journals/thoughts
+    path: ${MAURICE_THOUGHTS_DIR:-~/thoughts}
     pattern: "**/*.md"
     recursive: true
     chunking:
@@ -70,7 +80,7 @@ sources:
         date: stem
 
   research-dossiers:
-    path: /Users/candide/perso/workspaces/akita/research/dossiers
+    path: ${MAURICE_DOSSIERS_DIR:-~/dossiers}
     pattern: "**/*.md"
     recursive: true
     chunking:
@@ -91,7 +101,7 @@ sources:
   # brace expansion. `*-fiche.md` at <member>/<collection>/<locale>/ is exactly
   # the set, and it is the same discriminator web/src/content.config.ts uses.
   garden-fiches:
-    path: ${MAURICE_GARDENS_DIR:-/Users/candide/perso/workspaces/maurice/web/gardens}
+    path: ${MAURICE_GARDENS_DIR:-./web/gardens}
     pattern: "*/*/*/*-fiche.md"
     recursive: true
     member_from_path: parent.parent.parent.name
@@ -114,7 +124,7 @@ sources:
   # Expressed as a depth with exclusions because notes, fiches and cards all sit
   # at <member>/<dir>/<locale>/<file>.md and pathlib globs cannot say "not".
   garden-cards:
-    path: ${MAURICE_GARDENS_DIR:-/Users/candide/perso/workspaces/maurice/web/gardens}
+    path: ${MAURICE_GARDENS_DIR:-./web/gardens}
     pattern: "*/*/*/*.md"
     exclude:
       - "*/notes/*/*.md"      # garden-notes owns these
@@ -137,7 +147,7 @@ sources:
   # the piece that argued X" is actually answered; the fiche itself only holds
   # the metadata and a comment.
   garden-fragments:
-    path: ${MAURICE_GARDENS_DIR:-/Users/candide/perso/workspaces/maurice/web/gardens}
+    path: ${MAURICE_GARDENS_DIR:-./web/gardens}
     pattern: "*/*/*/*-fiche/_fragments/*.frag"
     recursive: true
     member_from_path: parent.parent.parent.parent.parent.name
@@ -157,7 +167,7 @@ sources:
   # member_from_path routes each note's embeddings into <member>.db. Fiches and
   # other garden content live outside notes/, so the pattern excludes them.
   garden-notes:
-    path: ${MAURICE_GARDENS_DIR:-/Users/candide/perso/workspaces/maurice/web/gardens}
+    path: ${MAURICE_GARDENS_DIR:-./web/gardens}
     pattern: "*/notes/*/*.md"
     recursive: true
     member_from_path: parent.parent.parent.name

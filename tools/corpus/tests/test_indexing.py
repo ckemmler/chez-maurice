@@ -31,14 +31,22 @@ HERE = Path(__file__).resolve().parent
 CORPUS = HERE.parent
 sys.path.insert(0, str(CORPUS))
 
-# The orchestrator imports `tools.shared.context`, which only resolves with a
-# Maurice checkout on the path — that is the overlay contract (link.sh symlinks
-# this package into <maurice>/tools/). Honour the documented layout: a `maurice`
-# checkout beside this repo, or MAURICE_REPO.
-_maurice = Path(os.environ.get("MAURICE_REPO", CORPUS.parent.parent / "maurice"))
-if not (_maurice / "tools" / "shared").is_dir():
-    sys.exit(f"needs a Maurice checkout for tools.shared — looked in {_maurice}; set MAURICE_REPO")
-sys.path.insert(0, str(_maurice))
+# The orchestrator imports `tools.shared.context`, so the repo root has to be on
+# the path. Walk up rather than assume a depth: this package sits at
+# <maurice>/tools/corpus now, but it spent a year being symlinked in from a
+# sibling checkout and may well be again.
+def _repo_root() -> Path:
+    if env := os.environ.get("MAURICE_REPO"):
+        return Path(env)
+    for candidate in [CORPUS, *CORPUS.parents]:
+        if (candidate / "tools" / "shared").is_dir():
+            return candidate
+        if (candidate / "maurice" / "tools" / "shared").is_dir():
+            return candidate / "maurice"
+    sys.exit("needs a Maurice checkout for tools.shared — set MAURICE_REPO")
+
+
+sys.path.insert(0, str(_repo_root()))
 
 TMP = Path(tempfile.mkdtemp(prefix="corpus-tests-"))
 os.environ["MAURICE_CORPUS_DATA_DIR"] = str(TMP / "state")
