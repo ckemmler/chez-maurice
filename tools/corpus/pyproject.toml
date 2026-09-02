@@ -1,0 +1,30 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "akita-corpus"
+version = "0.1.0"
+description = "Akita corpus watcher and MCP server"
+requires-python = ">=3.11"
+dependencies = [
+    "mcp>=1.0.0",
+    "watchdog>=3.0.0",
+    "qdrant-client>=1.7.0",
+    "openai>=1.0.0",
+    "httpx>=0.25.0",
+    "tiktoken>=0.5.0",
+    "nltk>=3.8.0",
+    "python-frontmatter>=1.0.0",
+    "PyYAML>=6.0.1",
+    "python-dateutil>=2.8.2",
+    "anyio>=4.0.0",
+    "rich>=13.0.0",
+    "python-dotenv>=1.0"
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[project.scripts]
+akita-corpus = "src.main:main"
