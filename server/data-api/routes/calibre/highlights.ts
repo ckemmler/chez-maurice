@@ -1,5 +1,7 @@
 import { Hono } from "hono";
 import {
+  asHighlightView,
+  HIGHLIGHT_VIEWS,
   listHighlights,
   createHighlight,
   updateHighlight,
@@ -14,7 +16,13 @@ highlights.get("/:bookId/highlights", (c) => {
   if (!memberId) return c.json({ error: "Authentication required" }, 401);
   const bookId = Number(c.req.param("bookId"));
   if (Number.isNaN(bookId)) return c.json({ error: "Invalid book ID" }, 400);
-  return c.json(listHighlights(memberId, bookId));
+  // ?view=summary narrows to one of the chapter's two texts; omitted returns
+  // both, which is what the reader wants — it loads once and picks per view.
+  const view = c.req.query("view");
+  if (view && !HIGHLIGHT_VIEWS.includes(view as any)) {
+    return c.json({ error: `view must be one of: ${HIGHLIGHT_VIEWS.join(", ")}` }, 400);
+  }
+  return c.json(listHighlights(memberId, bookId, view ? asHighlightView(view) : undefined));
 });
 
 // POST /books/:bookId/highlights
@@ -31,9 +39,13 @@ highlights.post("/:bookId/highlights", async (c) => {
     color?: string;
     start_offset?: number | null;
     end_offset?: number | null;
+    view?: string;
   }>().catch(() => null);
   if (!body?.chapter_slug || !body.quote?.trim()) {
     return c.json({ error: "chapter_slug and quote required" }, 400);
+  }
+  if (body.view && !HIGHLIGHT_VIEWS.includes(body.view as any)) {
+    return c.json({ error: `view must be one of: ${HIGHLIGHT_VIEWS.join(", ")}` }, 400);
   }
 
   const created = createHighlight(memberId, bookId, {
@@ -43,6 +55,7 @@ highlights.post("/:bookId/highlights", async (c) => {
     color: body.color,
     startOffset: body.start_offset ?? null,
     endOffset: body.end_offset ?? null,
+    view: asHighlightView(body.view),
   });
   return c.json(created, 201);
 });
