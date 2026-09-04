@@ -33,6 +33,7 @@ import {
   cardWebPath,
   ficheWebPath,
   fichePath,
+  fragmentsDir,
   gardenFor,
   parseFiche,
   resourceImagePaths,
@@ -526,21 +527,54 @@ function appendComment(memberId: string, garden: GardenRef, ref: ArticleFicheRef
   indexGardenPaths(memberId, [ref.file]);
 }
 
-// ── Helpers ──
+// ── Describing what is on disk ──
 
-function describeExisting(
-  garden: GardenRef,
-  ref: ArticleFicheRef,
-  extra: { duplicate: boolean },
-): SaveArticleResult {
+/**
+ * Everything the reading app needs to show one saved article, straight off the
+ * fiche on disk. `has_text` is the promise the row makes — "the DOM was
+ * captured, this is readable here" — so it checks the fragment directory, not
+ * the status flag: a card from the older scrape route has `status: inbox` but
+ * no fragment, and offering its (absent) text would be a lie.
+ */
+export interface ArticleDescription extends ArticleFicheRef {
+  needs_capture: boolean;
+  subtitle: string | null;
+  author: string | null;
+  publication: string | null;
+  published_at: string | null;
+  image: string | null;
+  excerpt: string | null;
+  lang: string | null;
+  tags: string[];
+  word_count: number;
+  summary: string | null;
+  has_text: boolean;
+  capture_error: string | null;
+  source_client: string | null;
+  fiche_path: string;
+  fiche_web_path: string;
+  card_web_path: string;
+}
+
+/** Does the fiche have its full text saved alongside it? */
+export function hasFullText(ficheFile: string): boolean {
+  const dir = fragmentsDir(ficheFile);
+  try {
+    return fs.readdirSync(dir).some((f) => f.endsWith(".frag"));
+  } catch {
+    return false;
+  }
+}
+
+export function describeArticle(garden: GardenRef, ref: ArticleFicheRef): ArticleDescription {
   const parsed = parseFiche(fs.readFileSync(ref.file, "utf-8"));
   const fm = parsed?.frontmatter ?? {};
-  const meta = (fm.meta ?? {}) as Record<string, any>;
+  // A fiche keeps provider metadata under `meta`; a published card carries the
+  // same fields flat — the same split scanArticleFiches already handles.
+  const meta = (ref.kind === "fiche" ? (fm.meta ?? {}) : fm) as Record<string, any>;
   return {
     ...ref,
-    duplicate: extra.duplicate,
     needs_capture: String(meta.status ?? fm.status ?? "") === NEEDS_CAPTURE,
-    completed: false,
     title: String(fm.title ?? ref.title),
     subtitle: meta.subtitle ?? null,
     author: meta.author ?? null,
@@ -549,13 +583,46 @@ function describeExisting(
     image: meta.image ?? null,
     excerpt: meta.excerpt ?? null,
     lang: meta.lang ?? null,
-    comment: null,
     tags: Array.isArray(fm.tags) ? fm.tags.map(String) : [],
     word_count: Number(meta.word_count ?? 0),
     summary: meta.summary ?? null,
+    has_text: ref.kind === "fiche" && hasFullText(ref.file),
+    capture_error: meta.capture_error ?? null,
+    source_client: meta.source_client ?? null,
     fiche_path: path.relative(garden.root, ref.file),
     fiche_web_path: ficheWebPath(garden, COLLECTION, ref.locale, ref.slug),
     card_web_path: cardWebPath(garden, COLLECTION, ref.locale, ref.slug),
+  };
+}
+
+/** Every saved article, newest first — the reading app's list endpoint. */
+export function listArticles(garden: GardenRef): ArticleDescription[] {
+  return scanArticleFiches(garden)
+    .map((ref) => describeArticle(garden, ref))
+    .sort((a, b) => (a.saved_at < b.saved_at ? 1 : a.saved_at > b.saved_at ? -1 : 0));
+}
+
+/** The fiche's markdown body — the lead quote and the comment history. */
+export function readArticleBody(ref: ArticleFicheRef): string {
+  try {
+    return parseFiche(fs.readFileSync(ref.file, "utf-8"))?.body.trim() ?? "";
+  } catch {
+    return "";
+  }
+}
+
+// ── Helpers ──
+
+function describeExisting(
+  garden: GardenRef,
+  ref: ArticleFicheRef,
+  extra: { duplicate: boolean },
+): SaveArticleResult {
+  return {
+    ...describeArticle(garden, ref),
+    duplicate: extra.duplicate,
+    completed: false,
+    comment: null,
   };
 }
 
