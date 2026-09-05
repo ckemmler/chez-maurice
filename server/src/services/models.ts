@@ -10,7 +10,7 @@ export interface Model {
   name: string;
   tier: "cloud" | "local";
   vendor: string;
-  /** which API the model speaks: anthropic | openai | mistral | ollama */
+  /** which API the model speaks: anthropic | openai | mistral | zai | ollama */
   provider: string;
   ctx: number;
   ram: number | null;
@@ -25,7 +25,7 @@ export interface ModelInfo {
   id: string;
   name: string;
   tier: "cloud" | "local";
-  provider: string; // anthropic | openai | mistral | ollama — for grouping/logos
+  provider: string; // anthropic | openai | mistral | zai | ollama — for grouping/logos
   sub: string;      // vendor (+ size for local)
   desc: string;
   note: string;     // "metered" | "private"
@@ -81,12 +81,13 @@ export function toModelInfo(m: Model): ModelInfo {
  *  set. Keeps keyless providers out of the apps' model lists. */
 export function configuredProviders(): Set<string> {
   const row = db
-    .query(`SELECT api_key, openai_api_key, mistral_api_key FROM households WHERE id = 'default'`)
+    .query(`SELECT api_key, openai_api_key, mistral_api_key, zai_api_key FROM households WHERE id = 'default'`)
     .get() as any;
   const s = new Set<string>(["ollama"]);
   if (row?.api_key) s.add("anthropic");
   if (row?.openai_api_key) s.add("openai");
   if (row?.mistral_api_key) s.add("mistral");
+  if (row?.zai_api_key) s.add("zai");
   return s;
 }
 
@@ -142,6 +143,14 @@ export function addModel(input: ModelInput): Model {
  *  needs a way to say so without hand-editing the database. */
 export function setModelVision(id: string, vision: boolean): boolean {
   return db.run(`UPDATE models SET vision = ? WHERE id = ?`, [vision ? 1 : 0, id]).changes > 0;
+}
+
+/** Set a model's context window (k tokens). The seed's figure is a snapshot —
+ *  providers raise their windows, and the generation path bounds the
+ *  conversation by this number, so the admin has to be able to correct it. */
+export function setModelCtx(id: string, ctxK: number): boolean {
+  if (!Number.isFinite(ctxK) || ctxK < 1) return false;
+  return db.run(`UPDATE models SET ctx = ? WHERE id = ?`, [Math.floor(ctxK), id]).changes > 0;
 }
 
 export function removeModel(id: string): boolean {

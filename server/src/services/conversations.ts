@@ -300,6 +300,19 @@ export function deleteConversation(id: string, userId: string): boolean {
 
 // ── Messages ────────────────────────────────────────────────────
 
+/** The id of the oldest message inside the conversation's context window, or
+ *  null when the whole history is sent. See contextWindow.ts. */
+export function getContextFrom(conversationId: string): string | null {
+  const row = db
+    .query(`SELECT context_from FROM conversations WHERE id = ?`)
+    .get(conversationId) as { context_from: string | null } | null;
+  return row?.context_from ?? null;
+}
+
+export function setContextFrom(conversationId: string, messageId: string | null): void {
+  db.run(`UPDATE conversations SET context_from = ? WHERE id = ?`, [messageId, conversationId]);
+}
+
 export function getMessages(conversationId: string): Message[] {
   return (
     db

@@ -1,7 +1,8 @@
 import { readFileSync } from "fs";
 import { join } from "path";
 import db from "../db";
-import { getMessages, getParticipants, countParticipants } from "./conversations";
+import { getMessages, getParticipants, countParticipants, getContextFrom, setContextFrom } from "./conversations";
+import { estimateText, planDrop } from "./contextWindow";
 import { imagesDir } from "./images";
 import { hasWebSearch, webSearch, formatWebSearch } from "./webSearch";
 import { McpSession, type McpTool } from "./mcpClient";
@@ -10,7 +11,7 @@ import { type FileAttachment } from "./composer/files";
 import { getConversationMaurice, resolveMauriceContext, resolveMauriceAttachments } from "./maurices";
 import { resolveModelId, getModel } from "./models";
 import { resolveUsableModel, getEverydayModel } from "./modelAccess";
-import { ollamaTurn, type OllamaToolCall } from "./ollama";
+import { ollamaTurn, OLLAMA_NUM_CTX, type OllamaToolCall } from "./ollama";
 import { openaiTurn, type OpenAIToolCall } from "./openaiChat";
 import { resolveFamilies, toolInFamilies, canUseExperimental, isExperimentalTool } from "./toolFamilies";
 import { t, userLocale } from "./i18n";
@@ -39,13 +40,14 @@ function getHouseholdConfig(): {
   apiKey: string | null;
   openaiApiKey: string | null;
   mistralApiKey: string | null;
+  zaiApiKey: string | null;
   falApiKey: string | null;
   defaultModel: string;
   maxTokens: number;
 } {
   const row = db
     .query(
-      `SELECT api_key, openai_api_key, mistral_api_key, fal_api_key, default_model, max_tokens FROM households WHERE id = 'default'`
+      `SELECT api_key, openai_api_key, mistral_api_key, zai_api_key, fal_api_key, default_model, max_tokens FROM households WHERE id = 'default'`
     )
     .get() as any;
 
@@ -53,6 +55,7 @@ function getHouseholdConfig(): {
     apiKey: row.api_key,
     openaiApiKey: row.openai_api_key,
     mistralApiKey: row.mistral_api_key,
+    zaiApiKey: row.zai_api_key,
     falApiKey: row.fal_api_key,
     defaultModel: row.default_model,
     maxTokens: row.max_tokens,
@@ -175,7 +178,7 @@ function mcpToolToAnthropic(t: McpTool) {
   };
 }
 
-// OpenAI-style "function" tool shape — used by Ollama, OpenAI, and Mistral.
+// OpenAI-style "function" tool shape — used by Ollama, OpenAI, Mistral and Z.ai.
 function mcpToolToFunction(t: McpTool) {
   return {
     type: "function",
@@ -450,7 +453,20 @@ async function* runOllamaAgentic(
   yield { type: "done", message_id: crypto.randomUUID() };
 }
 
-/** Agentic loop for an OpenAI-style provider (OpenAI or Mistral). Same shape as
+/** Where each OpenAI-compatible provider's Chat Completions API lives, and the
+ *  name to show when its key is missing. */
+const OPENAI_STYLE_BASE_URL: Record<string, string> = {
+  openai: "https://api.openai.com/v1",
+  mistral: "https://api.mistral.ai/v1",
+  zai: "https://api.z.ai/api/paas/v4",
+};
+const OPENAI_STYLE_LABEL: Record<string, string> = {
+  openai: "OpenAI",
+  mistral: "Mistral",
+  zai: "Z.ai",
+};
+
+/** Agentic loop for an OpenAI-style provider (OpenAI, Mistral, Z.ai). Same shape as
  *  the others, but the Chat Completions message format (assistant tool_calls +
  *  role:"tool" results keyed by tool_call_id). */
 async function* runOpenAIAgentic(
@@ -553,8 +569,19 @@ function breakpointOn(message: any): any | null {
   return last;
 }
 
-function buildApiMessages(conversationId: string): any[] {
-  const history = getMessages(conversationId);
+/** The history as API messages, plus each one's database id (parallel array)
+ *  so the context window can be anchored to a message. Starts at the
+ *  conversation's `context_from` cursor when one is set — see windowMessages. */
+function buildApiMessages(conversationId: string): { messages: any[]; ids: string[] } {
+  let history = getMessages(conversationId);
+  const from = getContextFrom(conversationId);
+  if (from) {
+    const start = history.findIndex((m) => m.id === from);
+    // A cursor pointing at a message that no longer exists (deleted, or the
+    // thread was cleared) means nothing: send everything and forget it.
+    if (start > 0) history = history.slice(start);
+    else if (start < 0) setContextFrom(conversationId, null);
+  }
   const imagePattern = /!\[.*?\]\(\/api\/images\/(.+?)\)/g;
 
   // In a multi-human room, prefix each human turn with the speaker's name so
@@ -567,8 +594,9 @@ function buildApiMessages(conversationId: string): any[] {
       ? `${(m.author_id && nameById[m.author_id]) || "Someone"}: `
       : "";
 
-  return history
-    .filter((m) => m.role !== "system")
+  const kept = history.filter((m) => m.role !== "system");
+  const ids = kept.map((m) => m.id);
+  const messages = kept
     .map((m) => {
       const role = m.role as "user" | "assistant";
       const tag = speaker(m);
@@ -608,6 +636,40 @@ function buildApiMessages(conversationId: string): any[] {
       }
       return { role, content };
     });
+  return { messages, ids };
+}
+
+// ── Context window ──────────────────────────────────────────────
+//
+// The model's window bounds what we send. When the history outgrows it, the
+// oldest turns are left out — and the cut is remembered on the conversation
+// (`context_from`), so the next turn sends the same prefix rather than
+// recomputing a slightly different one: the prompt cache is a prefix match.
+// See contextWindow.ts for the arithmetic.
+
+/** Told to the model whenever the window has a start other than the first
+ *  message. Constant text, so it doesn't disturb the cached prefix from one
+ *  turn to the next. */
+const WINDOW_NOTICE =
+  `\n\n## Earlier in this conversation\nThe conversation is longer than fits in your context window: its earliest turns have been left out, and what you see starts partway through. Don't assume you have seen the beginning; if something referenced earlier is missing, say so and ask rather than guess.`;
+
+function windowMessages(
+  conversationId: string,
+  messages: any[],
+  ids: string[],
+  budget: { contextTokens: number; headTokens: number; replyTokens: number },
+): { messages: any[]; windowed: boolean } {
+  // Protected tail: the user turn being answered and the clock after it.
+  const drop = planDrop(messages, budget, 2);
+  if (drop > 0) {
+    // `ids` runs parallel to the history-derived messages, which is every
+    // message but the clock; drop ≤ messages.length - 2 keeps this in range.
+    const cursor = ids[drop];
+    if (cursor) setContextFrom(conversationId, cursor);
+    console.log(`[claude] context window: dropped ${drop} message(s) from ${conversationId} (budget ${budget.contextTokens - budget.headTokens - budget.replyTokens} tokens)`);
+    return { messages: messages.slice(drop), windowed: true };
+  }
+  return { messages, windowed: getContextFrom(conversationId) != null };
 }
 
 // Library binaries (img/pdf) loaded into the composer ride along as real content
@@ -651,7 +713,7 @@ export async function* streamResponse(
   // already follow the user's language).
   const userLang = userLocale(memberId);
 
-  const messages = buildApiMessages(conversationId);
+  let { messages, ids } = buildApiMessages(conversationId);
   // In a room the summoner is whoever sent the @claude message (userDisplayName).
   let systemPrompt =
     countParticipants(conversationId) > 1
@@ -707,9 +769,8 @@ export async function* streamResponse(
     }
   }
 
-  // Non-negotiable content-safety floor — appended LAST so no persona prompt or
-  // loaded context above can strip or out-prioritize it (covers every provider).
-  systemPrompt += CONTENT_SAFETY_FLOOR;
+  // (The content-safety floor is appended after the context window is settled,
+  // below — it has to be the very last thing in the system prompt.)
 
   // The clock goes at the very end of the message list, after attachBinaries has
   // found the latest real user turn (appending it earlier would hang this turn's
@@ -768,6 +829,26 @@ export async function* streamResponse(
     }
   }
 
+  // Fit the conversation to the model's window. `ctx` is what the roster says
+  // (k tokens, admin-editable); Ollama is additionally capped by what we ask
+  // of it per request. The head estimate uses the function-shaped roster for
+  // every provider — same names, descriptions and schemas, different wrapper.
+  {
+    const ctxK = rec?.ctx && rec.ctx > 0 ? rec.ctx : 128;
+    const contextTokens = provider === "ollama" ? Math.min(ctxK * 1024, OLLAMA_NUM_CTX) : ctxK * 1024;
+    const toolText = JSON.stringify(mcpTools.map(mcpToolToFunction)) + (wantsWeb ? JSON.stringify(WEB_SEARCH_FUNCTION) : "");
+    const headTokens = estimateText(systemPrompt + CONTENT_SAFETY_FLOOR + WINDOW_NOTICE) + estimateText(toolText);
+    const fitted = windowMessages(conversationId, messages, ids, {
+      contextTokens, headTokens, replyTokens: config.maxTokens,
+    });
+    messages = fitted.messages;
+    if (fitted.windowed) systemPrompt += WINDOW_NOTICE;
+  }
+
+  // Non-negotiable content-safety floor — appended LAST so no persona prompt or
+  // loaded context above can strip or out-prioritize it (covers every provider).
+  systemPrompt += CONTENT_SAFETY_FLOOR;
+
   // Local (Ollama) — private, on the Mac mini. Selected tool families only.
   if (provider === "ollama") {
     const tools = mcpTools.map(mcpToolToFunction);
@@ -776,12 +857,16 @@ export async function* streamResponse(
     return;
   }
 
-  // OpenAI / Mistral — OpenAI-compatible Chat Completions.
-  if (provider === "openai" || provider === "mistral") {
-    const baseUrl = provider === "openai" ? "https://api.openai.com/v1" : "https://api.mistral.ai/v1";
-    const key = provider === "openai" ? config.openaiApiKey : config.mistralApiKey;
+  // OpenAI / Mistral / Z.ai — OpenAI-compatible Chat Completions.
+  if (provider === "openai" || provider === "mistral" || provider === "zai") {
+    // Z.ai's OpenAI-compatible surface lives under the PaaS v4 path; the client
+    // appends /chat/completions, as it does for the other two.
+    const baseUrl = OPENAI_STYLE_BASE_URL[provider]!;
+    const key = provider === "openai" ? config.openaiApiKey
+      : provider === "mistral" ? config.mistralApiKey
+      : config.zaiApiKey;
     if (!key) {
-      const label = provider === "openai" ? "OpenAI" : "Mistral";
+      const label = OPENAI_STYLE_LABEL[provider]!;
       yield { type: "text_delta", text: t(userLang, "chat.no_provider_key", label) };
       yield { type: "done", message_id: crypto.randomUUID() };
       return;

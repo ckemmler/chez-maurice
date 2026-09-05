@@ -47,6 +47,16 @@ const PRICES: Record<string, ModelPrice> = {
   // both against https://mistral.ai/pricing before trusting the figure.
   "mistral-medium-latest": { input: 0.4, output: 2, cacheWrite: 1, cacheRead: 0.1 },
 
+  // Z.ai — https://docs.z.ai/guides/overview/pricing, read 2026-09-05. Caching
+  // is implicit (no write, no storage fee), so a write is ordinary input; a
+  // cached read is the sheet's "Cached Input" column over its "Input" one.
+  // GLM-5.3: $1.40 in, $0.26 cached, $4.40 out.
+  "glm-5.3": { input: 1.4, output: 4.4, cacheWrite: 1, cacheRead: 0.26 / 1.4 },
+  // GLM-5.3-Flash: $0.075 in, $0.015 cached, $0.25 out — the sheet flags a 50%
+  // promotion through 2026-09-09 without saying whether these are the promo
+  // figures. Taken as printed; re-read the sheet after that date.
+  "glm-5.3-flash": { input: 0.075, output: 0.25, cacheWrite: 1, cacheRead: 0.015 / 0.075 },
+
   // OpenAI is deliberately absent until someone checks its current sheet — an
   // unpriced model shows token counts with no dollar figure, which is honest; a
   // wrong figure is worse than none. Local (Ollama) models are never priced:

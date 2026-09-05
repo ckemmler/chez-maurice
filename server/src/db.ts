@@ -524,7 +524,13 @@ try { db.run(`ALTER TABLE conversations ADD COLUMN tool_families TEXT`); } catch
 // Extra cloud providers (Anthropic stays in the existing `api_key`).
 try { db.run(`ALTER TABLE households ADD COLUMN openai_api_key TEXT`); } catch {}
 try { db.run(`ALTER TABLE households ADD COLUMN mistral_api_key TEXT`); } catch {}
+// Z.ai (GLM). Its API is OpenAI-compatible, so it rides the Chat Completions
+// path — only the key and the base URL differ.
+try { db.run(`ALTER TABLE households ADD COLUMN zai_api_key TEXT`); } catch {}
 try { db.run(`ALTER TABLE households ADD COLUMN providers_seeded INTEGER NOT NULL DEFAULT 0`); } catch {}
+// Separate guard from providers_seeded: that flag is already set on every
+// existing database, so the GLM rows would never appear if they rode on it.
+try { db.run(`ALTER TABLE households ADD COLUMN zai_seeded INTEGER NOT NULL DEFAULT 0`); } catch {}
 
 // Non-model API keys, for the tools that enrich garden entries with metadata
 // and cover art. The Python MCP tools read these columns straight out of
@@ -538,7 +544,7 @@ try { db.run(`ALTER TABLE households ADD COLUMN podcastindex_api_secret TEXT`); 
 try { db.run(`ALTER TABLE households ADD COLUMN igdb_client_id TEXT`); } catch {}
 try { db.run(`ALTER TABLE households ADD COLUMN igdb_client_secret TEXT`); } catch {}
 
-// Which API a model speaks: anthropic | openai | mistral | ollama.
+// Which API a model speaks: anthropic | openai | mistral | zai | ollama.
 try { db.run(`ALTER TABLE models ADD COLUMN provider TEXT`); } catch {}
 try { db.run(`UPDATE models SET provider = CASE WHEN tier = 'local' THEN 'ollama' ELSE 'anthropic' END WHERE provider IS NULL OR provider = ''`); } catch {}
 
@@ -616,6 +622,41 @@ try {
     db.run(`UPDATE households SET providers_seeded = 1 WHERE id = 'default'`);
   }
 } catch {}
+
+// Seed the Z.ai (GLM) roster once, on its own guard. Same shape as the block
+// above: stable ids, and the admin can add or correct models per key.
+try {
+  const hh = db.query(`SELECT zai_seeded FROM households WHERE id = 'default'`).get() as { zai_seeded: number } | undefined;
+  if (!hh?.zai_seeded) {
+    // Both carry a 1M-token window (docs.z.ai, GLM-5.3 and GLM-5.3-Flash pages).
+    const ZAI: Array<[string, string, number, string, number]> = [
+      ["glm-5.3",       "GLM-5.3",       1024, "Z.ai's flagship — strong reasoning and tool use.", 30],
+      ["glm-5.3-flash", "GLM-5.3 Flash", 1024, "Fast, economical GLM model.",                      31],
+    ];
+    for (const [id, name, ctx, descr, sort] of ZAI) {
+      db.run(
+        `INSERT OR IGNORE INTO models (id, name, tier, vendor, ctx, discovered, descr, sort, provider)
+         VALUES (?, ?, 'cloud', 'Z.ai', ?, 0, ?, ?, 'zai')`,
+        [id, name, ctx, descr, sort],
+      );
+    }
+    db.run(`UPDATE households SET zai_seeded = 1 WHERE id = 'default'`);
+  }
+} catch {}
+
+// Migration: the first GLM seed guessed 200k/128k windows; both models have 1M.
+// Only the guessed figures are touched, so a value the admin set stays.
+try {
+  db.run(`UPDATE models SET ctx = 1024 WHERE id = 'glm-5.3' AND ctx = 200`);
+  db.run(`UPDATE models SET ctx = 1024 WHERE id = 'glm-5.3-flash' AND ctx = 128`);
+} catch {}
+
+// Where a conversation's context window starts: the id of the oldest message
+// still sent to the model, or NULL for "from the beginning". Set by the
+// generation path when the history outgrows the model's window (see
+// services/contextWindow.ts); persisted so the prompt prefix stays the same
+// from one turn to the next, which is what the cache is keyed on.
+try { db.run(`ALTER TABLE conversations ADD COLUMN context_from TEXT`); } catch {}
 
 // Migration: an earlier seed minted fabricated ids (opus/haiku at the sonnet
 // version), which 404 at Anthropic. Remap to the real ids and make sure the

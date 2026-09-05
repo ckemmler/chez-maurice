@@ -251,6 +251,10 @@ const CSS = `
   .model-desc { font-size: 12px; color: var(--ink-soft); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .model-meta { display: flex; align-items: center; gap: 16px; flex-shrink: 0; }
   .mono-num { font-family: var(--mono); font-size: 10.5px; color: var(--ink-mute); text-align: right; }
+  /* The context-window field on a model row: reads like the number it replaces, edits in place. */
+  .ctx-in { width: 52px; font-family: var(--mono); font-size: 10.5px; color: var(--ink-mute); text-align: right;
+            background: transparent; border: 0.5px solid transparent; border-radius: 4px; padding: 2px 4px; }
+  .ctx-in:hover, .ctx-in:focus { border-color: var(--rule); color: var(--ink); outline: none; }
   .trash { background: none; border: none; color: var(--ink-mute); cursor: pointer; padding: 4px; font-size: 14px; line-height: 1; }
   .trash:hover { color: var(--accent); }
   .addbar { padding: 12px 16px; border-top: 0.5px solid var(--rule); }

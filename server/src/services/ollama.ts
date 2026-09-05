@@ -16,7 +16,7 @@ export interface StreamEvent {
 // Ollama allocate that KV cache costs ~30s+ on first load and a lot of RAM on a
 // 48GB box. 32K is plenty for a household chat + persona context + tool results,
 // and keeps cold starts to just the weight load (~8s).
-const OLLAMA_NUM_CTX = 32768;
+export const OLLAMA_NUM_CTX = 32768;
 // Keep the model resident indefinitely (-1) so there's no ~8s cold reload after
 // idle. Fine when the household leans on one local model on a 48GB box.
 const OLLAMA_KEEP_ALIVE = -1;

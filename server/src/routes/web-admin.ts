@@ -34,7 +34,7 @@ import {
   removeLibrary,
   validateLibraryRoot,
 } from "../services/calibreLibraries";
-import { listModels, getModel, addModel, removeModel, type Model } from "../services/models";
+import { listModels, getModel, addModel, removeModel, setModelCtx, type Model } from "../services/models";
 import {
   accessMatrix,
   accessCounts,
@@ -501,7 +501,9 @@ web.get("/dashboard", async (c) => {
         <div class="model-desc">${escape(m.descr)}</div>
       </div>
       <div class="model-meta">
-        <span class="mono-num" style="width:58px">${escape(t(lang, "models.ctx", m.ctx))}</span>
+        <form method="POST" action="/admin/models/${encodeURIComponent(m.id)}/ctx" class="inline" title="${escape(t(lang, "models.ctx_title"))}">
+          <input type="number" name="ctx" value="${m.ctx}" min="1" max="10000" class="mono ctx-in" onchange="this.form.submit()" />k
+        </form>
         ${m.tier === "local" ? `<span class="mono-num" style="width:60px">${m.ram ?? "?"} GB</span>` : ""}
         <span class="mono-num" style="width:92px;color:${counts[m.id] ? "var(--ink)" : "var(--ink-mute)"}">${escape(t(lang, "models.can_use", counts[m.id] || 0, memberCount))}</span>
         ${removable ? `<form method="POST" action="/admin/models/${encodeURIComponent(m.id)}/delete" class="inline" onsubmit="return confirm('${escape(t(lang, "models.confirm_remove", m.name))}')"><button class="trash" title="${escape(t(lang, "models.remove_title"))}">🗑</button></form>` : `<span style="width:21px"></span>`}
@@ -566,6 +568,7 @@ web.get("/dashboard", async (c) => {
     ["Anthropic", "anthropic", !!household.api_key, "api.anthropic.com"],
     ["OpenAI", "openai", !!household.openai_api_key, "api.openai.com"],
     ["Mistral", "mistral", !!household.mistral_api_key, "api.mistral.ai"],
+    ["Z.ai", "zai", !!household.zai_api_key, "api.z.ai"],
   ];
   const cloudCards = CLOUD_PROVIDERS.map(([title, provider, keySet, host]) => {
     const list = cloud.filter((m) => m.provider === provider);
@@ -628,6 +631,11 @@ web.get("/dashboard", async (c) => {
               <span class="hint">${escape(t(lang, "settings.leave_blank"))}</span></div>
             <div class="field"><label class="label">${escape(t(lang, "settings.mistral_key"))}</label>
               <input type="password" name="mistral_api_key" autocomplete="off" placeholder="${household.mistral_api_key ? escape(t(lang, "settings.saved_placeholder")) : "…"}" />
+              <span class="hint">${escape(t(lang, "settings.leave_blank"))}</span></div>
+          </div>
+          <div class="grid2" style="margin-top:16px">
+            <div class="field"><label class="label">${escape(t(lang, "settings.zai_key"))}</label>
+              <input type="password" name="zai_api_key" autocomplete="off" placeholder="${household.zai_api_key ? escape(t(lang, "settings.saved_placeholder")) : "…"}" />
               <span class="hint">${escape(t(lang, "settings.leave_blank"))}</span></div>
           </div>
           <div class="grid2" style="margin-top:16px">
@@ -730,6 +738,7 @@ web.post("/settings", async (c) => {
   if (form.api_key && (form.api_key as string).trim()) put("api_key", (form.api_key as string).trim());
   if (form.openai_api_key && (form.openai_api_key as string).trim()) put("openai_api_key", (form.openai_api_key as string).trim());
   if (form.mistral_api_key && (form.mistral_api_key as string).trim()) put("mistral_api_key", (form.mistral_api_key as string).trim());
+  if (form.zai_api_key && (form.zai_api_key as string).trim()) put("zai_api_key", (form.zai_api_key as string).trim());
   if (form.fal_api_key && (form.fal_api_key as string).trim()) put("fal_api_key", (form.fal_api_key as string).trim());
   if (form.ollama_host) put("ollama_host", (form.ollama_host as string).trim().replace(/\/+$/, ""));
   if (form.default_model && getModel((form.default_model as string).trim())) put("default_model", (form.default_model as string).trim());
@@ -773,8 +782,8 @@ web.post("/models/rescan", async (c) => {
   return c.redirect(res.connected ? `/admin/dashboard?msg=scanned_models&n=${res.count}` : "/admin/dashboard?msg=ollama_not_reachable");
 });
 
-const PROVIDER_LABEL: Record<string, string> = { ollama: "On-device", openai: "OpenAI", mistral: "Mistral", anthropic: "Anthropic" };
-const PROVIDER_VENDOR: Record<string, string> = { ollama: "Ollama", openai: "OpenAI", mistral: "Mistral", anthropic: "Anthropic" };
+const PROVIDER_LABEL: Record<string, string> = { ollama: "On-device", openai: "OpenAI", mistral: "Mistral", zai: "Z.ai", anthropic: "Anthropic" };
+const PROVIDER_VENDOR: Record<string, string> = { ollama: "Ollama", openai: "OpenAI", mistral: "Mistral", zai: "Z.ai", anthropic: "Anthropic" };
 
 web.get("/models/new", (c) => {
   const redir = requireWebAdmin(c);
@@ -784,7 +793,7 @@ web.get("/models/new", (c) => {
   const provider = c.req.query("provider") || "ollama";
   const isLocal = provider === "ollama";
   const label = isLocal ? t(lang, "models.provider_ondevice") : (PROVIDER_LABEL[provider] || provider);
-  const idPlaceholder = isLocal ? "phi4:14b" : provider === "openai" ? "gpt-4o" : provider === "mistral" ? "mistral-large-latest" : "claude-…";
+  const idPlaceholder = isLocal ? "phi4:14b" : provider === "openai" ? "gpt-4o" : provider === "mistral" ? "mistral-large-latest" : provider === "zai" ? "glm-5.3" : "claude-…";
   return c.html(layout(t(lang, "models.new_title"), `
     <form method="POST" action="/admin/models/new">
       <input type="hidden" name="provider" value="${escape(provider)}" />
@@ -822,6 +831,14 @@ web.post("/models/new", async (c) => {
     addModel({ id, name, tier: "cloud", vendor: PROVIDER_VENDOR[provider] || provider, provider, ctx: parseInt(form.ctx as string) || 128, discovered: false, descr: "Added manually." });
   }
   return c.redirect("/admin/dashboard?msg=model_added");
+});
+web.post("/models/:id/ctx", async (c) => {
+  const redir = requireWebAdmin(c);
+  if (redir) return redir;
+  const form = await c.req.parseBody();
+  const ctx = parseInt(form.ctx as string, 10);
+  const ok = setModelCtx(c.req.param("id"), ctx);
+  return c.redirect(ok ? "/admin/dashboard?msg=model_ctx_saved" : "/admin/dashboard?msg=model_ctx_invalid");
 });
 web.post("/models/:id/delete", (c) => {
   const redir = requireWebAdmin(c);
