@@ -4,7 +4,7 @@
  */
 
 import { describe, expect, test } from "bun:test";
-import { estimateMessage, historyBudget, planDrop } from "../src/services/contextWindow";
+import { estimateMessage, historyBudget, planDrop, replyReserve } from "../src/services/contextWindow";
 
 const text = (role: string, chars: number) => ({
   role,
@@ -33,6 +33,17 @@ describe("estimateMessage", () => {
     });
     expect(pdf).toBeGreaterThan(4000);
     expect(pdf).toBeLessThan(6000);
+  });
+});
+
+describe("replyReserve", () => {
+  test("a household max_tokens sized for the cloud does not swallow a 32k local window", () => {
+    // The household's 32k max_tokens against Ollama's 32,768-token request.
+    expect(replyReserve(32_768, 32_000)).toBe(8_192);
+    const budget = { contextTokens: 32_768, headTokens: 5_000, replyTokens: replyReserve(32_768, 32_000) };
+    expect(historyBudget(budget)).toBeGreaterThan(12_000);
+    // On a big window the household figure stands.
+    expect(replyReserve(200 * 1024, 32_000)).toBe(32_000);
   });
 });
 

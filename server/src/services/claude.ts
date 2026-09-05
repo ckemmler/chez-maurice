@@ -2,7 +2,7 @@ import { readFileSync } from "fs";
 import { join } from "path";
 import db from "../db";
 import { getMessages, getParticipants, countParticipants, getContextFrom, setContextFrom } from "./conversations";
-import { estimateText, planDrop } from "./contextWindow";
+import { estimateText, planDrop, replyReserve } from "./contextWindow";
 import { imagesDir } from "./images";
 import { hasWebSearch, webSearch, formatWebSearch } from "./webSearch";
 import { McpSession, type McpTool } from "./mcpClient";
@@ -839,7 +839,7 @@ export async function* streamResponse(
     const toolText = JSON.stringify(mcpTools.map(mcpToolToFunction)) + (wantsWeb ? JSON.stringify(WEB_SEARCH_FUNCTION) : "");
     const headTokens = estimateText(systemPrompt + CONTENT_SAFETY_FLOOR + WINDOW_NOTICE) + estimateText(toolText);
     const fitted = windowMessages(conversationId, messages, ids, {
-      contextTokens, headTokens, replyTokens: config.maxTokens,
+      contextTokens, headTokens, replyTokens: replyReserve(contextTokens, config.maxTokens),
     });
     messages = fitted.messages;
     if (fitted.windowed) systemPrompt += WINDOW_NOTICE;

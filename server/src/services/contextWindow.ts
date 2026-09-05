@@ -86,6 +86,15 @@ function margin(contextTokens: number): number {
   return Math.max(2_000, Math.floor(contextTokens * 0.1));
 }
 
+/** How much of the window to hold back for the reply. The household's
+ *  `max_tokens` is a ceiling on the answer, not a promise to fill it, and it is
+ *  set with the big cloud windows in mind (32k here). Reserving all of it on a
+ *  32k Ollama request would leave the history nothing at all — so the reserve
+ *  is capped at a quarter of the window. */
+export function replyReserve(contextTokens: number, maxTokens: number): number {
+  return Math.min(maxTokens, Math.floor(contextTokens / 4));
+}
+
 /** Tokens the conversation itself may occupy. Can be ≤ 0 on a small window
  *  with a big head, in which case only the latest turn survives. */
 export function historyBudget(b: WindowBudget): number {
