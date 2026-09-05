@@ -16,6 +16,7 @@ import {
   cardWebPath,
   ficheWebPath,
   gardenFor,
+  isOpened,
   parseFiche,
   RESOURCE_COLLECTIONS,
   type GardenRef,
@@ -53,6 +54,12 @@ export interface GardenEntry {
   image: string | null;
   card: GardenEntryFace | null;
   fiche: GardenEntryFace | null;
+  /**
+   * False when the entry is only an unopened fiche — written by a share, not
+   * yet written on (gardenFiche.ts). A card is a published position, so an
+   * entry with one is opened whatever its fiche says.
+   */
+  opened: boolean;
 }
 
 function webPathFor(
@@ -107,7 +114,7 @@ export function listGardenEntries(garden: GardenRef): GardenEntry[] {
           e = {
             collection, locale, slug,
             title: "", date: "", tags: [], image: null,
-            card: null, fiche: null,
+            card: null, fiche: null, opened: false,
           };
           bySlug.set(slug, e);
         }
@@ -136,6 +143,7 @@ export function listGardenEntries(garden: GardenRef): GardenEntry[] {
         };
         if (isFiche) e.fiche = face;
         else e.card = face;
+        if (!isFiche || isOpened(fm)) e.opened = true;
 
         // The card is the published face — where both exist, its title and
         // date win. Tags and image are best-of-either: a card often carries

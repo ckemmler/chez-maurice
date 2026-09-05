@@ -36,7 +36,17 @@ beforeAll(() => {
   write("notes/fr/sucre-et-sante.md", `---\ntitle: Sucre et santé\ndate: '2026-01-01'\nlocale: fr\n---\n`);
   write("books/fr/being-you-fiche.md",
     `---\ntitle: Being You\nresource_collection: books\nresource_id: being-you\ndate: '2026-02-01'\ntags: []\nlocale: fr\n---\n`);
+  // Two bare article shares — unopened fiches.
+  write("articles/fr/sugar-tax-fiche.md",
+    `---\ntitle: Sugar tax debate\nresource_collection: articles\nresource_id: sugar-tax\ndate: '2026-09-01'\ntags: []\nlocale: fr\nmeta:\n  url: https://example.org/tax\n  opened: false\n---\n`);
+  write("articles/fr/china-fiche.md",
+    `---\ntitle: A.I. Is Everywhere in China\nresource_collection: articles\nresource_id: china\ndate: '2026-09-02'\ntags: []\nlocale: fr\nmeta:\n  url: https://example.org/china\n  opened: false\n---\n`);
 });
+
+const openedMarker = (rel: string) =>
+  (Bun.YAML.parse(
+    fs.readFileSync(path.join(garden.root, rel), "utf-8").match(/^---\n([\s\S]*?)\n---/)![1]!,
+  ) as any).meta?.opened;
 
 describe("searchLinkTargets", () => {
   test("title-prefix beats substring; fiche wins the link basename", () => {
@@ -57,6 +67,11 @@ describe("searchLinkTargets", () => {
     const note = hits.find((h) => h.slug === "sucre-et-sante")!;
     expect(note.link_basename).toBe("sucre-et-sante");
     expect(note.has_fiche).toBe(false);
+  });
+
+  test("unopened fiches are not offered as targets", () => {
+    expect(searchLinkTargets(garden, "sugar").map((h) => h.slug)).not.toContain("sugar-tax");
+    expect(searchLinkTargets(garden, "").map((h) => h.slug)).not.toContain("china");
   });
 });
 
@@ -84,6 +99,19 @@ describe("appendResonance", () => {
     const again = fs.readFileSync(path.join(garden.root, r.file), "utf-8");
     expect(again.match(/## Résonances/g)!.length).toBe(1);
     expect(again).toContain("Deuxième pensée.");
+    // The source of the first resonance was an unopened article: sending a
+    // thought from it opened it.
+    expect(openedMarker("articles/fr/china-fiche.md")).toBeUndefined();
+  });
+
+  test("a resonance filed on an unopened fiche opens it", () => {
+    expect(openedMarker("articles/fr/sugar-tax-fiche.md")).toBe(false);
+    appendResonance("m1", garden, {
+      to: { locale: "fr", slug: "sugar-tax", collection: "articles" },
+      comment: "Relié à Sugar.",
+    });
+    expect(openedMarker("articles/fr/sugar-tax-fiche.md")).toBeUndefined();
+    expect(searchLinkTargets(garden, "sugar tax").map((h) => h.slug)).toContain("sugar-tax");
   });
 
   test("a source outside the garden gets a plain label, not a wiki-link", () => {

@@ -171,6 +171,46 @@ describe("a site that refuses robots", () => {
   });
 });
 
+describe("an unopened fiche", () => {
+  // A share without a comment is a weak signal: the file is written, but it
+  // is not one of the member's fiches until they write on it.
+  test("is what a bare share writes; a comment opens it", async () => {
+    const url = "https://www.lemonde.fr/a/sans-mot.html";
+    const bare = await saveArticleFiche(MEMBER.id, { url, html: page({ title: "Sans un mot" }) });
+    expect(bare.opened).toBe(false);
+    expect(parseFiche(fs.readFileSync(bare.file, "utf-8"))!.frontmatter.meta.opened).toBe(false);
+
+    // Re-sharing with a thought is the opening gesture.
+    const again = await saveArticleFiche(MEMBER.id, { url, comment: "Ça me parle." });
+    expect(again.duplicate).toBe(true);
+    expect(again.opened).toBe(true);
+    const fm = parseFiche(fs.readFileSync(bare.file, "utf-8"))!.frontmatter;
+    expect(fm.meta.opened).toBeUndefined(); // absence is the opened state
+    expect(fm.meta.status).toBe("inbox");   // nothing else in meta was touched
+  });
+
+  test("a share with a comment is opened from the start", async () => {
+    const saved = await saveArticleFiche(MEMBER.id, {
+      url: "https://www.lemonde.fr/a/avec-mot.html",
+      html: page({ title: "Avec un mot" }),
+      comment: "À creuser.",
+    });
+    expect(saved.opened).toBe(true);
+    expect(parseFiche(fs.readFileSync(saved.file, "utf-8"))!.frontmatter.meta.opened).toBeUndefined();
+  });
+
+  test("a bookmark follows the same rule, and completion keeps it", async () => {
+    const url = "https://www.gatesnotes.com/work/unopened/reader";
+    const stub = await saveArticleFiche(MEMBER.id, { url });
+    expect(stub.needs_capture).toBe(true);
+    expect(stub.opened).toBe(false);
+
+    const done = await saveArticleFiche(MEMBER.id, { url, html: page({ title: "Rempli" }) });
+    expect(done.completed).toBe(true);
+    expect(done.opened).toBe(false);
+  });
+});
+
 test("every fiche written here is readable back", () => {
   const refs = scanArticleFiches({ root: GARDEN, username: "candide" });
   expect(refs.length).toBeGreaterThan(0);

@@ -41,8 +41,29 @@ test("card and fiche pair into one entry; lone faces stand alone", () => {
     `---\ntitle: Voyage en Chine\ndate: 2026-08-19\ntags:\n  - trip\nlocale: fr\n---\nTexte.`,
   );
   write("pages/fr/accueil.md", `---\ntitle: Accueil\nlocale: fr\n---\n`);
+  // An article share wrote this; nobody has written on it.
+  write(
+    "articles/fr/un-partage-fiche.md",
+    `---\ntitle: Un partage\nresource_collection: articles\nresource_id: un-partage\ndate: '2026-09-01'\ntags: []\nlocale: fr\nmeta:\n  url: https://example.org/p\n  opened: false\n---\n`,
+  );
+  // An unopened fiche behind a published card: the card is a position taken.
+  write(
+    "articles/fr/promu.md",
+    `---\ntitle: Promu\ndate: 2026-09-02\nlocale: fr\n---\nVerdict.`,
+  );
+  write(
+    "articles/fr/promu-fiche.md",
+    `---\ntitle: Promu\nresource_collection: articles\nresource_id: promu\ndate: '2026-09-01'\ntags: []\nlocale: fr\nmeta:\n  opened: false\n---\n`,
+  );
 
   const entries = listGardenEntries(garden);
+
+  // Opened unless the entry is nothing but an unopened fiche; a fiche without
+  // the marker (everything written before it existed) is opened.
+  expect(entries.find((e) => e.slug === "un-partage")!.opened).toBe(false);
+  expect(entries.find((e) => e.slug === "promu")!.opened).toBe(true);
+  expect(entries.find((e) => e.slug === "pluribus")!.opened).toBe(true);
+  expect(entries.find((e) => e.slug === "chine-2026")!.opened).toBe(true);
 
   const sugar = entries.find((e) => e.slug === "sugar")!;
   expect(sugar.collection).toBe("series");

@@ -16,6 +16,11 @@
  * (author, publication, dates) goes in `meta`. The full text goes in a
  * fragment, so the fiche stays small enough that scanning every one of them for
  * a duplicate URL is cheap.
+ *
+ * A share without a comment is a weak signal, so the file it writes is an
+ * *unopened* fiche (`meta.opened: false`, see gardenFiche.ts): kept, readable,
+ * but not yet one of the member's fiches. The first thing they write on it —
+ * a comment, a resonance, a highlight with a note — opens it.
  */
 
 import fs from "node:fs";
@@ -35,12 +40,15 @@ import {
   fichePath,
   fragmentsDir,
   gardenFor,
+  isOpened,
+  markOpened,
   parseFiche,
   resourceImagePaths,
   downloadImage,
   writeFiche,
   writeFragment,
   type GardenRef,
+  type ParsedFiche,
 } from "./gardenFiche";
 import { indexGardenPaths } from "./gardenIndex";
 
@@ -102,6 +110,8 @@ export interface SaveArticleResult extends ArticleFicheRef {
   card_web_path: string;
   /** Filled by the summarisation pass (not yet wired). */
   summary: string | null;
+  /** False until the member has written on it (comment, resonance, noted highlight). */
+  opened: boolean;
 }
 
 // ── Duplicate detection ──
@@ -318,6 +328,8 @@ export async function saveArticleFiche(
     status: "inbox",
     source_client: input.source_client || undefined,
     // `summary` is left out until there is one; the summarisation pass adds it.
+    // Opened by a comment — now, or on the bookmark this save completes.
+    opened: comment || (stub && stubOpened(stub)) ? undefined : false,
   };
 
   writeFiche(
@@ -373,10 +385,21 @@ export async function saveArticleFiche(
     tags,
     word_count: article.word_count,
     summary: null,
+    opened: meta.opened !== false,
     fiche_path: path.relative(garden.root, file),
     fiche_web_path: ficheWebPath(garden, COLLECTION, fileLocale, slug),
     card_web_path: cardWebPath(garden, COLLECTION, fileLocale, slug),
   };
+}
+
+/** Whether a bookmark on disk was already opened (it carried a comment). */
+function stubOpened(stub: ArticleFicheRef): boolean {
+  try {
+    const parsed = parseFiche(fs.readFileSync(stub.file, "utf-8"));
+    return parsed ? isOpened(parsed.frontmatter) : true;
+  } catch {
+    return true;
+  }
 }
 
 // ── Bookmarks ──
@@ -418,6 +441,7 @@ function writeStub(memberId: string, garden: GardenRef, i: StubInput): SaveArtic
     status: NEEDS_CAPTURE,
     capture_error: i.captureError || undefined,
     source_client: i.input.source_client || undefined,
+    opened: i.comment ? undefined : false,
   };
 
   writeFiche(
@@ -451,6 +475,7 @@ function writeStub(memberId: string, garden: GardenRef, i: StubInput): SaveArtic
     tags: i.tags,
     word_count: 0,
     summary: null,
+    opened: !!i.comment,
     fiche_path: path.relative(garden.root, file),
     fiche_web_path: ficheWebPath(garden, COLLECTION, i.locale, slug),
     card_web_path: cardWebPath(garden, COLLECTION, i.locale, slug),
@@ -505,7 +530,10 @@ function quote(text: string): string {
     .join("\n");
 }
 
-/** Add a dated line under `## Commentaire`, creating the section if needed. */
+/**
+ * Add a dated line under `## Commentaire`, creating the section if needed.
+ * Writing on the fiche is what opens it.
+ */
 function appendComment(memberId: string, garden: GardenRef, ref: ArticleFicheRef, comment: string): void {
   let raw: string;
   try {
@@ -515,16 +543,62 @@ function appendComment(memberId: string, garden: GardenRef, ref: ArticleFicheRef
   }
   const parsed = parseFiche(raw);
   if (!parsed) return;
-  if (parsed.body.includes(comment)) return; // same thought, sent twice
+  if (parsed.body.includes(comment)) {
+    // Same thought, sent twice — still a thought about it.
+    openArticleFiche(memberId, garden, ref);
+    return;
+  }
 
   const line = `${new Date().toISOString().slice(0, 10)} — ${comment}`;
   const body = parsed.body.includes(COMMENT_HEADING)
     ? `${parsed.body.trimEnd()}\n\n${line}\n`
     : `${parsed.body.trimEnd()}\n\n${COMMENT_HEADING}\n\n${line}\n`;
 
+  markOpened(parsed.frontmatter);
   writeFiche(ref.file, parsed.frontmatter, `\n${body.replace(/^\n+/, "")}`);
   autoCommit(garden, [ref.file], `Add comment to article fiche: ${ref.slug}`);
   indexGardenPaths(memberId, [ref.file]);
+}
+
+/** A comment on an already-saved article, by slug — the app's "add a note". */
+export function addArticleComment(
+  memberId: string,
+  slug: string,
+  comment: string,
+  locale?: string,
+): ArticleDescription & { body: string } {
+  const garden = gardenFor(memberId);
+  if (!garden) throw new ArticleSaveError("No garden for this member", 404);
+  const text = comment.trim();
+  if (!text) throw new ArticleSaveError("comment is required", 400);
+
+  const ref = scanArticleFiches(garden).find(
+    (f) => f.slug === slug && (!locale || f.locale === locale),
+  );
+  if (!ref) throw new ArticleSaveError(`Article not found: ${slug}`, 404);
+
+  appendComment(memberId, garden, ref, text);
+  return { ...describeArticle(garden, ref), body: readArticleBody(ref) };
+}
+
+/**
+ * Open a fiche without writing in its body — for the gestures that leave their
+ * text elsewhere (a highlight's note lives in SQLite, a resonance on the other
+ * entry). No-op, and no commit, when it is already open.
+ */
+export function openArticleFiche(memberId: string, garden: GardenRef, ref: ArticleFicheRef): boolean {
+  if (ref.kind !== "fiche") return false;
+  let parsed: ParsedFiche | null;
+  try {
+    parsed = parseFiche(fs.readFileSync(ref.file, "utf-8"));
+  } catch {
+    return false;
+  }
+  if (!parsed || !markOpened(parsed.frontmatter)) return false;
+  writeFiche(ref.file, parsed.frontmatter, parsed.body);
+  autoCommit(garden, [ref.file], `Open article fiche: ${ref.slug}`);
+  indexGardenPaths(memberId, [ref.file]);
+  return true;
 }
 
 // ── Describing what is on disk ──
@@ -551,6 +625,8 @@ export interface ArticleDescription extends ArticleFicheRef {
   has_text: boolean;
   capture_error: string | null;
   source_client: string | null;
+  /** False until the member has written on it; a card is opened by definition. */
+  opened: boolean;
   fiche_path: string;
   fiche_web_path: string;
   card_web_path: string;
@@ -589,6 +665,7 @@ export function describeArticle(garden: GardenRef, ref: ArticleFicheRef): Articl
     has_text: ref.kind === "fiche" && hasFullText(ref.file),
     capture_error: meta.capture_error ?? null,
     source_client: meta.source_client ?? null,
+    opened: ref.kind !== "fiche" || isOpened(fm),
     fiche_path: path.relative(garden.root, ref.file),
     fiche_web_path: ficheWebPath(garden, COLLECTION, ref.locale, ref.slug),
     card_web_path: cardWebPath(garden, COLLECTION, ref.locale, ref.slug),

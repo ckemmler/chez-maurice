@@ -135,6 +135,30 @@ export function dumpFrontmatter(fm: Record<string, Yamlish>): string {
     .join("\n");
 }
 
+// ── Opened / unopened ──
+//
+// A fiche the member has not written on yet is *unopened*: the file exists
+// (an article share writes one on every save) but the gesture behind it was
+// weak — "keep this", not "this has my attention". It becomes a fiche proper
+// the first time they write on it: a comment, a resonance, a highlight with a
+// note. Books, movies, series get their fiche through `open_fiche` in the MCP
+// tool, which is that deliberate gesture by construction — so the marker only
+// ever appears on what was written automatically, and its absence means opened.
+// That keeps every fiche written before the marker existed a fiche.
+
+/** `meta.opened: false` marks an unopened fiche; anything else reads as opened. */
+export function isOpened(frontmatter: Record<string, any>): boolean {
+  return (frontmatter.meta ?? {}).opened !== false;
+}
+
+/** Clear the marker in place — absence is the opened state. */
+export function markOpened(frontmatter: Record<string, any>): boolean {
+  if (isOpened(frontmatter)) return false;
+  const { opened: _drop, ...rest } = frontmatter.meta;
+  frontmatter.meta = rest;
+  return true;
+}
+
 // ── Reading ──
 
 export interface ParsedFiche {

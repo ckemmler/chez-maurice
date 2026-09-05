@@ -3,6 +3,7 @@
  * GET  /api/v1/garden/articles       — list every saved article, newest first
  * GET  /api/v1/garden/articles/lookup?url=… — is it already saved?
  * GET  /api/v1/garden/articles/:slug        — one article's metadata + body
+ * POST /api/v1/garden/articles/:slug/comment — add a note (opens the fiche)
  * GET  /api/v1/garden/articles/:slug/text   — the captured full text
  * CRUD /api/v1/garden/articles/:slug/highlights — passage highlights
  *
@@ -16,10 +17,12 @@
 
 import { Hono } from "hono";
 import {
+  addArticleComment,
   ArticleSaveError,
   describeArticle,
   findArticleFiche,
   listArticles,
+  openArticleFiche,
   readArticleBody,
   saveArticleFiche,
   type SaveArticleInput,
@@ -150,6 +153,29 @@ app.get("/:slug", (c) => {
   }
 });
 
+// A note on an article already saved — the dated line under ## Commentaire
+// that a re-share with a comment would add, without re-sharing. Writing on
+// the fiche is what opens it, so this is also how the app opens one.
+app.post("/:slug/comment", async (c) => {
+  const memberId = c.get("userId") as string;
+
+  let body: { comment?: string; locale?: string };
+  try {
+    body = await c.req.json();
+  } catch {
+    return c.json({ error: "Body must be JSON" }, 400);
+  }
+
+  try {
+    const result = addArticleComment(memberId, c.req.param("slug"), body.comment ?? "", body.locale);
+    return c.json({ ...result, file: undefined }, 201);
+  } catch (e) {
+    if (e instanceof ArticleSaveError) return c.json({ error: e.message }, e.status);
+    console.error("[garden-articles] comment failed:", e);
+    return c.json({ error: "Failed to add the comment" }, 500);
+  }
+});
+
 // The captured full text — what the fragment holds. 404 when the save never
 // got the page (a bookmark), so the app can tell "not captured" from "empty".
 app.get("/:slug/text", (c) => {
@@ -211,6 +237,12 @@ app.post("/:slug/highlights", async (c) => {
       endOffset: body.end_offset ?? null,
       view: asHighlightView(body.view),
     });
+    // A highlight alone is a reading gesture; a highlight with a note is a
+    // writing one, and opens the fiche.
+    if (body.note?.trim()) {
+      const garden = gardenFor(memberId);
+      if (garden) openArticleFiche(memberId, garden, ref);
+    }
     return c.json(created, 201);
   } catch (e) {
     if (e instanceof ArticleSaveError) return c.json({ error: e.message }, e.status);
@@ -228,6 +260,17 @@ app.put("/:slug/highlights/:id", async (c) => {
     .catch(() => ({}) as { note?: string | null; color?: string });
   const updated = updateArticleHighlight(memberId, id, { note: body.note, color: body.color });
   if (!updated) return c.json({ error: "Highlight not found" }, 404);
+  if (body.note?.trim()) {
+    const garden = gardenFor(memberId);
+    if (garden) {
+      try {
+        openArticleFiche(memberId, garden, findArticleBySlug(memberId, updated.slug, updated.locale));
+      } catch {
+        // The fiche may have been removed since the highlight was made; the
+        // note itself is saved, which is what the caller asked for.
+      }
+    }
+  }
   return c.json(updated);
 });
 

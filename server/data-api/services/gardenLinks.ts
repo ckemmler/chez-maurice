@@ -24,7 +24,7 @@
 
 import fs from "node:fs";
 import path from "node:path";
-import { autoCommit, parseFiche, writeFiche, type GardenRef } from "./gardenFiche";
+import { autoCommit, markOpened, parseFiche, writeFiche, type GardenRef } from "./gardenFiche";
 import { listGardenEntries, type GardenEntry } from "./gardenEntries";
 import { indexGardenPaths } from "./gardenIndex";
 
@@ -52,12 +52,16 @@ export interface LinkTarget {
 /**
  * Entries matching a query, for the picker. Title-prefix and word-start
  * matches rank before mere substring hits; ties break on recency.
+ *
+ * Unopened fiches stay out: "this feeds my X" wants the entries the member has
+ * actually taken up, and every article ever shared would drown those.
  */
 export function searchLinkTargets(garden: GardenRef, query: string, limit = 20): LinkTarget[] {
   const q = query.trim().toLowerCase();
   const scored: { score: number; t: LinkTarget }[] = [];
 
   for (const e of listGardenEntries(garden)) {
+    if (!e.opened) continue;
     const title = e.title.toLowerCase();
     let score: number;
     if (!q) score = 1;
@@ -102,9 +106,9 @@ export interface ResonanceResult {
   target: { collection: string; locale: string; slug: string; title: string };
 }
 
-function findEntry(garden: GardenRef, to: ResonanceInput["to"]): GardenEntry | null {
+function findEntry(entries: GardenEntry[], to: ResonanceInput["to"]): GardenEntry | null {
   return (
-    listGardenEntries(garden).find(
+    entries.find(
       (e) =>
         e.slug === to.slug &&
         e.locale === to.locale &&
@@ -126,6 +130,36 @@ export function findBookEntryByTitle(garden: GardenRef, title: string): GardenEn
   );
 }
 
+/**
+ * Open the fiche a [[basename]] names, when it is an unopened one. Returns the
+ * absolute file it rewrote, or null when nothing needed to change.
+ */
+function openSourceFiche(
+  garden: GardenRef,
+  entries: GardenEntry[],
+  basename: string,
+  preferLocale: string,
+): string | null {
+  if (!basename.endsWith("-fiche")) return null;
+  const slug = basename.slice(0, -"-fiche".length);
+  // A [[link]] carries no locale; when the slug exists under two, the one
+  // beside the target is the likelier source.
+  const candidates = entries.filter((e) => e.slug === slug && e.fiche && !e.opened);
+  const entry = candidates.find((e) => e.locale === preferLocale) ?? candidates[0];
+  if (!entry?.fiche) return null;
+
+  const file = path.join(garden.root, entry.fiche.file);
+  let parsed;
+  try {
+    parsed = parseFiche(fs.readFileSync(file, "utf-8"));
+  } catch {
+    return null;
+  }
+  if (!parsed || !markOpened(parsed.frontmatter)) return null;
+  writeFiche(file, parsed.frontmatter, parsed.body);
+  return file;
+}
+
 export function appendResonance(
   memberId: string,
   garden: GardenRef,
@@ -135,7 +169,9 @@ export function appendResonance(
   const quote = (input.quote ?? "").trim();
   if (!comment && !quote) throw new GardenLinkError("comment or quote required", 400);
 
-  const entry = findEntry(garden, input.to);
+  // One scan serves both the target lookup and the source's, below.
+  const entries = listGardenEntries(garden);
+  const entry = findEntry(entries, input.to);
   if (!entry) {
     throw new GardenLinkError(`No garden entry for ${input.to.locale}/${input.to.slug}`, 404);
   }
@@ -166,9 +202,21 @@ export function appendResonance(
     ? `${parsed.body.trimEnd()}\n\n${block}\n`
     : `${parsed.body.trimEnd()}\n\n${HEADING}\n\n${block}\n`;
 
+  // Writing on the target opens it (it was a target only by being picked from
+  // the opened ones, but the fiche can also be named directly).
+  markOpened(parsed.frontmatter);
   writeFiche(file, parsed.frontmatter, `\n${body.replace(/^\n+/, "")}`);
-  autoCommit(garden, [file], `Resonance on ${entry.collection}/${entry.slug}`);
-  indexGardenPaths(memberId, [file]);
+  const written = [file];
+
+  // A resonance sent *from* an unopened article is a thought about that
+  // article too: the note lands on the target, the opening lands on the source.
+  const sourceFile = input.source?.basename
+    ? openSourceFiche(garden, entries, input.source.basename, entry.locale)
+    : null;
+  if (sourceFile) written.push(sourceFile);
+
+  autoCommit(garden, written, `Resonance on ${entry.collection}/${entry.slug}`);
+  indexGardenPaths(memberId, written);
 
   return {
     file: face.file,
