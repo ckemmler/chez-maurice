@@ -9,6 +9,7 @@
 import { Hono } from "hono";
 import { gardenFor } from "../services/gardenFiche";
 import { GARDEN_COLLECTIONS, listGardenEntries } from "../services/gardenEntries";
+import { cardsFace } from "../services/flashcards";
 
 const app = new Hono();
 
@@ -17,7 +18,12 @@ app.get("/entries", (c) => {
   const garden = gardenFor(memberId);
   if (!garden) return c.json({ error: "No garden for this member" }, 404);
 
-  const entries = listGardenEntries(garden);
+  // Each entry with its flashcard face — counts read off the card files, no
+  // source re-read (staleness is the per-entry cards endpoint's job).
+  const entries = listGardenEntries(garden).map((e) => ({
+    ...e,
+    cards: e.fiche ? cardsFace(garden, e.fiche.file) : null,
+  }));
   return c.json({
     garden: {
       username: garden.username,

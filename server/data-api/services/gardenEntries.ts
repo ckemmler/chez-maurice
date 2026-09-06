@@ -60,6 +60,12 @@ export interface GardenEntry {
    * entry with one is opened whatever its fiche says.
    */
   opened: boolean;
+  /**
+   * The third face: flashcards generated on this entry, counts only. Filled by
+   * the entries route (services/flashcards.ts does the reading; it imports this
+   * module, so the scan itself stays unaware of cards).
+   */
+  cards?: { files: number; total: number; due: number; generated_at: string | null } | null;
 }
 
 function webPathFor(
