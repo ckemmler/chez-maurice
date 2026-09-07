@@ -804,6 +804,7 @@ private struct BookCardBody: View {
     let accent: Color
     @State private var chapters: [ComposerStore.BookChapter] = []
     @State private var showAll = false
+    @State private var confirmReset = false
 
     private var visible: [ComposerStore.BookChapter] { chapters.filter { !$0.hidden } }
     private var hiddenCount: Int { chapters.count - visible.count }
@@ -847,17 +848,49 @@ private struct BookCardBody: View {
             }
 
             if item.scopeMode == "progress" {
-                VStack(alignment: .leading, spacing: 4) {
+                VStack(alignment: .leading, spacing: 6) {
                     HStack {
-                        Image(systemName: "bookmark").font(.system(size: 11)).foregroundStyle(accent.legible(onDark: theme.isDark))
+                        Image(systemName: item.progressPaused ? "pause.circle" : "bookmark")
+                            .font(.system(size: 11)).foregroundStyle(accent.legible(onDark: theme.isDark))
                         Text(item.progressChapter < 0
                              ? L("book.progress.unstarted")
                              : String(format: L("book.progress.at"), item.progressChapter + 1,
                                       max(visible.count, item.progressChapter + 1)))
                             .font(.system(size: 11.5)).foregroundStyle(theme.ink)
                     }
-                    Text(L("book.progress.hint"))
+                    Text(item.progressPaused ? L("book.progress.pausedHint") : L("book.progress.hint"))
                         .font(.system(size: 9.5, design: .monospaced)).foregroundStyle(theme.inkMute)
+
+                    HStack(spacing: 8) {
+                        // Pause before going to look up an index or a chapter
+                        // well ahead: opening it then isn't recorded as having
+                        // read that far, and the loaded context stays put.
+                        Button {
+                            Task { await store.setReadingPaused(!item.progressPaused, bookId: item.rawId) }
+                        } label: {
+                            progressButtonLabel(
+                                item.progressPaused ? "play" : "pause",
+                                item.progressPaused ? L("book.progress.resume") : L("book.progress.pause"),
+                                on: item.progressPaused)
+                        }
+                        .buttonStyle(.plain)
+
+                        Button { confirmReset = true } label: {
+                            progressButtonLabel("arrow.counterclockwise", L("book.progress.reset"), on: false)
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(item.progressChapter < 0 && !item.progressPaused)
+                        Spacer(minLength: 0)
+                    }
+                    .padding(.top, 2)
+                }
+                // Losing where you are in a 27-chapter book to a stray tap is
+                // not something an undo can give back.
+                .confirmationDialog(L("book.progress.resetConfirm"), isPresented: $confirmReset, titleVisibility: .visible) {
+                    Button(L("book.progress.reset"), role: .destructive) {
+                        Task { await store.resetReadingProgress(bookId: item.rawId) }
+                    }
+                    Button(L("common.cancel"), role: .cancel) {}
                 }
             }
 
@@ -919,6 +952,19 @@ private struct BookCardBody: View {
         .task(id: item.rawId) {
             if chapters.isEmpty { chapters = await store.bookChapters(item.rawId) }
         }
+    }
+
+    /// Small bordered pill, the tray's own chrome — filled when it reports a
+    /// state that is on (tracking held), outlined when it is an action.
+    private func progressButtonLabel(_ symbol: String, _ title: String, on: Bool) -> some View {
+        HStack(spacing: 5) {
+            Image(systemName: symbol).font(.system(size: 10))
+            Text(title).font(.system(size: 11))
+        }
+        .foregroundStyle(on ? accent.legible(onDark: theme.isDark) : theme.inkSoft)
+        .padding(.horizontal, 9).padding(.vertical, 5)
+        .overlay(RoundedRectangle(cornerRadius: 7)
+            .strokeBorder(on ? accent.opacity(0.55) : theme.ruleHard, lineWidth: 0.5))
     }
 
     private func setScope(_ scope: String) {

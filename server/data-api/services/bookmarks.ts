@@ -187,9 +187,16 @@ export function getReadingProgress(memberId: string, bookId: number): ReadingPro
 
 /**
  * Record the reader's last position — last-write-wins, per member, so it syncs
- * across a member's devices. Upserts unconditionally (tracking is on by default);
- * stores the exact chapter, view and fractional scroll `position` (0–1) they left
- * off at, rather than only advancing to the furthest chapter.
+ * across a member's devices. Stores the exact chapter, view and scroll
+ * `position` they left off at, rather than only advancing to the furthest
+ * chapter.
+ *
+ * A row with `enabled = 0` is PAUSED and is not moved: that is how you go and
+ * consult the index, or a chapter well ahead, without the act of opening it
+ * being recorded as having read that far. The stored position — and so what a
+ * tracked book loads into a conversation — stays where you left it until
+ * tracking is resumed. The paused row is returned unchanged, so a caller can
+ * tell the reader why nothing moved.
  */
 export function updateReadingProgress(
   memberId: string,
@@ -199,6 +206,8 @@ export function updateReadingProgress(
   view: string,
   position: number = 0,
 ): ReadingProgress {
+  const existing = getReadingProgress(memberId, bookId);
+  if (existing && !existing.enabled) return existing;
   // Position is an opaque per-view offset (top character index for full text,
   // paragraph index for summaries) — a non-negative number, not a 0–1 fraction.
   const pos = Number.isFinite(position) && position >= 0 ? position : 0;
@@ -215,6 +224,38 @@ export function updateReadingProgress(
        RETURNING *`,
     )
     .get(memberId, bookId, chapterIndex, chapterSlug, view, pos) as ReadingProgress;
+}
+
+/** Forget where the member is in a book: the row goes, and a tracked book in a
+ *  conversation goes back to loading nothing. Deliberately a delete rather than
+ *  a chapter-zero row — "I have not started this" and "I am on the first page"
+ *  are different answers, and only the delete can say the first. */
+export function clearReadingProgress(memberId: string, bookId: number): void {
+  getDb().run("DELETE FROM reading_progress WHERE member_id = ? AND book_id = ?", [memberId, bookId]);
+}
+
+/** Pause or resume recording, explicitly. Preferred over the toggle below:
+ *  two clients toggling the same book race each other into opposite states,
+ *  and a button that says "Pause" should pause whatever the other device did.
+ *  Pausing a book nobody has opened records the pause, so it holds from the
+ *  first page. */
+export function setReadingTracking(memberId: string, bookId: number, enabled: boolean): ReadingProgress {
+  const db = getDb();
+  const existing = getReadingProgress(memberId, bookId);
+  if (existing) {
+    return db
+      .query(
+        `UPDATE reading_progress SET enabled = ?, updated_at = datetime('now')
+         WHERE member_id = ? AND book_id = ? RETURNING *`,
+      )
+      .get(enabled ? 1 : 0, memberId, bookId) as ReadingProgress;
+  }
+  return db
+    .query(
+      `INSERT INTO reading_progress (member_id, book_id, chapter_index, chapter_slug, view, enabled)
+       VALUES (?, ?, -1, '', 'summary', ?) RETURNING *`,
+    )
+    .get(memberId, bookId, enabled ? 1 : 0) as ReadingProgress;
 }
 
 export function toggleReadingTracking(memberId: string, bookId: number): ReadingProgress {

@@ -34,6 +34,9 @@ struct TrayItem: Identifiable, Equatable {
     /// `progress` scope only: the visible-chapter index the reader has reached,
     /// -1 before they start. Read off the server's snapshot, never sent.
     var progressChapter: Int = -1
+    /// `progress` scope: recording is paused, so the marker is held while the
+    /// reader consults further on.
+    var progressPaused: Bool = false
     /// Chapters the reader actually sees (front/back matter excluded).
     var visibleChapters: Int = 0
     // fiche options
@@ -219,6 +222,30 @@ final class ComposerStore {
         return try? JSONSerialization.jsonObject(with: data)
     }
 
+    // ── Reading progress of a tracked book ──
+    //
+    // The card's two controls. Both go to the calibre routes rather than the
+    // composer's, because the row they touch is the reader's own — the same
+    // one Carnet writes — and a tracked book merely reads it. Reweighing after
+    // is what refreshes the chapter the card shows.
+
+    /// Hold the marker where it is (or let it move again). Pause before going
+    /// to consult an index or a chapter well ahead, so opening it is not
+    /// recorded as having read that far.
+    func setReadingPaused(_ paused: Bool, bookId: String) async {
+        guard let id = Int(bookId) else { return }
+        _ = await request("POST", "/api/v1/calibre/books/\(id)/reading-progress/tracking",
+                          body: ["paused": paused])
+        await reweigh()
+    }
+
+    /// Forget the position entirely: the book goes back to loading nothing.
+    func resetReadingProgress(bookId: String) async {
+        guard let id = Int(bookId) else { return }
+        _ = await request("DELETE", "/api/v1/calibre/books/\(id)/reading-progress")
+        await reweigh()
+    }
+
     func reweigh() async {
         guard !items.isEmpty else { total = 0; tier = "light"; over = false; return }
         let body: [String: Any] = ["items": items.map { $0.payload() }]
@@ -240,6 +267,7 @@ final class ComposerStore {
                 // book on the progress scope: how far the reader has got, so
                 // the card can say it without a second request.
                 if let p = w["progressChapter"] as? Int { items[i].progressChapter = p }
+                if let p = w["progressPaused"] as? Bool { items[i].progressPaused = p }
                 if let f = w["fragments"] as? Int { items[i].fragmentCount = f }
                 if items[i].type == .book, let v = w["visibleCount"] as? Int { items[i].visibleChapters = v }
                 // file: kind/na drive the glyph + "n/a" readout; rebuild the meta

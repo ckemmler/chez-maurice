@@ -104,6 +104,9 @@ export interface ResolvedBook {
   /** Only set for a `progress` scope: the visible-list index the reader is at,
    *  -1 when nothing has been read. Drives the tray's "chapter 12 of 27". */
   progressChapter?: number;
+  /** `progress` scope: recording is paused, so the set above is held where it
+   *  is while the reader consults further on. */
+  progressPaused?: boolean;
   missing?: boolean;
 }
 export function resolveBookItem(memberId: string, it: any): ResolvedBook {
@@ -138,6 +141,7 @@ export function resolveBookItem(memberId: string, it: any): ResolvedBook {
     includedRefs: included.map((c) => c.ref),
     title: bc.title,
     progressChapter: scope.mode === "progress" ? progressChapter(memberId, Number(it.id), visible) : undefined,
+    progressPaused: scope.mode === "progress" ? isProgressPaused(memberId, Number(it.id)) : undefined,
   };
 }
 
@@ -149,6 +153,11 @@ export function resolveBookItem(memberId: string, it: any): ResolvedBook {
  *  FULL chapter list. The ref is the reliable half: chapter indices shift when
  *  a book is re-extracted, and hidden front-matter makes the two lists differ.
  *  The index is only a fallback for a row written before refs were stored. */
+function isProgressPaused(memberId: string, bookId: number): boolean {
+  const p = getReadingProgress(memberId, bookId);
+  return !!p && !p.enabled;
+}
+
 function progressChapter(memberId: string, bookId: number, visible: ChapterInfo[]): number {
   const p = getReadingProgress(memberId, bookId);
   if (!p) return -1;
@@ -205,6 +214,8 @@ export interface WeighedItem {
   moc?: boolean;
   /** book, `progress` scope: the visible-list index the reader has reached. */
   progressChapter?: number;
+  /** book, `progress` scope: recording is paused. */
+  progressPaused?: boolean;
   /** fiche: how many fragments rode along. */
   fragments?: number;
   heavy?: boolean; // ≥40 resolved notes, or a book ≥80k tokens
@@ -230,7 +241,7 @@ export function weighItems(memberId: string, items: any[]): {
     }
     if (it.type === "book") {
       const r = resolveBookItem(memberId, it);
-      return { type: "book", id: it.id, title: r.title, weight: r.weight, count: r.count, visibleCount: r.visibleCount, representation: r.representation, progressChapter: r.progressChapter, heavy: r.weight >= 80_000, missing: r.missing };
+      return { type: "book", id: it.id, title: r.title, weight: r.weight, count: r.count, visibleCount: r.visibleCount, representation: r.representation, progressChapter: r.progressChapter, progressPaused: r.progressPaused, heavy: r.weight >= 80_000, missing: r.missing };
     }
     if (it.type === "conversation") {
       const r = conversationWeight(memberId, it.id);

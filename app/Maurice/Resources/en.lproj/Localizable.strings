@@ -395,3 +395,11 @@
 "chat.activity.thinking" = "Thinking";
 "chat.activity.webSearch" = "Searching the web";
 "chat.activity.usingTool" = "Using %@";
+
+
+/* Reading progress: pause while you look ahead, and reset */
+"book.progress.pause" = "Pause";
+"book.progress.resume" = "Resume";
+"book.progress.reset" = "Reset";
+"book.progress.resetConfirm" = "Forget where you are in this book? Nothing will be loaded until you say where you've read to.";
+"book.progress.pausedHint" = "Held here while you look further ahead. Reading on won't move it.";

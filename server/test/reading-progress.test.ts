@@ -82,3 +82,32 @@ test("the upsert works, and two members track the same book apart", () => {
 test("a book nobody has opened has no progress", () => {
   expect(svc.getReadingProgress("alice", 999)).toBeNull();
 });
+
+test("a paused book is not moved by reading on, and moves again once resumed", () => {
+  svc.updateReadingProgress("carol", 7, 3, "0004-Three", "full", 0);
+  svc.setReadingTracking("carol", 7, false);
+
+  // What the reader does next — opening the index, skipping ahead — is exactly
+  // what pausing is for: it must not become "I have read this far".
+  svc.updateReadingProgress("carol", 7, 40, "0041-Index", "full", 0);
+  expect(svc.getReadingProgress("carol", 7)?.chapter_slug).toBe("0004-Three");
+
+  svc.setReadingTracking("carol", 7, true);
+  svc.updateReadingProgress("carol", 7, 4, "0005-Four", "full", 0);
+  expect(svc.getReadingProgress("carol", 7)?.chapter_slug).toBe("0005-Four");
+});
+
+test("pausing a book nobody has opened holds it from the first page", () => {
+  svc.setReadingTracking("dave", 8, false);
+  expect(svc.getReadingProgress("dave", 8)?.enabled).toBe(0);
+  svc.updateReadingProgress("dave", 8, 12, "0013-Twelve", "full", 0);
+  expect(svc.getReadingProgress("dave", 8)?.chapter_slug).toBe("");
+});
+
+test("reset forgets the book entirely", () => {
+  svc.updateReadingProgress("erin", 9, 2, "0003-Two", "full", 0);
+  svc.clearReadingProgress("erin", 9);
+  // Null, not a chapter-zero row: "not started" and "on the first page" are
+  // different answers, and only the delete can say the first.
+  expect(svc.getReadingProgress("erin", 9)).toBeNull();
+});

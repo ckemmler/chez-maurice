@@ -753,10 +753,13 @@ function trackedBooks(
     const r = resolveBookItem(memberId, it);
     if (r.missing) continue;
     const at = r.progressChapter ?? -1;
+    const held = r.progressPaused
+      ? " Tracking is PAUSED: they are consulting further on in the book, and the marker is held here on purpose. Do not offer to move it; if they ask you to, tell them tracking is paused and that resuming it is a button on the book's card."
+      : "";
     lines.push(
       at < 0
-        ? `- **${r.title}** — the reader has not started it. No chapter is loaded.`
-        : `- **${r.title}** — read up to chapter ${at + 1} of ${r.visibleCount}, which is what is loaded above.`,
+        ? `- **${r.title}** — the reader has not started it. No chapter is loaded.${held}`
+        : `- **${r.title}** — read up to chapter ${at + 1} of ${r.visibleCount}, which is what is loaded above.${held}`,
     );
   }
   return lines;

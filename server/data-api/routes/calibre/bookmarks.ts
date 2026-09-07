@@ -7,6 +7,8 @@ import {
   getReadingProgress,
   updateReadingProgress,
   toggleReadingTracking,
+  setReadingTracking,
+  clearReadingProgress,
 } from "../../services/bookmarks";
 
 const bookmarks = new Hono();
@@ -82,6 +84,32 @@ bookmarks.post("/:bookId/reading-progress/toggle", (c) => {
 
   const result = toggleReadingTracking(memberId, bookId);
   return c.json(result);
+});
+
+// DELETE /books/:bookId/reading-progress — forget where the reader is
+bookmarks.delete("/:bookId/reading-progress", (c) => {
+  const memberId = c.get("userId") as string;
+  if (!memberId) return c.json({ error: "Authentication required" }, 401);
+  const bookId = Number(c.req.param("bookId"));
+  if (Number.isNaN(bookId)) return c.json({ error: "Invalid book ID" }, 400);
+
+  clearReadingProgress(memberId, bookId);
+  return c.json({ ok: true });
+});
+
+// POST /books/:bookId/reading-progress/tracking — pause or resume, explicitly.
+// The toggle above flips whatever it finds, which two clients race each other
+// on; a button labelled "Pause" has to pause.
+bookmarks.post("/:bookId/reading-progress/tracking", async (c) => {
+  const memberId = c.get("userId") as string;
+  if (!memberId) return c.json({ error: "Authentication required" }, 401);
+  const bookId = Number(c.req.param("bookId"));
+  if (Number.isNaN(bookId)) return c.json({ error: "Invalid book ID" }, 400);
+
+  const body = await c.req.json<{ paused?: boolean }>().catch(() => ({}) as { paused?: boolean });
+  if (typeof body.paused !== "boolean") return c.json({ error: "paused (boolean) required" }, 400);
+
+  return c.json(setReadingTracking(memberId, bookId, !body.paused));
 });
 
 // POST /books/:bookId/reading-progress — record visit
