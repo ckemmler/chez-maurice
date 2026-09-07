@@ -389,3 +389,9 @@
 "fiche.meta.withFragments" = "scheda · %d frammento/i";
 "fiche.meta.noFragments" = "scheda";
 "fiche.meta.aloneNoFragments" = "scheda · senza i frammenti";
+
+
+/* Activity labels under a reply in flight */
+"chat.activity.thinking" = "Sta pensando";
+"chat.activity.webSearch" = "Ricerca sul web";
+"chat.activity.usingTool" = "Usa %@";

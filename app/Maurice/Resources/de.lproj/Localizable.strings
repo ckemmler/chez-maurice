@@ -389,3 +389,9 @@
 "fiche.meta.withFragments" = "Notizkarte · %d Fragment(e)";
 "fiche.meta.noFragments" = "Notizkarte";
 "fiche.meta.aloneNoFragments" = "Notizkarte · ohne Fragmente";
+
+
+/* Activity labels under a reply in flight */
+"chat.activity.thinking" = "Denkt nach";
+"chat.activity.webSearch" = "Sucht im Web";
+"chat.activity.usingTool" = "Nutzt %@";

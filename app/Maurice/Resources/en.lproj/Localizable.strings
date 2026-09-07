@@ -389,3 +389,9 @@
 "fiche.meta.withFragments" = "fiche · %d fragment(s)";
 "fiche.meta.noFragments" = "fiche";
 "fiche.meta.aloneNoFragments" = "fiche · fragments off";
+
+
+/* Activity labels under a reply in flight */
+"chat.activity.thinking" = "Thinking";
+"chat.activity.webSearch" = "Searching the web";
+"chat.activity.usingTool" = "Using %@";

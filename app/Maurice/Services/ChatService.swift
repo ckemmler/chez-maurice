@@ -804,15 +804,19 @@ final class ChatService {
     }
 
     /// Activity label while a reasoning model thinks (see `.thinking` above).
-    private static let thinkingLabel = "Thinking"
+    /// Computed, not a stored `let`: a stored one would freeze the string at
+    /// first access, and the label is compared by value to clear the phase —
+    /// after a language change the comparison would never match again.
+    private static var thinkingLabel: String { L("chat.activity.thinking") }
 
     /// Map a server tool name (e.g. "web_search", "tasks__triage") to a
-    /// friendly activity label.
+    /// friendly activity label. The server segment of an MCP name is its own
+    /// identifier ("tasks", "garden") and stays as it is.
     private static func toolLabel(for tool: String) -> String {
-        if tool == "web_search" { return "Searching the web" }
+        if tool == "web_search" { return L("chat.activity.webSearch") }
         // MCP tools are namespaced "server__tool"; show the server segment.
         let server = tool.components(separatedBy: "__").first ?? tool
-        return "Using \(server)"
+        return L("chat.activity.usingTool", server)
     }
 
     // MARK: - User Switch
