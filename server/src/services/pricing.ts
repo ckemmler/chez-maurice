@@ -52,10 +52,13 @@ const PRICES: Record<string, ModelPrice> = {
   // cached read is the sheet's "Cached Input" column over its "Input" one.
   // GLM-5.3: $1.40 in, $0.26 cached, $4.40 out.
   "glm-5.3": { input: 1.4, output: 4.4, cacheWrite: 1, cacheRead: 0.26 / 1.4 },
-  // GLM-5.3-Flash: $0.075 in, $0.015 cached, $0.25 out — the sheet flags a 50%
-  // promotion through 2026-09-09 without saying whether these are the promo
-  // figures. Taken as printed; re-read the sheet after that date.
-  "glm-5.3-flash": { input: 0.075, output: 0.25, cacheWrite: 1, cacheRead: 0.015 / 0.075 },
+  // GLM-5.3-Flash: list is $0.15 in, $0.03 cached, $0.50 out. The sheet strikes
+  // those through and shows half of each through 2026-09-09, and says in as many
+  // words that the struck figures are the list prices. Priced at list for the
+  // same reason as Sonnet 5 above: the promotion lapses on a date nobody here
+  // will be watching, and a meter that reads low is the one wrong answer. Until
+  // then this overstates a Flash turn by half.
+  "glm-5.3-flash": { input: 0.15, output: 0.5, cacheWrite: 1, cacheRead: 0.03 / 0.15 },
 
   // OpenAI is deliberately absent until someone checks its current sheet — an
   // unpriced model shows token counts with no dollar figure, which is honest; a

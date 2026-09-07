@@ -705,7 +705,7 @@ try {
 // vision_seeded is a generation counter, not a boolean: bumping it re-seeds once
 // and repairs databases that ran the mis-ordered version, while still never
 // overwriting a later operator change twice for the same generation.
-const VISION_SEED_GENERATION = 2;
+const VISION_SEED_GENERATION = 3;
 try {
   const seeded =
     (db.query(`SELECT vision_seeded FROM households WHERE id = 'default'`).get() as
@@ -717,7 +717,9 @@ try {
       `UPDATE models SET vision = 1
        WHERE provider = 'anthropic'
           OR id IN ('gpt-4o', 'gpt-4o-mini',
-                    'mistral-medium-latest', 'mistral-large-latest', 'mistral-small-latest')`,
+                    'mistral-medium-latest', 'mistral-large-latest', 'mistral-small-latest',
+                    -- GLM-5.3 is text-only; the Flash is the multimodal one of the pair.
+                    'glm-5.3-flash')`,
     );
     db.run(`UPDATE households SET vision_seeded = ? WHERE id = 'default'`, [VISION_SEED_GENERATION]);
   }

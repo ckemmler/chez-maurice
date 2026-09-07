@@ -426,7 +426,30 @@ conversations.post("/:id/messages", async (c) => {
           );
           await controller.flush();
           lastFlush = Date.now();
+          lastWrite = lastFlush;
         };
+
+        // Keepalive for the whole turn. The app drops the request after 180s
+        // without a byte, and a thinking model (GLM, DeepSeek…) or a slow tool
+        // can stay silent longer than that — the reply then lands in the
+        // database while the client shows a timeout. A `ping` every 15s of
+        // silence keeps the socket warm; clients that don't know the type skip
+        // it. Written from a timer, like the image-generation keepalives.
+        let lastWrite = Date.now();
+        const KEEPALIVE_INTERVAL = 15_000;
+        const keepalive = setInterval(async () => {
+          if (Date.now() - lastWrite < KEEPALIVE_INTERVAL) return;
+          try {
+            controller.write(encoder.encode(JSON.stringify({ type: "ping" }) + "\n"));
+            await controller.flush();
+            lastWrite = Date.now();
+          } catch {}
+        }, KEEPALIVE_INTERVAL);
+
+        // `thinking` arrives per reasoning token; one a second is plenty for
+        // an activity label and already resets the client's idle timer.
+        let lastThinking = 0;
+        const THINKING_INTERVAL = 1_000;
 
         try {
           for await (const event of streamResponse(
@@ -456,6 +479,11 @@ conversations.post("/:id/messages", async (c) => {
 
             if (event.type === "done") continue;
 
+            if (event.type === "thinking") {
+              if (Date.now() - lastThinking < THINKING_INTERVAL) continue;
+              lastThinking = Date.now();
+            }
+
             // Structured tool result: keep a copy to persist with the turn, then
             // fall through to forward it to the client for live rendering.
             if (event.type === "tool_data" && event.data != null) {
@@ -475,6 +503,7 @@ conversations.post("/:id/messages", async (c) => {
               encoder.encode(JSON.stringify(event) + "\n")
             );
             await controller.flush();
+            lastWrite = Date.now();
           }
 
           // Flush any remaining text
@@ -666,6 +695,8 @@ conversations.post("/:id/messages", async (c) => {
               );
             } catch {}
           }
+        } finally {
+          clearInterval(keepalive);
         }
 
         try { controller.close(); } catch {}

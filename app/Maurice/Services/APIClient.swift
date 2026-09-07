@@ -215,6 +215,10 @@ struct StreamEvent: Decodable {
 
     enum EventType: String, Decodable {
         case text_delta
+        /// The model is reasoning; nothing visible yet. Activity signal only.
+        case thinking
+        /// Server keepalive during a long silence — resets the idle timer, no UI.
+        case ping
         case done
         case error
         case image

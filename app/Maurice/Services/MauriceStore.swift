@@ -82,7 +82,7 @@ struct MauriceModel: Identifiable, Equatable {
     let id: String
     let name: String
     let tier: String   // "cloud" | "local"
-    let provider: String // anthropic | openai | mistral | ollama
+    let provider: String // anthropic | openai | mistral | zai | ollama
     let sub: String
     let desc: String
     let note: String

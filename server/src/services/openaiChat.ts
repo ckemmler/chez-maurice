@@ -19,8 +19,36 @@ export interface OpenAIUsage {
 
 export type OpenAITurnEvent =
   | { type: "text"; text: string }
+  /** A reasoning delta arrived (`reasoning_content`, GLM/DeepSeek-style). The
+   *  text itself stays private; the event only says the model is still at work,
+   *  so the route can keep the client's connection alive and show an activity. */
+  | { type: "thinking" }
   | { type: "turn_end"; content: string; toolCalls: OpenAIToolCall[]; usage: OpenAIUsage | null }
-  | { type: "error"; message: string };
+  /** `kind` names the billing failures a household can actually act on, so the
+   *  chat can answer in plain language instead of showing a raw status line. */
+  | { type: "error"; message: string; kind?: BillingErrorKind };
+
+/** `out_of_credits`: the account is definitely empty. `plan_or_credits`: the
+ *  provider refused on billing grounds without saying which — see below. */
+export type BillingErrorKind = "out_of_credits" | "plan_or_credits";
+
+/** Read a billing refusal out of a provider error. Matched on the message rather
+ *  than the status: all three providers answer 429 for ordinary rate limiting
+ *  too, and telling someone their credits ran out when they were merely sending
+ *  too fast sends them to a billing page for nothing.
+ *
+ *  Z.ai's code 1113 covers two different situations in one sentence —
+ *  "Insufficient balance or no resource package" — and they are not the same
+ *  errand. A key whose package covers GLM-5.3 but not GLM-5.3-Flash gets this
+ *  refusal on Flash while the account is perfectly well funded, so reporting it
+ *  as "your credits ran out" would send the admin to recharge for nothing. Its
+ *  own wording is checked first, precisely because it contains the unambiguous
+ *  phrase as a substring. */
+function billingErrorKind(detail: string): BillingErrorKind | undefined {
+  if (/no resource package|insufficient balance or/i.test(detail)) return "plan_or_credits";
+  if (/insufficient[ _]balance|insufficient_quota|exceeded your current quota/i.test(detail)) return "out_of_credits";
+  return undefined;
+}
 
 /** Normalize a Chat Completions `delta.content` to plain text. It's usually a
  *  string, but some OpenAI-compatible providers (e.g. MiniMax) send it as an
@@ -89,7 +117,11 @@ export async function* openaiTurn(
   if (!response.ok || !response.body) {
     let detail = "";
     try { detail = await response.text(); } catch {}
-    yield { type: "error", message: `Provider error ${response.status}: ${detail.slice(0, 300)}` };
+    yield {
+      type: "error",
+      message: `Provider error ${response.status}: ${detail.slice(0, 300)}`,
+      kind: billingErrorKind(detail),
+    };
     return;
   }
 
@@ -126,6 +158,9 @@ export async function* openaiTurn(
       }
       const delta = chunk.choices?.[0]?.delta;
       if (!delta) continue;
+      // Thinking models stream their reasoning as `reasoning_content` before any
+      // `content`. That phase can run for minutes with nothing else on the wire.
+      if (typeof delta.reasoning_content === "string" && delta.reasoning_content) yield { type: "thinking" };
       const text = deltaText(delta.content);
       if (text) { content += text; yield { type: "text", text }; }
       if (Array.isArray(delta.tool_calls)) {

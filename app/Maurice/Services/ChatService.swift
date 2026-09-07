@@ -707,6 +707,15 @@ final class ChatService {
                         if let t = event.text {
                             streamingText += t
                         }
+                        // Visible text ends the "Thinking" phase (a tool label
+                        // is cleared by its own end event).
+                        if toolActivity == Self.thinkingLabel { toolActivity = nil }
+                    case .thinking:
+                        // Reasoning models go quiet for a while before the first
+                        // word; say so instead of showing a bare spinner.
+                        if toolActivity == nil { toolActivity = Self.thinkingLabel }
+                    case .ping:
+                        break // keepalive — nothing to show
                     case .image_loading:
                         streamingText = ""
                         isGeneratingImage = true
@@ -793,6 +802,9 @@ final class ChatService {
         pendingSummon = false
         await loadConversations()
     }
+
+    /// Activity label while a reasoning model thinks (see `.thinking` above).
+    private static let thinkingLabel = "Thinking"
 
     /// Map a server tool name (e.g. "web_search", "tasks__triage") to a
     /// friendly activity label.

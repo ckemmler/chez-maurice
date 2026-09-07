@@ -256,7 +256,7 @@ struct PersonaCreator: View {
 
     // MARK: 2 · Model
 
-    private static let providerOrder = ["anthropic", "openai", "mistral", "ollama"]
+    private static let providerOrder = ["anthropic", "openai", "mistral", "zai", "ollama"]
 
     private var modelSection: some View {
         Section(number: 2, title: session.localized("persona.section.model"), theme: theme) {
@@ -436,13 +436,15 @@ enum ProviderStyle {
         case "anthropic":         return Color(hex: "cc785c") // clay
         case "openai":            return Color(hex: "202123") // near-black
         case "mistral":           return Color(hex: "fa500f") // orange
+        case "zai":               return Color(hex: "2d2d2d") // charcoal — the GLM mark's own ground
         case "gemini", "google":  return Color(hex: "4d83ef") // blue
         case "ollama":            return Color(hex: "00ff00") // pure green — local/on-device
         default:                  return Color(hex: "6b6460")
         }
     }
     /// Brand mark fill for the composer model pill — gradients for Mistral &
-    /// Gemini, solids for Anthropic & OpenAI (the household's provider palette).
+    /// Gemini, solids for Anthropic, OpenAI & Z.ai (the household's provider
+    /// palette; the last three are near-black marks, told apart by their logo).
     static func fill(_ p: String) -> AnyShapeStyle {
         func grad(_ a: String, _ b: String) -> AnyShapeStyle {
             AnyShapeStyle(LinearGradient(
@@ -453,6 +455,7 @@ enum ProviderStyle {
         case "anthropic":         return AnyShapeStyle(Color(hex: "da7758"))
         case "openai":            return AnyShapeStyle(Color(hex: "202123"))
         case "mistral":           return grad("fcc73c", "fc6817")
+        case "zai":               return AnyShapeStyle(Color(hex: "2d2d2d"))
         case "gemini", "google":  return grad("4d83ef", "cd6983")
         default:                  return AnyShapeStyle(color(p))
         }
@@ -462,6 +465,7 @@ enum ProviderStyle {
         case "anthropic":         return "asterisk"
         case "openai":            return "circle.hexagongrid.fill"
         case "mistral":           return "wind"
+        case "zai":               return "z.square"
         case "gemini", "google":  return "sparkle"
         case "ollama":            return "cpu"
         default:                  return "cube"
@@ -472,6 +476,7 @@ enum ProviderStyle {
         case "anthropic":         return "ANTHROPIC"
         case "openai":            return "OPENAI"
         case "mistral":           return "MISTRAL"
+        case "zai":               return "Z.AI"
         case "gemini", "google":  return "GEMINI"
         case "ollama":            return L("persona.provider.ollama")
         default:                  return p.uppercased()
@@ -491,7 +496,8 @@ enum ProviderStyle {
 }
 
 /// Provider chip: the real logo (its own colours) on a light ground so both the
-/// black marks (Anthropic, OpenAI) and the colour marks (Mistral, Gemini) read —
+/// black marks (Anthropic, OpenAI, Z.ai) and the colour marks (Mistral, Gemini)
+/// read —
 /// falling back to a brand-coloured SF Symbol chip until a logo asset is added.
 struct ProviderBadge: View {
     let provider: String

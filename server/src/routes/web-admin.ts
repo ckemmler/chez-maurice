@@ -76,6 +76,7 @@ const PROVIDER_LOGO: Record<string, string> = {
   anthropic: "anthropic.svg",
   openai: "openai.svg",
   mistral: "mistral.png",
+  zai: "zai.svg",
   gemini: "gemini.svg",
   google: "gemini.svg",
 };
