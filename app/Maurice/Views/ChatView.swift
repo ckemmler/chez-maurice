@@ -2245,6 +2245,24 @@ private struct ComposerBar: View {
                 .lineLimit(2...10)
                 .focused($isFocused)
                 .submitLabel(.send)
+                // macOS: Return sends, Shift-Return breaks the line. SwiftUI's
+                // vertical TextField gives Return to onSubmit and lets
+                // Shift-Return submit too, so both keys had the same effect and
+                // a multi-line message could not be typed. We take the key
+                // ourselves; the newline lands at the end of the field because
+                // the caret is not readable from a TextField binding (see
+                // anchorAtSelection).
+                #if os(macOS)
+                .onKeyPress(phases: .down) { press in
+                    guard press.key == .return else { return .ignored }
+                    if press.modifiers.contains(.shift) {
+                        inputText.append("\n")
+                        return .handled
+                    }
+                    submit(onSend)
+                    return .handled
+                }
+                #endif
 
                 HStack(spacing: 4) {
                     Menu {
