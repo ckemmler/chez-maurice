@@ -2,13 +2,22 @@ import { Database } from "bun:sqlite";
 import { getDbPath } from "../lib/config";
 
 let db: Database;
+let dbPath: string | null = null;
 function getDb(): Database {
+  // Cached per resolved path, not just "opened once". Under `bun test` every
+  // suite shares one process: binding the path at import, or holding one handle
+  // whatever the path resolves to, both mean the first suite to get here
+  // decides for all the others — and a suite that points MAURICE_DATA_DIR at
+  // its own fixture then reads and WRITES the real database instead. That is
+  // not a hypothetical; it put two test rows in a live reading_progress.
+  const path = getDbPath("akita.db");
+  if (db && dbPath !== path) {
+    try { db.close(); } catch {}
+    db = undefined as unknown as Database;
+  }
   if (!db) {
-    // Resolved on first use, never at import: under `bun test` every suite
-    // shares one process, so a path bound at module load is whichever suite
-    // imported this file first — and a suite that sets MAURICE_DATA_DIR for
-    // its own fixture silently gets the real database instead.
-    db = new Database(getDbPath("akita.db"));
+    dbPath = path;
+    db = new Database(path);
     db.exec("PRAGMA journal_mode=WAL");
     db.exec(`
       CREATE TABLE IF NOT EXISTS bookmarks (
