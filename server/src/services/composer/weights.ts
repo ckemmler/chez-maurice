@@ -2,6 +2,8 @@ import db from "../../db";
 import { estimateTokens, resolveSubtree } from "./notes";
 import { listChapters, type ChapterInfo } from "./calibre";
 import { resolveFileItem, resolveFolderItem } from "./files";
+import { resolveFicheItem } from "./fiches";
+import { getReadingProgress } from "../../../data-api/services/bookmarks";
 
 // B4: weight estimation across the three artifact types. Drives the per-chip
 // count/weight and the running context total. Estimates are char/4 token counts —
@@ -14,11 +16,16 @@ export const CTX_BUDGET = 200_000;
 export type BookScope =
   | { mode: "all" }
   | { mode: "up_to"; chapter: number } // chapter = index into the VISIBLE list, inclusive
-  | { mode: "chapters"; refs: string[] };
+  | { mode: "chapters"; refs: string[] }
+  // The one scope that is NOT frozen: it re-reads the member's reading
+  // progress every time the context is assembled, so a Maurice bound to a
+  // book keeps pace with the reader instead of needing a refresh.
+  | { mode: "progress" };
 
 export type ComposerItem =
   | { type: "note"; id: string; recurse?: boolean; include_archived?: boolean; exclude?: string[] }
   | { type: "book"; id: number; representation?: "summary" | "full"; scope?: BookScope }
+  | { type: "fiche"; id: string; include_fragments?: boolean }
   | { type: "conversation"; id: string }
   | { type: "file"; id: string }
   | { type: "folder"; id: string; recurse?: boolean; exclude?: string[] };
@@ -49,6 +56,9 @@ export function validateItems(items: any[]): ItemValidationError[] {
     } else if (it.type === "folder") {
       if ("representation" in it || "scope" in it)
         errs.push({ index, message: "folder items take no representation/scope" });
+    } else if (it.type === "fiche") {
+      if ("recurse" in it || "representation" in it || "scope" in it || "exclude" in it)
+        errs.push({ index, message: "fiche items take no recurse/representation/scope/exclude" });
     } else {
       errs.push({ index, message: `unknown item type: ${it.type}` });
     }
@@ -91,6 +101,9 @@ export interface ResolvedBook {
   representation: "summary" | "full";
   includedRefs: string[];
   title: string;
+  /** Only set for a `progress` scope: the visible-list index the reader is at,
+   *  -1 when nothing has been read. Drives the tray's "chapter 12 of 27". */
+  progressChapter?: number;
   missing?: boolean;
 }
 export function resolveBookItem(memberId: string, it: any): ResolvedBook {
@@ -101,7 +114,12 @@ export function resolveBookItem(memberId: string, it: any): ResolvedBook {
   const visible = bc.chapters.filter((c) => !c.hidden);
   const scope: BookScope = it.scope ?? { mode: "all" };
   let included: ChapterInfo[];
-  if (scope.mode === "up_to") {
+  if (scope.mode === "progress") {
+    const upto = progressChapter(memberId, Number(it.id), visible);
+    // Nothing read yet resolves to nothing, not to the whole book: a tracked
+    // book must never hand over more than the reader has reached.
+    included = upto < 0 ? [] : visible.slice(0, upto + 1);
+  } else if (scope.mode === "up_to") {
     const n = Math.max(0, Math.min(visible.length - 1, Number((scope as any).chapter)));
     included = visible.slice(0, n + 1); // spoiler-safe, over visible only
   } else if (scope.mode === "chapters") {
@@ -119,7 +137,30 @@ export function resolveBookItem(memberId: string, it: any): ResolvedBook {
     representation: rep,
     includedRefs: included.map((c) => c.ref),
     title: bc.title,
+    progressChapter: scope.mode === "progress" ? progressChapter(memberId, Number(it.id), visible) : undefined,
   };
+}
+
+/** Where the member has read to, as an index into the VISIBLE chapter list,
+ *  inclusive; -1 when nothing has been read (or the row says so).
+ *
+ *  Progress is recorded by whatever last read the book — Carnet's reader, or
+ *  the tool this conversation calls — as a chapter ref plus an index into the
+ *  FULL chapter list. The ref is the reliable half: chapter indices shift when
+ *  a book is re-extracted, and hidden front-matter makes the two lists differ.
+ *  The index is only a fallback for a row written before refs were stored. */
+function progressChapter(memberId: string, bookId: number, visible: ChapterInfo[]): number {
+  const p = getReadingProgress(memberId, bookId);
+  if (!p) return -1;
+  if (p.chapter_slug) {
+    const i = visible.findIndex((c) => c.ref === p.chapter_slug);
+    if (i >= 0) return i;
+    // A ref that isn't visible is front/back matter: it says reading has
+    // started but not reached a body chapter.
+    return -1;
+  }
+  if (p.chapter_index >= 0) return Math.min(p.chapter_index, visible.length - 1);
+  return -1;
 }
 
 export interface ResolvedConv {
@@ -162,6 +203,10 @@ export interface WeighedItem {
   visibleCount?: number;
   representation?: string;
   moc?: boolean;
+  /** book, `progress` scope: the visible-list index the reader has reached. */
+  progressChapter?: number;
+  /** fiche: how many fragments rode along. */
+  fragments?: number;
   heavy?: boolean; // ≥40 resolved notes, or a book ≥80k tokens
   missing?: boolean;
   // file/folder
@@ -185,7 +230,7 @@ export function weighItems(memberId: string, items: any[]): {
     }
     if (it.type === "book") {
       const r = resolveBookItem(memberId, it);
-      return { type: "book", id: it.id, title: r.title, weight: r.weight, count: r.count, visibleCount: r.visibleCount, representation: r.representation, heavy: r.weight >= 80_000, missing: r.missing };
+      return { type: "book", id: it.id, title: r.title, weight: r.weight, count: r.count, visibleCount: r.visibleCount, representation: r.representation, progressChapter: r.progressChapter, heavy: r.weight >= 80_000, missing: r.missing };
     }
     if (it.type === "conversation") {
       const r = conversationWeight(memberId, it.id);
@@ -194,6 +239,10 @@ export function weighItems(memberId: string, items: any[]): {
     if (it.type === "file") {
       const r = resolveFileItem(memberId, it.id);
       return { type: "file", id: it.id, title: r.name, weight: r.weight, kind: r.kind, na: r.na, path: r.path, missing: r.missing };
+    }
+    if (it.type === "fiche") {
+      const r = resolveFicheItem(memberId, it);
+      return { type: "fiche", id: it.id, title: r.title, weight: r.weight, count: r.count, fragments: r.fragments, missing: r.missing };
     }
     if (it.type === "folder") {
       const r = resolveFolderItem(memberId, it);

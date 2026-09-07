@@ -364,3 +364,28 @@
 "fiche.open_fiche" = "Notizkarte öffnen";
 "fiche.open_card" = "Karte öffnen";
 "fiche.seasons" = "%d Staffeln";
+
+
+/* Sort controls (the shared SortMenu) */
+"sort.menu" = "Sortieren";
+"sort.default" = "Standard";
+"sort.recent" = "Zuletzt bearbeitet";
+"sort.title" = "Titel";
+"sort.kind" = "Art";
+"sort.relevance" = "Relevanz";
+
+
+/* Reading companion: a book that follows your progress, and fiches in context */
+"context.section.fiches" = "Notizkarten";
+"book.scope.progress" = "Mein Lesestand";
+"book.scope.progressAt" = "folgt meinem Lesen · Kap. %d von %d";
+"book.scope.progressUnstarted" = "folgt meinem Lesen · nicht begonnen";
+"book.progress.at" = "Gelesen bis Kapitel %d von %d.";
+"book.progress.unstarted" = "Du hast dieses Buch noch nicht begonnen. Es ist noch nichts geladen.";
+"book.progress.hint" = "Folgt deinem Lesestand, als Zusammenfassungen. Sag Maurice, dass du weitergelesen hast.";
+"fiche.includeFragments" = "Fragmente einbeziehen";
+"fiche.fragmentsHint" = "%d Fragment(e) — was du auf dieser Notizkarte geschrieben hast.";
+"fiche.noFragmentsYet" = "Auf dieser Notizkarte steht noch nichts.";
+"fiche.meta.withFragments" = "Notizkarte · %d Fragment(e)";
+"fiche.meta.noFragments" = "Notizkarte";
+"fiche.meta.aloneNoFragments" = "Notizkarte · ohne Fragmente";

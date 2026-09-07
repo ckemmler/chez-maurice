@@ -1,12 +1,14 @@
 import { Database } from "bun:sqlite";
 import { getDbPath } from "../lib/config";
 
-const DB_PATH = getDbPath("akita.db");
-
 let db: Database;
 function getDb(): Database {
   if (!db) {
-    db = new Database(DB_PATH);
+    // Resolved on first use, never at import: under `bun test` every suite
+    // shares one process, so a path bound at module load is whichever suite
+    // imported this file first — and a suite that sets MAURICE_DATA_DIR for
+    // its own fixture silently gets the real database instead.
+    db = new Database(getDbPath("akita.db"));
     db.exec("PRAGMA journal_mode=WAL");
     db.exec(`
       CREATE TABLE IF NOT EXISTS bookmarks (
@@ -40,8 +42,64 @@ function getDb(): Database {
     try { db.exec("ALTER TABLE reading_progress ADD COLUMN member_id TEXT NOT NULL DEFAULT ''"); } catch {}
     // Fractional scroll position (0–1) within the current chapter+view.
     try { db.exec("ALTER TABLE reading_progress ADD COLUMN position REAL NOT NULL DEFAULT 0"); } catch {}
+    migrateProgressKey(db);
   }
   return db;
+}
+
+
+/**
+ * The table predates members: akita created it with `book_id INTEGER PRIMARY
+ * KEY`, one row per book for one reader, and `member_id` was later bolted on
+ * with ALTER — which cannot change a primary key. The CREATE above declares
+ * the right key, but IF NOT EXISTS meant it never applied to a live database.
+ *
+ * Two consequences, both silent: two members could never both track the same
+ * book, and `updateReadingProgress`'s `ON CONFLICT(member_id, book_id)` threw
+ * "does not match any PRIMARY KEY or UNIQUE constraint" on every call — so no
+ * reading position has ever reached the server from Carnet's reader.
+ *
+ * Rebuild the table with the composite key. Guarded on the actual key, so it
+ * runs once and is a no-op on a database created by the CREATE above.
+ */
+function migrateProgressKey(db: Database): void {
+  try {
+    const cols = db.query("PRAGMA table_info(reading_progress)").all() as Array<{ name: string; pk: number }>;
+    if (!cols.length) return;
+    const keyed = cols.filter((c) => c.pk > 0).map((c) => c.name).sort();
+    if (keyed.length === 2 && keyed[0] === "book_id" && keyed[1] === "member_id") return;
+
+    db.exec("BEGIN");
+    db.exec(`
+      CREATE TABLE reading_progress_migrated (
+        member_id TEXT NOT NULL DEFAULT '',
+        book_id INTEGER NOT NULL,
+        chapter_index INTEGER NOT NULL,
+        chapter_slug TEXT NOT NULL,
+        view TEXT NOT NULL DEFAULT 'summary',
+        enabled INTEGER NOT NULL DEFAULT 0,
+        position REAL NOT NULL DEFAULT 0,
+        updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+        PRIMARY KEY (member_id, book_id)
+      )
+    `);
+    // The old key was book_id alone, so no two rows can collide on the new one.
+    db.exec(`
+      INSERT INTO reading_progress_migrated
+        (member_id, book_id, chapter_index, chapter_slug, view, enabled, position, updated_at)
+      SELECT COALESCE(member_id, ''), book_id, chapter_index, chapter_slug,
+             COALESCE(view, 'summary'), COALESCE(enabled, 0), COALESCE(position, 0),
+             COALESCE(updated_at, datetime('now'))
+      FROM reading_progress
+    `);
+    db.exec("DROP TABLE reading_progress");
+    db.exec("ALTER TABLE reading_progress_migrated RENAME TO reading_progress");
+    db.exec("COMMIT");
+    console.log("[bookmarks] reading_progress rekeyed on (member_id, book_id)");
+  } catch (e) {
+    try { db.exec("ROLLBACK"); } catch {}
+    console.error("[bookmarks] reading_progress migration failed, left as it was:", e);
+  }
 }
 
 export interface Bookmark {

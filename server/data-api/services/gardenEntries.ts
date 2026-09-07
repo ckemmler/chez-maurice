@@ -50,6 +50,9 @@ export interface GardenEntry {
   slug: string;
   title: string;
   date: string;
+  /** Newest mtime across the entry's files, ISO-8601 — when it was last
+   *  edited, as opposed to `date`, which is the subject's own date. */
+  updated_at: string;
   tags: string[];
   image: string | null;
   card: GardenEntryFace | null;
@@ -119,7 +122,7 @@ export function listGardenEntries(garden: GardenRef): GardenEntry[] {
         if (!e) {
           e = {
             collection, locale, slug,
-            title: "", date: "", tags: [], image: null,
+            title: "", date: "", updated_at: "", tags: [], image: null,
             card: null, fiche: null, opened: false,
           };
           bySlug.set(slug, e);
@@ -131,8 +134,10 @@ export function listGardenEntries(garden: GardenRef): GardenEntry[] {
         if (!file.endsWith(".md")) continue;
         const full = path.join(dir, file);
         let parsed;
+        let mtime: string;
         try {
           parsed = parseFiche(fs.readFileSync(full, "utf-8"));
+          mtime = fs.statSync(full).mtime.toISOString();
         } catch {
           continue;
         }
@@ -149,6 +154,8 @@ export function listGardenEntries(garden: GardenRef): GardenEntry[] {
         };
         if (isFiche) e.fiche = face;
         else e.card = face;
+        // Either face counts: writing on the fiche is editing the entry.
+        if (mtime > e.updated_at) e.updated_at = mtime;
         if (!isFiche || isOpened(fm)) e.opened = true;
 
         // The card is the published face — where both exist, its title and

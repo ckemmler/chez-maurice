@@ -1,5 +1,6 @@
 import { Hono } from "hono";
 import db from "../db";
+import { scanFiches } from "../services/composer/fiches";
 import { scanNotes, resolveSubtree } from "../services/composer/notes";
 import { searchBooks, bookCoverage, libraryRootFor, listChapters } from "../services/composer/calibre";
 import { weighItems, validateItems } from "../services/composer/weights";
@@ -24,13 +25,25 @@ function matchScore(ql: string, ...fields: (string | null | undefined)[]): numbe
   return best;
 }
 
+/** SQLite's `datetime('now')` is UTC without a zone marker; the clients want
+ *  a real ISO-8601 instant. Anything already carrying a zone passes through. */
+function isoUtc(raw: string | null | undefined): string | null {
+  if (!raw) return null;
+  const hasZone = /[Zz]|[+-]\d{2}:?\d{2}$/.test(raw);
+  const d = new Date(raw.replace(" ", "T") + (hasZone ? "" : "Z"));
+  return Number.isNaN(d.getTime()) ? null : d.toISOString();
+}
+
 interface SearchResult {
-  type: "note" | "book" | "conversation" | "file" | "folder";
+  type: "note" | "book" | "conversation" | "file" | "folder" | "fiche";
   id: string | number;
   title: string;
   sub: string;
   badges: Record<string, unknown>;
   score: number;
+  /** When the thing was last touched, ISO-8601 — what a "recent first" sort in
+   *  the picker orders on. Null when the source has no date to give. */
+  updated_at: string | null;
 }
 
 // GET /api/v1/composer/search?q=…  → ranked results across the three types.
@@ -53,6 +66,26 @@ composer.get("/search", (c) => {
       sub: n.isMoc ? "MOC · fans out" : "note · leaf",
       badges: { moc: n.isMoc, archived: n.isArchived, encrypted: n.isEncrypted },
       score,
+      updated_at: n.updatedAt,
+    });
+  }
+
+  // ── Fiches (the garden's working face: a subject plus what was written
+  //    on it). Their fragments ride along with the item, so they are not
+  //    searchable on their own — you reach a fragment through its fiche. ──
+  for (const f of scanFiches(memberId).values()) {
+    const score = matchScore(ql, f.title, f.slug);
+    if (!score) continue;
+    out.push({
+      type: "fiche",
+      id: f.id,
+      title: f.title,
+      sub: f.fragments
+        ? `${f.collection} · ${f.fragments} fragment${f.fragments === 1 ? "" : "s"}`
+        : `${f.collection} · fiche`,
+      badges: { collection: f.collection, fragments: f.fragments },
+      score,
+      updated_at: f.updatedAt || null,
     });
   }
 
@@ -74,6 +107,7 @@ composer.get("/search", (c) => {
           : null,
       },
       score,
+      updated_at: b.added,
     });
   }
 
@@ -101,6 +135,7 @@ composer.get("/search", (c) => {
       sub: `conversation · ${date}`,
       badges: { date },
       score,
+      updated_at: isoUtc(r.updated_at),
     });
   }
 
@@ -115,6 +150,7 @@ composer.get("/search", (c) => {
       sub: h.sub,
       badges: { kind: h.kind ?? null },
       score,
+      updated_at: isoUtc(h.updatedAt),
     });
   }
 

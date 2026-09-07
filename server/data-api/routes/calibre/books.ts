@@ -15,6 +15,7 @@ books.get("/", async (c) => {
       tags: b.tags,
       formats: b.formats,
       series: b.series,
+      added: b.added,
       chapters: stats[i].chapters,
       summarized: stats[i].summarized,
       indexed: stats[i].indexed,

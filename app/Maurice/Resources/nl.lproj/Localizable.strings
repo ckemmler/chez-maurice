@@ -364,3 +364,28 @@
 "fiche.open_fiche" = "Fiche openen";
 "fiche.open_card" = "Kaart openen";
 "fiche.seasons" = "%d seizoenen";
+
+
+/* Sort controls (the shared SortMenu) */
+"sort.menu" = "Sorteren";
+"sort.default" = "standaard";
+"sort.recent" = "Onlangs bewerkt";
+"sort.title" = "Titel";
+"sort.kind" = "Soort";
+"sort.relevance" = "Relevantie";
+
+
+/* Reading companion: a book that follows your progress, and fiches in context */
+"context.section.fiches" = "Fiches";
+"book.scope.progress" = "Mijn lezen";
+"book.scope.progressAt" = "volgt mijn lezen · hfst. %d van %d";
+"book.scope.progressUnstarted" = "volgt mijn lezen · nog niet begonnen";
+"book.progress.at" = "Gelezen tot hoofdstuk %d van %d.";
+"book.progress.unstarted" = "Je bent nog niet aan dit boek begonnen. Er is nog niets geladen.";
+"book.progress.hint" = "Volgt waar je bent, in samenvattingen. Zeg Maurice dat je verder bent gelezen.";
+"fiche.includeFragments" = "De fragmenten meenemen";
+"fiche.fragmentsHint" = "%d fragment(en) — wat je op deze fiche hebt geschreven.";
+"fiche.noFragmentsYet" = "Er is nog niets op deze fiche geschreven.";
+"fiche.meta.withFragments" = "fiche · %d fragment(en)";
+"fiche.meta.noFragments" = "fiche";
+"fiche.meta.aloneNoFragments" = "fiche · zonder de fragmenten";

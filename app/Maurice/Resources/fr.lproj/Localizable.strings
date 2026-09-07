@@ -364,3 +364,28 @@
 "fiche.open_fiche" = "Ouvrir la fiche";
 "fiche.open_card" = "Ouvrir la carte";
 "fiche.seasons" = "%d saisons";
+
+
+/* Sort controls (the shared SortMenu) */
+"sort.menu" = "Trier";
+"sort.default" = "par défaut";
+"sort.recent" = "Modifié récemment";
+"sort.title" = "Titre";
+"sort.kind" = "Type";
+"sort.relevance" = "Pertinence";
+
+
+/* Reading companion: a book that follows your progress, and fiches in context */
+"context.section.fiches" = "Fiches";
+"book.scope.progress" = "Ma lecture";
+"book.scope.progressAt" = "suit ma lecture · ch. %d sur %d";
+"book.scope.progressUnstarted" = "suit ma lecture · pas commencé";
+"book.progress.at" = "Lu jusqu'au chapitre %d sur %d.";
+"book.progress.unstarted" = "Tu n'as pas commencé ce livre. Rien n'est encore chargé.";
+"book.progress.hint" = "Suit où tu en es, en résumés. Dis à Maurice que tu as avancé et ça bouge.";
+"fiche.includeFragments" = "Inclure ses fragments";
+"fiche.fragmentsHint" = "%d fragment(s) — ce que tu as écrit sur cette fiche.";
+"fiche.noFragmentsYet" = "Rien n'a encore été écrit sur cette fiche.";
+"fiche.meta.withFragments" = "fiche · %d fragment(s)";
+"fiche.meta.noFragments" = "fiche";
+"fiche.meta.aloneNoFragments" = "fiche · sans les fragments";

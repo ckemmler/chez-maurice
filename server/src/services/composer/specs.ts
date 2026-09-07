@@ -3,6 +3,7 @@ import { isParticipant } from "../conversations";
 import { resolveSubtree, readNoteBody, estimateTokens } from "./notes";
 import { readChapters } from "./calibre";
 import { resolveFileItem, resolveFolderItem, fileText, fileBinary, type FileAttachment } from "./files";
+import { ficheText, resolveFicheItem } from "./fiches";
 import {
   resolveBookItem,
   conversationWeight,
@@ -23,6 +24,13 @@ export interface SpecItemSnapshot {
   slugs?: string[]; // note: the frozen descendant set
   refs?: string[]; // book: the frozen included chapters
   representation?: "summary" | "full";
+  /** book: true when the item's scope is `progress`, so the frozen refs above
+   *  are a snapshot for display only — the resolver recomputes them. */
+  tracksProgress?: boolean;
+  /** book, `progress` scope: the visible-list index at freeze time. */
+  progressChapter?: number;
+  /** fiche: how many fragments the item carries. */
+  fragments?: number;
   encrypted?: boolean;
   archivedWithheld?: number;
   // file/folder
@@ -33,7 +41,7 @@ export interface SpecItemSnapshot {
   resolved_at: string;
 }
 export interface SpecItem {
-  type: "note" | "book" | "conversation" | "file" | "folder";
+  type: "note" | "book" | "conversation" | "file" | "folder" | "fiche";
   id: string | number;
   [k: string]: any;
   snapshot: SpecItemSnapshot;
@@ -85,8 +93,17 @@ function freeze(memberId: string, it: any): SpecItem {
         count: r.count,
         refs: r.includedRefs,
         representation: r.representation,
+        tracksProgress: it.scope?.mode === "progress" || undefined,
+        progressChapter: r.progressChapter,
         resolved_at: at,
       },
+    };
+  }
+  if (it.type === "fiche") {
+    const r = resolveFicheItem(memberId, it);
+    return {
+      ...it,
+      snapshot: { weight: r.weight, count: r.count, fragments: r.fragments, resolved_at: at },
     };
   }
   if (it.type === "file") {
@@ -233,11 +250,20 @@ export function resolveSpecToText(memberId: string, spec: ContextSpec): Resolved
       return { type: "note", id: it.id, text, weight: estimateTokens(text), encrypted: it.snapshot?.encrypted };
     }
     if (it.type === "book") {
-      const refs = it.snapshot?.refs ?? [];
+      // A tracked book is the one item that ignores its frozen set: the whole
+      // point is that it follows the reader, so the chapters are recomputed
+      // here rather than read off the snapshot.
+      const refs = it.snapshot?.tracksProgress
+        ? resolveBookItem(memberId, it).includedRefs
+        : (it.snapshot?.refs ?? []);
       const rep = (it.snapshot?.representation ?? "summary") as "summary" | "full";
       const chs = readChapters(memberId, Number(it.id), refs, rep);
       const text = chs.map((c) => c.text).filter(Boolean).join("\n\n---\n\n");
       return { type: "book", id: it.id, text, weight: estimateTokens(text) };
+    }
+    if (it.type === "fiche") {
+      const text = ficheText(memberId, String(it.id), it.include_fragments !== false);
+      return { type: "fiche", id: it.id, text, weight: estimateTokens(text) };
     }
     if (it.type === "file") {
       // binaries carry no text (they ride along via resolveSpecAttachments)

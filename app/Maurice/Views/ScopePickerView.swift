@@ -935,6 +935,21 @@ private struct GardenRow: View {
     }
 }
 
+/// How the garden's entries are ordered. Recency is the default because the
+/// garden is a working surface: what you wrote on last is what you come back
+/// to. Title and kind are for hunting something specific down.
+enum GardenSort: String, SortChoice {
+    case recent, title, kind
+    static var defaultChoice: GardenSort { .recent }
+    var labelKey: String {
+        switch self {
+        case .recent: return "sort.recent"
+        case .title: return "sort.title"
+        case .kind: return "sort.kind"
+        }
+    }
+}
+
 // MARK: - Garden tool page (the › destination: search · theme · manage notes)
 
 struct GardenPageView: View {
@@ -954,6 +969,9 @@ struct GardenPageView: View {
     @State private var visibleCount = GardenPageView.pageSize
     @State private var webThemes: [(id: String, label: String)] = [("default", "Default")]
     @State private var accessNote: ServerGardenNote?
+    /// Remembered across launches: a gardener who sorts by title means it.
+    @AppStorage("maurice.garden.sort") private var sortRaw = GardenSort.defaultChoice.rawValue
+    private var sort: GardenSort { GardenSort(rawValue: sortRaw) ?? .defaultChoice }
 
     private var accent: Color { session.activeDeviceUser?.color ?? .blue }
 
@@ -962,8 +980,39 @@ struct GardenPageView: View {
 
     private var filteredNotes: [ServerGardenNote] {
         let q = query.trimmingCharacters(in: .whitespaces).lowercased()
-        guard !q.isEmpty else { return garden.notes }
-        return garden.notes.filter { $0.title.lowercased().contains(q) || $0.slug.contains(q) }
+        let matching = q.isEmpty
+            ? garden.notes
+            : garden.notes.filter { $0.title.lowercased().contains(q) || $0.slug.contains(q) }
+        // The server already hands the notes over newest-edit first, so the
+        // default order costs nothing; only the other axes re-sort.
+        switch sort {
+        case .recent: return matching
+        case .title: return matching.sorted { byTitle($0, $1) }
+        case .kind: return matching.sorted { a, b in
+            let (ka, kb) = (kindRank(a), kindRank(b))
+            return ka == kb ? recencyBefore(a, b) : ka < kb
+        }
+        }
+    }
+
+    private func byTitle(_ a: ServerGardenNote, _ b: ServerGardenNote) -> Bool {
+        let c = a.title.localizedCaseInsensitiveCompare(b.title)
+        return c == .orderedSame ? a.id < b.id : c == .orderedAscending
+    }
+
+    /// Notes, then fiches, then cards — the order a garden is written in.
+    private func kindRank(_ n: ServerGardenNote) -> Int {
+        switch n.kind ?? "note" {
+        case "note": return 0
+        case "fiche": return 1
+        default: return 2
+        }
+    }
+
+    /// Newest edit first; an entry with no mtime sinks rather than jumping.
+    private func recencyBefore(_ a: ServerGardenNote, _ b: ServerGardenNote) -> Bool {
+        let (x, y) = (a.updated_at ?? "", b.updated_at ?? "")
+        return x == y ? byTitle(a, b) : x > y
     }
 
     /// The slice actually rendered. Search filters the whole garden, not the
@@ -993,8 +1042,12 @@ struct GardenPageView: View {
                         .font(.system(size: 11.5))
                         .foregroundStyle(theme.inkMute)
                         .padding(.top, 8)
-                    SetKickerLine(session.localized("gardens.all_notes"))
-                        .padding(.top, 26)
+                    HStack(spacing: 6) {
+                        SetKickerLine(session.localized("gardens.all_notes"))
+                        Spacer(minLength: 0)
+                        SortMenu<GardenSort>(raw: $sortRaw, accent: accent)
+                    }
+                    .padding(.top, 26)
                     notesCard
                         .padding(.top, 8)
                 }
@@ -1214,8 +1267,9 @@ struct GardenPageView: View {
         .background(theme.surface, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous)
             .strokeBorder(theme.rule, lineWidth: 0.5))
-        // A new search starts from the top of its own results.
+        // A new search — or a new order — starts from the top of its results.
         .onChange(of: query) { _, _ in visibleCount = Self.pageSize }
+        .onChange(of: sortRaw) { _, _ in visibleCount = Self.pageSize }
     }
 
     private func revealMore() {

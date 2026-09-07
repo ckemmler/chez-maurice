@@ -6,7 +6,8 @@ import { estimateText, planDrop, replyReserve } from "./contextWindow";
 import { imagesDir } from "./images";
 import { hasWebSearch, webSearch, formatWebSearch } from "./webSearch";
 import { McpSession, type McpTool } from "./mcpClient";
-import { resolveToText, resolveAttachments } from "./composer/specs";
+import { resolveToText, resolveAttachments, getSpec } from "./composer/specs";
+import { resolveBookItem } from "./composer/weights";
 import { type FileAttachment } from "./composer/files";
 import { getConversationMaurice, resolveMauriceContext, resolveMauriceAttachments } from "./maurices";
 import { resolveModelId, getModel } from "./models";
@@ -18,7 +19,9 @@ import { t, userLocale } from "./i18n";
 import { newUsage, priceUsage, hasUsage, type TurnUsage } from "./pricing";
 
 interface StreamEvent {
-  type: "text_delta" | "done" | "error" | "tool_call" | "tool_data" | "usage";
+  // thinking: the model is reasoning and nothing visible is coming yet — an
+  // activity signal only, the reasoning text stays private.
+  type: "text_delta" | "thinking" | "done" | "error" | "tool_call" | "tool_data" | "usage";
   text?: string;
   message_id?: string;
   message?: string;
@@ -496,6 +499,8 @@ async function* runOpenAIAgentic(
       if (ev.type === "text") {
         content += ev.text;
         yield { type: "text_delta", text: ev.text };
+      } else if (ev.type === "thinking") {
+        yield { type: "thinking" };
       } else if (ev.type === "turn_end") {
         toolCalls = ev.toolCalls;
         if (ev.usage) {
@@ -507,6 +512,15 @@ async function* runOpenAIAgentic(
         }
       } else if (ev.type === "error") {
         yield* reportUsage();
+        // A billing refusal is not a bug to show a member a status code for — it
+        // is an errand for the admin. `out_of_credits` reuses the Anthropic
+        // path's wording; the ambiguous one says both things it might mean.
+        if (ev.kind) {
+          const key = ev.kind === "out_of_credits" ? "chat.out_of_credits" : "chat.plan_or_credits";
+          yield { type: "text_delta", text: t(lang, key) };
+          yield { type: "done", message_id: crypto.randomUUID() };
+          return;
+        }
         yield { type: "error", message: ev.message };
         return;
       }
@@ -720,6 +734,34 @@ export async function* streamResponse(
       ? buildRoomSystemPrompt(conversationId, userDisplayName)
       : buildSystemPrompt(userDisplayName, profileText);
 
+/** One line per book loaded on the `progress` scope, across the persona's
+ *  bundle and the conversation's own items: what it is, and where the reader
+ *  has got to. Empty when no book is being tracked, which is the usual case —
+ *  the whole "Reading in progress" section then never appears. */
+function trackedBooks(
+  memberId: string,
+  conversationId: string,
+  maurice: { context: any[] } | null,
+): string[] {
+  const items = [...(maurice?.context ?? []), ...getSpec(memberId, conversationId).items];
+  const seen = new Set<string>();
+  const lines: string[] = [];
+  for (const it of items) {
+    if (it.type !== "book" || it.scope?.mode !== "progress") continue;
+    if (seen.has(String(it.id))) continue;
+    seen.add(String(it.id));
+    const r = resolveBookItem(memberId, it);
+    if (r.missing) continue;
+    const at = r.progressChapter ?? -1;
+    lines.push(
+      at < 0
+        ? `- **${r.title}** — the reader has not started it. No chapter is loaded.`
+        : `- **${r.title}** — read up to chapter ${at + 1} of ${r.visibleCount}, which is what is loaded above.`,
+    );
+  }
+  return lines;
+}
+
   // Specialized Maurice (persona): a named, hatted assistant with its own
   // behaviour, model preference, creativity, and baked-in context bundle.
   const maurice = getConversationMaurice(conversationId);
@@ -749,6 +791,19 @@ export async function* streamResponse(
       if (block.trim()) {
         systemPrompt +=
           `\n\n## Loaded context\nThe following material has been loaded into this conversation${maurice ? ` (some baked into ${maurice.name})` : ""}. Treat it as authoritative background and draw on it when relevant.\n\n${block}`;
+      }
+
+      // A book loaded on the `progress` scope makes the conversation a reading
+      // companion: the context stops where the reader stopped. Saying so —
+      // with the chapter and the tool that moves it — is what lets "I've read
+      // some more" work without the reader spelling out what to do.
+      const tracked = trackedBooks(memberId, conversationId, maurice);
+      if (tracked.length) {
+        systemPrompt += `\n\n## Reading in progress\n${tracked.join("\n")}\n` +
+          `The material above stops where the reader has stopped: never mention, summarise or allude to anything past that point, ` +
+          `even if you know the work — being spoiled is the one failure they cannot undo. ` +
+          `When they say they have read further, record it with the calibre \`set_reading_progress\` tool and say where you have moved them to. ` +
+          `If they do not say how far, ask for the chapter before writing anything.`;
       }
 
       // Library binaries (img/pdf) → real content blocks on the latest user turn.

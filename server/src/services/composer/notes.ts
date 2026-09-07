@@ -26,6 +26,8 @@ export interface NoteMeta {
   links: string[];
   /** estimated token weight of the body */
   weight: number;
+  /** File mtime, ISO-8601 — when the note was last edited. */
+  updatedAt: string;
 }
 
 const WIKI_RE = /\[\[([a-z0-9-]+)(?:\|[^\]]+)?\]\]/g;
@@ -64,7 +66,7 @@ function field(fmText: string, key: string): string | undefined {
   return m ? unquote(m[1]) : undefined;
 }
 
-function parseNote(raw: string, slug: string, locale: string): NoteMeta | null {
+function parseNote(raw: string, slug: string, locale: string, updatedAt: string): NoteMeta | null {
   const m = raw.match(/^---\n([\s\S]*?)\n---\n?([\s\S]*)$/);
   if (!m) return null;
   const fmText = m[1];
@@ -83,6 +85,7 @@ function parseNote(raw: string, slug: string, locale: string): NoteMeta | null {
     parent: field(fmText, "parent"),
     links,
     weight: estimateTokens(body),
+    updatedAt,
   };
 }
 
@@ -118,12 +121,15 @@ export function scanNotes(memberId: string): Map<string, NoteMeta> {
         // first locale wins (deterministic).
         if (bySlug.has(slug)) continue;
         let raw: string;
+        let mtime: Date;
         try {
-          raw = fs.readFileSync(path.join(dir, file), "utf8");
+          const full = path.join(dir, file);
+          raw = fs.readFileSync(full, "utf8");
+          mtime = fs.statSync(full).mtime;
         } catch {
           continue;
         }
-        const note = parseNote(raw, slug, locale);
+        const note = parseNote(raw, slug, locale, mtime.toISOString());
         if (note) bySlug.set(slug, note);
       }
     }

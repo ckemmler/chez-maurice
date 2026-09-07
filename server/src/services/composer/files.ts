@@ -68,6 +68,8 @@ export interface FileSearchHit {
   title: string;
   sub: string;
   kind?: string; // file kind (text/img/pdf/file)
+  /** `created_at` — the library has no edit column, so this is the only date. */
+  updatedAt: string;
 }
 
 /** Files + folders whose name matches `ql` (already lowercased). Empty → all. */
@@ -85,6 +87,7 @@ export function searchFiles(userId: string, ql: string): FileSearchHit[] {
       id: f.id,
       title: f.name,
       sub: [`folder · ${n} file${n === 1 ? "" : "s"}`, path].filter(Boolean).join(" · "),
+      updatedAt: f.created_at,
     });
   }
   for (const f of idx.files.values()) {
@@ -96,6 +99,7 @@ export function searchFiles(userId: string, ql: string): FileSearchHit[] {
       title: f.name,
       kind: f.kind,
       sub: [`${f.kind} · ${sizeLabel(f.size_bytes)}`, path].filter(Boolean).join(" · "),
+      updatedAt: f.created_at,
     });
   }
   return out;

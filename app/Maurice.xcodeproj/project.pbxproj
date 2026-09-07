@@ -8,23 +8,24 @@
 
 /* Begin PBXBuildFile section */
 		01BF41C8D7454D75BCFE569A /* MauriceApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A0683126686701347E9871B /* MauriceApp.swift */; };
+		13534AB1DC9B63D211D638DA /* SortMenu.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC55EBC69472BBED58BC1614 /* SortMenu.swift */; };
 		13D7AEF70186BD458531FA85 /* PairingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00B700626149A3D1C0D6D5CB /* PairingView.swift */; };
+		1DF3750F49F0229EA008EE9E /* PersonaCreatorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1D2CFA40CFE0E5C595775127 /* PersonaCreatorView.swift */; };
 		22273DE6923544F195C76CAD /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 462A7ECD4C83B5ADC43A81CB /* ContentView.swift */; };
 		2B268BBE8FAF1C5EE355B1D4 /* Localizable.strings in Resources */ = {isa = PBXBuildFile; fileRef = 64254BB6519693E70459014E /* Localizable.strings */; };
 		32D68A2ACC7ECFB3E37DE97F /* ScopePickerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 68242686E76201D100B8C3A9 /* ScopePickerView.swift */; };
-		42BAB4DB372C6C3626246909 /* PersonaCreatorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0771569C52CB8301E71FC8F2 /* PersonaCreatorView.swift */; };
+		40A5F2A1C32240D14842B8D2 /* DictateIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = CEB5E21AE21611A0C6FC115B /* DictateIntent.swift */; };
 		48A8B2E348C99992B23AA7DF /* SessionStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 405F9AA69C83E58A86FDD625 /* SessionStore.swift */; };
-		4D58E0A090A8320F8CD78EC5 /* MauriceStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = C4A2FD62165976ABC1E019B3 /* MauriceStore.swift */; };
 		52B02D3D7EF2D7154BDB5FD8 /* BoaterHat.swift in Sources */ = {isa = PBXBuildFile; fileRef = EE3170FDE5751A81E295CF2E /* BoaterHat.swift */; };
 		5421D4350871A4F9836C8B60 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 2E85AEEB530CF3C1C5C3E79F /* Assets.xcassets */; };
-		546FF27400CDDB251645BDFC /* Hats.swift in Sources */ = {isa = PBXBuildFile; fileRef = DDC0BDB56B55D342FE7D3C43 /* Hats.swift */; };
-		59828CC6048334EBCF31C737 /* MauriceStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = C4A2FD62165976ABC1E019B3 /* MauriceStore.swift */; };
+		58C19733EBF8E99AB41D71A9 /* Hats.swift in Sources */ = {isa = PBXBuildFile; fileRef = DCDEAA0E48CC14C7C18BE8FD /* Hats.swift */; };
 		59B67C643B5A71D878B6A7D1 /* MarkdownUI in Frameworks */ = {isa = PBXBuildFile; productRef = 7C956089E4A23890D03A7C5B /* MarkdownUI */; };
-		A1B2C3D4E5F600000000A001 /* SwiftMath in Frameworks */ = {isa = PBXBuildFile; productRef = A1B2C3D4E5F600000000A003 /* SwiftMath */; };
-		A1B2C3D4E5F600000000A002 /* SwiftMath in Frameworks */ = {isa = PBXBuildFile; productRef = A1B2C3D4E5F600000000A004 /* SwiftMath */; };
+		5B4288B9598CBE20AE92F4D9 /* YoungSerif-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 723F14E6AB7B2EAB08CC94EF /* YoungSerif-Regular.ttf */; };
 		5DF005A2A1E5A2B26E0DBCF4 /* MauriceTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1ABC13222ECFAD2CFC3180B /* MauriceTheme.swift */; };
+		5DF6B6C027E0EBBF600EAF50 /* PersonaCreatorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1D2CFA40CFE0E5C595775127 /* PersonaCreatorView.swift */; };
+		6E245195E6CD90C3C83CB1BD /* SwiftMath in Frameworks */ = {isa = PBXBuildFile; productRef = D1B845FF866B55501A5D0C68 /* SwiftMath */; };
 		707E1F5D159DC0ED0841E5D0 /* UserPickerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB58402567AEED97404D604C /* UserPickerView.swift */; };
-		70FB0607970648DD7FA74A0C /* PersonaCreatorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0771569C52CB8301E71FC8F2 /* PersonaCreatorView.swift */; };
+		72B46D7608456B22303FB423 /* MauriceStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8C96937F0554878BAF247D3F /* MauriceStore.swift */; };
 		7416ECF23A6705C449F95A51 /* MauriceApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A0683126686701347E9871B /* MauriceApp.swift */; };
 		773B899803CBAAF839CDE0C1 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E0D0DF979284275260F31D2 /* SettingsView.swift */; };
 		775815BED73706273BEE92F3 /* MauriceTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1ABC13222ECFAD2CFC3180B /* MauriceTheme.swift */; };
@@ -32,68 +33,73 @@
 		7CB12254AF16A2499EAEA7D7 /* ComposerStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 70240FCC64F152DDCEC0F0E2 /* ComposerStore.swift */; };
 		7D338BE53D7A3CA7660BB1C5 /* SessionStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 405F9AA69C83E58A86FDD625 /* SessionStore.swift */; };
 		7D41CDDFD359570A173D9D72 /* ComposerStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 70240FCC64F152DDCEC0F0E2 /* ComposerStore.swift */; };
+		829F549C6E38D127EBA91380 /* Dictation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8DD6FC0052BD394074159538 /* Dictation.swift */; };
 		8354A2864D971667617A4546 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 2E85AEEB530CF3C1C5C3E79F /* Assets.xcassets */; };
 		8420EA02F7C918A622052FF4 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 462A7ECD4C83B5ADC43A81CB /* ContentView.swift */; };
+		87ECEC8E0F3C684D0577613C /* DictateIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = CEB5E21AE21611A0C6FC115B /* DictateIntent.swift */; };
 		8D85F19C2F440203BAFC484F /* ChatView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E01BB325D88F4E74B3571BC /* ChatView.swift */; };
+		91817BB3A32C4F1FE886B982 /* OFL.txt in Resources */ = {isa = PBXBuildFile; fileRef = 51780E1D57A085038F7AB3A4 /* OFL.txt */; };
+		98920F5C7DB20F4AF25B7C78 /* SortMenu.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC55EBC69472BBED58BC1614 /* SortMenu.swift */; };
+		AE476FD86F5124FDD239F5AB /* OFL.txt in Resources */ = {isa = PBXBuildFile; fileRef = 51780E1D57A085038F7AB3A4 /* OFL.txt */; };
 		AF3DE3F5A58AC486DD4036F1 /* ComposerViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A157516CA9C98CE6FB4E293 /* ComposerViews.swift */; };
 		B124B0C5C8B1A67C94E9A4FE /* BoaterHat.swift in Sources */ = {isa = PBXBuildFile; fileRef = EE3170FDE5751A81E295CF2E /* BoaterHat.swift */; };
 		B1ED9211E2F19D6C411ADE78 /* APIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 815355ED837E18AB9BEFDC83 /* APIClient.swift */; };
 		B5655384F94390632B3335BB /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E0D0DF979284275260F31D2 /* SettingsView.swift */; };
-		B837C44EF1D56C139A420627 /* StudioViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = E63F94A6CA387F2378B68525 /* StudioViews.swift */; };
+		B80161B44335BB6CEC01F7DA /* YoungSerif-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 723F14E6AB7B2EAB08CC94EF /* YoungSerif-Regular.ttf */; };
+		CAF942F37AE2F3E45A4761D0 /* Hats.swift in Sources */ = {isa = PBXBuildFile; fileRef = DCDEAA0E48CC14C7C18BE8FD /* Hats.swift */; };
 		CB71AD2912D05739932A2EB1 /* ChatView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E01BB325D88F4E74B3571BC /* ChatView.swift */; };
 		CC9F77433FFC0CCC7F8668EA /* UserPickerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB58402567AEED97404D604C /* UserPickerView.swift */; };
 		CCEF2532174820F615C4C61F /* ChatService.swift in Sources */ = {isa = PBXBuildFile; fileRef = EDFA39C22354B093CDDBB691 /* ChatService.swift */; };
-		40310B9F788B1E4B1F24D942 /* Dictation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2B42103BED598E72BE11F777 /* Dictation.swift */; };
-		993DE4554854DBA8CF0A38F2 /* DictateIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2687BF25C0F3C5C5C2B29A91 /* DictateIntent.swift */; };
-		63D7E8A7E42BCD47D0C7C20D /* DictateIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2687BF25C0F3C5C5C2B29A91 /* DictateIntent.swift */; };
-		79811BB28E785F4C40E4E482 /* Dictation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2B42103BED598E72BE11F777 /* Dictation.swift */; };
 		D050F6CF74E2684FAF9E78A2 /* ChatService.swift in Sources */ = {isa = PBXBuildFile; fileRef = EDFA39C22354B093CDDBB691 /* ChatService.swift */; };
+		D62E56C5C4F7FE3E42018A4E /* StudioViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2605DBDEA2B929B93F14F098 /* StudioViews.swift */; };
 		D8646EEFDB175A13C908F420 /* MarkdownUI in Frameworks */ = {isa = PBXBuildFile; productRef = 452588EF4A59C7B3E4BE0156 /* MarkdownUI */; };
 		DE41C437D70BFE6F0A82015E /* Localizable.strings in Resources */ = {isa = PBXBuildFile; fileRef = 64254BB6519693E70459014E /* Localizable.strings */; };
-		DF3E5F44F1536B21EC6CF909 /* Hats.swift in Sources */ = {isa = PBXBuildFile; fileRef = DDC0BDB56B55D342FE7D3C43 /* Hats.swift */; };
+		E18185D700DE1B1EB0B18AA0 /* Dictation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8DD6FC0052BD394074159538 /* Dictation.swift */; };
 		E3C10DC76C2CF893DD4DF505 /* ComposerViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A157516CA9C98CE6FB4E293 /* ComposerViews.swift */; };
-		E69F8CCB2E7E0EEB5679EB54 /* StudioViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = E63F94A6CA387F2378B68525 /* StudioViews.swift */; };
+		E5C694E6D1F0339BB34D4047 /* StudioViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2605DBDEA2B929B93F14F098 /* StudioViews.swift */; };
+		EE60CB5C6953EB6207373CBA /* MauriceStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8C96937F0554878BAF247D3F /* MauriceStore.swift */; };
 		F8D5EA6FB79DA0781074F0DA /* ScopePickerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 68242686E76201D100B8C3A9 /* ScopePickerView.swift */; };
+		FEA11BEC64D6D78DD1F6145E /* SwiftMath in Frameworks */ = {isa = PBXBuildFile; productRef = BF74ECA03676D1736856AEB2 /* SwiftMath */; };
 		FF9F6DF88F721A8C74CFAEF4 /* PairingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00B700626149A3D1C0D6D5CB /* PairingView.swift */; };
-		0FA1117011AF2CB600F00002 /* YoungSerif-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 0FA1117011AF2CB600F00001 /* YoungSerif-Regular.ttf */; };
-		0FA1117011AF2CB600F00003 /* YoungSerif-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 0FA1117011AF2CB600F00001 /* YoungSerif-Regular.ttf */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
 		00B700626149A3D1C0D6D5CB /* PairingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PairingView.swift; sourceTree = "<group>"; };
-		0771569C52CB8301E71FC8F2 /* PersonaCreatorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PersonaCreatorView.swift; sourceTree = "<group>"; };
-		0D081898F95D5F43D16FF025 /* nl */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = nl; path = nl.lproj/Localizable.strings; sourceTree = "<group>"; };
+		0CD335EB3BF542EDF13DA17D /* Maurice_iOS.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Maurice_iOS.entitlements; sourceTree = "<group>"; };
+		1033DD525DBD3D990DEF6484 /* es */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = es; path = es.lproj/Localizable.strings; sourceTree = "<group>"; };
 		1A0683126686701347E9871B /* MauriceApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MauriceApp.swift; sourceTree = "<group>"; };
-		1E14F6C4773C5D28BA00E010 /* it */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = it; path = it.lproj/Localizable.strings; sourceTree = "<group>"; };
-		1E8A38800A11AF2CB6C84060 /* Maurice.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Maurice.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		1D2CFA40CFE0E5C595775127 /* PersonaCreatorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PersonaCreatorView.swift; sourceTree = "<group>"; };
+		1E096709042498D4C525711C /* Maurice-iOS-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = "Maurice-iOS-Info.plist"; sourceTree = "<group>"; };
+		2605DBDEA2B929B93F14F098 /* StudioViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StudioViews.swift; sourceTree = "<group>"; };
+		2CAFCB68E681C9F8D796C959 /* it */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = it; path = it.lproj/Localizable.strings; sourceTree = "<group>"; };
 		2E85AEEB530CF3C1C5C3E79F /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
-		30547AD02FD6F31500613D0D /* Maurice_macOS.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Maurice_macOS.entitlements; sourceTree = "<group>"; };
-		30547AD12FD6F35800613D0D /* Maurice_iOS.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Maurice_iOS.entitlements; sourceTree = "<group>"; };
-		30547AD22FD6F36000613D0D /* Maurice-iOS-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = "Maurice-iOS-Info.plist"; sourceTree = "<group>"; };
-		3BE7138632C9FC7848091210 /* pt */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = pt; path = pt.lproj/Localizable.strings; sourceTree = "<group>"; };
 		405F9AA69C83E58A86FDD625 /* SessionStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionStore.swift; sourceTree = "<group>"; };
 		462A7ECD4C83B5ADC43A81CB /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		4E01BB325D88F4E74B3571BC /* ChatView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatView.swift; sourceTree = "<group>"; };
 		4E0D0DF979284275260F31D2 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		51780E1D57A085038F7AB3A4 /* OFL.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = OFL.txt; sourceTree = "<group>"; };
 		68242686E76201D100B8C3A9 /* ScopePickerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScopePickerView.swift; sourceTree = "<group>"; };
 		70240FCC64F152DDCEC0F0E2 /* ComposerStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerStore.swift; sourceTree = "<group>"; };
+		70ED879F4FDF2E7978D56133 /* nl */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = nl; path = nl.lproj/Localizable.strings; sourceTree = "<group>"; };
+		723F14E6AB7B2EAB08CC94EF /* YoungSerif-Regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "YoungSerif-Regular.ttf"; sourceTree = "<group>"; };
 		7A157516CA9C98CE6FB4E293 /* ComposerViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerViews.swift; sourceTree = "<group>"; };
 		815355ED837E18AB9BEFDC83 /* APIClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIClient.swift; sourceTree = "<group>"; };
-		9006F98C487E36857C899716 /* Maurice.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Maurice.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		8C96937F0554878BAF247D3F /* MauriceStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MauriceStore.swift; sourceTree = "<group>"; };
+		8DD6FC0052BD394074159538 /* Dictation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Dictation.swift; sourceTree = "<group>"; };
 		9BF26FE82F8A718D32D2FDBA /* en */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = en; path = en.lproj/Localizable.strings; sourceTree = "<group>"; };
-		A8F5525ABF53711C8FE1ABAA /* es */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = es; path = es.lproj/Localizable.strings; sourceTree = "<group>"; };
+		A3DD0A7E56E944D68EF56A0E /* Maurice_macOS.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Maurice_macOS.entitlements; sourceTree = "<group>"; };
 		AB58402567AEED97404D604C /* UserPickerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserPickerView.swift; sourceTree = "<group>"; };
+		BFCE6C747A2189EC6AA13782 /* pt */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = pt; path = pt.lproj/Localizable.strings; sourceTree = "<group>"; };
 		C1ABC13222ECFAD2CFC3180B /* MauriceTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MauriceTheme.swift; sourceTree = "<group>"; };
-		C4A2FD62165976ABC1E019B3 /* MauriceStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MauriceStore.swift; sourceTree = "<group>"; };
+		C51DFC4112740952D536AA5F /* Maurice_macOS.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Maurice_macOS.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		CC55EBC69472BBED58BC1614 /* SortMenu.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SortMenu.swift; sourceTree = "<group>"; };
 		CCF7CFD4DA400C3D744B7A69 /* fr */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = fr; path = fr.lproj/Localizable.strings; sourceTree = "<group>"; };
-		D082D95DB6E90591D9C5EB61 /* de */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = de; path = de.lproj/Localizable.strings; sourceTree = "<group>"; };
-		DDC0BDB56B55D342FE7D3C43 /* Hats.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Hats.swift; sourceTree = "<group>"; };
-		E63F94A6CA387F2378B68525 /* StudioViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StudioViews.swift; sourceTree = "<group>"; };
+		CEB5E21AE21611A0C6FC115B /* DictateIntent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DictateIntent.swift; sourceTree = "<group>"; };
+		D8EA76446DB39E558173EA2A /* de */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = de; path = de.lproj/Localizable.strings; sourceTree = "<group>"; };
+		D91B47992093B9201D94B7D7 /* Maurice_iOS.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Maurice_iOS.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		DCDEAA0E48CC14C7C18BE8FD /* Hats.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Hats.swift; sourceTree = "<group>"; };
 		EDFA39C22354B093CDDBB691 /* ChatService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatService.swift; sourceTree = "<group>"; };
-		2B42103BED598E72BE11F777 /* Dictation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Dictation.swift; sourceTree = "<group>"; };
-		2687BF25C0F3C5C5C2B29A91 /* DictateIntent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DictateIntent.swift; sourceTree = "<group>"; };
 		EE3170FDE5751A81E295CF2E /* BoaterHat.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BoaterHat.swift; sourceTree = "<group>"; };
-		0FA1117011AF2CB600F00001 /* YoungSerif-Regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Fonts/YoungSerif-Regular.ttf"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -102,7 +108,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				59B67C643B5A71D878B6A7D1 /* MarkdownUI in Frameworks */,
-				A1B2C3D4E5F600000000A001 /* SwiftMath in Frameworks */,
+				FEA11BEC64D6D78DD1F6145E /* SwiftMath in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -111,7 +117,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				D8646EEFDB175A13C908F420 /* MarkdownUI in Frameworks */,
-				A1B2C3D4E5F600000000A002 /* SwiftMath in Frameworks */,
+				6E245195E6CD90C3C83CB1BD /* SwiftMath in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -134,17 +140,26 @@
 		1BB583D8B7C5D14E61393EB3 /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				1E8A38800A11AF2CB6C84060 /* Maurice.app */,
-				9006F98C487E36857C899716 /* Maurice.app */,
+				D91B47992093B9201D94B7D7 /* Maurice_iOS.app */,
+				C51DFC4112740952D536AA5F /* Maurice_macOS.app */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		48657A49CCB0C964BD5B7F06 /* Fonts */ = {
+			isa = PBXGroup;
+			children = (
+				51780E1D57A085038F7AB3A4 /* OFL.txt */,
+				723F14E6AB7B2EAB08CC94EF /* YoungSerif-Regular.ttf */,
+			);
+			path = Fonts;
 			sourceTree = "<group>";
 		};
 		6E4D158A05D27EBC8AF8AB9C /* Resources */ = {
 			isa = PBXGroup;
 			children = (
+				48657A49CCB0C964BD5B7F06 /* Fonts */,
 				64254BB6519693E70459014E /* Localizable.strings */,
-				0FA1117011AF2CB600F00001 /* YoungSerif-Regular.ttf */,
 			);
 			path = Resources;
 			sourceTree = "<group>";
@@ -156,13 +171,14 @@
 				4E01BB325D88F4E74B3571BC /* ChatView.swift */,
 				7A157516CA9C98CE6FB4E293 /* ComposerViews.swift */,
 				462A7ECD4C83B5ADC43A81CB /* ContentView.swift */,
+				DCDEAA0E48CC14C7C18BE8FD /* Hats.swift */,
 				00B700626149A3D1C0D6D5CB /* PairingView.swift */,
+				1D2CFA40CFE0E5C595775127 /* PersonaCreatorView.swift */,
 				68242686E76201D100B8C3A9 /* ScopePickerView.swift */,
 				4E0D0DF979284275260F31D2 /* SettingsView.swift */,
+				CC55EBC69472BBED58BC1614 /* SortMenu.swift */,
+				2605DBDEA2B929B93F14F098 /* StudioViews.swift */,
 				AB58402567AEED97404D604C /* UserPickerView.swift */,
-				DDC0BDB56B55D342FE7D3C43 /* Hats.swift */,
-				E63F94A6CA387F2378B68525 /* StudioViews.swift */,
-				0771569C52CB8301E71FC8F2 /* PersonaCreatorView.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -180,11 +196,11 @@
 			children = (
 				815355ED837E18AB9BEFDC83 /* APIClient.swift */,
 				EDFA39C22354B093CDDBB691 /* ChatService.swift */,
-				2B42103BED598E72BE11F777 /* Dictation.swift */,
-				2687BF25C0F3C5C5C2B29A91 /* DictateIntent.swift */,
 				70240FCC64F152DDCEC0F0E2 /* ComposerStore.swift */,
+				CEB5E21AE21611A0C6FC115B /* DictateIntent.swift */,
+				8DD6FC0052BD394074159538 /* Dictation.swift */,
+				8C96937F0554878BAF247D3F /* MauriceStore.swift */,
 				405F9AA69C83E58A86FDD625 /* SessionStore.swift */,
-				C4A2FD62165976ABC1E019B3 /* MauriceStore.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -192,9 +208,9 @@
 		F81067684A1EE16B2E0FC7F1 = {
 			isa = PBXGroup;
 			children = (
-				30547AD22FD6F36000613D0D /* Maurice-iOS-Info.plist */,
-				30547AD12FD6F35800613D0D /* Maurice_iOS.entitlements */,
-				30547AD02FD6F31500613D0D /* Maurice_macOS.entitlements */,
+				0CD335EB3BF542EDF13DA17D /* Maurice_iOS.entitlements */,
+				A3DD0A7E56E944D68EF56A0E /* Maurice_macOS.entitlements */,
+				1E096709042498D4C525711C /* Maurice-iOS-Info.plist */,
 				1494F6FE9E62E4610A005B68 /* Maurice */,
 				1BB583D8B7C5D14E61393EB3 /* Products */,
 			);
@@ -218,10 +234,10 @@
 			name = Maurice_macOS;
 			packageProductDependencies = (
 				452588EF4A59C7B3E4BE0156 /* MarkdownUI */,
-				A1B2C3D4E5F600000000A004 /* SwiftMath */,
+				D1B845FF866B55501A5D0C68 /* SwiftMath */,
 			);
 			productName = Maurice_macOS;
-			productReference = 9006F98C487E36857C899716 /* Maurice.app */;
+			productReference = C51DFC4112740952D536AA5F /* Maurice_macOS.app */;
 			productType = "com.apple.product-type.application";
 		};
 		BE41AFBA15F7E24D1881B207 /* Maurice_iOS */ = {
@@ -239,10 +255,10 @@
 			name = Maurice_iOS;
 			packageProductDependencies = (
 				7C956089E4A23890D03A7C5B /* MarkdownUI */,
-				A1B2C3D4E5F600000000A003 /* SwiftMath */,
+				BF74ECA03676D1736856AEB2 /* SwiftMath */,
 			);
 			productName = Maurice_iOS;
-			productReference = 1E8A38800A11AF2CB6C84060 /* Maurice.app */;
+			productReference = D91B47992093B9201D94B7D7 /* Maurice_iOS.app */;
 			productType = "com.apple.product-type.application";
 		};
 /* End PBXNativeTarget section */
@@ -255,9 +271,11 @@
 				LastUpgradeCheck = 1430;
 				TargetAttributes = {
 					047472439A78AABB86703D1F = {
+						DevelopmentTeam = 33DB976938;
 						ProvisioningStyle = Automatic;
 					};
 					BE41AFBA15F7E24D1881B207 = {
+						DevelopmentTeam = 33DB976938;
 						ProvisioningStyle = Automatic;
 					};
 				};
@@ -267,19 +285,19 @@
 			hasScannedForEncodings = 0;
 			knownRegions = (
 				Base,
+				de,
 				en,
+				es,
 				fr,
 				it,
-				de,
-				es,
-				pt,
 				nl,
+				pt,
 			);
 			mainGroup = F81067684A1EE16B2E0FC7F1;
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				159AE80C2E72D2DDF8BE78D1 /* XCRemoteSwiftPackageReference "swift-markdown-ui" */,
-				A1B2C3D4E5F600000000A005 /* XCRemoteSwiftPackageReference "SwiftMath" */,
+				319A44DBB636BD0AA5D275BE /* XCRemoteSwiftPackageReference "SwiftMath" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 1BB583D8B7C5D14E61393EB3 /* Products */;
@@ -299,7 +317,8 @@
 			files = (
 				5421D4350871A4F9836C8B60 /* Assets.xcassets in Resources */,
 				DE41C437D70BFE6F0A82015E /* Localizable.strings in Resources */,
-				0FA1117011AF2CB600F00002 /* YoungSerif-Regular.ttf in Resources */,
+				AE476FD86F5124FDD239F5AB /* OFL.txt in Resources */,
+				B80161B44335BB6CEC01F7DA /* YoungSerif-Regular.ttf in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -309,7 +328,8 @@
 			files = (
 				8354A2864D971667617A4546 /* Assets.xcassets in Resources */,
 				2B268BBE8FAF1C5EE355B1D4 /* Localizable.strings in Resources */,
-				0FA1117011AF2CB600F00003 /* YoungSerif-Regular.ttf in Resources */,
+				91817BB3A32C4F1FE886B982 /* OFL.txt in Resources */,
+				5B4288B9598CBE20AE92F4D9 /* YoungSerif-Regular.ttf in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -320,25 +340,26 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				546FF27400CDDB251645BDFC /* Hats.swift in Sources */,
-				B837C44EF1D56C139A420627 /* StudioViews.swift in Sources */,
-				42BAB4DB372C6C3626246909 /* PersonaCreatorView.swift in Sources */,
-				59828CC6048334EBCF31C737 /* MauriceStore.swift in Sources */,
 				79A6D1DBFB049245E3D239D6 /* APIClient.swift in Sources */,
 				52B02D3D7EF2D7154BDB5FD8 /* BoaterHat.swift in Sources */,
 				CCEF2532174820F615C4C61F /* ChatService.swift in Sources */,
-				40310B9F788B1E4B1F24D942 /* Dictation.swift in Sources */,
-				993DE4554854DBA8CF0A38F2 /* DictateIntent.swift in Sources */,
 				8D85F19C2F440203BAFC484F /* ChatView.swift in Sources */,
 				7D41CDDFD359570A173D9D72 /* ComposerStore.swift in Sources */,
 				AF3DE3F5A58AC486DD4036F1 /* ComposerViews.swift in Sources */,
 				22273DE6923544F195C76CAD /* ContentView.swift in Sources */,
+				87ECEC8E0F3C684D0577613C /* DictateIntent.swift in Sources */,
+				829F549C6E38D127EBA91380 /* Dictation.swift in Sources */,
+				CAF942F37AE2F3E45A4761D0 /* Hats.swift in Sources */,
 				7416ECF23A6705C449F95A51 /* MauriceApp.swift in Sources */,
+				72B46D7608456B22303FB423 /* MauriceStore.swift in Sources */,
 				5DF005A2A1E5A2B26E0DBCF4 /* MauriceTheme.swift in Sources */,
 				13D7AEF70186BD458531FA85 /* PairingView.swift in Sources */,
+				5DF6B6C027E0EBBF600EAF50 /* PersonaCreatorView.swift in Sources */,
 				32D68A2ACC7ECFB3E37DE97F /* ScopePickerView.swift in Sources */,
 				48A8B2E348C99992B23AA7DF /* SessionStore.swift in Sources */,
 				B5655384F94390632B3335BB /* SettingsView.swift in Sources */,
+				98920F5C7DB20F4AF25B7C78 /* SortMenu.swift in Sources */,
+				E5C694E6D1F0339BB34D4047 /* StudioViews.swift in Sources */,
 				CC9F77433FFC0CCC7F8668EA /* UserPickerView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -347,25 +368,26 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				DF3E5F44F1536B21EC6CF909 /* Hats.swift in Sources */,
-				E69F8CCB2E7E0EEB5679EB54 /* StudioViews.swift in Sources */,
-				70FB0607970648DD7FA74A0C /* PersonaCreatorView.swift in Sources */,
-				4D58E0A090A8320F8CD78EC5 /* MauriceStore.swift in Sources */,
 				B1ED9211E2F19D6C411ADE78 /* APIClient.swift in Sources */,
 				B124B0C5C8B1A67C94E9A4FE /* BoaterHat.swift in Sources */,
 				D050F6CF74E2684FAF9E78A2 /* ChatService.swift in Sources */,
-				79811BB28E785F4C40E4E482 /* Dictation.swift in Sources */,
-				63D7E8A7E42BCD47D0C7C20D /* DictateIntent.swift in Sources */,
 				CB71AD2912D05739932A2EB1 /* ChatView.swift in Sources */,
 				7CB12254AF16A2499EAEA7D7 /* ComposerStore.swift in Sources */,
 				E3C10DC76C2CF893DD4DF505 /* ComposerViews.swift in Sources */,
 				8420EA02F7C918A622052FF4 /* ContentView.swift in Sources */,
+				40A5F2A1C32240D14842B8D2 /* DictateIntent.swift in Sources */,
+				E18185D700DE1B1EB0B18AA0 /* Dictation.swift in Sources */,
+				58C19733EBF8E99AB41D71A9 /* Hats.swift in Sources */,
 				01BF41C8D7454D75BCFE569A /* MauriceApp.swift in Sources */,
+				EE60CB5C6953EB6207373CBA /* MauriceStore.swift in Sources */,
 				775815BED73706273BEE92F3 /* MauriceTheme.swift in Sources */,
 				FF9F6DF88F721A8C74CFAEF4 /* PairingView.swift in Sources */,
+				1DF3750F49F0229EA008EE9E /* PersonaCreatorView.swift in Sources */,
 				F8D5EA6FB79DA0781074F0DA /* ScopePickerView.swift in Sources */,
 				7D338BE53D7A3CA7660BB1C5 /* SessionStore.swift in Sources */,
 				773B899803CBAAF839CDE0C1 /* SettingsView.swift in Sources */,
+				13534AB1DC9B63D211D638DA /* SortMenu.swift in Sources */,
+				D62E56C5C4F7FE3E42018A4E /* StudioViews.swift in Sources */,
 				707E1F5D159DC0ED0841E5D0 /* UserPickerView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -376,13 +398,13 @@
 		64254BB6519693E70459014E /* Localizable.strings */ = {
 			isa = PBXVariantGroup;
 			children = (
+				D8EA76446DB39E558173EA2A /* de */,
 				9BF26FE82F8A718D32D2FDBA /* en */,
+				1033DD525DBD3D990DEF6484 /* es */,
 				CCF7CFD4DA400C3D744B7A69 /* fr */,
-				1E14F6C4773C5D28BA00E010 /* it */,
-				D082D95DB6E90591D9C5EB61 /* de */,
-				A8F5525ABF53711C8FE1ABAA /* es */,
-				3BE7138632C9FC7848091210 /* pt */,
-				0D081898F95D5F43D16FF025 /* nl */,
+				2CAFCB68E681C9F8D796C959 /* it */,
+				70ED879F4FDF2E7978D56133 /* nl */,
+				BFCE6C747A2189EC6AA13782 /* pt */,
 			);
 			name = Localizable.strings;
 			sourceTree = "<group>";
@@ -408,10 +430,10 @@
 				ENABLE_RESOURCE_ACCESS_PHOTO_LIBRARY = NO;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = "Chez Maurice";
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.education";
 				INFOPLIST_KEY_NSCameraUsageDescription = "Maurice uses the camera so you can take a profile photo.";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Maurice uses the microphone so you can dictate a message instead of typing it.";
 				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Maurice turns your dictation into text on this device whenever your language has an offline model. If it doesn't, Maurice asks you first before sending any audio to Apple.";
-				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.education";
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
@@ -421,8 +443,8 @@
 				);
 				MARKETING_VERSION = 0.1;
 				PRODUCT_BUNDLE_IDENTIFIER = eu.chezmaurice.app;
-				PRODUCT_NAME = "Chez Maurice";
 				PRODUCT_MODULE_NAME = Maurice;
+				PRODUCT_NAME = "Chez Maurice";
 				RUNTIME_EXCEPTION_ALLOW_DYLD_ENVIRONMENT_VARIABLES = NO;
 				RUNTIME_EXCEPTION_ALLOW_JIT = NO;
 				RUNTIME_EXCEPTION_ALLOW_UNSIGNED_EXECUTABLE_MEMORY = NO;
@@ -573,10 +595,10 @@
 				ENABLE_RESOURCE_ACCESS_PHOTO_LIBRARY = NO;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = "Chez Maurice";
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.education";
 				INFOPLIST_KEY_NSCameraUsageDescription = "Maurice uses the camera so you can take a profile photo.";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Maurice uses the microphone so you can dictate a message instead of typing it.";
 				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Maurice turns your dictation into text on this device whenever your language has an offline model. If it doesn't, Maurice asks you first before sending any audio to Apple.";
-				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.education";
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
@@ -586,8 +608,8 @@
 				);
 				MARKETING_VERSION = 0.1;
 				PRODUCT_BUNDLE_IDENTIFIER = eu.chezmaurice.app;
-				PRODUCT_NAME = "Chez Maurice";
 				PRODUCT_MODULE_NAME = Maurice;
+				PRODUCT_NAME = "Chez Maurice";
 				RUNTIME_EXCEPTION_ALLOW_DYLD_ENVIRONMENT_VARIABLES = NO;
 				RUNTIME_EXCEPTION_ALLOW_JIT = NO;
 				RUNTIME_EXCEPTION_ALLOW_UNSIGNED_EXECUTABLE_MEMORY = NO;
@@ -611,10 +633,10 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "Maurice-iOS-Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = "Chez Maurice";
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.education";
 				INFOPLIST_KEY_NSCameraUsageDescription = "Maurice uses the camera so you can take a profile photo.";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Maurice uses the microphone so you can dictate a message instead of typing it.";
 				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Maurice turns your dictation into text on this device whenever your language has an offline model. If it doesn't, Maurice asks you first before sending any audio to Apple.";
-				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.education";
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
@@ -642,10 +664,10 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "Maurice-iOS-Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = "Chez Maurice";
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.education";
 				INFOPLIST_KEY_NSCameraUsageDescription = "Maurice uses the camera so you can take a profile photo.";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Maurice uses the microphone so you can dictate a message instead of typing it.";
 				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Maurice turns your dictation into text on this device whenever your language has an offline model. If it doesn't, Maurice asks you first before sending any audio to Apple.";
-				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.education";
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
@@ -704,7 +726,7 @@
 				minimumVersion = 2.4.1;
 			};
 		};
-		A1B2C3D4E5F600000000A005 /* XCRemoteSwiftPackageReference "SwiftMath" */ = {
+		319A44DBB636BD0AA5D275BE /* XCRemoteSwiftPackageReference "SwiftMath" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/mgriebling/SwiftMath";
 			requirement = {
@@ -725,14 +747,14 @@
 			package = 159AE80C2E72D2DDF8BE78D1 /* XCRemoteSwiftPackageReference "swift-markdown-ui" */;
 			productName = MarkdownUI;
 		};
-		A1B2C3D4E5F600000000A003 /* SwiftMath */ = {
+		BF74ECA03676D1736856AEB2 /* SwiftMath */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = A1B2C3D4E5F600000000A005 /* XCRemoteSwiftPackageReference "SwiftMath" */;
+			package = 319A44DBB636BD0AA5D275BE /* XCRemoteSwiftPackageReference "SwiftMath" */;
 			productName = SwiftMath;
 		};
-		A1B2C3D4E5F600000000A004 /* SwiftMath */ = {
+		D1B845FF866B55501A5D0C68 /* SwiftMath */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = A1B2C3D4E5F600000000A005 /* XCRemoteSwiftPackageReference "SwiftMath" */;
+			package = 319A44DBB636BD0AA5D275BE /* XCRemoteSwiftPackageReference "SwiftMath" */;
 			productName = SwiftMath;
 		};
 /* End XCSwiftPackageProductDependency section */

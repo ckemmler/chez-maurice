@@ -27,6 +27,7 @@ private func typeSymbol(_ type: ComposerItemType, moc: Bool, kind: String = "") 
     switch type {
     case .note: return moc ? "rectangle.3.group" : "note.text"
     case .book: return "book"
+    case .fiche: return "square.text.square"
     case .conversation: return "bubble.left.and.bubble.right"
     case .folder: return "folder"
     case .file:
@@ -43,6 +44,13 @@ private func typeSymbol(_ type: ComposerItemType, moc: Bool, kind: String = "") 
 // "all chapters · summaries", "up to ch. 6 · full text".
 private func bookScopeLabel(_ item: TrayItem) -> String {
     let rep = item.representation == "full" ? L("book.representation.fullText") : L("book.representation.summaries")
+    // A tracked book states where the reader is, not what was frozen — that
+    // number is the whole reason the item exists.
+    if item.scopeMode == "progress" {
+        return item.progressChapter < 0
+            ? L("book.scope.progressUnstarted")
+            : String(format: L("book.scope.progressAt"), item.progressChapter + 1, max(item.visibleChapters, item.progressChapter + 1))
+    }
     let scope: String
     switch item.scopeMode {
     case "up_to":    scope = String(format: L("book.scope.upToChapter"), item.uptoChapter + 1)
@@ -70,6 +78,11 @@ private func cardMeta(_ item: TrayItem, count: Int) -> String {
     case .folder:
         if !item.recurse { return L("folder.meta.directOnly") }
         return String(format: L("folder.meta.files"), count)
+    case .fiche:
+        if !item.includeFragments { return L("fiche.meta.aloneNoFragments") }
+        return item.fragmentCount == 0
+            ? L("fiche.meta.noFragments")
+            : String(format: L("fiche.meta.withFragments"), item.fragmentCount)
     }
 }
 
@@ -359,7 +372,38 @@ struct TrayCard: View {
         case .note: NoteCardBody(item: item, accent: accent)
         case .book: BookCardBody(item: item, accent: accent)
         case .folder: FolderCardBody(item: item, accent: accent)
+        case .fiche: FicheCardBody(item: item, accent: accent)
         case .conversation, .file: EmptyView()
+        }
+    }
+}
+
+// MARK: Fiche card body — the one thing a fiche item can be asked
+//
+// A fiche is a subject plus what was written on it. The fragments are the
+// record of the conversations that produced it, and for a Maurice bound to one
+// book they are the material, not an extra — so they ride along by default and
+// this switch is the way to drop them when only the fiche itself is wanted.
+
+private struct FicheCardBody: View {
+    @Environment(\.mauriceTheme) private var theme
+    @Environment(ComposerStore.self) private var store
+    let item: TrayItem
+    let accent: Color
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Toggle(isOn: Binding(
+                get: { item.includeFragments },
+                set: { var c = item; c.includeFragments = $0; store.update(c) })
+            ) {
+                Text(L("fiche.includeFragments")).font(.system(size: 12.5)).foregroundStyle(theme.ink)
+            }
+            .toggleStyle(SwitchToggleStyle(tint: accent))
+            Text(item.fragmentCount == 0
+                 ? L("fiche.noFragmentsYet")
+                 : String(format: L("fiche.fragmentsHint"), item.fragmentCount))
+                .font(.system(size: 9.5, design: .monospaced)).foregroundStyle(theme.inkMute)
         }
     }
 }
@@ -767,6 +811,10 @@ private struct BookCardBody: View {
     // Refs currently in scope, client-side mirror of the server resolver.
     private var includedRefs: Set<String> {
         switch item.scopeMode {
+        case "progress":
+            // Nothing read → nothing in scope, which is the point.
+            guard item.progressChapter >= 0 else { return [] }
+            return Set(visible.prefix(min(item.progressChapter + 1, visible.count)).map(\.ref))
         case "up_to":
             let last = min(max(0, item.uptoChapter), visible.count - 1)
             return Set(visible.prefix(last + 1).map(\.ref))
@@ -779,17 +827,38 @@ private struct BookCardBody: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            row(L("book.representation")) {
-                ComposerSegmented(
-                    options: [("summary", L("book.representation.summary")), ("full", L("book.representation.full"))],
-                    value: Binding(get: { item.representation }, set: { var c = item; c.representation = $0; store.update(c) }),
-                    accent: accent)
+            // A tracked book is summaries by definition — the full text of
+            // everything read outgrows the context budget long before the end
+            // of a real book — so the control goes away rather than lying.
+            if item.scopeMode != "progress" {
+                row(L("book.representation")) {
+                    ComposerSegmented(
+                        options: [("summary", L("book.representation.summary")), ("full", L("book.representation.full"))],
+                        value: Binding(get: { item.representation }, set: { var c = item; c.representation = $0; store.update(c) }),
+                        accent: accent)
+                }
             }
             row(L("book.scope")) {
                 ComposerSegmented(
-                    options: [("all", L("book.scope.all")), ("up_to", L("book.scope.upTo")), ("chapters", L("book.scope.select"))],
+                    options: [("all", L("book.scope.all")), ("up_to", L("book.scope.upTo")),
+                              ("chapters", L("book.scope.select")), ("progress", L("book.scope.progress"))],
                     value: Binding(get: { item.scopeMode }, set: { setScope($0) }),
                     accent: accent)
+            }
+
+            if item.scopeMode == "progress" {
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack {
+                        Image(systemName: "bookmark").font(.system(size: 11)).foregroundStyle(accent.legible(onDark: theme.isDark))
+                        Text(item.progressChapter < 0
+                             ? L("book.progress.unstarted")
+                             : String(format: L("book.progress.at"), item.progressChapter + 1,
+                                      max(visible.count, item.progressChapter + 1)))
+                            .font(.system(size: 11.5)).foregroundStyle(theme.ink)
+                    }
+                    Text(L("book.progress.hint"))
+                        .font(.system(size: 9.5, design: .monospaced)).foregroundStyle(theme.inkMute)
+                }
             }
 
             if item.scopeMode == "up_to", !visible.isEmpty {
@@ -856,6 +925,8 @@ private struct BookCardBody: View {
         var c = item
         c.scopeMode = scope
         if scope == "up_to", c.uptoChapter == 0 { c.uptoChapter = min(6, max(0, visible.count - 1)) }
+        // Summaries, always: see the note on the representation row above.
+        if scope == "progress" { c.representation = "summary" }
         if scope == "chapters", c.selectedRefs.isEmpty { c.selectedRefs = Array(includedRefs) }
         store.update(c)
     }
@@ -1093,6 +1164,23 @@ struct FlowLayout: Layout {
 
 // MARK: Add-context bottom sheet (search picker)
 
+/// How the picker's candidates are ordered. Recency is the default: reaching
+/// for context nearly always means reaching for what you were just working on,
+/// and the server's relevance score can only rank a query you've typed — with
+/// an empty field it ranks everything alike, which is exactly when the list is
+/// longest. Relevance stays one tap away for a real search.
+enum ContextSort: String, SortChoice {
+    case recent, relevance, title
+    static var defaultChoice: ContextSort { .recent }
+    var labelKey: String {
+        switch self {
+        case .recent: return "sort.recent"
+        case .relevance: return "sort.relevance"
+        case .title: return "sort.title"
+        }
+    }
+}
+
 struct AddContextSheet: View {
     @Environment(\.mauriceTheme) private var theme
     @Environment(ComposerStore.self) private var store
@@ -1102,9 +1190,35 @@ struct AddContextSheet: View {
     @State private var results: [SearchEntry] = []
     @State private var showImporter = false
     @State private var uploading = false
+    @AppStorage("maurice.context.sort") private var sortRaw = ContextSort.defaultChoice.rawValue
+    private var sort: ContextSort { ContextSort(rawValue: sortRaw) ?? .defaultChoice }
+
+    /// `results` arrives in the server's relevance order; the other two axes
+    /// re-sort it. Sections slice this list, so ordering it once orders them
+    /// all.
+    private var ordered: [SearchEntry] {
+        switch sort {
+        case .relevance: return results
+        case .title: return results.sorted { byTitle($0, $1) }
+        case .recent: return results.sorted { a, b in
+            switch (a.updatedAt, b.updatedAt) {
+            case let (x?, y?): return x == y ? byTitle(a, b) : x > y
+            case (_?, nil): return true
+            case (nil, _?): return false
+            case (nil, nil): return byTitle(a, b)
+            }
+        }
+        }
+    }
+
+    private func byTitle(_ a: SearchEntry, _ b: SearchEntry) -> Bool {
+        let c = a.title.localizedCaseInsensitiveCompare(b.title)
+        return c == .orderedSame ? a.id < b.id : c == .orderedAscending
+    }
 
     private var groups: [(label: String, type: ComposerItemType)] {
-        [(L("context.section.notes"), .note), (L("context.section.books"), .book),
+        [(L("context.section.notes"), .note), (L("context.section.fiches"), .fiche),
+         (L("context.section.books"), .book),
          (L("context.section.folders"), .folder), (L("context.section.files"), .file),
          (L("context.section.conversations"), .conversation)]
     }
@@ -1115,6 +1229,7 @@ struct AddContextSheet: View {
             HStack(alignment: .firstTextBaseline) {
                 Text(L("context.addContext")).font(.system(size: 21, design: .serif)).foregroundStyle(theme.ink)
                 Spacer()
+                SortMenu<ContextSort>(raw: $sortRaw, accent: accent)
                 Button(L("common.done")) { dismiss() }
                     .font(.system(size: 14, weight: .semibold)).foregroundStyle(accent.legible(onDark: theme.isDark))
             }
@@ -1144,7 +1259,7 @@ struct AddContextSheet: View {
 
             List {
                 ForEach(groups, id: \.label) { g in
-                    let rows = results.filter { $0.type == g.type }
+                    let rows = ordered.filter { $0.type == g.type }
                     if !rows.isEmpty {
                         Section {
                             ForEach(rows) { e in row(e) }

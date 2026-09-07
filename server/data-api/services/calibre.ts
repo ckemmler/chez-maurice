@@ -12,6 +12,8 @@ export interface BookMetadata {
   series: string | null;
   description: string | null;
   bookPath: string;
+  /** When Calibre took the book in, ISO-8601. Null if the column is empty. */
+  added: string | null;
 }
 
 export interface ChapterInfo {
@@ -112,6 +114,31 @@ function getBookFormats(bookId: number): string[] {
   return rows.map((r) => r.format.toUpperCase());
 }
 
+/** True when the table has that column. `books.timestamp` is standard Calibre,
+ *  but a hand-built or very old library can lack it, and naming a missing
+ *  column in the SELECT throws rather than returning null. */
+function hasColumn(table: string, column: string): boolean {
+  try {
+    const cols = getDb().query(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>;
+    return cols.some((c) => c.name === column);
+  } catch {
+    return false;
+  }
+}
+
+/** The `added` column expression, or a literal null where Calibre has none. */
+function addedExpr(): string {
+  return hasColumn("books", "timestamp") ? "b.timestamp" : "NULL";
+}
+
+/** Calibre stores `books.timestamp` as `YYYY-MM-DD HH:MM:SS.ssssss+00:00`;
+ *  clients want ISO-8601. Unparseable values are dropped rather than guessed. */
+function isoTimestamp(raw: string | null): string | null {
+  if (!raw) return null;
+  const d = new Date(raw.replace(" ", "T"));
+  return Number.isNaN(d.getTime()) ? null : d.toISOString();
+}
+
 function getBookRecord(bookId: number): BookMetadata | null {
   const stmt = getDb().query(
     `
@@ -122,7 +149,8 @@ function getBookRecord(bookId: number): BookMetadata | null {
         GROUP_CONCAT(a.name, ',') AS authors,
         GROUP_CONCAT(t.name, ',') AS tags,
         s.name AS series,
-        c.text AS description
+        c.text AS description,
+        ${addedExpr()} AS added
       FROM books b
       LEFT JOIN books_authors_link bal ON bal.book = b.id
       LEFT JOIN authors a ON a.id = bal.author
@@ -145,6 +173,7 @@ function getBookRecord(bookId: number): BookMetadata | null {
         tags: string | null;
         series: string | null;
         description: string | null;
+        added: string | null;
       }
     | undefined;
 
@@ -161,6 +190,7 @@ function getBookRecord(bookId: number): BookMetadata | null {
     formats: getBookFormats(row.id),
     series: row.series ?? null,
     description: row.description ?? null,
+    added: isoTimestamp(row.added),
   };
 }
 
@@ -172,7 +202,8 @@ export function listBooks(): BookMetadata[] {
         (SELECT GROUP_CONCAT(a2.name, ',') FROM books_authors_link bal2 JOIN authors a2 ON a2.id = bal2.author WHERE bal2.book = b.id) AS authors,
         (SELECT GROUP_CONCAT(t2.name, ',') FROM books_tags_link btl2 JOIN tags t2 ON t2.id = btl2.tag WHERE btl2.book = b.id) AS tags,
         s.name AS series,
-        c.text AS description
+        c.text AS description,
+        ${addedExpr()} AS added
       FROM books b
       LEFT JOIN books_series_link bsl ON b.id = bsl.book
       LEFT JOIN series s ON s.id = bsl.series
@@ -189,6 +220,7 @@ export function listBooks(): BookMetadata[] {
     tags: string | null;
     series: string | null;
     description: string | null;
+    added: string | null;
   }>;
 
   return rows.map((row) => ({
@@ -200,6 +232,7 @@ export function listBooks(): BookMetadata[] {
     formats: getBookFormats(row.id),
     series: row.series ?? null,
     description: row.description ?? null,
+    added: isoTimestamp(row.added),
   }));
 }
 
@@ -295,7 +328,8 @@ export function searchBooksByTags(tags: string[]): BookMetadata[] {
         (SELECT GROUP_CONCAT(a2.name, ',') FROM books_authors_link bal2 JOIN authors a2 ON a2.id = bal2.author WHERE bal2.book = b.id) AS authors,
         (SELECT GROUP_CONCAT(t2.name, ',') FROM books_tags_link btl2 JOIN tags t2 ON t2.id = btl2.tag WHERE btl2.book = b.id) AS tags,
         s.name AS series,
-        c.text AS description
+        c.text AS description,
+        ${addedExpr()} AS added
       FROM books b
       JOIN books_tags_link btl ON b.id = btl.book
       JOIN tags t ON t.id = btl.tag
@@ -315,6 +349,7 @@ export function searchBooksByTags(tags: string[]): BookMetadata[] {
     tags: string | null;
     series: string | null;
     description: string | null;
+    added: string | null;
   }>;
 
   return rows.map((row) => ({
@@ -326,6 +361,7 @@ export function searchBooksByTags(tags: string[]): BookMetadata[] {
     formats: getBookFormats(row.id),
     series: row.series ?? null,
     description: row.description ?? null,
+    added: isoTimestamp(row.added),
   }));
 }
 

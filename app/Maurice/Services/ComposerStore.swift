@@ -11,7 +11,7 @@ import SwiftUI
 let CTX_BUDGET = 200_000
 
 enum ComposerItemType: String, Codable {
-    case note, book, conversation, file, folder
+    case note, book, conversation, file, folder, fiche
 }
 
 /// One chip in the tray. `rawId` is the slug (note), numeric book id (as string),
@@ -28,9 +28,17 @@ struct TrayItem: Identifiable, Equatable {
     var exclude: [String] = []
     // book options
     var representation: String = "summary" // "summary" | "full"
-    var scopeMode: String = "all"          // "all" | "up_to" | "chapters"
+    var scopeMode: String = "all"          // "all" | "up_to" | "chapters" | "progress"
     var uptoChapter: Int = 0
     var selectedRefs: [String] = []
+    /// `progress` scope only: the visible-chapter index the reader has reached,
+    /// -1 before they start. Read off the server's snapshot, never sent.
+    var progressChapter: Int = -1
+    /// Chapters the reader actually sees (front/back matter excluded).
+    var visibleChapters: Int = 0
+    // fiche options
+    var includeFragments: Bool = true
+    var fragmentCount: Int = 0
     // file options
     var kind: String = ""                  // file kind: text/img/pdf/file
     var na: Bool = false                   // binary file — no token estimate (attachment)
@@ -50,8 +58,14 @@ struct TrayItem: Identifiable, Equatable {
             var scope: [String: Any] = ["mode": scopeMode]
             if scopeMode == "up_to" { scope["chapter"] = uptoChapter }
             if scopeMode == "chapters" { scope["refs"] = selectedRefs }
+            // A book that follows the reader is loaded as summaries: the full
+            // text of everything read grows past the context budget long
+            // before the end of a real book.
             return ["type": "book", "id": Int(rawId) ?? 0,
-                    "representation": representation, "scope": scope]
+                    "representation": scopeMode == "progress" ? "summary" : representation,
+                    "scope": scope]
+        case .fiche:
+            return ["type": "fiche", "id": rawId, "include_fragments": includeFragments]
         case .conversation:
             return ["type": "conversation", "id": rawId]
         case .file:
@@ -64,6 +78,18 @@ struct TrayItem: Identifiable, Equatable {
 
 /// A picker search result.
 struct SearchEntry: Identifiable {
+    /// The server sends ISO-8601, with or without fractional seconds.
+    static func parseDate(_ raw: String?) -> Date? {
+        guard let raw else { return nil }
+        return isoFractional.date(from: raw) ?? isoPlain.date(from: raw)
+    }
+    private static let isoFractional: ISO8601DateFormatter = {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return f
+    }()
+    private static let isoPlain = ISO8601DateFormatter()
+
     let type: ComposerItemType
     let rawId: String
     let title: String
@@ -71,6 +97,9 @@ struct SearchEntry: Identifiable {
     let encrypted: Bool
     let moc: Bool
     var kind: String = ""   // file kind (text/img/pdf/file) for glyph
+    /// When the thing was last touched (a note's mtime, a conversation's last
+    /// message, a book's arrival). Nil when its source has no date to give.
+    var updatedAt: Date? = nil
     var id: String { "\(type.rawValue)-\(rawId)" }
 }
 
@@ -208,6 +237,11 @@ final class ComposerStore {
                 if let t = w["title"] as? String, !t.isEmpty { items[i].title = t }
                 if let m = w["moc"] as? Bool { items[i].moc = m }
                 if let e = w["encrypted"] as? Bool { items[i].encrypted = e }
+                // book on the progress scope: how far the reader has got, so
+                // the card can say it without a second request.
+                if let p = w["progressChapter"] as? Int { items[i].progressChapter = p }
+                if let f = w["fragments"] as? Int { items[i].fragmentCount = f }
+                if items[i].type == .book, let v = w["visibleCount"] as? Int { items[i].visibleChapters = v }
                 // file: kind/na drive the glyph + "n/a" readout; rebuild the meta
                 // line (kind · path) so spec-loaded files read right without a search.
                 if items[i].type == .file {
@@ -294,6 +328,10 @@ final class ComposerStore {
                 it.uptoChapter = scope["chapter"] as? Int ?? 0
                 it.selectedRefs = scope["refs"] as? [String] ?? []
             }
+            it.progressChapter = snap?["progressChapter"] as? Int ?? -1
+        case .fiche:
+            it.includeFragments = d["include_fragments"] as? Bool ?? true
+            it.fragmentCount = snap?["fragments"] as? Int ?? 0
         case .conversation:
             break
         case .file:
@@ -470,6 +508,7 @@ final class ComposerStore {
                 encrypted: badges["encrypted"] as? Bool ?? false,
                 moc: badges["moc"] as? Bool ?? false,
                 kind: badges["kind"] as? String ?? "",
+                updatedAt: SearchEntry.parseDate(r["updated_at"] as? String),
             )
         }
     }

@@ -14,6 +14,8 @@ export interface BookHit {
   title: string;
   authors: string[];
   path: string;
+  /** Calibre's `timestamp` — when the book entered the library, ISO-8601. */
+  added: string | null;
 }
 
 export interface BookCoverage {
@@ -23,6 +25,25 @@ export interface BookCoverage {
 
 export function libraryRootFor(memberId: string): string | null {
   return getDefaultLibrary(memberId)?.library_root ?? null;
+}
+
+/** True when the table has that column. `books.timestamp` is standard Calibre,
+ *  but a hand-built or very old library can lack it, and naming a missing
+ *  column in the SELECT throws — taking the whole omnibox search down with it. */
+function hasColumn(db: Database, table: string, column: string): boolean {
+  try {
+    const cols = db.query(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>;
+    return cols.some((c) => c.name === column);
+  } catch {
+    return false;
+  }
+}
+
+/** Calibre writes `YYYY-MM-DD HH:MM:SS.ssssss+00:00`; clients want ISO-8601. */
+function isoDate(raw: string | null): string | null {
+  if (!raw) return null;
+  const d = new Date(raw.replace(" ", "T"));
+  return Number.isNaN(d.getTime()) ? null : d.toISOString();
 }
 
 function openMeta(root: string): Database | null {
@@ -44,9 +65,10 @@ export function searchBooks(memberId: string, q: string, limit = 20): BookHit[] 
   try {
     const like = `%${q.trim()}%`;
     const filtered = q.trim().length > 0;
+    const added = hasColumn(db, "books", "timestamp") ? "b.timestamp" : "NULL";
     const rows = db
       .query(
-        `SELECT b.id, b.title, b.path,
+        `SELECT b.id, b.title, b.path, ${added} AS added,
                 GROUP_CONCAT(DISTINCT a.name) AS authors
          FROM books b
          LEFT JOIN books_authors_link bal ON b.id = bal.book
@@ -60,6 +82,7 @@ export function searchBooks(memberId: string, q: string, limit = 20): BookHit[] 
       id: number;
       title: string;
       path: string;
+      added: string | null;
       authors: string | null;
     }>;
     return rows.map((r) => ({
@@ -67,6 +90,7 @@ export function searchBooks(memberId: string, q: string, limit = 20): BookHit[] 
       title: r.title,
       path: r.path,
       authors: r.authors ? r.authors.split(",") : [],
+      added: isoDate(r.added),
     }));
   } finally {
     db.close();
