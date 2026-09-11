@@ -33,13 +33,42 @@ AUTH=(-allowProvisioningUpdates
   -authenticationKeyID "$ASC_KEY_ID"
   -authenticationKeyIssuerID "$ASC_ISSUER_ID")
 
-# Version control. VERSION = marketing version (CFBundleShortVersionString),
-# which Apple requires to be 1–3 dot-separated integers (e.g. 1.0.0) — no
-# "-beta" suffix. BUILD = the build number (CFBundleVersion), which must strictly
-# increase per upload; defaults to the git commit count (monotonic). Track the
-# "beta" label and history via git tags (e.g. app-v1.0.0-beta.1).
-VERSION="${VERSION:-}"
-BUILD="${BUILD:-$(git -C "$SCRIPT_DIR" rev-list --count HEAD 2>/dev/null || echo 1)}"
+# ── Versions ────────────────────────────────────────────────────────────────
+# VERSION = marketing version (CFBundleShortVersionString): 1–3 dot-separated
+# integers, no "-beta" suffix. It lives in app/VERSION — one file, in git, that
+# says what this app currently is. Override with VERSION= for a one-off.
+#
+# BUILD = build number (CFBundleVersion), which must strictly increase. It is
+# asked of App Store Connect rather than derived locally, because every local
+# scheme eventually lies: the git commit count this used to use went from 316 in
+# June to 128 in September when the history was rewritten for the public
+# release, which would have made the next 1.0.x upload rejected as a regression.
+# Apple knows what was actually uploaded, and Apple is what enforces the rule.
+VERSION="${VERSION:-$(tr -d '[:space:]' < "$SCRIPT_DIR/VERSION" 2>/dev/null || true)}"
+: "${VERSION:?no version: set VERSION= or write one into app/VERSION}"
+
+if [[ -z "${BUILD:-}" ]]; then
+  echo "▸ asking App Store Connect what has already been uploaded…"
+  if ! asc_info="$(ASC_KEY_ID="$ASC_KEY_ID" ASC_ISSUER_ID="$ASC_ISSUER_ID" \
+                   bun run "$SCRIPT_DIR/asc-build-info.ts")"; then
+    echo "ERROR: could not reach App Store Connect."
+    echo "  Pass BUILD=<n> explicitly if you know it must exceed the last upload."
+    exit 1
+  fi
+  read -r HIGHEST_BUILD HIGHEST_VERSION <<<"$asc_info"
+  BUILD=$((HIGHEST_BUILD + 1))
+  echo "  highest uploaded: build $HIGHEST_BUILD, version $HIGHEST_VERSION → building $VERSION ($BUILD)"
+
+  # Refuse to go backwards. TestFlight tolerates it; the App Store does not, and
+  # a version that walks backwards is a mess to unpick months later. This check
+  # exists because it already happened: a 0.2.0 went out after a 1.0.0.
+  ver_lt() { [[ "$(printf '%s\n%s\n' "$1" "$2" | sort -t. -k1,1n -k2,2n -k3,3n | head -1)" == "$1" && "$1" != "$2" ]]; }
+  if ver_lt "$VERSION" "$HIGHEST_VERSION" && [[ -z "${ALLOW_VERSION_DOWNGRADE:-}" ]]; then
+    echo "ERROR: $VERSION is lower than $HIGHEST_VERSION, already on App Store Connect."
+    echo "  Bump app/VERSION, or set ALLOW_VERSION_DOWNGRADE=1 if you mean it."
+    exit 1
+  fi
+fi
 
 mkdir -p "$BUILD_DIR"
 

@@ -9,6 +9,31 @@ env vars; nothing secret is committed.
   Apple requires 1–3 dot-separated integers — **no `-beta` suffix**.
 - **Build number**: auto-set to the git commit count (monotonic); override with
   `BUILD=<n>` for a re-upload of the same commit. Must strictly increase per upload.
+- **Distribution policy (2026-09-11): external testers, version frozen at `1.0.0`.**
+  Apple reviews TestFlight builds *per version string*, not per build. `1.0.0`
+  is approved, so every `1.0.0 (N)` reaches external testers the moment it is
+  processed — no Beta App Review, ever, as long as `app/VERSION` stays `1.0.0`.
+  Testers need only the TestFlight app and their invitation code (or the public
+  link, if enabled on the "Beta" group). Internal testing is NOT used: it makes
+  every tester a member of the Apple developer team, and a child account cannot
+  be one at all. Bump the version only when you want a review — i.e. for the
+  App Store.
+
+- **Versions are not typed by hand any more.** The marketing version lives in
+  `app/VERSION` (one file, in git). The build number is asked of App Store
+  Connect — `app/asc-build-info.ts` reports the highest already uploaded, and the
+  build is that plus one.
+
+  This replaced the git commit count, which lied: it read 316 in June and 128 in
+  September, because the history was rewritten for the public release. The next
+  1.0.x upload would have been rejected as a regression, for a reason nothing on
+  this machine could have explained. `build-testflight.sh` also now refuses a
+  version lower than one already uploaded (a 0.2.0 went out after a 1.0.0 before
+  the check existed); `ALLOW_VERSION_DOWNGRADE=1` if you ever mean it.
+
+  So a release is: edit `app/VERSION`, run the script. Pass `BUILD=` only when
+  App Store Connect is unreachable and you know what you are doing.
+
 - **"beta" + history**: every TestFlight build is a beta by definition. Record the
   human label and history with **git tags** after each successful build:
   ```
@@ -66,12 +91,12 @@ xcrun stapler validate ChezMaurice.pkg
 ```
 # macOS
 PROVISIONING_PROFILE_MACOS="Maurice macOS App Store" PLATFORMS=macos \
-VERSION=1.0.0 ASC_KEY_ID=2MFNJ8HD9A ASC_ISSUER_ID=81a9b8ba-55cc-43cb-bc93-00e73c673425 \
+ASC_KEY_ID=2MFNJ8HD9A ASC_ISSUER_ID=81a9b8ba-55cc-43cb-bc93-00e73c673425 \
 ./app/build-testflight.sh
 
-# iOS (iPhone + iPad, universal)
+# iOS (iPhone + iPad, universal) — version from app/VERSION, build from ASC
 PROVISIONING_PROFILE_IOS="Maurice iOS App Store" PLATFORMS=ios \
-VERSION=1.0.0 ASC_KEY_ID=2MFNJ8HD9A ASC_ISSUER_ID=81a9b8ba-55cc-43cb-bc93-00e73c673425 \
+ASC_KEY_ID=2MFNJ8HD9A ASC_ISSUER_ID=81a9b8ba-55cc-43cb-bc93-00e73c673425 \
 ./app/build-testflight.sh
 
 # both at once: PLATFORMS="macos ios" and set both PROVISIONING_PROFILE_* vars
