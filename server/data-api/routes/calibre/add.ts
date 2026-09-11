@@ -13,8 +13,21 @@ import { getLibraryRoot } from "../../services/calibre";
 
 const app = new Hono();
 
-const CALIBRE_DB =
-  "/Applications/calibre.app/Contents/MacOS/calibredb";
+/** The `calibredb` binary. macOS hides it inside the app bundle, which is not on
+ *  anyone's PATH; Linux packages put it on PATH and nowhere else. Ask the
+ *  environment first, then PATH, and keep the bundle as the last resort so the
+ *  Mac install keeps working with no configuration. */
+function resolveCalibreDb(): string {
+  const pinned = process.env.CALIBRE_DB;
+  if (pinned) return pinned;
+  const onPath = spawnSync("sh", ["-c", "command -v calibredb"], { encoding: "utf-8" });
+  const found = onPath.stdout?.trim();
+  if (found) return found;
+  return "/Applications/calibre.app/Contents/MacOS/calibredb";
+}
+
+let _calibreDb: string | null = null;
+const calibreDb = () => (_calibreDb ??= resolveCalibreDb());
 const tmpDir = resolve(import.meta.dir, "../../../../data/tmp");
 
 const ALLOWED_EXTENSIONS = new Set([".pdf", ".epub"]);
@@ -44,7 +57,7 @@ app.post("/", async (c) => {
 
     // Run calibredb add — resolve the library at request time, so uploads land in
     // the same library the read paths serve.
-    const result = spawnSync(CALIBRE_DB, [
+    const result = spawnSync(calibreDb(), [
       "add", tmpPath,
       "--library-path", getLibraryRoot(),
     ], {

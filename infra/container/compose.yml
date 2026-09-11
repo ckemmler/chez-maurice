@@ -1,0 +1,96 @@
+# Maurice on Linux, running beside the macOS install rather than instead of it.
+#
+# Two rules hold this file together:
+#
+#  1. The published port is offset (13001) so both installs can run at
+#     once. INSIDE the container the ports are the normal ones, so
+#     config.toml, gardens.json and every hardcoded 127.0.0.1:<port> in
+#     server/index.ts stay correct — nothing is reconfigured, only republished.
+#
+#  2. The container never touches ~/.maurice on the Mac. Its data lives in the
+#     `home` named volume, seeded from a *copy* (scripts/container.sh seed).
+#     A bind mount would be wrong twice over: SQLite locking is unreliable
+#     across a macOS→Linux bind mount, and server/src/db.ts migrates the schema
+#     at startup — pointing this at the live database would rewrite production.
+
+name: maurice
+
+services:
+  maurice:
+    build:
+      context: ../..
+      dockerfile: infra/container/Dockerfile
+      # The dev target: bind-mounted sources, Calibre, the private overlays.
+      # The production target lives in compose.prod.yml and shares this file's
+      # base layers.
+      target: dev
+    ports:
+      # One port, because there is only one ingress. The Astro instances and the
+      # MCP gateway bind 127.0.0.1 (scripts/start-web.sh, start-mcp-gateway.sh)
+      # and are reached through the Bun server's reverse proxy, which is where
+      # authentication happens. Publishing 4321 or 8710 would expose a port that
+      # cannot answer — and if their binds were ever widened, would hand out an
+      # unauthenticated way in. Use `scripts/container.sh shell` to reach them.
+      - "13001:3001"
+    environment:
+      # MAURICE_DATA_DIR is deliberately NOT set, so the container reproduces the
+      # Mac's split: server/lib/appDir.ts resolves maurice.db & friends under
+      # $HOME/.maurice, while data-api's [paths] data_dir points at the `data`
+      # subdirectory. Setting it here would collapse the two and hide a mismatch
+      # that the Mac install actually has.
+      MAURICE_CONFIG: /home/maurice/.maurice/config.toml
+      MAURICE_GARDENS_DIR: /home/maurice/.maurice/gardens
+      MAURICE_TIMEZONE: Europe/Paris
+      TZ: Europe/Paris
+      # Calibre reads its library root from maurice.db, not from here; these
+      # are the fallbacks the Python tools use when the DB says nothing
+      # (tools/calibre/book_data.py, process_book.py — both of which otherwise
+      # default to a /Users path). Qt runs headless: see QT_QPA_PLATFORM in the
+      # Dockerfile.
+      CALIBRE_LIBRARY: /library
+      CALIBRE_LIBRARY_PATH: /library
+      CALIBRE_DB_PATH: /library/metadata.db
+      # TLS off by default: server/certs/server.crt is a Tailscale cert for the
+      # Mac's tailnet name, and it arrives here through the /app bind mount. Drop
+      # a cert + key at these paths (inside the `home` volume) to serve HTTPS.
+      MAURICE_TLS_CERT: /home/maurice/.maurice/tls/server.crt
+      MAURICE_TLS_KEY: /home/maurice/.maurice/tls/server.key
+      MAURICE_PUBLIC_HOST: localhost
+    volumes:
+      # The checkout, live — this is what buys the hot reload.
+      - ../..:/app
+      # …and the six paths inside it that must NOT be the Mac's. The first two
+      # hold darwin-arm64 binaries (sharp) that cannot load on Linux; the rest
+      # are directories both servers would otherwise write to at once.
+      - server-modules:/app/server/node_modules
+      - web-modules:/app/web/node_modules
+      - repo-data:/app/data
+      - repo-logs:/app/logs
+      - garden-roots:/app/web/.garden-roots
+      # These two hold symlinks into the gardens dir that
+      # web/src/integrations/download-images.ts rewrites every time Astro
+      # starts. Shared, the two installs overwrite each other's: the container
+      # pointed /images/candide at /home/maurice/… and the Mac's site stopped
+      # serving its own images until its next restart.
+      - public-images:/app/web/public/images
+      - public-avatars:/app/web/public/avatars
+      # The corpus vector store. sqlite-vec keeps its per-member DBs *inside the
+      # repo* (tools/corpus/data/vectors), which the bind mount would otherwise
+      # share: two writers on one SQLite file across virtiofs, which is the
+      # locking hazard rule 2 exists to avoid. lsof caught exactly that before
+      # this volume existed. Seeded by `container.sh seed`, like the data dir.
+      - corpus-data:/app/tools/corpus/data
+      # The application's own state. Never a bind mount — see rule 2 above.
+      - home:/home/maurice/.maurice
+    restart: unless-stopped
+
+volumes:
+  home:
+  server-modules:
+  web-modules:
+  repo-data:
+  repo-logs:
+  garden-roots:
+  public-images:
+  public-avatars:
+  corpus-data:

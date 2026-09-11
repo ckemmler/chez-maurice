@@ -1,0 +1,30 @@
+# The private `maurice-tools` sibling repo — layered on by scripts/container.sh
+# when it is present. Development only, and deliberately so.
+#
+# Thirteen entries under tools/ are symlinks into it: calibre, tracks, tasks,
+# health, compte, contacts, calendar, layouts, pipelines, readwise, signals,
+# social, thoughts. Without this mount they all dangle inside the container and
+# the MCP gateway comes up with only the two tools that ship publicly (garden,
+# corpus) — which is correct for a client image and wrong for parity with the
+# Mac.
+#
+# The mount point is not a choice: those symlinks are *relative*
+# (`../../maurice-tools/<tool>`), so from /app/tools they resolve to
+# /maurice-tools. Mounting the repo there makes every one of them work with no
+# rewriting — the same trick as the other overlays, handed to us by the symlinks
+# themselves.
+#
+# Read-only: it is someone else's repository and the container has no business
+# editing it. The one path a tool writes to inside its own tree —
+# calibre/data/, which holds an auto-run timestamp — gets a volume so that write
+# succeeds without reaching the Mac's copy. A tool that turns out to need
+# another writable path will fail loudly, which is the point.
+
+services:
+  maurice:
+    volumes:
+      - ${MAURICE_TOOLS_OVERLAY}:/maurice-tools:ro
+      - tools-calibre-data:/maurice-tools/calibre/data
+
+volumes:
+  tools-calibre-data:

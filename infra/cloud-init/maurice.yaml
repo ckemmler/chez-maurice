@@ -1,0 +1,83 @@
+#cloud-config
+#
+# Prepare a Linux machine to run Maurice. Nothing more.
+#
+# Deliberately NOT Scaleway-specific: plain cloud-init, no provider metadata, no
+# provider packages. It runs the same on Scaleway, Hetzner, OVH, a client's own
+# server, or a Linux VM on a Mac mini — which is what keeps that last option open
+# at no extra cost.
+#
+# And deliberately NOT a deployer. It installs Docker and makes a directory; the
+# application arrives afterwards, from a machine that has the repo, via
+# scripts/deploy.sh. Two reasons. The image lives in a private registry that this
+# file has no business holding credentials for. And doing the deploy by hand a
+# couple of times is how you find out what the automation should actually say.
+#
+# Usage: paste as the instance's user data, or
+#   cloud-init devel schema --config-file maurice.yaml   (to check it first)
+
+package_update: true
+package_upgrade: true
+
+packages:
+  - ca-certificates
+  - curl
+  - rsync
+
+users:
+  - name: maurice
+    groups: [docker]
+    shell: /bin/bash
+    sudo: ALL=(ALL) NOPASSWD:ALL
+    # Replace with the public key of whoever deploys. Password login stays off
+    # (see ssh_pwauth): this is the only way in.
+    ssh_authorized_keys:
+      - ssh-ed25519 AAAA...REPLACE_ME
+
+ssh_pwauth: false
+disable_root: true
+
+write_files:
+  # Where the deploy lands. compose.prod.yml, Caddyfile and .env are rsynced
+  # here; the data lives in a Docker volume, not in this directory.
+  - path: /opt/maurice/README
+    permissions: "0644"
+    content: |
+      Maurice lives here.
+
+        docker compose -f compose.prod.yml ps
+        docker compose -f compose.prod.yml logs -f
+        docker compose -f compose.prod.yml up -d
+
+      The data is in the `maurice_home` Docker volume, NOT in this directory.
+      Deleting this directory loses nothing; deleting that volume loses
+      everything. Back it up with:
+
+        docker run --rm -v maurice_home:/v -v "$PWD":/out busybox \
+          tar czf /out/maurice-$(date +%%F).tar.gz -C /v .
+
+runcmd:
+  # Docker, from Docker's own repository rather than the distribution's, because
+  # the distribution's is routinely a major version behind on compose.
+  - install -m 0755 -d /etc/apt/keyrings
+  - curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+  - chmod a+r /etc/apt/keyrings/docker.asc
+  - >
+    echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc]
+    https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo "$VERSION_CODENAME") stable"
+    > /etc/apt/sources.list.d/docker.list
+  - apt-get update
+  - apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+  - systemctl enable --now docker
+  - usermod -aG docker maurice
+  - chown -R maurice:maurice /opt/maurice
+
+  # A compressed swap device. Maurice's memory is dominated by Astro instances
+  # that spend most of their life idle, and their pages compress well — this buys
+  # real headroom on a small machine for about three lines and no money.
+  - apt-get install -y systemd-zram-generator
+  - printf '[zram0]\nzram-size = ram / 2\n' > /etc/systemd/zram-generator.conf
+  - systemctl daemon-reload
+  - systemctl start systemd-zram-setup@zram0.service || true
+
+final_message: "Maurice's host is ready. Deploy with scripts/deploy.sh from the repo."

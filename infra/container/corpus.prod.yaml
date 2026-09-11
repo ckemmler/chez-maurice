@@ -1,0 +1,113 @@
+# Corpus configuration for a deployed instance.
+#
+# tools/corpus/config/corpus.yaml is gitignored — it names absolute paths on the
+# machine that wrote it — so it is not in the image, and without it the MCP
+# gateway dies at startup: corpus is one of the two tools that ship, and it
+# raises FileNotFoundError before uvicorn finishes booting. The entrypoint
+# installs this file when none is present.
+#
+# Every path here comes from the environment. There is nothing machine-specific
+# in it, which is the whole difference from the developer's copy.
+
+store:
+  backend: sqlite_vec
+  # No `path`: the default is tools/corpus/data/vectors, and in production the
+  # entrypoint has already made tools/corpus/data a symlink into the data
+  # volume. So the index lands where it survives a redeploy, with no path here
+  # to keep in sync.
+
+embedding:
+  # An OpenAI-compatible endpoint. On the Mac this is Ollama on localhost; a
+  # deployed instance has no Ollama, so it points at whatever provider the
+  # operator configured — Scaleway Generative APIs keeps the whole chain in the
+  # EU, which is the point of the exercise.
+  #
+  # CHANGING THE MODEL OR ITS DIMENSION INVALIDATES THE INDEX. Vectors from two
+  # models are not comparable; a change means a full reindex. Decide once, at
+  # install, while the index is still empty.
+  provider: openai
+  model: ${CORPUS_EMBEDDING_MODEL:-bge-multilingual-gemma2}
+  base_url: ${CORPUS_EMBEDDING_BASE_URL:-https://api.scaleway.ai/v1}
+  api_key: ${CORPUS_EMBEDDING_API_KEY:-}
+  vector_size: ${CORPUS_EMBEDDING_DIM:-3584}
+  batch_size: 50
+
+watcher:
+  debounce_seconds: 2
+  ignore_patterns:
+    - "*.tmp"
+    - "*.swp"
+    - ".DS_Store"
+    - "__pycache__"
+
+# Only the gardens. The developer's config also indexes a Calibre library,
+# journals and research dossiers; none of those exist on a deployed instance,
+# and a source whose path is missing is dropped with a warning at load rather
+# than failing — but naming them here would still be a lie about what this
+# instance is.
+sources:
+  garden-notes:
+    path: ${MAURICE_GARDENS_DIR}
+    pattern: "*/notes/*/*.md"
+    recursive: true
+    member_from_path: parent.parent.parent.name
+    member_lookup: garden_username
+    chunking:
+      method: semantic
+      max_tokens: 512
+      overlap_tokens: 50
+    metadata:
+      source_type: note
+      extract_from_frontmatter: true
+      extract_from_path:
+        locale: parent.name
+        slug: stem
+
+  garden-fiches:
+    path: ${MAURICE_GARDENS_DIR}
+    pattern: "*/*/*/*-fiche.md"
+    recursive: true
+    member_from_path: parent.parent.parent.name
+    member_lookup: garden_username
+    chunking:
+      method: semantic
+      max_tokens: 512
+      overlap_tokens: 50
+    metadata:
+      source_type: fiche
+      extract_from_frontmatter: true
+      extract_from_path:
+        collection: parent.parent.name
+
+  garden-cards:
+    path: ${MAURICE_GARDENS_DIR}
+    pattern: "*/*/*/*.md"
+    exclude:
+      - "*/notes/*/*.md"      # garden-notes owns these
+      - "*/*/*/*-fiche.md"    # garden-fiches owns these
+    recursive: true
+    member_from_path: parent.parent.parent.name
+    member_lookup: garden_username
+    chunking:
+      method: semantic
+      max_tokens: 512
+      overlap_tokens: 50
+    metadata:
+      source_type: card
+      extract_from_frontmatter: true
+      extract_from_path:
+        collection: parent.parent.name
+
+  garden-fragments:
+    path: ${MAURICE_GARDENS_DIR}
+    pattern: "*/*/*/*-fiche/_fragments/*.frag"
+    recursive: true
+    member_from_path: parent.parent.parent.parent.parent.name
+    member_lookup: garden_username
+    chunking:
+      method: semantic
+      max_tokens: 512
+      overlap_tokens: 50
+    metadata:
+      source_type: fragment
+      extract_from_frontmatter: true

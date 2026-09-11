@@ -1,0 +1,21 @@
+# Candide's workstation only — layered on by scripts/container.sh, and only when
+# the sibling repo is actually there.
+#
+# His web/ checkout carries gitignored symlinks into a private sibling repo:
+# web/src/pages/{books,library,research,…}, web/src/lib/*-api.ts and
+# web/themes/candide all point at absolute paths under
+# .../workspaces/maurice-web. A public checkout has none of them and Astro is
+# happy; his does, and inside the container they dangle — `astro dev` dies with
+# ENOENT on web/src/pages/books before it binds a port.
+#
+# Mounting the sibling repo at the *same absolute path it has on the host* makes
+# those symlinks resolve, without rewriting a single one of them. It is read-only
+# because the container has no business editing that repo.
+#
+# The path comes from the environment (scripts/container.sh computes it), so
+# nothing here is hardcoded to one person's home directory.
+
+services:
+  maurice:
+    volumes:
+      - ${MAURICE_WEB_OVERLAY}:${MAURICE_WEB_OVERLAY}:ro

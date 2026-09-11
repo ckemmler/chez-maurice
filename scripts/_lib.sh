@@ -59,23 +59,40 @@ else
 fi
 gardens_root() { echo "$_MAURICE_GARDENS_RESOLVED"; }
 
+# The environment beats the file. `source` alone let .env overwrite variables the
+# caller had already exported — invisible on macOS, where nothing sets them, and
+# wrong in the Linux container, where compose passes MAURICE_GARDENS_DIR and the
+# same .env still carries the Mac's /Users path. The gateway's garden tools then
+# read a directory that does not exist. This is also the precedence the server
+# and config.ts already use (index.ts only sets a key that is absent), so the
+# shell now agrees with them.
 load_env() {
-  if [[ -f "$REPO/.env" ]]; then
-    set -a
-    # shellcheck disable=SC1091
-    source "$REPO/.env"
-    set +a
-  fi
+  [[ -f "$REPO/.env" ]] || return 0
+  local restore="" name
+  while IFS= read -r name; do
+    [[ -n "${!name+x}" ]] || continue
+    restore+="$(printf '%s=%q; export %s' "$name" "${!name}" "$name")"$'\n'
+  done < <(sed -nE 's/^[[:space:]]*([A-Za-z_][A-Za-z0-9_]*)[[:space:]]*=.*/\1/p' "$REPO/.env")
+  set -a
+  # shellcheck disable=SC1091
+  source "$REPO/.env"
+  set +a
+  if [[ -n "$restore" ]]; then eval "$restore"; fi
 }
 
 # Resolve a Python interpreter that has the gateway's deps, in priority order.
 # Echoes the path, or returns 1 if none found. Override with MAURICE_PYTHON.
+# The candidates are only a preference — the import probe decides. That is what
+# lets the Linux container bind-mount the checkout without harm: its macOS
+# .venv/bin/python is a dangling symlink, fails the -x test, and /usr/bin/python3
+# (where the image installs the deps) answers instead.
 find_python() {
   local candidates=(
     "${MAURICE_PYTHON:-}"
     "$REPO/.venv/bin/python"
     "/opt/homebrew/bin/python3.13"
     "$(command -v python3 || true)"
+    "/usr/bin/python3"
   )
   for py in "${candidates[@]}"; do
     [[ -n "$py" && -x "$py" ]] || continue

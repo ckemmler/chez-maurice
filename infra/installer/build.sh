@@ -17,7 +17,7 @@ VERSION="${MAURICE_VERSION:-0.1.0}"
 
 # Build mode. `--public` ships only the public surface: the note tools of the
 # garden module (the gateway runs garden with MAURICE_GARDEN_PROFILE=public),
-# and NONE of the private tools (corpus, calendar, calibre, …). The default
+# and NONE of the private tools (calendar, calibre, tracks, …). The default
 # (full/private) build is self-contained with every tool the builder has.
 PUBLIC_BUILD=0
 for arg in "$@"; do
@@ -25,7 +25,10 @@ for arg in "$@"; do
 done
 # Private tools — symlinks into the sibling maurice-tools repo. Excluded from a
 # public build. (garden, mcp_gateway, shared are the in-repo public dirs.)
-PRIVATE_TOOLS=(corpus calendar calibre compte contacts health layouts pipelines readwise signals social tasks thoughts tracks)
+# corpus was on this list until 2026-09-10 and should not have been: it moved
+# into this repo in September and ships publicly, so a --public .pkg was going
+# out without the semantic search the documentation says it has.
+PRIVATE_TOOLS=(calendar calibre compte contacts health layouts pipelines readwise signals social tasks thoughts tracks)
 
 # ── Code signing / notarization (all optional; unset = unsigned local build) ──
 # Identity strings are NOT secret (names + cert hashes); the actual key stays in

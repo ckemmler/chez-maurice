@@ -1,0 +1,27 @@
+# TLS and the public door. Caddy obtains and renews a Let's Encrypt certificate
+# for MAURICE_DOMAIN on its own — nothing to configure, nothing to remember to
+# renew.
+#
+# It is deliberately the ONLY thing with a published port: the Maurice container
+# exposes 3001 on the compose network and nowhere else, so there is no way in
+# that skips TLS. Astro and the MCP gateway are further in still, on 127.0.0.1
+# inside that container, reached through the server's authenticated proxy.
+#
+# WebSockets need no configuration here: Caddy upgrades them through
+# reverse_proxy by default, which is what the rooms depend on.
+
+{$MAURICE_DOMAIN} {
+	reverse_proxy maurice:3001 {
+		# The MCP gateway builds its OAuth discovery URLs from these, so Claude
+		# is told the real public origin rather than an internal address.
+		header_up X-Forwarded-Host {host}
+		header_up X-Forwarded-Proto {scheme}
+	}
+
+	# Uploads and book files are large; the default would truncate them.
+	request_body {
+		max_size 512MB
+	}
+
+	encode gzip
+}

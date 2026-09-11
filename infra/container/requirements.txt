@@ -1,0 +1,42 @@
+# Every Python dependency the Linux container needs, in one place.
+#
+# The three `-r` lines below are the same files scripts/install_repo_env.sh feeds
+# the Mac's .venv, referenced rather than copied so the two installs cannot
+# drift. What install_repo_env.sh does on top of them is `pip install -e` every
+# tool that ships a pyproject.toml — the container does not, because it sets
+# PYTHONPATH=/app instead, which makes `tools.<name>` importable from the
+# bind-mounted sources without an install step that would go stale on every edit.
+#
+# The consequence is that a pyproject's own dependencies are not installed for
+# us, so they are listed explicitly below. Only two tools ship one.
+
+-r ../../tools/mcp_gateway/requirements.txt
+-r ../../tools/mcp_gateway/requirements-tools.txt
+-r ../../tools/corpus/requirements.txt
+
+# Both requirements files above say `mcp>=1.0`, which is only true of the Mac by
+# accident: its venv was created when 1.x was current and pip has never had a
+# reason to move it. A fresh install resolves to 2.x, where Server.list_tools no
+# longer exists — the gateway dies at import with AttributeError before it can
+# serve anything, and every sub-tool fails to load. Pin the version the Mac
+# actually runs, so the container is the same gateway and not a newer one.
+# Lifting this pin means porting tools/mcp_gateway/server.py to the 2.x API.
+mcp==1.27.1
+
+# tools/pipelines/research_tracks/pyproject.toml — the deep-research CLI the
+# server spawns from data-api/routes/dossiers.ts.
+pydantic>=2.7
+requests>=2.31
+python-dotenv>=1.0
+openai>=1.0.0
+anthropic>=0.40.0
+httpx>=0.27.0
+beautifulsoup4>=4.12.0
+duckduckgo-search>=6.2.4
+markdown>=3.5
+tiktoken>=0.7.0
+PyYAML>=6.0
+
+# supervisord runs as the container's init; it is the one process the image
+# needs that no repo requirements file mentions. (Installed via apt, not here —
+# listed for the reader who wonders where it comes from.)

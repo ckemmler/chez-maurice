@@ -1,0 +1,94 @@
+# Build context for infra/container/Dockerfile — shared by both targets.
+#
+# It is an ALLOWLIST: exclude everything, then name what may be sent. That
+# direction is deliberate. The production target does `COPY . /app`, so anything
+# reachable here lands in an image that gets pushed to a registry and run on a
+# rented machine. A denylist that forgets one entry leaks a private key; an
+# allowlist that forgets one entry breaks the build. Only one of those failures
+# is recoverable.
+#
+# Two things must never appear here, and they are not merely absent by luck —
+# nothing below re-includes them: `server/certs` (a TLS private key) and
+# `server/.secrets` (an Apple auth key, a Cloudflare API token). Same for `.env`.
+#
+# The `tools/` list mirrors the allowlist in .gitignore, which is the maintained
+# definition of Maurice's public surface: the thirteen private tools are
+# symlinks into the maurice-tools repo and stay out. The `web/` exclusions are
+# the same private paths .gitignore names. A new private path that nobody adds
+# here would be COPYed as a dangling symlink — which is why the production stage
+# fails the build on dangling symlinks rather than shipping one.
+#
+# BuildKit reads this file because it is named after the Dockerfile.
+
+*
+
+# ── The server ───────────────────────────────────────────────────────────────
+!server
+server/node_modules
+server/certs
+server/.secrets
+server/test
+
+# ── The garden engine ────────────────────────────────────────────────────────
+!web
+web/node_modules
+web/dist
+web/.garden-roots
+web/.astro
+# Only the bundled demo garden ships; real gardens are personal content.
+web/gardens/*
+!web/gardens/demo
+!web/gardens/gardens.json
+# Generated per-install symlinks into the gardens dir (download-images.ts).
+web/public/images/*
+!web/public/images/demo
+web/public/avatars
+# Private pages, components, helpers and theme — symlinks into maurice-web.
+web/themes/candide
+web/src/pages/books
+web/src/pages/briefings
+web/src/pages/compte
+web/src/pages/feeds
+web/src/pages/fiches
+web/src/pages/library
+web/src/pages/research
+web/src/pages/signals
+web/src/pages/tasks
+web/src/pages/fr/fiches
+web/src/pages/fr/reves
+web/src/components/CommandPalette.astro
+web/src/components/FichesList.astro
+web/src/lib/compte-api.ts
+web/src/lib/dossier-api.ts
+web/src/lib/tasks-api.ts
+
+# ── The public tools ─────────────────────────────────────────────────────────
+!tools/__init__.py
+!tools/README.md
+!tools/garden
+!tools/shared
+!tools/mcp_gateway
+!tools/corpus
+# …minus the corpus's own artefacts: 730 MB of vector store, plus a config that
+# names absolute paths on the machine that wrote it.
+tools/corpus/data
+tools/corpus/logs
+tools/corpus/.venv
+tools/corpus/config/corpus.yaml
+
+# ── Launch scripts and this directory ────────────────────────────────────────
+!scripts
+!infra/container
+# The model roster, read at repo root by tools/shared/model_config.py.
+!models.yml
+
+# ── Never, at any depth ──────────────────────────────────────────────────────
+**/node_modules
+**/__pycache__
+**/.venv
+**/.DS_Store
+**/._*
+**/*.db
+**/*.db-wal
+**/*.db-shm
+**/.env

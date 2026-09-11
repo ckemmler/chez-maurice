@@ -1,0 +1,94 @@
+# Maurice, deployed. This is what runs on a rented machine.
+#
+# Everything that makes compose.yml a development file is absent here: no bind
+# mount of the checkout, no private overlays, no offset ports. The image carries
+# the application; the volume carries the data; nothing else is needed, which is
+# the property that makes `cloud-init` able to stand this up unattended.
+#
+# One volume, and it holds everything that must survive: the databases, the
+# gardens, images, uploads, and — via the entrypoint's redirect — the corpus
+# vector store, which the application otherwise writes inside the repo tree.
+#
+#   docker compose -f compose.prod.yml up -d
+#
+# Configuration comes from a .env file beside this one. See .env.prod.example.
+
+name: maurice
+
+services:
+  maurice:
+    # `image` names what a registry pull provides and what a local build tags,
+    # so the same file serves both: build it on the Mac (arm64 → arm64, no cross
+    # build), push, and pull it on the host.
+    image: ${MAURICE_IMAGE:-maurice:production}
+    build:
+      context: ../..
+      dockerfile: infra/container/Dockerfile
+      target: production
+    ports:
+      # Bound to the host's LOOPBACK only — not 0.0.0.0. Caddy still reaches the
+      # application over the compose network and remains the only way in from the
+      # outside; this line exists solely so an SSH tunnel can reach /admin.
+      #
+      # It has to: web-admin.ts refuses any request whose Host is not localhost,
+      # and refuses anything carrying Cloudflare's edge headers. That is right —
+      # the admin console has no business being on the public internet — but it
+      # means /admin is unreachable through Caddy, and without this line it would
+      # be unreachable at all. You could never run /admin/setup on the instance.
+      #
+      #   ssh -L 3001:localhost:3001 <host>
+      #   then open http://localhost:3001/admin
+      #
+      # The Host header is then `localhost:3001`, which is what the check wants.
+      - "127.0.0.1:3001:3001"
+    environment:
+      MAURICE_CONFIG: /home/maurice/.maurice/config.toml
+      MAURICE_GARDENS_DIR: /home/maurice/.maurice/gardens
+      MAURICE_TIMEZONE: ${MAURICE_TIMEZONE:-Europe/Paris}
+      TZ: ${MAURICE_TIMEZONE:-Europe/Paris}
+      # The name people reach this by. Only the startup banner reads it — the
+      # MCP gateway builds its OAuth discovery URLs from X-Forwarded-Host, which
+      # Caddy sets — but it is what makes the logs legible.
+      MAURICE_PUBLIC_HOST: ${MAURICE_DOMAIN}
+      # TLS is Caddy's job, so the server speaks plain HTTP on the internal
+      # network. Pointing these at paths that do not exist is how it is told so.
+      MAURICE_TLS_CERT: /home/maurice/.maurice/tls/server.crt
+      MAURICE_TLS_KEY: /home/maurice/.maurice/tls/server.key
+      # The model provider's key is NOT here, and not anywhere in the
+      # environment: it is a column on the households row, set from /admin after
+      # setup. Use a key minted for this instance — it sits in a database on a
+      # machine you do not physically hold — and note that the provider list
+      # itself is hardcoded in server/src/services/claude.ts, so adding one
+      # (Scaleway Generative APIs, say) is a code change, not configuration.
+      # Enables OAuth on the MCP gateway, for connecting Claude to this server.
+      MAURICE_OAUTH_PASSWORD: ${MAURICE_OAUTH_PASSWORD:-}
+      # What embeds, for corpus search. There is no Ollama here, so it points at
+      # an OpenAI-compatible endpoint. Changing the model or its dimension
+      # invalidates the index — decide once, while it is still empty.
+      CORPUS_EMBEDDING_BASE_URL: ${CORPUS_EMBEDDING_BASE_URL:-https://api.scaleway.ai/v1}
+      CORPUS_EMBEDDING_MODEL: ${CORPUS_EMBEDDING_MODEL:-bge-multilingual-gemma2}
+      CORPUS_EMBEDDING_API_KEY: ${CORPUS_EMBEDDING_API_KEY:-}
+      CORPUS_EMBEDDING_DIM: ${CORPUS_EMBEDDING_DIM:-3584}
+    volumes:
+      - home:/home/maurice/.maurice
+    restart: unless-stopped
+
+  caddy:
+    image: caddy:2-alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      MAURICE_DOMAIN: ${MAURICE_DOMAIN}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      - maurice
+    restart: unless-stopped
+
+volumes:
+  home:
+  caddy-data:
+  caddy-config:

@@ -1,8 +1,14 @@
 """Backend-neutral vector store seam.
 
 `VectorStore` is the contract every backend implements. `make_store` picks the
-backend from config. Today only Qdrant exists; the sqlite-vec backend (per-user
-DB files) slots in here in Phase 2 without touching callers.
+backend from config, and what config says is **sqlite-vec** — per-member DB files
+under `store.path`, no daemon. Phase 2 happened; this docstring outlived it by
+long enough to send someone building a Linux container off to package a Qdrant
+sidecar that nothing was going to talk to.
+
+The Qdrant backend is kept only so an install that has not migrated can still
+read its old index. `make_store`'s default below still says "qdrant" for that
+back-compat, but every real config sets the backend explicitly.
 
 Terminology: a *unit* is the thing a set of chunks belongs to — a file path today,
 a message/conversation key once conversations are indexed. The Qdrant backend maps

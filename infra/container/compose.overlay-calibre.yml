@@ -1,0 +1,21 @@
+# The Calibre library, for the coexistence phase — layered on by
+# scripts/container.sh when the library the seeded maurice.db points at exists
+# on this host.
+#
+# Mounted at the *same absolute path it has on the host*, because that path is
+# what lives in maurice.db's calibre_libraries.library_root, and the container
+# reads its own seeded copy of that row. No configuration to keep in sync.
+#
+# READ-ONLY, and that is the whole point: metadata.db is SQLite, so a writable
+# bind mount would put the Mac's Calibre and the container's on one database
+# across virtiofs — the exact hazard that cost us the corpus store. Every read
+# path works (they open metadata.db directly); POST /api/v1/calibre/add fails
+# loudly, which is the right answer while the Mac owns the library.
+#
+# A shipped install has no such conflict: the container owns its library, in a
+# volume, and this file is not used.
+
+services:
+  maurice:
+    volumes:
+      - ${MAURICE_CALIBRE_LIBRARY}:${MAURICE_CALIBRE_LIBRARY}:ro
