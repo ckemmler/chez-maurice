@@ -31,7 +31,6 @@ export interface NoteMeta {
 }
 
 const WIKI_RE = /\[\[([a-z0-9-]+)(?:\|[^\]]+)?\]\]/g;
-const GARDENS = gardensRoot();
 
 export function estimateTokens(text: string): number {
   // ~4 chars/token — fast and consistent; exactness isn't the point.
@@ -41,7 +40,7 @@ export function estimateTokens(text: string): number {
 function notesRootFor(memberId: string): string | null {
   const user = getUser(memberId);
   if (!user) return null;
-  return path.join(GARDENS, user.username, "notes");
+  return path.join(gardensRoot(), user.username, "notes");
 }
 
 const unquote = (s: string) => s.trim().replace(/^["']|["']$/g, "").trim();
@@ -199,12 +198,41 @@ export function resolveSubtree(
   // but an explicit flag wins.
   const recurse = opts.recurse ?? rootNote.isMoc;
 
-  const visited = new Set<string>();
   let archivedWithheld = 0;
 
-  const walk = (s: string, manualExcludedAncestor: boolean, isRoot: boolean): TreeNode | null => {
-    if (visited.has(s)) return null; // dedup multi-path / break cycles
-    visited.add(s);
+  // Breadth-first: a note hangs under the node nearest the root that links to
+  // it, so the root's own links are its children, and a note reached from
+  // several places appears once, at its shallowest. The walk used to be
+  // depth-first, attaching each note wherever it first stumbled on it: a set
+  // of cross-linked notes — the system docs, sixteen of them under one index
+  // — came out as a single chain fourteen deep with two children at the root.
+  // Every note was still included, but the tree read as four documents, and
+  // "exclude this subtree" cut somewhere nobody expected. The multi-path
+  // dedup and the cycle break are the same `parentOf` check.
+  const parentOf = new Map<string, string | null>([[slug, null]]);
+  const childrenOf = new Map<string, string[]>();
+  const excludedAt = new Map<string, boolean>([[slug, excludedSet.has(slug)]]);
+  const queue: string[] = [slug];
+  while (queue.length) {
+    const s = queue.shift()!;
+    const note = bySlug.get(s);
+    if (!note) continue;
+    const isRoot = s === slug;
+    const manualExcluded = excludedAt.get(s)!;
+    // An excluded node keeps its subtree out of the walk; what those notes
+    // link to is reached, if at all, through some other path.
+    if (!(recurse && (isRoot || !manualExcluded))) continue;
+    for (const l of note.links) {
+      if (parentOf.has(l)) continue;
+      parentOf.set(l, s);
+      excludedAt.set(l, manualExcluded || excludedSet.has(l));
+      (childrenOf.get(s) ?? childrenOf.set(s, []).get(s)!).push(l);
+      queue.push(l);
+    }
+  }
+
+  const build = (s: string): TreeNode => {
+    const isRoot = s === slug;
     const note = bySlug.get(s);
     if (!note) {
       return {
@@ -212,11 +240,8 @@ export function resolveSubtree(
         weight: 0, childCount: 0, included: false, excluded: true, children: [],
       };
     }
-    const manualExcluded = manualExcludedAncestor || excludedSet.has(s);
-    const children =
-      recurse && (isRoot || !manualExcluded)
-        ? note.links.map((l) => walk(l, manualExcluded, false)).filter((n): n is TreeNode => !!n)
-        : [];
+    const manualExcluded = excludedAt.get(s)!;
+    const children = (childrenOf.get(s) ?? []).map(build);
     const includedByArchive = isRoot || !note.isArchived || includeArchived;
     const included = isRoot || (recurse && !manualExcluded && includedByArchive);
     if (!included && note.isArchived && !manualExcluded) archivedWithheld++;
@@ -227,7 +252,7 @@ export function resolveSubtree(
     };
   };
 
-  const tree = walk(slug, false, true)!;
+  const tree = build(slug);
 
   // Aggregate over the included nodes.
   let count = 0, weight = 0, encrypted = false;
@@ -318,7 +343,7 @@ export function scanResources(memberId: string): GardenItem[] {
   const out: GardenItem[] = [];
 
   for (const collection of RESOURCE_COLLECTIONS) {
-    const collDir = path.join(GARDENS, user.username, collection);
+    const collDir = path.join(gardensRoot(), user.username, collection);
     if (!fs.existsSync(collDir)) continue;
     for (const locale of fs.readdirSync(collDir)) {
       const dir = path.join(collDir, locale);
