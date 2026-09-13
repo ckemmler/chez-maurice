@@ -42,6 +42,13 @@ struct TrayItem: Identifiable, Equatable {
     // fiche options
     var includeFragments: Bool = true
     var fragmentCount: Int = 0
+    // conversation options — a long one is loaded as a summary unless pinned
+    // to its full transcript. The rest is read off /weigh, never sent.
+    var conversationFull: Bool = false
+    var summarisable: Bool = false
+    var summaryStatus: String = "none"   // ready | stale | pending | none
+    var fullWeight: Int = 0
+    var uncovered: Int = 0
     // file options
     var kind: String = ""                  // file kind: text/img/pdf/file
     var na: Bool = false                   // binary file — no token estimate (attachment)
@@ -70,7 +77,9 @@ struct TrayItem: Identifiable, Equatable {
         case .fiche:
             return ["type": "fiche", "id": rawId, "include_fragments": includeFragments]
         case .conversation:
-            return ["type": "conversation", "id": rawId]
+            var d: [String: Any] = ["type": "conversation", "id": rawId]
+            if conversationFull { d["representation"] = "full" }
+            return d
         case .file:
             return ["type": "file", "id": rawId]
         case .folder:
@@ -269,6 +278,15 @@ final class ComposerStore {
                 if let p = w["progressChapter"] as? Int { items[i].progressChapter = p }
                 if let p = w["progressPaused"] as? Bool { items[i].progressPaused = p }
                 if let f = w["fragments"] as? Int { items[i].fragmentCount = f }
+                if items[i].type == .conversation {
+                    items[i].summarisable = w["summarisable"] as? Bool ?? false
+                    items[i].summaryStatus = w["summary"] as? String ?? "none"
+                    items[i].fullWeight = w["fullWeight"] as? Int ?? 0
+                    items[i].uncovered = w["uncovered"] as? Int ?? 0
+                    if items[i].summaryStatus == "pending" || items[i].summaryStatus == "stale" {
+                        awaitSummary(items[i].rawId)
+                    }
+                }
                 if items[i].type == .book, let v = w["visibleCount"] as? Int { items[i].visibleChapters = v }
                 // file: kind/na drive the glyph + "n/a" readout; rebuild the meta
                 // line (kind · path) so spec-loaded files read right without a search.
@@ -279,6 +297,23 @@ final class ComposerStore {
                     items[i].sub = [items[i].kind, path].filter { !$0.isEmpty }.joined(separator: " · ")
                 }
             }
+        }
+    }
+
+    // Summaries are made by the server in the background: /weigh reports a
+    // long conversation as `pending` (or `stale`, once the thread moved on)
+    // with the transcript's weight. Wait for the summary to land, then weigh
+    // and save again so the card and the total show the real figure.
+    private var summaryWaits: Set<String> = []
+
+    private func awaitSummary(_ conversationId: String) {
+        guard !summaryWaits.contains(conversationId) else { return }
+        summaryWaits.insert(conversationId)
+        Task {
+            defer { summaryWaits.remove(conversationId) }
+            let done = await request("GET", "/api/v1/composer/conversations/\(conversationId)/summary?wait=1")
+            guard done != nil, items.contains(where: { $0.type == .conversation && $0.rawId == conversationId }) else { return }
+            await reweigh(); await save()
         }
     }
 
@@ -361,7 +396,9 @@ final class ComposerStore {
             it.includeFragments = d["include_fragments"] as? Bool ?? true
             it.fragmentCount = snap?["fragments"] as? Int ?? 0
         case .conversation:
-            break
+            it.conversationFull = (d["representation"] as? String) == "full"
+            it.summaryStatus = snap?["summary"] as? String ?? "none"
+            it.fullWeight = snap?["fullWeight"] as? Int ?? 0
         case .file:
             it.kind = snap?["kind"] as? String ?? ""
             it.na = snap?["na"] as? Bool ?? false

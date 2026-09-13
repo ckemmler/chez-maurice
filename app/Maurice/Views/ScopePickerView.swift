@@ -69,6 +69,15 @@ struct SidebarView: View {
         chat.conversations
     }
 
+    /// A query of two characters or more switches the list to search hits.
+    private var searching: Bool {
+        chat.searchQuery.trimmingCharacters(in: .whitespacesAndNewlines).count >= 2
+    }
+
+    private var searchBinding: Binding<String> {
+        Binding(get: { chat.searchQuery }, set: { chat.searchConversations($0) })
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             // Header: wordmark only — identity + foyer switching live in the
@@ -152,11 +161,59 @@ struct SidebarView: View {
                 SidebarSectionHead(label: session.localized("gardens.conversations"))
             }
 
+            // Search — full text over the member's rooms. While a query is in,
+            // the list below shows the hits (title + the passage that matched)
+            // instead of the recency-ordered conversations.
+            HStack(spacing: 7) {
+                Image(systemName: "magnifyingglass")
+                    .font(.system(size: 12, weight: .medium)).foregroundStyle(theme.inkMute)
+                TextField(session.localized("sidebar.search_placeholder"), text: searchBinding)
+                    .textFieldStyle(.plain).font(.system(size: 13.5))
+                    .autocorrectionDisabled()
+                    #if os(iOS)
+                    .textInputAutocapitalization(.never)
+                    #endif
+                if !chat.searchQuery.isEmpty {
+                    Button { chat.clearSearch() } label: {
+                        Image(systemName: "xmark.circle.fill").font(.system(size: 12)).foregroundStyle(theme.inkMute)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(session.localized("sidebar.search_clear"))
+                }
+            }
+            .padding(.horizontal, 10).padding(.vertical, 7)
+            .background(theme.surface, in: RoundedRectangle(cornerRadius: 10))
+            .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(theme.rule, lineWidth: 0.5))
+            .padding(.horizontal, 10)
+            .padding(.bottom, 8)
+
             // Conversation list — runs to the bottom (Settings moved up top), with
             // a soft fade where titles meet the bottom edge.
             ScrollView {
                 LazyVStack(spacing: 2) {
-                    ForEach(visibleConversations) { convo in
+                    if searching {
+                        if chat.searchResults.isEmpty {
+                            Text(chat.isSearching ? session.localized("sidebar.search_searching")
+                                                  : session.localized("sidebar.search_none"))
+                                .font(.system(size: 13)).foregroundStyle(theme.inkMute)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(.horizontal, 12).padding(.top, 6)
+                        }
+                        ForEach(chat.searchResults) { hit in
+                            Button {
+                                gardens.openGardenId = nil
+                                onActivateConversation()
+                                Task { await chat.selectConversation(hit.conversation.id) }
+                            } label: {
+                                SearchHitRow(
+                                    hit: hit,
+                                    maurice: maurices.maurice(for: hit.conversation.maurice_id),
+                                    isSelected: hit.conversation.id == chat.activeConversationId)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                    ForEach(searching ? [] : visibleConversations) { convo in
                         Button {
                             gardens.openGardenId = nil
                             onActivateConversation()
@@ -180,7 +237,7 @@ struct SidebarView: View {
                     }
                     // Infinite scroll: this footer enters the (lazy) viewport only
                     // when the user nears the bottom, paging in the next batch.
-                    if chat.hasMoreConversations {
+                    if chat.hasMoreConversations && !searching {
                         ProgressView()
                             .controlSize(.small)
                             .frame(maxWidth: .infinity)
@@ -387,6 +444,68 @@ private func importBadgeProvider(_ origin: String?) -> String? {
     case "anthropic": return "claude"   // logo-claude
     case "chatgpt":   return "openai"   // logo-openai
     default:          return nil
+    }
+}
+
+/// A search hit: the conversation's title, and under it the passage that
+/// matched with the matched words set in the accent colour.
+private struct SearchHitRow: View {
+    @Environment(SessionStore.self) private var session
+    @Environment(\.mauriceTheme) private var theme
+    let hit: ConversationSearchHit
+    let maurice: Maurice
+    let isSelected: Bool
+
+    /// The server marks matches as ⟦word⟧; render them in the accent, the
+    /// rest muted. One AttributedString, so the line wraps as ordinary text.
+    private func styledSnippet(accent: Color) -> AttributedString {
+        var out = AttributedString()
+        var rest = Substring(hit.snippet)
+        while let open = rest.range(of: "⟦") {
+            var plain = AttributedString(String(rest[rest.startIndex..<open.lowerBound]))
+            plain.foregroundColor = theme.inkSoft
+            out += plain
+            rest = rest[open.upperBound...]
+            guard let close = rest.range(of: "⟧") else { break }
+            var hot = AttributedString(String(rest[rest.startIndex..<close.lowerBound]))
+            hot.foregroundColor = accent
+            hot.font = .system(size: 12, weight: .semibold)
+            out += hot
+            rest = rest[close.upperBound...]
+        }
+        var tail = AttributedString(String(rest))
+        tail.foregroundColor = theme.inkSoft
+        out += tail
+        return out
+    }
+
+    var body: some View {
+        let accentColor = session.activeDeviceUser?.color ?? .blue
+        HStack(alignment: .top, spacing: 11) {
+            if !maurice.isEveryday {
+                HatBadge(kind: maurice.hat, palette: maurice.paletteValue, size: 30, radius: 9)
+            }
+            VStack(alignment: .leading, spacing: 3) {
+                HStack(spacing: 6) {
+                    Text(hit.conversation.title ?? session.localized("chat.new_conversation"))
+                        .font(.system(size: 15)).foregroundStyle(theme.ink).lineLimit(1)
+                    if hit.hits > 1 {
+                        Text("\(hit.hits)")
+                            .font(.system(size: 10, weight: .medium, design: .monospaced))
+                            .foregroundStyle(theme.inkMute)
+                            .padding(.horizontal, 5).padding(.vertical, 1)
+                            .background(theme.surfaceAlt, in: Capsule())
+                    }
+                }
+                Text(styledSnippet(accent: accentColor.legible(onDark: theme.isDark)))
+                    .font(.system(size: 12)).lineLimit(2)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding(.horizontal, 10).padding(.vertical, 7)
+        .background(isSelected ? accentColor.opacity(0.12) : Color.clear)
+        .clipShape(RoundedRectangle(cornerRadius: 10))
+        .contentShape(Rectangle())
     }
 }
 

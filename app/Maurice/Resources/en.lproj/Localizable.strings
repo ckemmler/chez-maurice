@@ -403,3 +403,21 @@
 "book.progress.reset" = "Reset";
 "book.progress.resetConfirm" = "Forget where you are in this book? Nothing will be loaded until you say where you've read to.";
 "book.progress.pausedHint" = "Held here while you look further ahead. Reading on won't move it.";
+
+// Conversation search (sidebar) + conversations as composer context
+"sidebar.search_placeholder" = "Search conversations…";
+"sidebar.search_clear" = "Clear search";
+"sidebar.search_searching" = "Searching…";
+"sidebar.search_none" = "Nothing matches.";
+"conversation.meta.messages" = "%d messages";
+"conversation.meta.fullText" = "full text";
+"conversation.meta.summary" = "summary";
+"conversation.meta.summaryStale" = "summary · %d new messages since";
+"conversation.meta.summarising" = "summarising…";
+"conversation.representation" = "Load as";
+"conversation.representation.summary" = "Summary";
+"conversation.representation.full" = "Full text";
+"conversation.hint.fullText" = "The whole transcript, ~%@ tokens.";
+"conversation.hint.summary" = "A summary stands in for the transcript (~%@ tokens). Continue the conversation and it is redone.";
+"conversation.hint.summaryStale" = "The conversation has moved on: %d messages after the summary ride along in full until a fresh one lands.";
+"conversation.hint.summarising" = "The transcript (~%@ tokens) is loaded until the summary is ready.";

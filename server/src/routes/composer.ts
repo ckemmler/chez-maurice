@@ -6,6 +6,8 @@ import { searchBooks, bookCoverage, libraryRootFor, listChapters } from "../serv
 import { weighItems, validateItems } from "../services/composer/weights";
 import { getSpec, saveSpec, refreshSpec, resolveToText, canCompose } from "../services/composer/specs";
 import { searchFiles, resolveFolderItem } from "../services/composer/files";
+import { searchConversations, SNIPPET_OPEN, SNIPPET_CLOSE } from "../services/conversationSearch";
+import { conversationContext, ensureSummary, SUMMARY_THRESHOLD } from "../services/composer/conversationSummary";
 
 // Context composer API (account-scoped via the /api/v1/* userId gate).
 // B1: unified omnibox search across notes, books, and conversations.
@@ -112,6 +114,8 @@ composer.get("/search", (c) => {
   }
 
   // ── Conversations (rooms the member participates in) ──
+  // Matched on title here; on message content through the full-text index,
+  // ranked under a title match so what you remember by name comes first.
   const convRows = db
     .query(
       `SELECT c.id, c.title, c.updated_at
@@ -123,10 +127,12 @@ composer.get("/search", (c) => {
        LIMIT 300`,
     )
     .all(memberId) as Array<{ id: string; title: string | null; updated_at: string }>;
+  const seenConvos = new Set<string>();
   for (const r of convRows) {
     const title = r.title || "Untitled conversation";
     const score = matchScore(ql, title);
     if (!score) continue;
+    seenConvos.add(r.id);
     const date = (r.updated_at || "").slice(0, 10);
     out.push({
       type: "conversation",
@@ -137,6 +143,22 @@ composer.get("/search", (c) => {
       score,
       updated_at: isoUtc(r.updated_at),
     });
+  }
+  if (ql) {
+    for (const h of searchConversations(memberId, q, { limit: 30 })) {
+      if (seenConvos.has(h.conversation.id) || !h.message_id) continue;
+      seenConvos.add(h.conversation.id);
+      const snippet = h.snippet.split(SNIPPET_OPEN).join("").split(SNIPPET_CLOSE).join("");
+      out.push({
+        type: "conversation",
+        id: h.conversation.id,
+        title: h.conversation.title || "Untitled conversation",
+        sub: `conversation · ${snippet}`,
+        badges: { date: (h.conversation.updated_at || "").slice(0, 10), hits: h.hits },
+        score: 55,
+        updated_at: isoUtc(h.conversation.updated_at),
+      });
+    }
   }
 
   // ── Library files + folders (the member's per-user file library) ──
@@ -222,6 +244,19 @@ composer.post("/weigh", async (c) => {
   const errs = validateItems(items);
   if (errs.length) return c.json({ error: "invalid items", details: errs }, 400);
   return c.json(weighItems(memberId, items));
+});
+
+// GET /api/v1/composer/conversations/:id/summary?wait=1
+// State of a conversation's summary as the composer would load it. With
+// `wait`, blocks until a generation in flight has landed (or failed), so a
+// client that saw "pending" from /weigh can come back for the real weight.
+composer.get("/conversations/:id/summary", async (c) => {
+  const memberId = c.get("userId") as string;
+  const id = c.req.param("id");
+  if (!canCompose(memberId, id)) return c.json({ error: "Forbidden" }, 403);
+  if (c.req.query("wait")) await ensureSummary(id);
+  const { text: _text, ...ctx } = conversationContext(id);
+  return c.json({ ...ctx, threshold: SUMMARY_THRESHOLD });
 });
 
 // ── Context spec: persistence (snapshot) + resolution (text payload) ──

@@ -4,6 +4,7 @@ import { listChapters, type ChapterInfo } from "./calibre";
 import { resolveFileItem, resolveFolderItem } from "./files";
 import { resolveFicheItem } from "./fiches";
 import { getReadingProgress } from "../../../data-api/services/bookmarks";
+import { conversationContext, type SummaryStatus } from "./conversationSummary";
 
 // B4: weight estimation across the three artifact types. Drives the per-chip
 // count/weight and the running context total. Estimates are char/4 token counts —
@@ -26,7 +27,9 @@ export type ComposerItem =
   | { type: "note"; id: string; recurse?: boolean; include_archived?: boolean; exclude?: string[] }
   | { type: "book"; id: number; representation?: "summary" | "full"; scope?: BookScope }
   | { type: "fiche"; id: string; include_fragments?: boolean }
-  | { type: "conversation"; id: string }
+  // A conversation past SUMMARY_THRESHOLD is loaded as a summary unless
+  // `representation: "full"` pins the transcript.
+  | { type: "conversation"; id: string; representation?: "summary" | "full" }
   | { type: "file"; id: string }
   | { type: "folder"; id: string; recurse?: boolean; exclude?: string[] };
 
@@ -42,8 +45,10 @@ export function validateItems(items: any[]): ItemValidationError[] {
   items.forEach((it, index) => {
     if (!it || typeof it !== "object") return errs.push({ index, message: "not an object" });
     if (it.type === "conversation") {
-      if ("recurse" in it || "representation" in it || "scope" in it || "exclude" in it)
-        errs.push({ index, message: "conversation items take no recurse/representation/scope" });
+      if ("recurse" in it || "scope" in it || "exclude" in it)
+        errs.push({ index, message: "conversation items take no recurse/scope/exclude" });
+      if ("representation" in it && it.representation !== "summary" && it.representation !== "full")
+        errs.push({ index, message: "conversation representation must be summary or full" });
     } else if (it.type === "note") {
       if ("representation" in it || "scope" in it)
         errs.push({ index, message: "note items take no representation/scope" });
@@ -176,19 +181,33 @@ export interface ResolvedConv {
   weight: number;
   count: number; // message count
   title: string;
+  representation: "summary" | "full";
+  fullWeight: number;
+  summarisable: boolean;
+  summary: SummaryStatus;
+  uncovered?: number;
   missing?: boolean;
 }
-export function conversationWeight(memberId: string, convId: string): ResolvedConv {
+export function conversationWeight(memberId: string, it: { id: string; representation?: string }): ResolvedConv {
+  const convId = String(it.id);
   const isP = db
     .query(`SELECT 1 FROM conversation_participants WHERE conversation_id = ? AND member_id = ?`)
     .get(convId, memberId);
-  if (!isP) return { weight: 0, count: 0, title: "conversation", missing: true };
+  if (!isP) {
+    return { weight: 0, count: 0, title: "conversation", representation: "full", fullWeight: 0, summarisable: false, summary: "none", missing: true };
+  }
   const convo = db.query(`SELECT title FROM conversations WHERE id = ?`).get(convId) as { title: string | null } | null;
-  const rows = db
-    .query(`SELECT content FROM messages WHERE conversation_id = ? ORDER BY created_at`)
-    .all(convId) as Array<{ content: string }>;
-  const text = rows.map((r) => r.content).join("\n");
-  return { weight: estimateTokens(text), count: rows.length, title: convo?.title || "Untitled conversation" };
+  const ctx = conversationContext(convId, it.representation === "full");
+  return {
+    weight: ctx.weight,
+    count: ctx.count,
+    title: convo?.title || "Untitled conversation",
+    representation: ctx.representation,
+    fullWeight: ctx.fullWeight,
+    summarisable: ctx.summarisable,
+    summary: ctx.summary,
+    uncovered: ctx.uncovered,
+  };
 }
 
 // ── The running total ──
@@ -218,6 +237,14 @@ export interface WeighedItem {
   progressPaused?: boolean;
   /** fiche: how many fragments rode along. */
   fragments?: number;
+  /** conversation: the transcript's own weight, whatever is loaded. */
+  fullWeight?: number;
+  /** conversation: long enough to be summarised. */
+  summarisable?: boolean;
+  /** conversation: state of its summary (see conversationSummary.ts). */
+  summary?: SummaryStatus;
+  /** conversation, stale summary: messages not covered, loaded verbatim. */
+  uncovered?: number;
   heavy?: boolean; // ≥40 resolved notes, or a book ≥80k tokens
   missing?: boolean;
   // file/folder
@@ -244,8 +271,12 @@ export function weighItems(memberId: string, items: any[]): {
       return { type: "book", id: it.id, title: r.title, weight: r.weight, count: r.count, visibleCount: r.visibleCount, representation: r.representation, progressChapter: r.progressChapter, progressPaused: r.progressPaused, heavy: r.weight >= 80_000, missing: r.missing };
     }
     if (it.type === "conversation") {
-      const r = conversationWeight(memberId, it.id);
-      return { type: "conversation", id: it.id, title: r.title, weight: r.weight, count: r.count, missing: r.missing };
+      const r = conversationWeight(memberId, it);
+      return {
+        type: "conversation", id: it.id, title: r.title, weight: r.weight, count: r.count,
+        representation: r.representation, fullWeight: r.fullWeight, summarisable: r.summarisable,
+        summary: r.summary, uncovered: r.uncovered, heavy: r.weight >= 80_000, missing: r.missing,
+      };
     }
     if (it.type === "file") {
       const r = resolveFileItem(memberId, it.id);

@@ -403,3 +403,21 @@
 "book.progress.reset" = "Zurücksetzen";
 "book.progress.resetConfirm" = "Vergessen, wo du in diesem Buch stehst? Es wird nichts geladen, bis du sagst, wie weit du gelesen hast.";
 "book.progress.pausedHint" = "Hier festgehalten, während du weiter vorn nachschlägst. Weiterlesen verschiebt es nicht.";
+
+// Conversation search (sidebar) + conversations as composer context
+"sidebar.search_placeholder" = "Unterhaltungen durchsuchen …";
+"sidebar.search_clear" = "Suche löschen";
+"sidebar.search_searching" = "Suche …";
+"sidebar.search_none" = "Keine Treffer.";
+"conversation.meta.messages" = "%d Nachrichten";
+"conversation.meta.fullText" = "Volltext";
+"conversation.meta.summary" = "Zusammenfassung";
+"conversation.meta.summaryStale" = "Zusammenfassung · %d neue Nachrichten seither";
+"conversation.meta.summarising" = "wird zusammengefasst …";
+"conversation.representation" = "Laden als";
+"conversation.representation.summary" = "Zusammenfassung";
+"conversation.representation.full" = "Volltext";
+"conversation.hint.fullText" = "Das gesamte Transkript, ~%@ Tokens.";
+"conversation.hint.summary" = "Eine Zusammenfassung ersetzt das Transkript (~%@ Tokens). Geht die Unterhaltung weiter, wird sie neu erstellt.";
+"conversation.hint.summaryStale" = "Die Unterhaltung ging weiter: %d Nachrichten nach der Zusammenfassung werden vollständig geladen, bis eine neue vorliegt.";
+"conversation.hint.summarising" = "Das Transkript (~%@ Tokens) wird geladen, bis die Zusammenfassung fertig ist.";

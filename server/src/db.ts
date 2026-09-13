@@ -697,6 +697,60 @@ try {
   }
 } catch {}
 
+// ── Full-text search over messages ──────────────────────────────
+// An external-content FTS5 index over messages.content, kept in step by
+// triggers so every insert/update/delete on `messages` (cascades included)
+// lands in the index without the write paths knowing about it. Built once on
+// existing installs: the rebuild runs only when the virtual table is new.
+{
+  const hadFts = !!db
+    .query(`SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'messages_fts'`)
+    .get();
+  db.run(`
+    CREATE VIRTUAL TABLE IF NOT EXISTS messages_fts USING fts5(
+      content,
+      content='messages',
+      content_rowid='rowid',
+      tokenize='unicode61 remove_diacritics 2'
+    )
+  `);
+  db.run(`
+    CREATE TRIGGER IF NOT EXISTS messages_fts_ai AFTER INSERT ON messages BEGIN
+      INSERT INTO messages_fts(rowid, content) VALUES (new.rowid, new.content);
+    END
+  `);
+  db.run(`
+    CREATE TRIGGER IF NOT EXISTS messages_fts_ad AFTER DELETE ON messages BEGIN
+      INSERT INTO messages_fts(messages_fts, rowid, content) VALUES ('delete', old.rowid, old.content);
+    END
+  `);
+  db.run(`
+    CREATE TRIGGER IF NOT EXISTS messages_fts_au AFTER UPDATE OF content ON messages BEGIN
+      INSERT INTO messages_fts(messages_fts, rowid, content) VALUES ('delete', old.rowid, old.content);
+      INSERT INTO messages_fts(rowid, content) VALUES (new.rowid, new.content);
+    END
+  `);
+  if (!hadFts) db.run(`INSERT INTO messages_fts(messages_fts) VALUES ('rebuild')`);
+}
+
+// ── Conversation summaries (context composer) ───────────────────
+// A conversation loaded as context past a certain length is summarised rather
+// than pasted whole. The summary is keyed by a hash of the transcript it was
+// made from: the moment the conversation is continued the hash no longer
+// matches, and the composer knows the summary is behind. One row per
+// conversation — a fresh summary replaces the stale one.
+db.run(`
+  CREATE TABLE IF NOT EXISTS conversation_summaries (
+    conversation_id TEXT PRIMARY KEY REFERENCES conversations(id) ON DELETE CASCADE,
+    content_hash    TEXT NOT NULL,
+    summary         TEXT NOT NULL,
+    model           TEXT,
+    message_count   INTEGER NOT NULL,
+    source_tokens   INTEGER NOT NULL,
+    created_at      TEXT NOT NULL DEFAULT (datetime('now'))
+  )
+`);
+
 // Which models can read an image. Runs here, below every block that inserts or
 // remaps model rows, because it can only mark rows that already exist — an
 // earlier placement matched nothing on a fresh database and then marked itself
