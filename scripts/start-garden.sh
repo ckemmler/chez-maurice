@@ -40,8 +40,11 @@ echo "→ Garden '$member' on :$port (base: ${base:-/}, root: .garden-roots/$mem
 # Host handling: the engine accepts any Host by default (it only ever serves
 # through the authenticated Bun proxy) — see web/astro.config.mjs. Export
 # ALLOWED_HOSTS to pin an explicit allowlist if you expose this port directly.
+# Bind to the loopback only. This is a dev server: it carries the /_dev/* tools
+# (delete, publish, write) with no auth of their own, so the proxy in front of
+# it — which checks the session and the member — must be the only way in.
 nohup env GARDEN="$member" GARDEN_BASE="$base" GARDEN_SHELL=1 WEB_SSR=1 \
-  ./node_modules/.bin/astro dev --port "$port" --host 0.0.0.0 >>"$log" 2>&1 &
+  ./node_modules/.bin/astro dev --port "$port" --host 127.0.0.1 >>"$log" 2>&1 &
 echo $! >"$pidfile"
 
 if wait_for_port "$port" 30; then

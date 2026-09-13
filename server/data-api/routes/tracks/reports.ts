@@ -8,6 +8,7 @@ import {
   renderResearchLog,
   reportStylesCss,
 } from "../../services/tracks/reports";
+import { safeFetch } from "../../services/articleExtract";
 
 const reports = new Hono();
 
@@ -25,17 +26,30 @@ reports.get("/img", async (c) => {
     return c.text("Missing or invalid url parameter", 400);
   }
   try {
-    const resp = await fetch(url, {
+    // safeFetch resolves DNS and refuses loopback/private/link-local/CGNAT
+    // targets, re-checking on every redirect — this proxy is reachable by any
+    // authenticated member, so a bare fetch() here is an open SSRF into the
+    // trusted network (the same guard articleExtract already uses on member URLs).
+    const resp = await safeFetch(url, {
       headers: { "User-Agent": "MauriceBot/1.0" },
-      redirect: "follow",
+      signal: AbortSignal.timeout(10_000),
     });
     if (!resp.ok) {
       return c.text("Upstream error", 502);
     }
     const ct = resp.headers.get("content-type") || "image/png";
+    if (!ct.startsWith("image/")) {
+      return c.text("Not an image", 415);
+    }
+    // Cap the body: an image proxy should never stream hundreds of MB.
+    const MAX = 12 * 1024 * 1024;
+    const buf = await resp.arrayBuffer();
+    if (buf.byteLength > MAX) {
+      return c.text("Image too large", 413);
+    }
     c.header("Content-Type", ct);
     c.header("Cache-Control", "public, max-age=86400");
-    return c.body(await resp.arrayBuffer());
+    return c.body(buf);
   } catch {
     return c.text("Failed to fetch image", 502);
   }

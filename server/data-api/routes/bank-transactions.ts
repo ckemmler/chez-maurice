@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { mkdirSync, writeFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { resolve, basename } from "node:path";
 
 const repoRoot = resolve(import.meta.dir, "..", "..", "..");
 const txBase = resolve(repoRoot, "data", "bank-transactions");
@@ -29,14 +29,23 @@ app.post("/", async (c) => {
   const dir = resolve(txBase, month);
   mkdirSync(dir, { recursive: true });
 
-  const dest = resolve(dir, filename);
+  // filename is client-supplied: strip to a bare basename so it can't escape
+  // txBase via .. or an absolute path (see uploads.ts).
+  const safe = basename(filename);
+  if (safe !== filename || safe === "" || safe === "." || safe === "..") {
+    return c.json({ error: "invalid filename" }, 400);
+  }
+  const dest = resolve(dir, safe);
+  if (!dest.startsWith(txBase + "/")) {
+    return c.json({ error: "invalid filename" }, 400);
+  }
   const buffer = await file.arrayBuffer();
   writeFileSync(dest, Buffer.from(buffer));
 
   return c.json(
     {
-      path: `data/bank-transactions/${month}/${filename}`,
-      filename,
+      path: `data/bank-transactions/${month}/${safe}`,
+      filename: safe,
       size: buffer.byteLength,
       timestamp: date.toISOString(),
     },

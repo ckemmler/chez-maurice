@@ -359,8 +359,11 @@ export default function devTools(): AstroIntegration {
                 // Update frontmatter in content file
                 try {
                   const result = JSON.parse(stdout);
-                  if (content_path && fs.existsSync(content_path)) {
-                    let fileContent = fs.readFileSync(content_path, "utf-8");
+                  // content_path comes from the request body: confine it to the
+                  // garden before reading or writing it.
+                  const safePath = content_path ? confineToGarden(content_path) : null;
+                  if (safePath && fs.existsSync(safePath)) {
+                    let fileContent = fs.readFileSync(safePath, "utf-8");
                     if (platform === "twitter") {
                       fileContent = setFrontmatterField(fileContent, "shared_twitter", "true");
                       if (result.url) {
@@ -372,8 +375,8 @@ export default function devTools(): AstroIntegration {
                         fileContent = setFrontmatterField(fileContent, "shared_linkedin_urn", `"${result.post_urn}"`);
                       }
                     }
-                    fs.writeFileSync(content_path, fileContent, "utf-8");
-                    autoCommit([content_path], `Record social share: ${path.basename(content_path)}`);
+                    fs.writeFileSync(safePath, fileContent, "utf-8");
+                    autoCommit([safePath], `Record social share: ${path.basename(safePath)}`);
                   }
 
                   res.setHeader("Content-Type", "application/json");
@@ -719,7 +722,36 @@ function findPageByTranslationKey(dir: string, key: string): string | null {
   return null;
 }
 
+// Every caller of this writes, toggles or deletes the file it returns, and the
+// `id` it resolves comes straight out of a request body — a `..` in it would
+// otherwise land in another member's garden. So the raw resolution below is
+// wrapped by resolveContentFile(), which refuses anything outside the garden.
+function gardenContentRoot(): string {
+  const member = process.env.GARDEN || "demo";
+  const gardensRoot = process.env.MAURICE_GARDENS_DIR || path.join(process.cwd(), "gardens");
+  return path.resolve(path.join(gardensRoot, member));
+}
+
+// A path handed to us by the client is only usable if it lands inside the
+// garden we serve. Returns the resolved path, or null to refuse.
+function confineToGarden(candidate: string): string | null {
+  const root = gardenContentRoot();
+  const abs = path.resolve(candidate);
+  return abs.startsWith(root + path.sep) ? abs : null;
+}
+
 function resolveContentFile(
+  urlPath: string
+): { filePath: string; isNotes: boolean; collection: string } | null {
+  const result = resolveContentFileUnchecked(urlPath);
+  if (!result) return null;
+  const root = gardenContentRoot();
+  const abs = path.resolve(result.filePath);
+  if (!abs.startsWith(root + path.sep)) return null;
+  return { ...result, filePath: abs };
+}
+
+function resolveContentFileUnchecked(
   urlPath: string
 ): { filePath: string; isNotes: boolean; collection: string } | null {
   // The member's garden, wherever it is configured to live. This used to point

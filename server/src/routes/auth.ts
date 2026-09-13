@@ -20,18 +20,14 @@ import type { Context } from "hono";
 
 const auth = new Hono();
 
-// ── Enroll rate limiting (anti-brute-force) ─────────────────────
-// /api/auth/enroll is unauthenticated, so it's the surface for guessing invite
-// codes. Count FAILED attempts in a fixed window (successful enrollments never
-// count, so legit members onboarding many devices aren't penalized), per client
-// IP with a global backstop. In-memory — fine for a single-process household.
-const ENROLL_WINDOW_MS = 10 * 60 * 1000; // 10 minutes
-const ENROLL_FAILS_PER_IP = 10;
-const ENROLL_FAILS_GLOBAL = 100;
-
+// ── Rate limiting (anti-brute-force) ────────────────────────────
+// The unauthenticated auth endpoints are the surface for guessing: invite codes
+// on /enroll, 4–6 digit PINs on /login. Both are reachable from the public
+// internet through the Cloudflare tunnel, so both need a brake. Count FAILED
+// attempts in a fixed window (successes never count, so a member onboarding many
+// devices or a parent mistyping once isn't penalized), per client IP with a
+// global backstop. In-memory — fine for a single-process household.
 type Bucket = { count: number; reset: number };
-const enrollFailsByIp = new Map<string, Bucket>();
-let enrollFailsGlobal: Bucket = { count: 0, reset: 0 };
 
 function clientIp(c: Context): string {
   return (
@@ -46,31 +42,37 @@ function liveCount(b: Bucket | undefined, now: number): number {
   return !b || now >= b.reset ? 0 : b.count;
 }
 
-/** Seconds to wait if this IP (or the whole server) is over its failure budget,
- *  else null. */
-function enrollRetryAfter(ip: string): number | null {
-  const now = Date.now();
-  const ipb = enrollFailsByIp.get(ip);
-  if (ipb && liveCount(ipb, now) >= ENROLL_FAILS_PER_IP) return Math.ceil((ipb.reset - now) / 1000);
-  if (liveCount(enrollFailsGlobal, now) >= ENROLL_FAILS_GLOBAL) {
-    return Math.ceil((enrollFailsGlobal.reset - now) / 1000);
-  }
-  return null;
+/** A per-IP failure limiter with a global backstop. Returns retryAfter (seconds
+ *  to wait, or null if under budget) and recordFailure. */
+function makeLimiter(windowMs: number, perIp: number, global: number) {
+  const byIp = new Map<string, Bucket>();
+  let globalBucket: Bucket = { count: 0, reset: 0 };
+  return {
+    retryAfter(ip: string): number | null {
+      const now = Date.now();
+      const ipb = byIp.get(ip);
+      if (ipb && liveCount(ipb, now) >= perIp) return Math.ceil((ipb.reset - now) / 1000);
+      if (liveCount(globalBucket, now) >= global) return Math.ceil((globalBucket.reset - now) / 1000);
+      return null;
+    },
+    recordFailure(ip: string): void {
+      const now = Date.now();
+      if (byIp.size > 2000) {
+        for (const [k, v] of byIp) if (now >= v.reset) byIp.delete(k);
+      }
+      const bump = (b: Bucket): Bucket => {
+        if (now >= b.reset) { b.count = 0; b.reset = now + windowMs; }
+        b.count++;
+        return b;
+      };
+      byIp.set(ip, bump(byIp.get(ip) ?? { count: 0, reset: 0 }));
+      globalBucket = bump(globalBucket);
+    },
+  };
 }
 
-function recordEnrollFailure(ip: string): void {
-  const now = Date.now();
-  if (enrollFailsByIp.size > 2000) {
-    for (const [k, v] of enrollFailsByIp) if (now >= v.reset) enrollFailsByIp.delete(k);
-  }
-  const bump = (b: Bucket): Bucket => {
-    if (now >= b.reset) { b.count = 0; b.reset = now + ENROLL_WINDOW_MS; }
-    b.count++;
-    return b;
-  };
-  enrollFailsByIp.set(ip, bump(enrollFailsByIp.get(ip) ?? { count: 0, reset: 0 }));
-  enrollFailsGlobal = bump(enrollFailsGlobal);
-}
+const enrollLimiter = makeLimiter(10 * 60 * 1000, 10, 100); // invite codes: 10/IP, 100 global, 10 min
+const loginLimiter = makeLimiter(15 * 60 * 1000, 10, 200);  // PINs: 10/IP, 200 global, 15 min
 
 // ── POST /api/auth/setup ────────────────────────────────────────
 // First-run: create the admin account. Only works if no admin exists.
@@ -120,23 +122,31 @@ auth.post("/login", async (c) => {
     return c.json({ user_id: record.id, token });
   }
 
-  // Standard user login: user_id + optional PIN
+  // Standard user login: user_id + PIN. Reachable unauthenticated from the
+  // public internet through the tunnel, so it is rate-limited, and a PIN is
+  // mandatory — a user_id alone (which any member can read from /api/users) must
+  // never be enough. An account with no PIN set can only get in by enrolling a
+  // device (invite code), which is the flow that then prompts it to set one.
   if (body.user_id) {
-    const record = getUserById(body.user_id);
-    if (!record) {
-      return c.json({ error: "User not found" }, 404);
+    const ip = clientIp(c);
+    const retry = loginLimiter.retryAfter(ip);
+    if (retry !== null) {
+      c.header("Retry-After", String(retry));
+      return c.json({ error: "Too many attempts. Try again later." }, 429);
     }
 
-    // If user has a PIN, require it
-    if (record.pin_hash) {
-      if (!body.pin) {
-        return c.json({ error: "PIN required" }, 401);
-      }
-      const valid = await verifyPin(body.pin.trim(), record.pin_hash);
-      if (!valid) {
-        return c.json({ error: "Invalid PIN" }, 401);
-      }
-    }
+    const record = getUserById(body.user_id);
+    // One generic failure shape for "no such user", "no PIN set" and "wrong PIN"
+    // alike: never disclose which user_ids exist or which lack a PIN.
+    const reject = () => {
+      loginLimiter.recordFailure(ip);
+      return c.json({ error: "Invalid credentials" }, 401);
+    };
+
+    if (!record || !record.pin_hash) return reject();
+    if (!body.pin) return c.json({ error: "PIN required" }, 401);
+    const valid = await verifyPin(body.pin.trim(), record.pin_hash);
+    if (!valid) return reject();
 
     const { token } = createSession(record.id, body.device_id);
     return c.json({ user_id: record.id, token });
@@ -151,7 +161,7 @@ auth.post("/login", async (c) => {
 
 auth.post("/enroll", async (c) => {
   const ip = clientIp(c);
-  const retry = enrollRetryAfter(ip);
+  const retry = enrollLimiter.retryAfter(ip);
   if (retry !== null) {
     c.header("Retry-After", String(retry));
     return c.json({ error: "Too many attempts. Try again later." }, 429);
@@ -160,12 +170,12 @@ auth.post("/enroll", async (c) => {
   if (!code) return c.json({ error: "code required" }, 400);
   const redeemed = redeemInviteCode(code);
   if (!redeemed) {
-    recordEnrollFailure(ip);
+    enrollLimiter.recordFailure(ip);
     return c.json({ error: "Invalid or expired code" }, 401);
   }
   const user = getUserById(redeemed.userId);
   if (!user) {
-    recordEnrollFailure(ip);
+    enrollLimiter.recordFailure(ip);
     return c.json({ error: "User not found" }, 404);
   }
   const { token } = createSession(user.id, device_id);

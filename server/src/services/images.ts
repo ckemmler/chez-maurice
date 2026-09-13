@@ -1,4 +1,4 @@
-import { join } from "path";
+import { join, resolve, sep } from "path";
 import { mkdirSync, writeFileSync, readFileSync } from "fs";
 import sharp from "sharp";
 import { dataDir } from "../db";
@@ -7,6 +7,22 @@ const imagesDir = join(dataDir, "images");
 mkdirSync(imagesDir, { recursive: true });
 
 export { imagesDir };
+
+// A filename pulled from a message's `![](/api/images/<name>)` markdown is member
+// controlled: the capture group is `(.+?)`, so it can hold `/` and `..`. Every
+// read out of imagesDir must go through this — return the absolute path only when
+// it is a plain filename that resolves to a direct child of imagesDir, else null.
+// (The HTTP route /api/images/:filename already does the equivalent inline; this
+// is the same guard for the internal callers that reach the directory directly.)
+export function resolveImagePath(filename: string): string | null {
+  if (!filename || filename.includes("/") || filename.includes("\\") || filename.includes("\0")) {
+    return null;
+  }
+  const abs = resolve(imagesDir, filename);
+  const root = resolve(imagesDir);
+  if (abs !== join(root, filename) || !abs.startsWith(root + sep)) return null;
+  return abs;
+}
 
 // ── Upload sizing ───────────────────────────────────────────────
 //
@@ -200,7 +216,8 @@ export async function editImage(
 }
 
 export function loadImageAsDataUri(filename: string): string {
-  const filePath = join(imagesDir, filename);
+  const filePath = resolveImagePath(filename);
+  if (!filePath) throw new Error("Invalid image filename");
   const data = readFileSync(filePath).toString("base64");
   const mediaType = filename.endsWith(".png") ? "image/png" : "image/jpeg";
   return `data:${mediaType};base64,${data}`;

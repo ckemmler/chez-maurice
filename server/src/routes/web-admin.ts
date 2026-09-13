@@ -225,12 +225,28 @@ const COLORS = [
 ];
 
 // ── Localhost-only guard ────────────────────────────────────────
+// The admin dashboard exposes every provider API key, so it must be reachable
+// only from the machine itself, never through the public Cloudflare tunnel.
+// Two independent signals, because neither alone is sufficient:
+//  - Host header: the client sets it, so `Host: localhost` can be forged. But a
+//    request that arrived over the tunnel carries Cloudflare's edge headers
+//    (cf-ray / cf-connecting-ip), which the origin adds and a client cannot fake
+//    into a genuine loopback connection. The tunnel also terminates at
+//    localhost:3001, so the socket peer is 127.0.0.1 for ALL tunneled traffic —
+//    the socket address can't tell local from remote here; the CF header can.
+// So: require a local Host AND the absence of any Cloudflare edge header. Real
+// local admin use (Candide on the mac-mini) has neither problem; a tunneled
+// request is refused whatever Host it claims.
 web.use("/*", async (c, next) => {
   const hostname = (c.req.header("host") || "").split(":")[0];
   const isLocal =
     hostname === "localhost" || hostname === "127.0.0.1" ||
     hostname === "::1" || hostname === "[::1]";
-  if (!isLocal) return c.text("Admin is only accessible from localhost", 403);
+  const viaCloudflare =
+    !!c.req.header("cf-ray") || !!c.req.header("cf-connecting-ip");
+  if (!isLocal || viaCloudflare) {
+    return c.text("Admin is only accessible from localhost", 403);
+  }
   // Persist a chosen language (?lang=xx) so it sticks across requests.
   const ql = c.req.query("lang");
   if (ql && (SUPPORTED as readonly string[]).includes(ql)) {

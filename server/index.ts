@@ -69,6 +69,7 @@ import respiratoryRate from "./data-api/routes/health/respiratory-rate";
 import health from "./data-api/routes/health/index";
 import calibre from "./data-api/routes/calibre/index";
 import trackPlans from "./data-api/routes/tracks/plans";
+import { noPathTraversal } from "./data-api/middleware/noPathTraversal";
 import tracksUi from "./data-api/routes/tracks/ui";
 import reportsUi from "./data-api/routes/tracks/reports";
 import articlesUi from "./data-api/routes/articles";
@@ -201,6 +202,15 @@ app.use("/*", async (c, next) => {
       if (me.role === "guest") return c.json({ error: "Forbidden" }, 403);
       const owner = getUserByUsername(slug);
       if (!owner) return c.json({ error: "Forbidden" }, 403);
+      // The garden engine's /_dev/* tools delete notes, flip them public and
+      // write files, and they carry no auth of their own — they trust this
+      // proxy. Never let them be reached for someone else's garden, whatever
+      // the request looks like. (The sec-fetch-dest rule below is about assets
+      // on a shared note page; a fetch() POST would sail straight past it.)
+      if (/^\/g\/[^/]+\/_dev\//.test(path)) {
+        return c.json({ error: "Forbidden" }, 403);
+      }
+
       const note = path.match(/^\/g\/[^/]+(?:\/[a-z]{2})?\/notes\/([a-z0-9-]+)\/?$/)?.[1];
       if (note) {
         if (!isNoteSharedWith(owner.id, note, me.id)) {
@@ -397,6 +407,9 @@ app.route("/api/v1/health/hrv", hrv);
 app.route("/api/v1/health/respiratory-rate", respiratoryRate);
 app.route("/api/v1/health", health);
 app.route("/api/v1/calibre", calibre);
+app.use("/api/v1/tracks/plans/*", noPathTraversal);
+app.use("/reports/*", noPathTraversal);
+app.use("/tracks/*", noPathTraversal);
 app.route("/api/v1/tracks/plans", trackPlans);
 app.route("/tracks", tracksUi);
 app.route("/reports", reportsUi);

@@ -1,9 +1,8 @@
 import { readFileSync } from "fs";
-import { join } from "path";
 import db from "../db";
 import { getMessages, getParticipants, countParticipants, getContextFrom, setContextFrom } from "./conversations";
 import { estimateText, planDrop, replyReserve } from "./contextWindow";
-import { imagesDir } from "./images";
+import { resolveImagePath } from "./images";
 import { hasWebSearch, webSearch, formatWebSearch } from "./webSearch";
 import { McpSession, type McpTool } from "./mcpClient";
 import { resolveToText, resolveAttachments, getSpec } from "./composer/specs";
@@ -629,7 +628,11 @@ function buildApiMessages(conversationId: string): { messages: any[]; ids: strin
       for (const img of images) {
         const filename = img[1]!;
         try {
-          const filePath = join(imagesDir, filename);
+          // Member-controlled capture: only read a genuine child of imagesDir,
+          // never a traversal like ../../.ssh/id_rsa that would be handed to the
+          // model as an image block.
+          const filePath = resolveImagePath(filename);
+          if (!filePath) continue;
           const data = readFileSync(filePath).toString("base64");
           const mediaType = filename.endsWith(".png") ? "image/png" : "image/jpeg";
           content.push({
