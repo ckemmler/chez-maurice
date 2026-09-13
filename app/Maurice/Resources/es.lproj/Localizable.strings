@@ -421,3 +421,17 @@
 "conversation.hint.summary" = "Un resumen sustituye a la transcripción (~%@ tokens). Si la conversación continúa, se rehace.";
 "conversation.hint.summaryStale" = "La conversación ha seguido: %d mensajes posteriores al resumen se cargan enteros hasta que llegue uno nuevo.";
 "conversation.hint.summarising" = "La transcripción (~%@ tokens) se carga mientras se prepara el resumen.";
+
+// Conversation details sheet (behind the header's "…")
+"chat.details" = "Detalles de la conversación";
+"chat.title_field" = "Título";
+"chat.title_placeholder" = "Nombrar esta conversación";
+"chat.details.with" = "Con";
+"chat.details.model" = "Modelo";
+"chat.details.created" = "Creada";
+"chat.details.last_message" = "Último mensaje";
+"chat.details.messages" = "Mensajes";
+"chat.details.people" = "Personas";
+"chat.review_reports" = "Revisar denuncias";
+"chat.leave_room" = "Salir de la sala";
+"sidebar.search" = "Buscar";

@@ -89,12 +89,12 @@ struct UserPickerView: View {
                         Button(session.localized("enroll.cta")) {
                             showEnroll = true
                         }
-                        .buttonStyle(.borderedProminent)
+                        .glassProminentButton()
 
                         Button(session.localized("picker.admin_signin")) {
                             showAdminLogin = true
                         }
-                        .buttonStyle(.bordered)
+                        .glassBorderedButton()
                     }
                 } else {
                     LazyVGrid(
@@ -441,9 +441,9 @@ private struct PinOverlay: View {
 
                 HStack(spacing: 16) {
                     Button(L("picker.pin.cancel")) { onCancel() }
-                        .buttonStyle(.bordered)
+                        .glassBorderedButton()
                     Button(L("picker.pin.submit")) { onSubmit() }
-                        .buttonStyle(.borderedProminent)
+                        .glassProminentButton()
                         .disabled(pinText.isEmpty)
                 }
             }
@@ -507,9 +507,9 @@ private struct AdminLoginOverlay: View {
 
                 HStack(spacing: 16) {
                     Button(L("picker.admin.cancel")) { onCancel() }
-                        .buttonStyle(.bordered)
+                        .glassBorderedButton()
                     Button(L("picker.admin.submit")) { onSubmit() }
-                        .buttonStyle(.borderedProminent)
+                        .glassProminentButton()
                         .disabled(username.isEmpty || password.isEmpty)
                 }
             }
@@ -560,9 +560,9 @@ private struct InviteEnrollOverlay: View {
                 }
 
                 HStack(spacing: 16) {
-                    Button(L("picker.admin.cancel")) { onCancel() }.buttonStyle(.bordered)
+                    Button(L("picker.admin.cancel")) { onCancel() }.glassBorderedButton()
                     Button(L("enroll.submit")) { onSubmit() }
-                        .buttonStyle(.borderedProminent)
+                        .glassProminentButton()
                         .disabled(code.trimmingCharacters(in: .whitespaces).isEmpty || busy)
                 }
             }
@@ -611,7 +611,7 @@ private struct PinSetupOverlay: View {
                 }
 
                 Button(L("pinsetup.submit")) { onSubmit() }
-                    .buttonStyle(.borderedProminent)
+                    .glassProminentButton()
                     .disabled(pin.isEmpty || confirm.isEmpty)
             }
             .padding(32)

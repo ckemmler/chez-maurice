@@ -99,21 +99,6 @@ private func cardMeta(_ item: TrayItem, count: Int) -> String {
     }
 }
 
-#if os(iOS)
-extension View {
-    /// Warm translucent "glass" panel: a `theme.surface` tint over a blur,
-    /// with a hairline border and soft shadow. Floats over the scrolling stream.
-    func glassPanel(_ theme: MauriceTheme, cornerRadius: CGFloat) -> some View {
-        let shape = RoundedRectangle(cornerRadius: cornerRadius)
-        return self
-            .background(theme.surface.opacity(0.80), in: shape) // warm tint, over…
-            .background(.ultraThinMaterial, in: shape)          // …the backdrop blur
-            .overlay(shape.strokeBorder(theme.rule, lineWidth: 0.5))
-            .shadow(color: .black.opacity(0.12), radius: 14, y: 8)
-    }
-}
-#endif
-
 // MARK: Weight readout (ctx <total> / 200k + meter + caption)
 
 struct WeightReadout: View {

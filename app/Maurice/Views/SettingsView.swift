@@ -829,9 +829,9 @@ struct AvatarCropView: View {
 
             HStack(spacing: 14) {
                 Button { dismiss() } label: { Text(L("common.cancel")).frame(maxWidth: .infinity) }
-                    .buttonStyle(.bordered)
+                    .glassBorderedButton()
                 Button { confirm() } label: { Text(L("settings.avatar.use")).frame(maxWidth: .infinity) }
-                    .buttonStyle(.borderedProminent)
+                    .glassProminentButton()
             }
             .padding(.horizontal, 24).padding(.bottom, 16)
         }

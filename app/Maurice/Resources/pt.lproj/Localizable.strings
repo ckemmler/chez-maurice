@@ -421,3 +421,17 @@
 "conversation.hint.summary" = "Um resumo substitui a transcrição (~%@ tokens). Se a conversa continuar, é refeito.";
 "conversation.hint.summaryStale" = "A conversa continuou: %d mensagens após o resumo são carregadas por inteiro até chegar um novo.";
 "conversation.hint.summarising" = "A transcrição (~%@ tokens) é carregada enquanto o resumo não está pronto.";
+
+// Conversation details sheet (behind the header's "…")
+"chat.details" = "Detalhes da conversa";
+"chat.title_field" = "Título";
+"chat.title_placeholder" = "Dê um nome a esta conversa";
+"chat.details.with" = "Com";
+"chat.details.model" = "Modelo";
+"chat.details.created" = "Criada";
+"chat.details.last_message" = "Última mensagem";
+"chat.details.messages" = "Mensagens";
+"chat.details.people" = "Pessoas";
+"chat.review_reports" = "Rever denúncias";
+"chat.leave_room" = "Sair da sala";
+"sidebar.search" = "Pesquisar";

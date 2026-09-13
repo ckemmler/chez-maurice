@@ -421,3 +421,17 @@
 "conversation.hint.summary" = "Een samenvatting vervangt het transcript (~%@ tokens). Gaat het gesprek verder, dan wordt ze opnieuw gemaakt.";
 "conversation.hint.summaryStale" = "Het gesprek is verdergegaan: %d berichten na de samenvatting worden volledig geladen tot er een nieuwe is.";
 "conversation.hint.summarising" = "Het transcript (~%@ tokens) wordt geladen tot de samenvatting klaar is.";
+
+// Conversation details sheet (behind the header's "…")
+"chat.details" = "Gespreksdetails";
+"chat.title_field" = "Titel";
+"chat.title_placeholder" = "Geef dit gesprek een naam";
+"chat.details.with" = "Met";
+"chat.details.model" = "Model";
+"chat.details.created" = "Aangemaakt";
+"chat.details.last_message" = "Laatste bericht";
+"chat.details.messages" = "Berichten";
+"chat.details.people" = "Personen";
+"chat.review_reports" = "Meldingen bekijken";
+"chat.leave_room" = "Kamer verlaten";
+"sidebar.search" = "Zoeken";

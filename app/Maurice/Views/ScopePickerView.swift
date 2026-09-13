@@ -32,6 +32,11 @@ struct SidebarView: View {
     @State private var showFoyerSwitcher = false
     @State private var pendingAdd = false
     @State private var gardensExpanded = true
+    /// The bottom-bar search: a magnifier button that opens into a full-width
+    /// field (the iOS 26 minimized-search idiom, drawn in our own bar).
+    @State private var searchOpen = false
+    @FocusState private var searchFocused: Bool
+    @Namespace private var glassNS
 
     /// Called when a conversation is opened, so the compact (iPhone) layout can
     /// slide from the sidebar to the chat. No-op on iPad/Mac (both columns show).
@@ -129,11 +134,10 @@ struct SidebarView: View {
                     }
                     .padding(.vertical, 12).padding(.horizontal, 14)
                     .frame(maxWidth: .infinity)
-                    .background(theme.surface, in: RoundedRectangle(cornerRadius: 13))
-                    .overlay(RoundedRectangle(cornerRadius: 13).strokeBorder(theme.ruleHard, lineWidth: 0.5))
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
+                .glassControl(theme, in: RoundedRectangle(cornerRadius: 13, style: .continuous))
                 .disabled(disabled)
             }
             .padding(.horizontal, 10)
@@ -160,32 +164,6 @@ struct SidebarView: View {
                 }
                 SidebarSectionHead(label: session.localized("gardens.conversations"))
             }
-
-            // Search — full text over the member's rooms. While a query is in,
-            // the list below shows the hits (title + the passage that matched)
-            // instead of the recency-ordered conversations.
-            HStack(spacing: 7) {
-                Image(systemName: "magnifyingglass")
-                    .font(.system(size: 12, weight: .medium)).foregroundStyle(theme.inkMute)
-                TextField(session.localized("sidebar.search_placeholder"), text: searchBinding)
-                    .textFieldStyle(.plain).font(.system(size: 13.5))
-                    .autocorrectionDisabled()
-                    #if os(iOS)
-                    .textInputAutocapitalization(.never)
-                    #endif
-                if !chat.searchQuery.isEmpty {
-                    Button { chat.clearSearch() } label: {
-                        Image(systemName: "xmark.circle.fill").font(.system(size: 12)).foregroundStyle(theme.inkMute)
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel(session.localized("sidebar.search_clear"))
-                }
-            }
-            .padding(.horizontal, 10).padding(.vertical, 7)
-            .background(theme.surface, in: RoundedRectangle(cornerRadius: 10))
-            .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(theme.rule, lineWidth: 0.5))
-            .padding(.horizontal, 10)
-            .padding(.bottom, 8)
 
             // Conversation list — runs to the bottom (Settings moved up top), with
             // a soft fade where titles meet the bottom edge.
@@ -261,7 +239,7 @@ struct SidebarView: View {
 
             bottomBar
         }
-        .background(theme.surfaceAlt)
+        .glassSidebarBackground(theme)
         .sheet(isPresented: $showSettings) {
             SettingsView()
                 .environment(session)
@@ -318,30 +296,100 @@ struct SidebarView: View {
     /// name + muted cog — ONE tap target → Settings) and the compact foyer
     /// pill on the right, whose switcher opens upward from the bar.
     private var bottomBar: some View {
-        HStack(spacing: 8) {
-            #if os(iOS)
-            if Platform.isPad {
-                // iPad keeps both in the bar (the wordmark is in the toolbar).
-                userChip
-                Spacer(minLength: 8)
-                foyerPill
-            } else {
-                // iPhone: the foyer pill moved to the header — the identity chip
-                // sits on the left edge on its own.
-                userChip
-                Spacer(minLength: 8)
+        GlassGroup(spacing: 10) {
+            HStack(spacing: 8) {
+                if searchOpen {
+                    searchField
+                } else {
+                    #if os(iOS)
+                    if Platform.isPad {
+                        // iPad keeps both in the bar (the wordmark is in the toolbar).
+                        userChip
+                        Spacer(minLength: 8)
+                        foyerPill
+                    } else {
+                        // iPhone: the foyer pill moved to the header — the identity chip
+                        // sits on the left edge on its own.
+                        userChip
+                        Spacer(minLength: 8)
+                    }
+                    #else
+                    userChip
+                    Spacer(minLength: 8)
+                    foyerPill
+                    #endif
+                    searchButton
+                }
             }
-            #else
-            userChip
-            Spacer(minLength: 8)
-            foyerPill
-            #endif
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 8)
         .overlay(alignment: .top) {
             Rectangle().fill(theme.rule).frame(height: 0.5)
         }
+        .animation(.spring(duration: 0.35, bounce: 0.15), value: searchOpen)
+    }
+
+    // The magnifier and the open field share one glass identity, so on OS 26
+    // the button morphs into the field instead of being swapped out.
+    #if os(macOS)
+    private let searchControlSize: CGFloat = 30
+    #else
+    private let searchControlSize: CGFloat = 44
+    #endif
+
+    private var searchButton: some View {
+        Button { searchOpen = true } label: {
+            Image(systemName: "magnifyingglass")
+                .font(.system(size: searchControlSize * 0.42, weight: .medium))
+                .foregroundStyle(theme.inkSoft)
+                .frame(width: searchControlSize, height: searchControlSize)
+                .contentShape(Circle())
+        }
+        .buttonStyle(.plain)
+        .glassControl(theme, in: Circle(), morph: "sidebar.search", namespace: glassNS)
+        .help(session.localized("sidebar.search"))
+        .accessibilityLabel(session.localized("sidebar.search"))
+    }
+
+    /// Full-text search over the member's rooms. While a query is in, the list
+    /// above shows the hits (title + the passage that matched) instead of the
+    /// recency-ordered conversations.
+    private var searchField: some View {
+        HStack(spacing: 7) {
+            Image(systemName: "magnifyingglass")
+                .font(.system(size: 13, weight: .medium)).foregroundStyle(theme.inkMute)
+            TextField(session.localized("sidebar.search_placeholder"), text: searchBinding)
+                .textFieldStyle(.plain).font(.system(size: 14))
+                .focused($searchFocused)
+                .autocorrectionDisabled()
+                #if os(iOS)
+                .textInputAutocapitalization(.never)
+                .submitLabel(.search)
+                #endif
+                .onAppear { searchFocused = true }
+                #if os(macOS)
+                .onExitCommand { closeSearch() }
+                #endif
+            Button { closeSearch() } label: {
+                Image(systemName: "xmark.circle.fill")
+                    .font(.system(size: 15)).foregroundStyle(theme.inkMute)
+                    .frame(width: 28, height: 28)
+                    .contentShape(Circle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(session.localized("sidebar.search_clear"))
+        }
+        .padding(.leading, 12).padding(.trailing, 6)
+        .frame(height: searchControlSize)
+        .frame(maxWidth: .infinity)
+        .glassControl(theme, in: Capsule(), morph: "sidebar.search", namespace: glassNS)
+    }
+
+    private func closeSearch() {
+        chat.clearSearch()
+        searchFocused = false
+        searchOpen = false
     }
 
     private var userChip: some View {
@@ -404,8 +452,7 @@ struct SidebarView: View {
             .padding(.trailing, 10)
             .padding(.vertical, 5)
             #if os(macOS)
-            .background(theme.surface, in: Capsule())
-            .overlay(Capsule().strokeBorder(theme.ruleHard, lineWidth: 0.5))
+            .glassControl(theme, in: Capsule())
             #endif
             // iOS header lockup: fully transparent — no fill, no outline.
             .contentShape(Capsule())

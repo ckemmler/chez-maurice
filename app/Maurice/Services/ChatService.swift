@@ -323,6 +323,21 @@ final class ChatService {
         }
     }
 
+    /// Rename a conversation (PATCH /api/conversations/:id). The list is
+    /// updated in place so the sidebar and header follow without a reload.
+    func renameConversation(_ id: String, title: String) async {
+        guard let api, let token else { return }
+        do {
+            let updated: RenamedConversation = try await api.patch(
+                "/api/conversations/\(id)", body: ["title": title], token: token)
+            if let i = conversations.firstIndex(where: { $0.id == id }) {
+                conversations[i].title = updated.title ?? title
+            }
+        } catch {
+            self.error = error.localizedDescription
+        }
+    }
+
     func deleteConversation(_ id: String) async {
         guard let api, let token else { return }
         do {

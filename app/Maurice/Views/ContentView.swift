@@ -199,10 +199,10 @@ struct ConnectDisclosureOverlay: View {
                     .bold()
                 HStack(spacing: 12) {
                     Button("Cancel", role: .cancel, action: onCancel)
-                        .buttonStyle(.bordered)
+                        .glassBorderedButton()
                     Spacer()
                     Button("I understand — Connect", action: onAccept)
-                        .buttonStyle(.borderedProminent)
+                        .glassProminentButton()
                 }
                 .padding(.top, 4)
             }

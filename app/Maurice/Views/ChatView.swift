@@ -36,9 +36,11 @@ struct ChatView: View {
     var body: some View {
         Group {
             #if os(iOS)
-            // Phone: header on top, stream fills the rest; the composer floats
-            // over it as a glass panel via a bottom inset.
-            VStack(spacing: 0) {
+            // Phone: the stream fills the view; header and composer float over it
+            // as glass panels via top/bottom insets, so it scrolls beneath both.
+            streamView
+            .background(theme.bg)
+            .safeAreaInset(edge: .top, spacing: 0) {
                 // iPhone draws its own header row; iPad re-homes it into the system
                 // toolbar (see chatToolbar) so iPadOS hosts the window controls inline.
                 if !Platform.isPad {
@@ -58,21 +60,19 @@ struct ChatView: View {
                         EmptyConversationHeader(onOpenSidebar: onOpenSidebar)
                     }
                 }
-                streamView
             }
-            .background(theme.bg)
             .safeAreaInset(edge: .bottom, spacing: 0) { composerDock }
             #else
-            VStack(spacing: 0) {
-                if let convo = chat.activeConversation {
-                    // Conversation header — shown from the start so a room can have
-                    // people added before the first message.
-                    ConversationHeaderView(conversation: convo)
-                }
-                streamView
-                composerDock
-            }
+            // Mac: the stream fills the pane, the composer floats over its foot;
+            // the conversation actions sit in the window's toolbar (macToolbar),
+            // which macOS 26 already draws in glass.
+            streamView
             .background(theme.surface)
+            .safeAreaInset(edge: .bottom, spacing: 0) { composerDock }
+            .toolbar { macToolbar }
+            // Our own toggle (in macToolbar) replaces the automatic one, so the
+            // button is always there and never doubled.
+            .toolbar(removing: .sidebarToggle)
             #endif
         }
         .sheet(isPresented: $showAddContext) {
@@ -117,9 +117,42 @@ struct ChatView: View {
         // single way back to the list. (The collapse is a NavigationStack, so the
         // chevron is a real back button, not the sidebar toggle.)
         .navigationBarBackButtonHidden(Platform.isPad)
-        .sheet(isPresented: $showAddParticipant) { AddParticipantSheet() }
         #endif
+        .sheet(isPresented: $showAddParticipant) { AddParticipantSheet() }
     }
+
+    #if os(macOS)
+    /// Add someone + "…" (details: title, metadata, room actions), as toolbar
+    /// items — shown from the start so a room can have people added before the
+    /// first message.
+    @ToolbarContentBuilder
+    private var macToolbar: some ToolbarContent {
+        // Show/hide the sidebar — leading, where the system's own toggle sits.
+        ToolbarItem(placement: .navigation) {
+            Button { onToggleSidebar() } label: {
+                Image(systemName: "sidebar.leading")
+            }
+            .help(session.localized("chat.back_to_conversations"))
+        }
+        if let convo = chat.activeConversation {
+            // A flexible spacer pins the actions to the trailing edge, as on iOS.
+            if #available(macOS 26.0, *) {
+                ToolbarSpacer(.flexible)
+            }
+            ToolbarItemGroup(placement: .primaryAction) {
+                if chat.participants.count > 1 {
+                    AvatarStack(participants: chat.participants, serverBase: session.serverURL,
+                                size: 22, ring: theme.bg, max: 4)
+                }
+                Button { showAddParticipant = true } label: {
+                    Image(systemName: "person.badge.plus")
+                }
+                .help(session.localized("chat.add_someone_help"))
+                ConversationDetailsButton(conversation: convo, inToolbar: true)
+            }
+        }
+    }
+    #endif
 
     #if os(iOS)
     private var activeMaurice: Maurice { maurices.maurice(for: chat.activeConversation?.maurice_id) }
@@ -226,7 +259,8 @@ struct ChatView: View {
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
                         #if os(iOS)
-                        .padding(.vertical, 18)
+                        .padding(.top, 6)
+                        .padding(.bottom, 10)
                         .padding(.horizontal, 16)
                         #else
                         .padding(.vertical, 26)
@@ -319,7 +353,7 @@ struct ChatView: View {
             }
         }
         .padding(.horizontal, 12)
-        .padding(.bottom, 8)
+        .padding(.bottom, 4)
         #else
         // Mac: like iOS, the tray is hidden during chat and toggled from the ctx
         // pill in the input row — so it doesn't sit on top of the field — and
@@ -340,6 +374,8 @@ struct ChatView: View {
                 sendMessage()
             }
         }
+        .padding(.horizontal, 12)
+        .padding(.bottom, 8)
         #endif
     }
 
@@ -395,97 +431,124 @@ private struct EmptyConversationHeader: View {
                     .font(.system(size: 17, weight: .medium))
                     .foregroundStyle(theme.inkSoft)
                     .frame(width: 44, height: 44)
-                    .overlay(Circle().strokeBorder(theme.ruleHard, lineWidth: 0.75))
+                    .contentShape(Circle())
             }
             .buttonStyle(.plain)
+            .glassControl(theme, in: Circle())
             .accessibilityLabel(session.localized("chat.back_to_conversations"))
             Spacer(minLength: 0)
         }
-        .padding(.horizontal, 16).padding(.vertical, 11)
-        .trafficLightInset()
-        .overlay(alignment: .bottom) {
-            Rectangle().fill(theme.rule).frame(height: 0.5)
-        }
+        .padding(.horizontal, 12)
     }
 }
 
+/// The conversation header (iPhone only — iPad and macOS host these in the
+/// system toolbar): two floating glass groups over the stream and no bar
+/// between them, the iOS 26 idiom. A back button on the left; on the right one
+/// capsule holding "add someone" and "…", which opens the details sheet where
+/// the title and metadata now live.
 private struct ConversationHeaderView: View {
     @Environment(ChatService.self) private var chat
     @Environment(SessionStore.self) private var session
-    @Environment(MauriceStore.self) private var maurices
-    @Environment(StudioState.self) private var studio
     @Environment(\.mauriceTheme) private var theme
-    #if os(iOS)
-    @Environment(\.horizontalSizeClass) private var hSize
-    #endif
     let conversation: ServerConversation
-    /// Reveal the sidebar (compact only) — the header carries its own back chevron.
+    /// Reveals the sidebar (the compact layout hides it behind the chat).
     var onBack: () -> Void = {}
     @State private var showAdd = false
-    @State private var showReports = false
-    @State private var showLeaveConfirm = false
 
-    private var maurice: Maurice { maurices.maurice(for: conversation.maurice_id) }
     private var multi: Bool { chat.participants.count > 1 }
-    private var isCompact: Bool {
-        #if os(iOS)
-        return hSize == .compact
-        #else
-        return false
-        #endif
-    }
 
     var body: some View {
-        HStack(spacing: 11) {
-            // Compact: a back chevron at the left of the metadata returns to the
-            // conversation list (there is no system nav bar).
-            if isCompact {
+        GlassGroup(spacing: 16) {
+            HStack(spacing: 0) {
                 Button { onBack() } label: {
                     Image(systemName: "chevron.left")
                         .font(.system(size: 17, weight: .medium))
                         .foregroundStyle(theme.inkSoft)
                         .frame(width: 44, height: 44)
-                        .overlay(Circle().strokeBorder(theme.ruleHard, lineWidth: 0.75))
+                        .contentShape(Circle())
                 }
                 .buttonStyle(.plain)
+                .glassControl(theme, in: Circle())
                 .accessibilityLabel(session.localized("chat.back_to_conversations"))
-            }
-            // Hat badge only for a specialized Maurice; the everyday one shows none.
-            if !maurice.isEveryday {
-                HatBadge(kind: maurice.hat, palette: maurice.paletteValue, size: 30, radius: 9)
-            }
-            // Title + meta — the ONLY growing child, so the title keeps its width
-            // and never truncates to make room for the trailing controls.
-            VStack(alignment: .leading, spacing: 2) {
-                Text(conversation.title ?? session.localized("chat.new_conversation"))
-                    .font(.system(size: 18, design: .serif))
-                    .foregroundStyle(theme.ink)
-                    .lineLimit(1).truncationMode(.tail)
-                Text(metaLine)
-                    .font(.system(size: 9.5, design: .monospaced))
-                    .foregroundStyle(theme.inkSoft)
-                    .lineLimit(1).truncationMode(.tail)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
 
-            // Trailing controls — all fixed-width (flex-shrink:0).
-            if multi {
-                AvatarStack(participants: chat.participants, serverBase: session.serverURL,
-                            size: 26, ring: theme.bg, max: 4)
+                Spacer(minLength: 8)
+
+                HStack(spacing: 0) {
+                    if multi {
+                        AvatarStack(participants: chat.participants, serverBase: session.serverURL,
+                                    size: 24, ring: theme.bg, max: 3)
+                            .padding(.leading, 10)
+                    }
+                    Button { showAdd = true } label: {
+                        Image(systemName: "person.badge.plus")
+                            .font(.system(size: 16, weight: .medium))
+                            .foregroundStyle(theme.inkSoft)
+                            .frame(width: 44, height: 44)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .help(session.localized("chat.add_someone_help"))
+                    ConversationDetailsButton(conversation: conversation)
+                }
+                .glassControl(theme, in: Capsule())
             }
-            trailingControls
         }
-        #if os(iOS)
-        .padding(.horizontal, 16).padding(.vertical, 11)
-        #else
-        .padding(.horizontal, 28).padding(.vertical, 12)
-        #endif
-        .trafficLightInset()
-        .overlay(alignment: .bottom) {
-            Rectangle().fill(theme.rule).frame(height: 0.5)
-        }
+        .padding(.horizontal, 12)
         .sheet(isPresented: $showAdd) { AddParticipantSheet() }
+    }
+}
+
+/// The "…" button and everything behind it: the details sheet, and the room
+/// actions it can trigger (edit Maurice, review reports, leave), which run once
+/// the sheet has dismissed — a sheet presented while another is going away is
+/// dropped. `inToolbar` draws a bare system toolbar button (macOS) instead of
+/// the 44pt glyph that sits inside the iPhone header's capsule.
+private struct ConversationDetailsButton: View {
+    @Environment(ChatService.self) private var chat
+    @Environment(SessionStore.self) private var session
+    @Environment(MauriceStore.self) private var maurices
+    @Environment(StudioState.self) private var studio
+    @Environment(\.mauriceTheme) private var theme
+    let conversation: ServerConversation
+    var inToolbar = false
+    @State private var showDetails = false
+    @State private var showReports = false
+    @State private var showLeaveConfirm = false
+    @State private var pending: ConversationDetailsSheet.Action?
+
+    private var maurice: Maurice { maurices.maurice(for: conversation.maurice_id) }
+
+    var body: some View {
+        Group {
+            if inToolbar {
+                Button { showDetails = true } label: {
+                    Image(systemName: "ellipsis")
+                }
+            } else {
+                Button { showDetails = true } label: {
+                    Image(systemName: "ellipsis")
+                        .font(.system(size: 16, weight: .medium))
+                        .foregroundStyle(theme.inkSoft)
+                        .frame(width: 44, height: 44)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .help(session.localized("chat.details"))
+        .accessibilityLabel(session.localized("chat.details"))
         .sheet(isPresented: $showReports) { ReportsReviewView() }
+        .sheet(isPresented: $showDetails, onDismiss: runPending) {
+            ConversationDetailsSheet(conversation: conversation) { action in
+                pending = action
+                showDetails = false
+            }
+            #if os(iOS)
+            .presentationDetents([.medium, .large])
+            .presentationDragIndicator(.visible)
+            #endif
+        }
         .confirmationDialog("Leave this room?", isPresented: $showLeaveConfirm, titleVisibility: .visible) {
             Button("Leave room", role: .destructive) { Task { await chat.leaveRoom() } }
             Button("Cancel", role: .cancel) {}
@@ -494,74 +557,134 @@ private struct ConversationHeaderView: View {
         }
     }
 
-    /// Add-someone is always a direct button. "Edit Maurice" is a roomy
-    /// (desktop/iPad) affordance — on the phone you edit from the picker or the
-    /// empty-state greeting, keeping the header uncluttered.
-    @ViewBuilder
-    private var trailingControls: some View {
-        Button { showAdd = true } label: {
-            Image(systemName: "person.badge.plus")
-                .font(.system(size: 16, weight: .medium))
-                .foregroundStyle(theme.inkSoft)
-                .frame(width: 44, height: 44)
-                .overlay(Circle().strokeBorder(theme.ruleHard, lineWidth: 0.75))
-        }
-        .buttonStyle(.plain)
-        .padding(.trailing, 2)
-        .help(session.localized("chat.add_someone_help"))
-
-        if !isCompact, !maurice.isEveryday {
-            Button { studio.openCreator(maurice, isEdit: true) } label: {
-                Text(session.localized("chat.edit_maurice"))
-                    .font(.system(size: 12, design: .monospaced))
-                    .foregroundStyle(theme.inkSoft)
-                    .padding(.horizontal, 11).padding(.vertical, 6)
-                    .overlay(Capsule().strokeBorder(theme.rule, lineWidth: 0.5))
-            }
-            .buttonStyle(.plain)
-        }
-
-        // Shared-room menu: leave (everyone) + review reports (operator).
-        if multi {
-            Menu {
-                if session.activeDeviceUser?.role == "admin" {
-                    Button { showReports = true } label: { Label("Review reports", systemImage: "flag") }
-                }
-                Button(role: .destructive) { showLeaveConfirm = true } label: {
-                    Label("Leave room", systemImage: "rectangle.portrait.and.arrow.right")
-                }
-            } label: {
-                Image(systemName: "ellipsis.circle")
-                    .font(.system(size: 16, weight: .medium))
-                    .foregroundStyle(theme.inkSoft)
-                    .frame(width: 44, height: 44)
-            }
-            .buttonStyle(.plain)
+    private func runPending() {
+        guard let action = pending else { return }
+        pending = nil
+        switch action {
+        case .editMaurice: studio.openCreator(maurice, isEdit: true)
+        case .reviewReports: showReports = true
+        case .leaveRoom: showLeaveConfirm = true
         }
     }
+}
 
-    /// "{when} · {Maurice name}" on phone; "· {model}" appended on roomy headers.
-    private var metaLine: String {
-        var parts: [String] = []
-        if let at = formattedAt { parts.append(at) }
-        parts.append(maurice.name)
-        if !isCompact {
-            let model = maurices.modelName(for: maurice)
-            if !model.isEmpty { parts.append(model.lowercased()) }
-        }
-        return parts.joined(separator: " · ")
+/// Behind "…": the title (editable — Save renames on the server), what the
+/// header used to say (when, which Maurice, which model, who is in the room),
+/// and the room actions that used to hide in the header's menu.
+private struct ConversationDetailsSheet: View {
+    enum Action { case editMaurice, reviewReports, leaveRoom }
+
+    @Environment(ChatService.self) private var chat
+    @Environment(SessionStore.self) private var session
+    @Environment(MauriceStore.self) private var maurices
+    @Environment(\.mauriceTheme) private var theme
+    @Environment(\.dismiss) private var dismiss
+    let conversation: ServerConversation
+    /// The sheet closes itself, then the header runs the action.
+    var onAction: (Action) -> Void
+    @State private var title = ""
+    @State private var saving = false
+    @FocusState private var titleFocused: Bool
+
+    private var maurice: Maurice { maurices.maurice(for: conversation.maurice_id) }
+    private var multi: Bool { chat.participants.count > 1 }
+    private var trimmedTitle: String { title.trimmingCharacters(in: .whitespacesAndNewlines) }
+    private var titleChanged: Bool {
+        !trimmedTitle.isEmpty && trimmedTitle != (conversation.title ?? "")
     }
 
-    private var formattedAt: String? {
-        let raw = conversation.last_message_at ?? conversation.updated_at
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section(session.localized("chat.title_field")) {
+                    TextField(session.localized("chat.title_placeholder"), text: $title)
+                        .focused($titleFocused)
+                        .onSubmit { if titleChanged { save() } }
+                        #if os(iOS)
+                        .submitLabel(.done)
+                        #endif
+                }
+
+                Section(session.localized("chat.details")) {
+                    row(session.localized("chat.details.with"), maurice.name)
+                    let model = maurices.modelName(for: maurice)
+                    if !model.isEmpty { row(session.localized("chat.details.model"), model) }
+                    if let s = formatted(conversation.created_at) { row(session.localized("chat.details.created"), s) }
+                    if let s = formatted(conversation.last_message_at ?? conversation.updated_at) {
+                        row(session.localized("chat.details.last_message"), s)
+                    }
+                    if let n = conversation.message_count { row(session.localized("chat.details.messages"), "\(n)") }
+                }
+
+                if multi {
+                    Section(session.localized("chat.details.people")) {
+                        ForEach(chat.participants) { p in
+                            HStack(spacing: 12) {
+                                UserAvatar(avatarURL: p.avatar_url, serverURL: session.serverURL,
+                                           initial: p.initial, color: p.color, size: 28)
+                                Text(p.display_name)
+                            }
+                        }
+                    }
+                }
+
+                Section {
+                    if !maurice.isEveryday {
+                        Button { onAction(.editMaurice) } label: {
+                            Label(session.localized("chat.edit_maurice"), systemImage: "pencil")
+                        }
+                    }
+                    if multi {
+                        if session.activeDeviceUser?.role == "admin" {
+                            Button { onAction(.reviewReports) } label: {
+                                Label(session.localized("chat.review_reports"), systemImage: "flag")
+                            }
+                        }
+                        Button(role: .destructive) { onAction(.leaveRoom) } label: {
+                            Label(session.localized("chat.leave_room"), systemImage: "rectangle.portrait.and.arrow.right")
+                        }
+                    }
+                }
+            }
+            #if os(macOS)
+            .formStyle(.grouped)
+            .frame(minWidth: 420, minHeight: 380)
+            #endif
+            .navigationTitle(conversation.title ?? session.localized("chat.new_conversation"))
+            #if os(iOS)
+            .navigationBarTitleDisplayMode(.inline)
+            #endif
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button(session.localized("common.done")) { dismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button(session.localized("common.save")) { save() }
+                        .disabled(!titleChanged || saving)
+                }
+            }
+        }
+        .onAppear { title = conversation.title ?? "" }
+    }
+
+    private func row(_ label: String, _ value: String) -> some View {
+        LabeledContent(label, value: value)
+    }
+
+    private func formatted(_ raw: String) -> String? {
         guard let date = parseServerDate(raw) else { return nil }
-        let cal = Calendar.current
-        let t = DateFormatter(); t.dateFormat = "H:mm"
-        let time = t.string(from: date)
-        if cal.isDateInToday(date) { return session.localized("time.today", time) }
-        if cal.isDateInYesterday(date) { return session.localized("time.yesterday", time) }
-        let d = DateFormatter(); d.dateFormat = "MMM d"
-        return "\(d.string(from: date)) · \(time)"
+        return date.formatted(date: .abbreviated, time: .shortened)
+    }
+
+    private func save() {
+        guard titleChanged else { return }
+        saving = true
+        let newTitle = trimmedTitle
+        Task {
+            await chat.renameConversation(conversation.id, title: newTitle)
+            saving = false
+            dismiss()
+        }
     }
 }
 
@@ -2136,11 +2259,11 @@ private struct ComposerBar: View {
                         .foregroundStyle(theme.inkMute)
                 }
                 .padding(.horizontal, 10).padding(.vertical, 6)
-                .overlay(Capsule().strokeBorder(theme.ruleHard, lineWidth: 0.5))
                 .contentShape(Capsule())
             }
             .menuIndicator(.hidden)
             .buttonStyle(.plain)
+            .glassControl(theme, in: Capsule(), fallbackFill: .clear)
             .disabled(chat.isStreaming)
             .help(session.localized("chat.switch_model"))
         }
@@ -2264,6 +2387,7 @@ private struct ComposerBar: View {
                 }
                 #endif
 
+                GlassGroup(spacing: 6) {
                 HStack(spacing: 4) {
                     Menu {
                         Button { showCamera = true } label: {
@@ -2284,6 +2408,7 @@ private struct ComposerBar: View {
                     }
                     .menuIndicator(.hidden)
                     .buttonStyle(.plain)   // no default menu-button background
+                    .glassControl(theme, in: Circle(), fallbackFill: .clear)
                     .disabled(chat.isStreaming)
 
                     // Dictate — fills the field, never sends. Recognition
@@ -2331,6 +2456,7 @@ private struct ComposerBar: View {
                                        value: micPulse)
                     }
                     .buttonStyle(.plain)
+                    .glassControl(theme, in: Circle(), fallbackFill: .clear)
                     .disabled(chat.isStreaming)
                     .help(session.localized(dictation.isListening ? "chat.dictate_stop" : "chat.dictate"))
                     #endif
@@ -2343,6 +2469,7 @@ private struct ComposerBar: View {
                             .frame(width: 34, height: 34)
                     }
                     .buttonStyle(.plain)
+                    .glassControl(theme, in: Circle(), fallbackFill: .clear)
                     .help(session.localized("chat.tools_help"))
 
                     // Context button — `+` to add when there's none; once context
@@ -2358,6 +2485,7 @@ private struct ComposerBar: View {
                             .frame(width: 34, height: 34)
                     }
                     .buttonStyle(.plain)
+                    .glassControl(theme, in: Circle(), fallbackFill: .clear)
                     .help(session.localized(hasContext ? "chat.review_context" : "chat.add_context"))
 
                     #if os(iOS)
@@ -2371,6 +2499,7 @@ private struct ComposerBar: View {
                                 .frame(width: 34, height: 34)
                         }
                         .buttonStyle(.plain)
+                        .glassControl(theme, in: Circle(), fallbackFill: .clear)
                         .help(session.localized("chat.hide_keyboard"))
                     }
                     #endif
@@ -2381,6 +2510,19 @@ private struct ComposerBar: View {
 
                     Spacer()
 
+                    #if os(macOS)
+                    // Return sends, Shift-Return breaks the line — said once, in
+                    // the row, while the field is still empty.
+                    if inputText.isEmpty {
+                        Text(session.localized("chat.composer.hint"))
+                            .font(.system(size: 9.5, design: .monospaced))
+                            .foregroundStyle(theme.inkMute)
+                            .tracking(0.5)
+                            .lineLimit(1)
+                            .padding(.trailing, 6)
+                    }
+                    #endif
+
                     // The send row reads as a sentence:
                     // 💬 no-one (group only) · 🎩 choose who · ➤ send to them.
                     HStack(spacing: 8) {
@@ -2390,9 +2532,9 @@ private struct ComposerBar: View {
                                     .font(.system(size: 18, weight: .medium))
                                     .foregroundStyle(canSend ? theme.inkSoft : theme.inkMute)
                                     .frame(width: 44, height: 44)
-                                    .overlay(Circle().strokeBorder(theme.ruleHard, lineWidth: 0.75))
                             }
                             .buttonStyle(.plain)
+                            .glassControl(theme, in: Circle(), fallbackFill: .clear)
                             .disabled(!canSend)
                             .help(session.localized("chat.post_humans"))
                         }
@@ -2428,36 +2570,14 @@ private struct ComposerBar: View {
                         }
                     }
                 }
+                }
             }
             .padding(.horizontal, 12)
-            .padding(.vertical, 10)
-            #if os(iOS)
+            .padding(.vertical, 8)
             // Floating glass field (the dock provides the horizontal margin).
+            // Liquid Glass on OS 26+, a tinted material before.
             .glassPanel(theme, cornerRadius: 22)
-            #else
-            .overlay(
-                RoundedRectangle(cornerRadius: 22)
-                    .strokeBorder(theme.rule, lineWidth: 0.5)
-            )
-            .background(
-                RoundedRectangle(cornerRadius: 22)
-                    .fill(theme.bg)
-            )
-            #endif
-
-            #if os(macOS)
-            Text("chat.composer.hint")
-                .font(.system(size: 9.5, design: .monospaced))
-                .foregroundStyle(theme.inkMute)
-                .tracking(0.5)
-            #endif
         }
-        #if os(iOS)
-        .padding(.top, 4)
-        #else
-        .padding(.horizontal, 10)
-        .padding(.vertical, 12)
-        #endif
         // Dictated text is appended, not assigned: you may have typed a few words
         // before reaching for the mic, and losing them would be worse than a
         // clumsy join. The anchor is where dictation writes, fixed when it
@@ -2912,7 +3032,7 @@ struct ReportsReviewView: View {
                             Spacer()
                             Button("Dismiss") { Task { await chat.dismissReport(r.id); await load() } }
                         }
-                        .buttonStyle(.bordered)
+                        .glassBorderedButton()
                         .font(.callout)
                     }
                     .padding(.vertical, 4)

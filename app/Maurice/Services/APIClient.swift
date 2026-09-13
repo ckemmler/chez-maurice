@@ -439,7 +439,8 @@ struct ServerUser: Decodable, Identifiable {
 
 struct ServerConversation: Decodable, Identifiable {
     let id: String
-    let title: String?
+    /// Mutable: a rename updates the cached row in place.
+    var title: String?
     /// The specialized Maurice this conversation uses; nil = everyday Maurice.
     let maurice_id: String?
     /// Provenance; nil = native, "anthropic" = imported from a Claude.ai export.
@@ -450,6 +451,12 @@ struct ServerConversation: Decodable, Identifiable {
     let last_message_at: String?
     /// The room's members — drives the sidebar avatar stack (multi-user only).
     let participants: [ServerParticipant]?
+}
+
+/// What PATCH /api/conversations/:id answers — only the fields a rename needs.
+struct RenamedConversation: Decodable {
+    let id: String
+    let title: String?
 }
 
 /// One hit from /api/conversations/search — the room, plus the passage that

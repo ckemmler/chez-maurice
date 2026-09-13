@@ -421,3 +421,17 @@
 "conversation.hint.summary" = "A summary stands in for the transcript (~%@ tokens). Continue the conversation and it is redone.";
 "conversation.hint.summaryStale" = "The conversation has moved on: %d messages after the summary ride along in full until a fresh one lands.";
 "conversation.hint.summarising" = "The transcript (~%@ tokens) is loaded until the summary is ready.";
+
+// Conversation details sheet (behind the header's "…")
+"chat.details" = "Conversation details";
+"chat.title_field" = "Title";
+"chat.title_placeholder" = "Name this conversation";
+"chat.details.with" = "With";
+"chat.details.model" = "Model";
+"chat.details.created" = "Created";
+"chat.details.last_message" = "Last message";
+"chat.details.messages" = "Messages";
+"chat.details.people" = "People";
+"chat.review_reports" = "Review reports";
+"chat.leave_room" = "Leave room";
+"sidebar.search" = "Search";

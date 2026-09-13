@@ -66,7 +66,7 @@ struct PairingView: View {
                         .frame(maxWidth: 400)
                         .padding(.vertical, 10)
                     }
-                    .buttonStyle(.borderedProminent)
+                    .glassProminentButton()
                     .disabled(serverURL.trimmingCharacters(in: .whitespaces).isEmpty || isConnecting)
                 }
             }
