@@ -1,5 +1,5 @@
 import { Database } from "bun:sqlite";
-import { getDbPath } from "../lib/config";
+import { getLifeDbPath } from "../lib/config";
 import { asHighlightView, type HighlightView } from "./highlights";
 
 // Passage-level highlights on saved articles — the article twin of
@@ -8,13 +8,13 @@ import { asHighlightView, type HighlightView } from "./highlights";
 // integer id + chapter slug, an article highlight off the fiche's locale+slug.
 // Making `book_id` nullable and adding a subject discriminator would leave
 // every existing reader-side query wondering which kind it holds; two small
-// tables keep both unambiguous. Per-member, stored in akita.db alongside the
+// tables keep both unambiguous. Per-member, stored in life.db alongside the
 // book highlights.
 //
 // An article has two texts, like a chapter: the captured full text and the
 // frontmatter summary. `view` says which one the offsets index.
 
-const DB_PATH = getDbPath("akita.db");
+const DB_PATH = getLifeDbPath();
 
 let db: Database;
 function getDb(): Database {

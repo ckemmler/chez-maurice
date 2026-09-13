@@ -1,5 +1,5 @@
 import { Database } from "bun:sqlite";
-import { getDbPath } from "../lib/config";
+import { getLifeDbPath } from "../lib/config";
 
 let db: Database;
 let dbPath: string | null = null;
@@ -10,7 +10,7 @@ function getDb(): Database {
   // decides for all the others — and a suite that points MAURICE_DATA_DIR at
   // its own fixture then reads and WRITES the real database instead. That is
   // not a hypothetical; it put two test rows in a live reading_progress.
-  const path = getDbPath("akita.db");
+  const path = getLifeDbPath();
   if (db && dbPath !== path) {
     try { db.close(); } catch {}
     db = undefined as unknown as Database;

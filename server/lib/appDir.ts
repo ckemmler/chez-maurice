@@ -3,7 +3,7 @@
  * state lives: maurice.db, avatars/, images/, files/, uploads/.
  *
  * This is deliberately NOT the data-api's [paths] data_dir from config.toml,
- * which points somewhere else (akita.db, compte.db, recommendations.db). The two
+ * which points somewhere else (life.db, compte.db, recommendations.db). The two
  * coincide only when MAURICE_DATA_DIR is set — as every test and the demo seed
  * do — which is why a mismatch between them survives the test suite and only
  * bites a config.toml-driven dev or prod setup.

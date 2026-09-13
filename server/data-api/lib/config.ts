@@ -9,7 +9,7 @@
  */
 
 import { resolve } from "node:path";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, renameSync } from "node:fs";
 import { homedir } from "node:os";
 
 // ── TOML parser (flat key/value sections only) ─────────────────────────
@@ -75,6 +75,34 @@ export function getDataDir(): string {
 
 export function getDbPath(name: string): string {
   return resolve(getDataDir(), name);
+}
+
+/**
+ * life.db — the data-api's database: health, tasks, signals, dossiers, places,
+ * coaching, layouts, reading progress, highlights, bookmarks, résonances.
+ *
+ * It was `akita.db` until 2026-09-13, the name of the prototype the whole layer
+ * was lifted from. Every service opens it through this one function, which on
+ * first use renames an old-named file (and its -wal/-shm) to the new name —
+ * nothing else has it open at that point, since the server is what opens it.
+ * Python readers (tools/shared/config_loader.get_life_db_path) look for the
+ * new name first and fall back to the old, so they follow whichever the server
+ * has done, and never rename anything themselves.
+ */
+let lifeDbReady = false;
+export function getLifeDbPath(): string {
+  const life = getDbPath("life.db");
+  if (!lifeDbReady) {
+    lifeDbReady = true;
+    const old = getDbPath("akita.db");
+    if (!existsSync(life) && existsSync(old)) {
+      for (const suffix of ["", "-wal", "-shm"]) {
+        if (existsSync(old + suffix)) renameSync(old + suffix, life + suffix);
+      }
+      console.log("[data-api] akita.db renamed to life.db");
+    }
+  }
+  return life;
 }
 
 /**

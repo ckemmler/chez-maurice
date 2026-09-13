@@ -13,7 +13,7 @@ import { spawnSync } from "node:child_process";
 const TMP = fs.mkdtempSync(path.join(os.tmpdir(), "maurice-garden-read-"));
 process.env.MAURICE_GARDENS_DIR = path.join(TMP, "gardens");
 
-// akita.db must be a throwaway — these tests write highlights. Give this
+// life.db must be a throwaway — these tests write highlights. Give this
 // suite its own data dir for that import, then hand the preload's throwaway
 // back (never `delete` it: with the variable unset, anything that resolves
 // the data dir lazily after this point lands in the real ~/.maurice).

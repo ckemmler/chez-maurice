@@ -1,14 +1,14 @@
 /**
- * Layouts service — read-only access to dashboard layout specs stored in akita.db.
+ * Layouts service — read-only access to dashboard layout specs stored in life.db.
  *
  * Layouts are authored by Claude via MCP tools and rendered by Carnet (iOS).
  * This service provides REST-friendly wrappers around the layouts table.
  */
 
 import { Database } from "bun:sqlite";
-import { getDbPath } from "../lib/config";
+import { getLifeDbPath } from "../lib/config";
 
-const DB_PATH = getDbPath("akita.db");
+const DB_PATH = getLifeDbPath();
 
 let db: Database;
 function getDb(): Database {

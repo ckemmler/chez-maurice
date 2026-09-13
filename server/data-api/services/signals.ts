@@ -1,11 +1,11 @@
 /**
- * Signals service — reads signals from akita.db (SQLite, readonly).
+ * Signals service — reads signals from life.db (SQLite, readonly).
  */
 
 import { Database } from "bun:sqlite";
-import { getDbPath } from "../lib/config";
+import { getLifeDbPath } from "../lib/config";
 
-const DB_PATH = getDbPath("akita.db");
+const DB_PATH = getLifeDbPath();
 
 let db: Database;
 function getDb(): Database {

@@ -1,14 +1,14 @@
 /**
- * Dossier service — reads dossier metadata from akita.db (SQLite, readonly)
+ * Dossier service — reads dossier metadata from life.db (SQLite, readonly)
  * and markdown content from the filesystem.
  */
 
 import { Database } from "bun:sqlite";
 import { resolve } from "node:path";
 import { existsSync, readFileSync, unlinkSync } from "node:fs";
-import { getDbPath } from "../lib/config";
+import { getLifeDbPath } from "../lib/config";
 
-const DB_PATH = getDbPath("akita.db");
+const DB_PATH = getLifeDbPath();
 const repoRoot = resolve(import.meta.dir, "..", "..", "..");
 const DOSSIER_ROOT = resolve(repoRoot, "dossiers");
 

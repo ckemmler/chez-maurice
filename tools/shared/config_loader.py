@@ -61,6 +61,21 @@ def get_db_path(name: str) -> Path:
     return get_data_dir() / name
 
 
+def get_life_db_path() -> Path:
+    """life.db — the data-api's database (health, tasks, signals, dossiers…).
+
+    It was akita.db until 2026-09-13. The server renames the file on its first
+    start after the change; a tool may run before or after that, so look for
+    the new name first and fall back to the old one. Never rename from here:
+    several tool processes share the file, and only the server owns it.
+    """
+    life = get_db_path("life.db")
+    if life.exists():
+        return life
+    old = get_db_path("akita.db")
+    return old if old.exists() else life
+
+
 def get_gardens_dir() -> Path:
     """Return the gardens content root (layout: <root>/<member>/notes/<locale>/…).
 

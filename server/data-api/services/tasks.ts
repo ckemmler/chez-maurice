@@ -1,13 +1,13 @@
 /**
  * Tasks service — SQLite-backed task management.
  *
- * Tables: tasks, task_log, task_categories (all in akita.db).
+ * Tables: tasks, task_log, task_categories (all in life.db).
  */
 
 import { Database } from "bun:sqlite";
-import { getDbPath } from "../lib/config";
+import { getLifeDbPath } from "../lib/config";
 
-const DB_PATH = getDbPath("akita.db");
+const DB_PATH = getLifeDbPath();
 
 let db: Database;
 function getDb(): Database {

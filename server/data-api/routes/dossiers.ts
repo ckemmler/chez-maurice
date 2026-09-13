@@ -62,7 +62,7 @@ app.get("/api/v1/dossiers/:id", (c) => {
   return c.json(dossier);
 });
 
-// Delete dossier (cascades in akita.db; optionally cleans up recommendations.db)
+// Delete dossier (cascades in life.db; optionally cleans up recommendations.db)
 app.delete("/api/v1/dossiers/:id", (c) => {
   const memberId = c.get("userId") as string;
   if (!memberId) return c.json({ error: "Authentication required" }, 401);

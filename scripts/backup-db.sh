@@ -19,43 +19,66 @@ set -euo pipefail
 source "$(dirname "${BASH_SOURCE[0]}")/_lib.sh"
 
 DB="${MAURICE_DB:-$HOME/.maurice/maurice.db}"
+# life.db holds the rest of what a household would hate to lose — health,
+# tasks, reading positions, highlights, dossiers — and until 2026-09-13 it was
+# not backed up at all (it was still called akita.db, and this script only knew
+# maurice.db). Same treatment, its own name in the snapshot files.
+LIFE_DB="${MAURICE_LIFE_DB:-$HOME/.maurice/data/life.db}"
 DEST="${MAURICE_BACKUP_DIR:-$HOME/.maurice/backups/db}"
 KEEP="${MAURICE_BACKUP_KEEP:-14}"
 
-[[ -f "$DB" ]] || { echo "✗ no database at $DB"; exit 1; }
 mkdir -p "$DEST"
-
 stamp="$(date +%Y%m%d-%H%M%S)"
-tmp="$DEST/.maurice-$stamp.db"
-out="$DEST/maurice-$stamp.db.gz"
 
-# VACUUM INTO refuses to overwrite, so the temp name must not exist.
-rm -f "$tmp"
-sqlite3 "$DB" "VACUUM INTO '$tmp'"
+# snapshot <db file> <name prefix> — a consistent copy, verified, compressed,
+# pruned to KEEP. Fails the run if the copy does not check out.
+snapshot() {
+  local db="$1" name="$2"
+  local tmp="$DEST/.$name-$stamp.db"
+  local out="$DEST/$name-$stamp.db.gz"
 
-# Verify before keeping it. A snapshot nobody checked is a guess, and this one
-# is cheap to check while the file is still in hand.
-if ! sqlite3 "$tmp" "PRAGMA integrity_check;" | grep -qx "ok"; then
-  echo "✗ snapshot failed integrity check — keeping nothing"
+  # VACUUM INTO refuses to overwrite, so the temp name must not exist.
   rm -f "$tmp"
-  exit 1
+  sqlite3 "$db" "VACUUM INTO '$tmp'"
+
+  # Verify before keeping it. A snapshot nobody checked is a guess, and this one
+  # is cheap to check while the file is still in hand.
+  if ! sqlite3 "$tmp" "PRAGMA integrity_check;" | grep -qx "ok"; then
+    echo "✗ $name: snapshot failed integrity check — keeping nothing"
+    rm -f "$tmp"
+    return 1
+  fi
+
+  gzip -c "$tmp" > "$out"
+  rm -f "$tmp"
+
+  # Prune oldest first, keeping KEEP. Never touches anything but our own pattern.
+  #
+  # A while-read loop, not mapfile: launchd runs this through /bin/bash, which on
+  # macOS is still 3.2, where mapfile does not exist. It failed there and nowhere
+  # else — an interactive run picks up Homebrew's bash 5 — so the snapshot was
+  # taken, the prune silently never ran, and the only symptom would have been a
+  # disk filling up months later.
+  ls -1t "$DEST"/"$name"-*.db.gz 2>/dev/null | tail -n +$((KEEP + 1)) | while IFS= read -r f; do
+    [ -n "$f" ] && rm -f "$f"
+  done
+
+  local live snap count
+  live="$(du -h "$db" | cut -f1)"
+  snap="$(du -h "$out" | cut -f1)"
+  count="$(ls -1 "$DEST"/"$name"-*.db.gz 2>/dev/null | wc -l | tr -d ' ')"
+  echo "✓ $(basename "$out")  ($live live → $snap compressed)  ${count}/${KEEP} kept"
+}
+
+[[ -f "$DB" ]] || { echo "✗ no database at $DB"; exit 1; }
+snapshot "$DB" maurice
+
+# The rename happens on the server's first start after the change; until then
+# the file may still carry the old name. Back up whichever exists.
+if [[ -f "$LIFE_DB" ]]; then
+  snapshot "$LIFE_DB" life
+elif [[ -f "$(dirname "$LIFE_DB")/akita.db" ]]; then
+  snapshot "$(dirname "$LIFE_DB")/akita.db" life
+else
+  echo "· no life.db at $LIFE_DB — skipped"
 fi
-
-gzip -c "$tmp" > "$out"
-rm -f "$tmp"
-
-# Prune oldest first, keeping KEEP. Never touches anything but our own pattern.
-#
-# A while-read loop, not mapfile: launchd runs this through /bin/bash, which on
-# macOS is still 3.2, where mapfile does not exist. It failed there and nowhere
-# else — an interactive run picks up Homebrew's bash 5 — so the snapshot was
-# taken, the prune silently never ran, and the only symptom would have been a
-# disk filling up months later.
-ls -1t "$DEST"/maurice-*.db.gz 2>/dev/null | tail -n +$((KEEP + 1)) | while IFS= read -r f; do
-  [ -n "$f" ] && rm -f "$f"
-done
-
-live="$(du -h "$DB" | cut -f1)"
-snap="$(du -h "$out" | cut -f1)"
-count="$(ls -1 "$DEST"/maurice-*.db.gz 2>/dev/null | wc -l | tr -d ' ')"
-echo "✓ $(basename "$out")  ($live live → $snap compressed)  ${count}/${KEEP} kept"

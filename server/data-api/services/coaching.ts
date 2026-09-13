@@ -1,5 +1,5 @@
 /**
- * Coaching plans service — CRUD for autonomous coaching plans stored in akita.db.
+ * Coaching plans service — CRUD for autonomous coaching plans stored in life.db.
  *
  * Plans are decoupled from garden notes and can exist independently.
  * Each plan has temporal activation (active_from / active_until) and
@@ -7,9 +7,9 @@
  */
 
 import { Database } from "bun:sqlite";
-import { getDbPath } from "../lib/config";
+import { getLifeDbPath } from "../lib/config";
 
-const DB_PATH = getDbPath("akita.db");
+const DB_PATH = getLifeDbPath();
 
 let db: Database;
 function getDb(): Database {

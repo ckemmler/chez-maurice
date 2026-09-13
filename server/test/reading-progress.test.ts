@@ -17,7 +17,7 @@ import path from "node:path";
 
 const TMP = fs.mkdtempSync(path.join(os.tmpdir(), "maurice-progress-"));
 process.env.MAURICE_DATA_DIR = TMP;
-const DB = path.join(TMP, "akita.db");
+const DB = path.join(TMP, "life.db");
 
 // The pre-migration shape, written before the service ever opens the file.
 beforeAll(() => {

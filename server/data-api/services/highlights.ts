@@ -1,9 +1,9 @@
 import { Database } from "bun:sqlite";
-import { getDbPath } from "../lib/config";
+import { getLifeDbPath } from "../lib/config";
 
 // Passage-level highlights on book chapters — a highlighted quote, an optional
 // note, a colour, and the character range within the text so the reader can
-// re-anchor it. Per-member, stored in akita.db alongside bookmarks.
+// re-anchor it. Per-member, stored in life.db alongside bookmarks.
 //
 // A chapter has two texts: the full one and its summary. `view` says which the
 // offsets belong to, without which they are ambiguous — the same chapter_slug
@@ -11,7 +11,7 @@ import { getDbPath } from "../lib/config";
 // carried that column since the beginning; highlights did not, and the reader
 // simply refused to highlight a summary rather than resolve it.
 
-const DB_PATH = getDbPath("akita.db");
+const DB_PATH = getLifeDbPath();
 
 let db: Database;
 function getDb(): Database {

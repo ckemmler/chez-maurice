@@ -6,7 +6,7 @@
  */
 
 import { Database } from "bun:sqlite";
-import { getDbPath } from "../lib/config";
+import { getLifeDbPath } from "../lib/config";
 import type {
   SleepDataPayload,
   MindfulMinutesDataPayload,
@@ -16,7 +16,7 @@ import type {
   RespiratoryRateDataPayload,
 } from "../types/health";
 
-const DB_PATH = getDbPath("akita.db");
+const DB_PATH = getLifeDbPath();
 
 let db: Database;
 function getDb(): Database {

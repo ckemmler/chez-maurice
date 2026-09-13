@@ -18,7 +18,7 @@ const TMP = fs.mkdtempSync(path.join(os.tmpdir(), "maurice-highlights-"));
 
 /** The table as it was before `view` existed, so the migration has work to do. */
 beforeAll(() => {
-  const db = new Database(path.join(TMP, "akita.db"));
+  const db = new Database(path.join(TMP, "life.db"));
   db.exec(`
     CREATE TABLE highlights (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
