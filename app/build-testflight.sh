@@ -15,6 +15,15 @@
 # Usage:
 #   ASC_KEY_ID=TJBDUXNG6C ASC_ISSUER_ID=<issuer-uuid> ./build-testflight.sh
 #   PLATFORMS="macos" ASC_KEY_ID=… ASC_ISSUER_ID=… ./build-testflight.sh   # macOS only
+#
+# After the upload, asc-release-build.ts waits for processing and hands the
+# build to every external group (internal groups get it on their own). Set
+# SKIP_RELEASE=1 to stop at the upload.
+#
+# Per machine: a Mac App Store profile carries ONE certificate, so each Mac
+# that ships macOS has its own — PROVISIONING_PROFILE_MACOS="Maurice macOS App
+# Store" on the mini, "… laptop" on the laptop — plus its own "3rd Party Mac
+# Developer Installer" certificate. iOS profiles carry both certificates.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -142,4 +151,13 @@ PLIST
 }
 
 for p in $PLATFORMS; do archive_and_upload "$p"; done
-echo "==> Done. Check TestFlight in App Store Connect; the public invite link stays stable across builds."
+
+# Internal groups see the build as soon as Apple has processed it. External
+# groups need it added and a beta review submission made — automatic for a
+# version already reviewed. SKIP_RELEASE=1 leaves the build in internal testing.
+if [[ -z "${SKIP_RELEASE:-}" ]]; then
+  echo "==> Handing build $BUILD to the external TestFlight groups..."
+  ASC_KEY_ID="$ASC_KEY_ID" ASC_ISSUER_ID="$ASC_ISSUER_ID" \
+    bun run "$SCRIPT_DIR/asc-release-build.ts" "$BUILD" $PLATFORMS
+fi
+echo "==> Done. The public invite link stays stable across builds."
