@@ -21,9 +21,7 @@ const {
 } = await import("../data-api/services/flashcards");
 const { listGardenEntries } = await import("../data-api/services/gardenEntries");
 
-const MEMBER = (await import("../src/db")).default
-  .query("SELECT id FROM users ORDER BY created_at LIMIT 1")
-  .get() as { id: string };
+const { MEMBER } = await import("./_member");
 const { gardenFor } = await import("../data-api/services/gardenFiche");
 const garden = () => gardenFor(MEMBER.id)!;
 

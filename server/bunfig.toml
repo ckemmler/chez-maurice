@@ -1,0 +1,6 @@
+# Every suite runs in one process. Without a preload, whichever suite first
+# imports src/db.ts decides where maurice.db lives for all the others — and a
+# suite that never set MAURICE_DATA_DIR bound it to the real ~/.maurice. Two
+# test fixtures ended up in the household's live database that way.
+[test]
+preload = ["./test/_preload.ts"]

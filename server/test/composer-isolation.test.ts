@@ -3,7 +3,9 @@ import { Database } from "bun:sqlite";
 import fs from "node:fs";
 import path from "node:path";
 import { join } from "node:path";
-import { setDefaultLibrary, removeLibrary, getDefaultLibrary } from "../src/services/calibreLibraries";
+// No service imports for the database: this suite tests the RUNNING server, so
+// everything it seeds must land in that server's database. The service layer
+// goes through src/db, which the test preload points at a throwaway.
 import { gardensRoot } from "../src/services/gardensRoot";
 
 // B6 cross-cutting: every composer endpoint is account-scoped, and the encrypted
@@ -14,7 +16,10 @@ import { gardensRoot } from "../src/services/gardensRoot";
 
 const BASE = "https://localhost:3001/api/v1/composer";
 const tls = { rejectUnauthorized: false } as any;
-const DATA = process.env.MAURICE_DATA_DIR || join(process.env.HOME || "", ".maurice");
+// The live data dir, on purpose: this suite talks to the running server and
+// reads its tokens. The test preload redirects MAURICE_DATA_DIR to a temp
+// dir for everyone else and leaves the original here.
+const DATA = process.env.MAURICE_LIVE_DATA_DIR || process.env.MAURICE_DATA_DIR || join(process.env.HOME || "", ".maurice");
 const PAOLA_LIB = "/tmp/paola-cc-isolation";
 // Seeded by this suite (see beforeAll) rather than borrowed from the developer's
 // own garden: gardens are gitignored, so a real slug leaves the test red on any
@@ -97,13 +102,21 @@ beforeAll(() => {
     INSERT INTO books_authors_link (book,author) VALUES (18,1);
   `);
   meta.close();
-  setDefaultLibrary(paolaId, PAOLA_LIB, "Paola Test");
+  // Same row setDefaultLibrary() would write, on the live database.
+  const live = new Database(join(DATA, "maurice.db"));
+  live.run(`DELETE FROM calibre_libraries WHERE account_id = ? AND library_root = ?`, [paolaId, PAOLA_LIB]);
+  live.run(
+    `INSERT INTO calibre_libraries (id, account_id, label, library_root, is_default) VALUES (?, ?, ?, ?, 1)`,
+    [crypto.randomUUID(), paolaId, "Paola Test", PAOLA_LIB],
+  );
+  live.close();
 });
 
 afterAll(() => {
   fs.rmSync(ENCRYPTED_NOTE_PATH, { force: true });
-  const lib = getDefaultLibrary(paolaId);
-  if (lib && lib.library_root === PAOLA_LIB) removeLibrary(paolaId, lib.id);
+  const live = new Database(join(DATA, "maurice.db"));
+  live.run(`DELETE FROM calibre_libraries WHERE account_id = ? AND library_root = ?`, [paolaId, PAOLA_LIB]);
+  live.close();
   fs.rmSync(PAOLA_LIB, { recursive: true, force: true });
   // drop any specs this suite created
   const db = new Database(join(DATA, "maurice.db"));

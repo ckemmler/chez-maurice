@@ -13,10 +13,10 @@ import { spawnSync } from "node:child_process";
 const TMP = fs.mkdtempSync(path.join(os.tmpdir(), "maurice-garden-read-"));
 process.env.MAURICE_GARDENS_DIR = path.join(TMP, "gardens");
 
-// akita.db must be a throwaway — these tests write highlights. The path binds
-// when articleHighlights is first imported, so set the env just for that
-// import, then drop it: src/db (below) must keep resolving the developer's
-// real maurice.db, which articles.test.ts borrows a member id from too.
+// akita.db must be a throwaway — these tests write highlights. Give this
+// suite its own data dir for that import, then hand the preload's throwaway
+// back (never `delete` it: with the variable unset, anything that resolves
+// the data dir lazily after this point lands in the real ~/.maurice).
 process.env.MAURICE_DATA_DIR = path.join(TMP, "data");
 fs.mkdirSync(process.env.MAURICE_DATA_DIR, { recursive: true });
 const {
@@ -26,21 +26,14 @@ const {
   deleteArticleHighlight,
   countArticleHighlights,
 } = await import("../data-api/services/articleHighlights");
-delete process.env.MAURICE_DATA_DIR;
+process.env.MAURICE_DATA_DIR = process.env.MAURICE_TEST_DATA_DIR!;
 
 const { saveArticleFiche, listArticles, describeArticle, readArticleBody, findArticleFiche } =
   await import("../data-api/services/gardenArticles");
 const { gardenFor } = await import("../data-api/services/gardenFiche");
 
 // Like articles.test.ts, borrow a real member id — never write to maurice.db:
-// under `bun test` every file shares one process, so src/db may already be
-// bound to the developer's own database by an earlier suite regardless of the
-// env set above. The env still isolates what this suite *writes*: the garden
-// (fresh MAURICE_GARDENS_DIR) and akita.db (fresh MAURICE_DATA_DIR, resolved
-// when articleHighlights is first imported — which is here).
-const MEMBER = (await import("../src/db")).default
-  .query("SELECT id FROM users ORDER BY created_at LIMIT 1")
-  .get() as { id: string };
+const { MEMBER } = await import("./_member");
 
 const garden = () => gardenFor(MEMBER.id)!;
 

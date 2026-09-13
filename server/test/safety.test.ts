@@ -12,7 +12,10 @@ import { join } from "node:path";
 
 const BASE = "https://localhost:3001/api";
 const tls = { rejectUnauthorized: false } as any;
-const DATA = process.env.MAURICE_DATA_DIR || join(process.env.HOME || "", ".maurice");
+// The live data dir, on purpose: this suite talks to the running server and
+// reads its tokens. The test preload redirects MAURICE_DATA_DIR to a temp
+// dir for everyone else and leaves the original here.
+const DATA = process.env.MAURICE_LIVE_DATA_DIR || process.env.MAURICE_DATA_DIR || join(process.env.HOME || "", ".maurice");
 
 let adminTok = "", adminId = "", memberTok = "", memberId = "";
 let roomId = "", privId = "";

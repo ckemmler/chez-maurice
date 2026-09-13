@@ -23,10 +23,7 @@ const { dumpFrontmatter, parseFiche, writeFragment } =
 const { saveArticleFiche, scanArticleFiches, NEEDS_CAPTURE } =
   await import("../data-api/services/gardenArticles");
 
-/** Whichever member owns the first garden — the tests only need a real id. */
-const MEMBER = (await import("../src/db")).default
-  .query("SELECT id FROM users ORDER BY created_at LIMIT 1")
-  .get() as { id: string };
+const { MEMBER } = await import("./_member");
 
 beforeAll(() => {
   fs.mkdirSync(GARDEN, { recursive: true });
