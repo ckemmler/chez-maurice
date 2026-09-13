@@ -3,14 +3,17 @@
 # line is the whole "leave the fleet" procedure.
 #
 # Each entry: name (matches the token line), url (the API root, no trailing
-# slash), owner (a first name is enough — this file is public), since, and
-# optionally insecure: true for a self-signed local cert.
+# slash), owner (a first name is enough — this file is public), since,
+# optionally insecure: true for a self-signed local cert, and deploy: the
+# shell command, run from the repo root, that puts the current checkout live
+# there. The tower runs it on `d`; without one the instance is read-only.
 #
 # The health token of each instance lives OUTSIDE the repo, one line per
 # instance, in ~/.maurice/ops/fleet-tokens:
 #     aline=maur_…
-# Mint it in that instance's admin → Tokens, scope "Health only". Without a
-# token the row still shows reachability and the public version.
+# Mint it with ops/mint-health-token.ts or in that instance's admin → Tokens,
+# scope "Health only". Without a token the row still shows reachability and
+# the public version.
 
 instances:
   - name: home
@@ -18,11 +21,16 @@ instances:
     owner: Candide
     since: 2026-03-01
     insecure: true
+    # launchd runs the checkout itself: deploying is restarting on main.
+    deploy: scripts/service.sh restart api
   - name: aline
     url: https://aline.chezmaurice.eu
     owner: Aline
     since: 2026-09-01
+    # The rehearsal container at :13003, started by hand; rebuilt from the checkout.
+    deploy: ops/recreate-container.sh maurice-repet
   - name: review
     url: https://review.chezmaurice.eu
     owner: Candide (App Review account)
     since: 2026-09-12
+    deploy: launchctl kickstart -k gui/501/com.maurice.household.review

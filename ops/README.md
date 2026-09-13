@@ -24,16 +24,31 @@ emits. Only the `[tag]` a log line opens with is kept (`[claude]`, `[gardens]`,
 when it climbs, read the logs of that instance.
 
 A **Health only** token cannot do anything else: it is refused as a member
-credential everywhere. Mint one per instance in that instance's admin →
-Tokens, and keep it in `~/.maurice/ops/fleet-tokens`, one `name=maur_…` per
-line. The file is outside the repo on purpose.
+credential everywhere. Mint one per instance — `ops/mint-health-token.ts
+<maurice.db>` writes it straight into the file (also works with `docker exec`
+inside a container), or use that instance's admin → Tokens — and keep it in
+`~/.maurice/ops/fleet-tokens`, one `name=maur_…` per line, mode 600. The file
+is outside the repo on purpose.
 
 ## The inventory: `fleet.yaml`
 
-Hand-kept. One entry per instance: `name`, `url`, `owner`, `since`, and
-`insecure: true` for a self-signed local certificate. Adding an instance to
-the fleet is adding a line; handing it over is removing the line and revoking
-its health token in its admin. There is no discovery and there will not be.
+Hand-kept. One entry per instance: `name`, `url`, `owner`, `since`,
+`insecure: true` for a self-signed local certificate, and `deploy:` — the
+shell command, run from the repo root, that puts the current checkout live
+there. Adding an instance to the fleet is adding a line; handing it over is
+removing the line and revoking its health token in its admin. There is no
+discovery and there will not be.
+
+Three shapes of `deploy:` exist today, one per kind of instance:
+
+| Instance runs as | `deploy:` |
+|---|---|
+| launchd from the checkout (home, review) | `scripts/service.sh restart api`, `launchctl kickstart -k gui/501/com.maurice.household.<name>` |
+| a local container started by hand (aline, `:13003`) | `ops/recreate-container.sh <container>` — builds the image, recreates the container with its own env, ports, volumes and log rotation, waits for `/healthz` (`--dry-run` shows the run line) |
+| a remote host (Scaleway, to come) | `scripts/deploy.sh <ssh-host>` |
+
+The end state is one shape — the container — which is when the tower's `d`
+means the same thing everywhere.
 
 ## The one command: `fleet-status.ts`
 
@@ -54,6 +69,26 @@ review    DOWN (ConnectionRefused)
 Exit code 1 when anything is down or degraded, so a launchd or cron line
 piped to a notifier is a pager. Without a token for an instance the row shows
 reachability and the public version only.
+
+## The tower: `tower.ts`
+
+```
+ops/tower.ts                # live, in the terminal
+ops/tower.ts --every 10     # poll interval, seconds
+ops/tower.ts --once         # one frame, no keys — for a pipe or a test
+```
+
+The same table, refreshed every 30 s, an error sparkline per instance over
+the last 40 polls (a red dot is an unreachable poll), the selected instance's
+url / owner / deploy line, and a log pane. Keys: `↑/↓` select, `r` probe now,
+`d` deploy the selected instance (asks `y/n`, then streams the command's
+output into the log, one deploy at a time), `l` toggle the log, `q` quit.
+
+It is a terminal program on purpose: no daemon, no port, no tunnel, no login
+page. Its access control is the shell it runs in — the Mac mini's, or an ssh
+session into it (Tailscale from the phone works). A web face on the same
+`fleet.ts` core is a later option if the terminal ever falls short; it would
+need Cloudflare Access in front of it before it gets a deploy button.
 
 ## Versions
 
