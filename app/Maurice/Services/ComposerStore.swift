@@ -558,10 +558,15 @@ final class ComposerStore {
 
     // MARK: search
 
-    func search(_ q: String) async -> [SearchEntry] {
+    /// Nil, not `[]`, when the request did not complete — failed, or cancelled
+    /// because the picker moved on to the next keystroke. The two answers are
+    /// not the same: "nothing matches" is a result, "we never heard back" is
+    /// not, and a caller that treated them alike wrote an empty list over the
+    /// real one every time a search was cancelled.
+    func search(_ q: String) async -> [SearchEntry]? {
         let qs = q.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
         guard let json = await request("GET", "/api/v1/composer/search?q=\(qs)") as? [String: Any],
-              let results = json["results"] as? [[String: Any]] else { return [] }
+              let results = json["results"] as? [[String: Any]] else { return nil }
         return results.compactMap { r in
             guard let typeStr = r["type"] as? String, let type = ComposerItemType(rawValue: typeStr) else { return nil }
             let rawId = (r["id"] as? String) ?? String(describing: r["id"] ?? "")

@@ -1390,8 +1390,16 @@ struct AddContextSheet: View {
         // results List collapses to zero height (reads as "search is broken").
         .frame(minWidth: 480, idealWidth: 520, minHeight: 560, idealHeight: 640)
         #endif
+        // One request per pause in typing, not per keystroke, and never a
+        // write from a task that has been cancelled. Every keystroke cancels
+        // the previous task here; its request used to come back as an empty
+        // list, which the dying task then wrote over the live results — so
+        // the first search worked and the next ones came up blank.
         .task(id: q) {
-            results = await store.search(q)
+            try? await Task.sleep(for: .milliseconds(150))
+            guard !Task.isCancelled else { return }
+            guard let found = await store.search(q), !Task.isCancelled else { return }
+            results = found
         }
         .fileImporter(isPresented: $showImporter, allowedContentTypes: [.item]) { result in
             guard case .success(let url) = result else { return }
