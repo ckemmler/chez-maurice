@@ -532,6 +532,25 @@ try { db.run(`ALTER TABLE households ADD COLUMN providers_seeded INTEGER NOT NUL
 // existing database, so the GLM rows would never appear if they rode on it.
 try { db.run(`ALTER TABLE households ADD COLUMN zai_seeded INTEGER NOT NULL DEFAULT 0`); } catch {}
 
+// ── Ancillary models ────────────────────────────────────────────
+// The models behind the functions that are not the chat: summaries, flashcards,
+// signal parsing, the tools' own classifiers and syntheses. Each function is an
+// "invocation" (services/ancillary.ts lists them); a row here pins one to a
+// model. Nothing is pinned by default — an invocation without a row runs on the
+// household's ancillary model, which must always be set: a function that fails
+// because nobody chose its model is the failure this exists to rule out.
+db.run(`
+  CREATE TABLE IF NOT EXISTS ancillary_models (
+    invocation TEXT PRIMARY KEY,
+    model_id   TEXT NOT NULL,
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+  )
+`);
+try { db.run(`ALTER TABLE households ADD COLUMN ancillary_model TEXT`); } catch {}
+// Forced: an install that predates the column gets its chat default as its
+// ancillary default, so every function has a model from the first request.
+db.run(`UPDATE households SET ancillary_model = default_model WHERE ancillary_model IS NULL OR ancillary_model = ''`);
+
 // Non-model API keys, for the tools that enrich garden entries with metadata
 // and cover art. The Python MCP tools read these columns straight out of
 // maurice.db (env vars of the same name still win, for headless setups).

@@ -3,25 +3,21 @@
  * into structured signals with details, timestamp, and metadata.
  */
 
-import { getHouseholdConfig } from "../../src/services/claude";
+import { ancillaryComplete } from "../../src/services/ancillary";
 
-const ANTHROPIC_API_URL = "https://api.anthropic.com/v1/messages";
 
-// Haiku for lightweight parsing, Sonnet for nutritional estimation
-const MODEL_HAIKU = "claude-haiku-4-5-20251001";
-const MODEL_SONNET = "claude-sonnet-4-5-20250929";
 
 interface CategorySchema {
   description: string;
   metadataFields: string;
   examples: string;
-  model?: string;
+  invocation?: string;
 }
 
 const CATEGORY_SCHEMAS: Record<string, CategorySchema> = {
   eating: {
     description: "Meal or food intake",
-    model: MODEL_SONNET,
+    invocation: "signal_nutrition",
     metadataFields: [
       '"meal" (breakfast/lunch/dinner/snack — infer from time if not stated)',
       '"items" (array of food items)',
@@ -118,39 +114,13 @@ export async function parseSignalText(
 ): Promise<ParsedSignal> {
   // Use the household's stored key (same source as Maurice's chat), falling
   // back to the env var so the parser still works if run standalone.
-  const apiKey = getHouseholdConfig().apiKey ?? process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) {
-    throw new Error("No Anthropic API key configured (household api_key or ANTHROPIC_API_KEY)");
-  }
-
   const now = new Date().toISOString();
   const prompt = buildPrompt(text, category, now);
-  const model = CATEGORY_SCHEMAS[category]?.model ?? MODEL_HAIKU;
-
-  const response = await fetch(ANTHROPIC_API_URL, {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-      "x-api-key": apiKey,
-      "anthropic-version": "2023-06-01",
-    },
-    body: JSON.stringify({
-      model,
-      max_tokens: 512,
-      messages: [{ role: "user", content: prompt }],
-    }),
-  });
-
-  if (!response.ok) {
-    const err = await response.text();
-    throw new Error(`Anthropic API error: ${response.status} ${err}`);
-  }
-
-  const result = (await response.json()) as {
-    content: Array<{ type: string; text?: string }>;
-  };
-
-  const raw = result.content?.[0]?.text?.trim();
+  // Meals carry a nutrition estimate and get the heavier invocation; every
+  // other category is plain parsing. Both are the admin's to pin.
+  const invocation = CATEGORY_SCHEMAS[category]?.invocation ?? "signal_parse";
+  const result = await ancillaryComplete({ invocation, prompt, maxTokens: 512 });
+  const raw = result.text.trim();
   if (!raw) {
     throw new Error("Empty response from LLM");
   }

@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import db from "../../db";
-import { getHouseholdConfig } from "../claude";
+import { ancillaryComplete, ancillaryModel } from "../ancillary";
 import { estimateTokens } from "./notes";
 
 // A conversation loaded into the composer as context. Short ones are pasted
@@ -20,8 +20,6 @@ export const SUMMARY_THRESHOLD = 8_000;
 /** Runaway guard — a thread this long is not summarised in one pass. */
 const MAX_TRANSCRIPT_CHARS = 1_500_000;
 
-const ANTHROPIC_API_URL = "https://api.anthropic.com/v1/messages";
-const SUMMARY_MODEL = "claude-sonnet-5";
 
 // ── Transcript ───────────────────────────────────────────────────────────────
 
@@ -110,43 +108,25 @@ function buildPrompt(title: string, transcript: string): string {
   ].join("\n");
 }
 
-/** Raw fetch rather than the SDK, like every other model call in this server. */
-const anthropicGenerator: SummaryGenerator = async ({ title, transcript }) => {
-  const { apiKey } = getHouseholdConfig();
-  if (!apiKey) throw new Error("no Anthropic API key configured for this household");
-  const response = await fetch(ANTHROPIC_API_URL, {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-      "x-api-key": apiKey,
-      "anthropic-version": "2023-06-01",
-    },
-    body: JSON.stringify({
-      model: SUMMARY_MODEL,
-      max_tokens: 6000,
-      output_config: { effort: "low" },
-      messages: [{ role: "user", content: buildPrompt(title, transcript) }],
-    }),
+/** Through the ancillary door: the admin's model for `conversation_summary`,
+ *  on whichever provider it belongs to. */
+const modelGenerator: SummaryGenerator = async ({ title, transcript }) => {
+  const r = await ancillaryComplete({
+    invocation: "conversation_summary",
+    prompt: buildPrompt(title, transcript),
+    maxTokens: 6000,
+    effort: "low",
   });
-  if (!response.ok) throw new Error(`Anthropic API error: ${response.status} ${await response.text()}`);
-  const result = (await response.json()) as {
-    stop_reason?: string;
-    stop_details?: { category?: string | null };
-    content: Array<{ type: string; text?: string }>;
-  };
-  if (result.stop_reason === "refusal") {
-    throw new Error(`model declined to summarise (${result.stop_details?.category ?? "unspecified"})`);
-  }
-  const text = result.content.filter((b) => b.type === "text").map((b) => b.text ?? "").join("").trim();
-  if (!text) throw new Error("model returned an empty summary");
-  if (result.stop_reason === "max_tokens") throw new Error("the summary hit the token ceiling");
-  return text;
+  if (r.stop === "refusal") throw new Error("model declined to summarise");
+  if (!r.text) throw new Error("model returned an empty summary");
+  if (r.stop === "max_tokens") throw new Error("the summary hit the token ceiling");
+  return r.text;
 };
 
-let generator: SummaryGenerator = anthropicGenerator;
+let generator: SummaryGenerator = modelGenerator;
 /** Tests swap the model call for a stub. */
 export function setSummaryGenerator(g: SummaryGenerator | null): void {
-  generator = g ?? anthropicGenerator;
+  generator = g ?? modelGenerator;
 }
 
 // One generation per conversation at a time: the composer weighs, saves and
@@ -179,7 +159,7 @@ export function ensureSummary(conversationId: string): Promise<SummaryRow | null
         conversation_id: conversationId,
         content_hash: hash,
         summary,
-        model: SUMMARY_MODEL,
+        model: ancillaryModel("conversation_summary"),
         message_count: rows.length,
         source_tokens: estimateTokens(text),
       });

@@ -457,7 +457,7 @@ async function* runOllamaAgentic(
 
 /** Where each OpenAI-compatible provider's Chat Completions API lives, and the
  *  name to show when its key is missing. */
-const OPENAI_STYLE_BASE_URL: Record<string, string> = {
+export const OPENAI_STYLE_BASE_URL: Record<string, string> = {
   openai: "https://api.openai.com/v1",
   mistral: "https://api.mistral.ai/v1",
   zai: "https://api.z.ai/api/paas/v4",

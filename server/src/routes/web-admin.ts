@@ -34,7 +34,8 @@ import {
   removeLibrary,
   validateLibraryRoot,
 } from "../services/calibreLibraries";
-import { listModels, getModel, addModel, removeModel, setModelCtx, type Model } from "../services/models";
+import { listModels, getModel, addModel, removeModel, setModelCtx, configuredProviders, type Model } from "../services/models";
+import { ANCILLARY_INVOCATIONS, ancillaryTable, householdAncillaryModel, setHouseholdAncillaryModel, setPinnedModel } from "../services/ancillary";
 import {
   accessMatrix,
   accessCounts,
@@ -277,6 +278,37 @@ function adminName(c: any): string {
 }
 
 // ── small render helpers ────────────────────────────────────────
+// ── Ancillary models ─────────────────────────────────────────────
+// The models behind everything that is not the chat: summaries, flashcards,
+// signal parsing, the tools' classifiers and syntheses. One household default
+// that every function runs on unless pinned, and a pin per function. Only
+// models whose provider has a key are offered — a pin the household cannot
+// call would silently fall back anyway (services/ancillary.ts).
+function ancillaryCard(lang: string): string {
+  const ok = configuredProviders();
+  const models = listModels().filter((m) => ok.has(m.provider));
+  const options = (selected: string | null, blank?: string) =>
+    (blank !== undefined ? `<option value="" ${!selected ? "selected" : ""}>${escape(blank)}</option>` : "") +
+    models.map((m) =>
+      `<option value="${escape(m.id)}" ${m.id === selected ? "selected" : ""}>${escape(m.name)}${m.tier === "local" ? " · " + escape(t(lang, "settings.on_device")) : ""}</option>`).join("");
+  const rows = ancillaryTable().map((r) => `
+      <div class="field" style="margin-top:12px">
+        <label class="label">${escape(r.label)} <span class="hint">· ${escape(t(lang, r.side === "server" ? "ancillary.side_server" : "ancillary.side_tools"))} · ${escape(t(lang, `ancillary.tier_${r.tier}`))}</span></label>
+        <select name="pin:${escape(r.id)}">${options(r.pinned, t(lang, "ancillary.household_default_option"))}</select>
+        <span class="hint">${escape(r.blurb)}</span>
+      </div>`).join("");
+  return `
+        <form method="POST" action="/admin/ancillary-models" class="card pad" style="margin-top:18px">
+          <div class="access-head"><span class="ttl2">${escape(t(lang, "ancillary.title"))}</span></div>
+          <div class="hint" style="margin:6px 0 12px">${escape(t(lang, "ancillary.desc"))}</div>
+          <div class="field"><label class="label">${escape(t(lang, "ancillary.household_default"))}</label>
+            <select name="ancillary_model">${options(householdAncillaryModel())}</select>
+            <span class="hint">${escape(t(lang, "ancillary.household_default_hint"))}</span></div>
+          ${rows}
+          <div class="grid-actions"><button type="submit" class="btn primary">${escape(t(lang, "settings.save"))}</button></div>
+        </form>`;
+}
+
 function sectionHead(kicker: string, title: string, desc: string, action = ""): string {
   return `
   <div class="sec-headrow">
@@ -666,6 +698,7 @@ web.get("/dashboard", async (c) => {
             <input type="number" name="max_tokens" value="${household.max_tokens}" min="256" max="200000" /></div>
           <div class="grid-actions"><button type="submit" class="btn primary">${escape(t(lang, "settings.save"))}</button></div>
         </form>
+        ${ancillaryCard(lang)}
       </section>
 
       <section id="sec-reading">
@@ -761,6 +794,24 @@ web.post("/settings", async (c) => {
   if (form.default_model && getModel((form.default_model as string).trim())) put("default_model", (form.default_model as string).trim());
   if (form.max_tokens) put("max_tokens", parseInt(form.max_tokens as string) || 4096);
   if (sets.length) db.run(`UPDATE households SET ${sets.join(", ")} WHERE id = 'default'`, params);
+  return c.redirect("/admin/dashboard?msg=settings_saved#sec-settings");
+});
+
+// ── Ancillary models (POST) ─────────────────────────────────────
+web.post("/ancillary-models", async (c) => {
+  const redir = requireWebAdmin(c);
+  if (redir) return redir;
+  const form = await c.req.parseBody();
+  const ok = configuredProviders();
+  // A pin has to be callable now; a model without a key would only fall back
+  // silently, and the admin would think the pin took.
+  const callable = (id: string) => { const m = getModel(id); return !!m && ok.has(m.provider); };
+  const hh = String(form.ancillary_model ?? "").trim();
+  if (hh && callable(hh)) setHouseholdAncillaryModel(hh);
+  for (const inv of ANCILLARY_INVOCATIONS) {
+    const v = String(form[`pin:${inv.id}`] ?? "").trim();
+    setPinnedModel(inv.id, v && callable(v) ? v : null);
+  }
   return c.redirect("/admin/dashboard?msg=settings_saved#sec-settings");
 });
 

@@ -31,7 +31,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { createHash } from "node:crypto";
-import { getHouseholdConfig } from "../../src/services/claude";
+import { ancillaryComplete, ancillaryModel, AncillaryError } from "../../src/services/ancillary";
 import {
   assertLocale,
   assertSlug,
@@ -143,7 +143,6 @@ export class FlashcardError extends Error {
 
 const DEFAULT_LOCALE = "fr";
 const DEFAULT_LANG = "fr";
-export const CARDS_MODEL = "claude-opus-5";
 
 // ── Hashing ──
 
@@ -579,23 +578,19 @@ export function buildCardsPrompt(
   ].join("\n");
 }
 
+/** Through the ancillary door: the admin's model for `flashcards`, on
+ *  whichever provider it belongs to. */
 async function callModel(prompt: string): Promise<string> {
-  const { apiKey } = getHouseholdConfig();
-  if (!apiKey) throw new FlashcardError("no Anthropic API key configured for this household", 422);
-  const response = await fetch("https://api.anthropic.com/v1/messages", {
-    method: "POST",
-    headers: { "content-type": "application/json", "x-api-key": apiKey, "anthropic-version": "2023-06-01" },
-    body: JSON.stringify({
-      model: CARDS_MODEL,
-      max_tokens: 16_000,
-      output_config: { effort: "medium" },
-      messages: [{ role: "user", content: prompt }],
-    }),
-  });
-  if (!response.ok) throw new FlashcardError(`Anthropic API error: ${response.status} ${await response.text()}`, 502);
-  const result = (await response.json()) as { stop_reason?: string; content: Array<{ type: string; text?: string }> };
-  if (result.stop_reason === "refusal") throw new FlashcardError("model declined to make cards", 422);
-  return result.content.filter((b) => b.type === "text").map((b) => b.text ?? "").join("").trim();
+  let r;
+  try {
+    r = await ancillaryComplete({ invocation: "flashcards", prompt, maxTokens: 16_000, effort: "medium" });
+  } catch (e) {
+    // 422 is "nothing to call with" (no key); anything else is the provider failing.
+    if (e instanceof AncillaryError) throw new FlashcardError(e.message, e.status === 422 ? 422 : 502);
+    throw e;
+  }
+  if (r.stop === "refusal") throw new FlashcardError("model declined to make cards", 422);
+  return r.text;
 }
 
 export function parseDrafts(raw: string): Draft[] {
@@ -680,7 +675,7 @@ export async function generateCards(
     source,
     source_hash: fingerprintSource(text),
     generated_at: new Date().toISOString().slice(0, 10),
-    model: opts.generator ? "test" : CARDS_MODEL,
+    model: opts.generator ? "test" : ancillaryModel("flashcards"),
     lang,
     answer_lang,
     mode,

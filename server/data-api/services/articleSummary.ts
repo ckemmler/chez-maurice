@@ -10,21 +10,18 @@
  * would clobber that. The file is re-read from disk at write time for the same
  * reason — the in-memory copy from the save is already stale.
  *
- * Raw fetch rather than the Anthropic SDK, matching the two call sites this
- * server already has (services/claude.ts, signalParser.ts) and keeping a
- * self-hosted install free of another runtime dependency.
+ * The model is the admin's choice for the `article_summary` invocation, run
+ * through services/ancillary.ts on whichever provider it belongs to.
  */
 
 import fs from "node:fs";
 import path from "node:path";
-import { getHouseholdConfig } from "../../src/services/claude";
+import { ancillaryComplete, ancillaryModel } from "../../src/services/ancillary";
 import { autoCommit, fragmentsDir, gardenFor, parseFiche, writeFiche } from "./gardenFiche";
 import { extractArticleFromUrl } from "./articleExtract";
 import { indexGardenPaths } from "./gardenIndex";
 import { ArticleSaveError, scanArticleFiches, type ArticleFicheRef } from "./gardenArticles";
 
-const ANTHROPIC_API_URL = "https://api.anthropic.com/v1/messages";
-const SUMMARY_MODEL = "claude-opus-5";
 
 /**
  * Runaway guard, not a context limit — the model takes 1M tokens and the
@@ -81,52 +78,24 @@ export async function summarizeArticleText(input: SummaryInput): Promise<string>
     );
   }
 
-  const { apiKey } = getHouseholdConfig();
-  if (!apiKey) throw new Error("no Anthropic API key configured for this household");
-
-  const response = await fetch(ANTHROPIC_API_URL, {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-      "x-api-key": apiKey,
-      "anthropic-version": "2023-06-01",
-    },
-    body: JSON.stringify({
-      model: SUMMARY_MODEL,
-      // Room for adaptive thinking plus a short paragraph. Thinking is on by
-      // default on this model and its tokens count against max_tokens.
-      max_tokens: 4000,
-      output_config: { effort: "low" },
-      messages: [{ role: "user", content: buildPrompt({ ...input, text }) }],
-    }),
+  // Through the ancillary door: the admin's model for `article_summary`, on
+  // whichever provider it belongs to. Room for adaptive thinking plus a short
+  // paragraph — on a thinking model those tokens count against max_tokens.
+  const result = await ancillaryComplete({
+    invocation: "article_summary",
+    prompt: buildPrompt({ ...input, text }),
+    maxTokens: 4000,
+    effort: "low",
   });
 
-  if (!response.ok) {
-    throw new Error(`Anthropic API error: ${response.status} ${await response.text()}`);
-  }
-
-  const result = (await response.json()) as {
-    stop_reason?: string;
-    stop_details?: { category?: string | null; explanation?: string };
-    content: Array<{ type: string; text?: string }>;
-  };
-
-  if (result.stop_reason === "refusal") {
-    throw new Error(`model declined to summarise (${result.stop_details?.category ?? "unspecified"})`);
-  }
-
-  const summary = result.content
-    .filter((b) => b.type === "text")
-    .map((b) => b.text ?? "")
-    .join("")
-    .trim();
-
+  if (result.stop === "refusal") throw new Error("model declined to summarise");
+  const summary = result.text;
   if (!summary) throw new Error("model returned an empty summary");
   // A truncated paragraph is non-empty, so it would pass the check above, get
   // committed, and stick — `summarizeAndStore` skips regeneration once a
   // summary exists, so a retry without `force` would hand back the same stub of
   // a sentence.
-  if (result.stop_reason === "max_tokens") {
+  if (result.stop === "max_tokens") {
     throw new Error("the summary hit the token ceiling and would be cut off mid-sentence");
   }
   return summary;
@@ -200,7 +169,7 @@ export async function summarizeAndStore(
 
   const stamp = {
     summary,
-    summary_model: SUMMARY_MODEL,
+    summary_model: ancillaryModel("article_summary"),
     summary_at: new Date().toISOString().slice(0, 10),
   };
   if (ref.kind === "fiche") {
