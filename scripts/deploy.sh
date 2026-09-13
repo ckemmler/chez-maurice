@@ -25,6 +25,7 @@ echo "▸ Deploying to $HOST  (tag $TAG)"
 
 # 1. Build ──────────────────────────────────────────────────────────────────
 echo "  build…"
+"$REPO/scripts/build-info.sh" "$TAG"
 docker build -f "$REPO/infra/container/Dockerfile" --target production \
   -t "maurice:$TAG" -t maurice:production "$REPO"
 

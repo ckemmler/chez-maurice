@@ -85,21 +85,40 @@ async function hashToken(raw: string): Promise<string> {
   return Array.from(new Uint8Array(hash), (b) => b.toString(16).padStart(2, "0")).join("");
 }
 
-function validateApiToken(tokenHash: string): { userId: string } | null {
+export type ApiTokenScope = "mcp" | "health" | "full";
+
+/** Look a token hash up. A `health`-scoped token is an operator's probe, not a
+ *  member's credential: it never authenticates as the user, so it is refused
+ *  here and only honoured by validateHealthToken. */
+function validateApiToken(tokenHash: string): { userId: string; scope: ApiTokenScope } | null {
   const row = db
-    .query(`SELECT user_id FROM api_tokens WHERE token_hash = ?`)
-    .get(tokenHash) as any;
+    .query(`SELECT user_id, scope FROM api_tokens WHERE token_hash = ?`)
+    .get(tokenHash) as { user_id: string; scope: ApiTokenScope } | undefined;
   if (!row) return null;
+  if (row.scope === "health") return null;
   // Touch last_used_at (fire-and-forget)
   db.run(`UPDATE api_tokens SET last_used_at = datetime('now') WHERE token_hash = ?`, [tokenHash]);
-  return { userId: row.user_id };
+  return { userId: row.user_id, scope: row.scope };
+}
+
+/** True when a raw maur_* token may read the full /healthz: scope `health` or
+ *  `full`. Never resolves to a user. */
+export async function validateHealthToken(raw: string): Promise<boolean> {
+  if (!raw.startsWith("maur_")) return false;
+  const hash = await hashToken(raw);
+  const row = db
+    .query(`SELECT scope FROM api_tokens WHERE token_hash = ?`)
+    .get(hash) as { scope: ApiTokenScope } | undefined;
+  if (!row || (row.scope !== "health" && row.scope !== "full")) return false;
+  db.run(`UPDATE api_tokens SET last_used_at = datetime('now') WHERE token_hash = ?`, [hash]);
+  return true;
 }
 
 /**
  * Validate a raw maur_* token (hashes it, looks up in DB).
  * Returns the userId on success, null on failure.
  */
-export async function validateApiTokenRaw(raw: string): Promise<{ userId: string } | null> {
+export async function validateApiTokenRaw(raw: string): Promise<{ userId: string; scope: ApiTokenScope } | null> {
   const hash = await hashToken(raw);
   return validateApiToken(hash);
 }
@@ -119,7 +138,7 @@ export function generateApiToken(): string {
 export async function createApiToken(
   userId: string,
   label: string,
-  scope: "mcp" | "health" | "full" = "full",
+  scope: ApiTokenScope = "full",
   storeRaw = false
 ): Promise<{ id: string; rawToken: string }> {
   const raw = generateApiToken();

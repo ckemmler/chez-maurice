@@ -186,9 +186,9 @@ cmd_status() {
 }
 
 case "${1:-}" in
-  build)   shift; dc build "$@" ;;
+  build)   shift; "$REPO/scripts/build-info.sh" >/dev/null; dc build "$@" ;;
   seed)    shift; cmd_seed "$@" ;;
-  up)      shift; dc up -d --build "$@"; echo; echo "→ API on http://localhost:13001" ;;
+  up)      shift; "$REPO/scripts/build-info.sh" >/dev/null; dc up -d --build "$@"; echo; echo "→ API on http://localhost:13001" ;;
   down)    shift; dc down "$@" ;;
   restart) shift; if [[ -n "${1:-}" ]]; then sup restart "$1"; else dc restart; fi ;;
   status|ps) cmd_status ;;

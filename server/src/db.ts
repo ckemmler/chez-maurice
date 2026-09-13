@@ -835,5 +835,12 @@ try {
   }
 } catch {}
 
+// Schema version, stamped in the file's PRAGMA user_version so an operator can
+// see from /healthz which shape of database an instance runs. Bump it by hand
+// whenever a migration above changes the schema; the number is descriptive,
+// nothing branches on it yet.
+export const SCHEMA_VERSION = 1;
+db.run(`PRAGMA user_version = ${SCHEMA_VERSION}`);
+
 export default db;
 export { dataDir };

@@ -54,7 +54,8 @@ import { adminExists, getUser, getUserByUsername, householdName, householdInfo }
 import { dataDir } from "./src/db";
 import { imagesDir } from "./src/services/images";
 import { avatarsDir } from "./src/services/avatars";
-import { proxyAuth, validateApiTokenRaw } from "./src/middleware/auth";
+import { proxyAuth, validateApiTokenRaw, validateHealthToken } from "./src/middleware/auth";
+import { fullHealth, hookConsoleErrors, publicHealth, recordError } from "./src/services/health";
 import { validateSession } from "./src/services/auth";
 import { isParticipant } from "./src/services/conversations";
 import { setRoomPublisher, setSubscriberCount, roomTopic, userTopic } from "./src/services/roomBus";
@@ -92,9 +93,23 @@ import dashboard from "./data-api/routes/dashboard";
 
 const app = new Hono();
 
+// Every console.error from here on is one tick on /healthz's error counter.
+hookConsoleErrors();
+
 // ── Middleware ───────────────────────────────────────────────────
 
 app.use("/*", logger());
+
+// Errors that escape a route: log the tag, count it, answer 500. Without this
+// Hono answers 500 silently and the operator never learns the rate.
+app.onError((err, c) => {
+  console.error(`[http] ${c.req.method} ${c.req.path}:`, err?.message);
+  return c.json({ error: "Internal error" }, 500);
+});
+app.use("/*", async (c, next) => {
+  await next();
+  if (c.res.status >= 500) recordError(`http-${c.res.status}`);
+});
 app.use(
   "/*",
   cors({
@@ -510,7 +525,18 @@ app.get("/api/health", (c) => {
   });
 });
 
-app.get("/healthz", (c) => c.json({ status: "ok", service: "maurice" }));
+// Public face: enough for an uptime probe and for the apps' version check.
+// With a `health`- or `full`-scoped maur_* token: the operator's full picture.
+// No member data on either face — see src/services/health.ts.
+app.get("/healthz", async (c) => {
+  const auth = c.req.header("Authorization");
+  const raw = auth?.startsWith("Bearer ") ? auth.slice(7) : null;
+  if (raw && (await validateHealthToken(raw))) {
+    const h = fullHealth();
+    return c.json(h, h.status === "ok" ? 200 : 503);
+  }
+  return c.json(publicHealth());
+});
 
 // ── Reverse proxy: Astro (fallback → localhost:{web-port}) ──────────
 

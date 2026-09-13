@@ -129,3 +129,6 @@ notarization/
 
 # notarized installer artifacts (built/copied at deploy time)
 *.pkg
+
+# Stamped by scripts/build-info.sh at image build
+server/build-info.json

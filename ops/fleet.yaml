@@ -1,0 +1,28 @@
+# The instances Candide operates for other people. Hand-kept: an instance is
+# added when it is provisioned and removed when its owner takes it over — that
+# line is the whole "leave the fleet" procedure.
+#
+# Each entry: name (matches the token line), url (the API root, no trailing
+# slash), owner (a first name is enough — this file is public), since, and
+# optionally insecure: true for a self-signed local cert.
+#
+# The health token of each instance lives OUTSIDE the repo, one line per
+# instance, in ~/.maurice/ops/fleet-tokens:
+#     aline=maur_…
+# Mint it in that instance's admin → Tokens, scope "Health only". Without a
+# token the row still shows reachability and the public version.
+
+instances:
+  - name: home
+    url: https://localhost:3001
+    owner: Candide
+    since: 2026-03-01
+    insecure: true
+  - name: aline
+    url: https://aline.chezmaurice.eu
+    owner: Aline
+    since: 2026-09-01
+  - name: review
+    url: https://review.chezmaurice.eu
+    owner: Candide (App Review account)
+    since: 2026-09-12
