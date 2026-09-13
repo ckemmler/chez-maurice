@@ -452,6 +452,21 @@ struct ServerConversation: Decodable, Identifiable {
     let participants: [ServerParticipant]?
 }
 
+/// One hit from /api/conversations/search — the room, plus the passage that
+/// matched. The server wraps the matched words in ⟦ ⟧; `snippet` keeps them.
+struct ConversationSearchHit: Decodable, Identifiable {
+    let conversation: ServerConversation
+    let snippet: String
+    let message_id: String?
+    let hits: Int
+    var id: String { conversation.id }
+}
+
+struct ConversationSearchResponse: Decodable {
+    let q: String
+    let results: [ConversationSearchHit]
+}
+
 struct ServerConversationDetail: Decodable {
     let id: String
     let title: String?

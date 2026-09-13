@@ -31,6 +31,7 @@ import { generateImage, editImage, saveUploadedImage, loadImageAsDataUri } from 
 import { publishToRoom, publishToUser, userHasSocket } from "../services/roomBus";
 import { pushToUser } from "../services/push";
 import { indexConversationInBackground } from "../services/mcpClient";
+import { searchConversations } from "../services/conversationSearch";
 
 const conversations = new Hono();
 
@@ -93,6 +94,20 @@ conversations.post("/", async (c) => {
   if (!canUseMaurice(maurice_id ?? null, uid)) return c.json({ error: "Not found" }, 404);
   const convo = createConversation(uid, maurice_id ?? null);
   return c.json(convo, 201);
+});
+
+// ── GET /api/conversations/search?q=…&limit=… ───────────────────
+// Full-text search over the member's own rooms (messages + titles). Declared
+// before /:id so "search" is never read as a conversation id.
+
+conversations.get("/search", (c) => {
+  const q = (c.req.query("q") || "").trim();
+  const limit = parseInt(c.req.query("limit") ?? "30", 10);
+  if (!q) return c.json({ q, results: [] });
+  const results = searchConversations(c.get("userId"), q, {
+    limit: Number.isFinite(limit) ? limit : 30,
+  });
+  return c.json({ q, results });
 });
 
 // ── GET /api/conversations/:id ──────────────────────────────────

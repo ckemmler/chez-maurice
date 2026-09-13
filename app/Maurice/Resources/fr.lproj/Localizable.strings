@@ -403,3 +403,21 @@
 "book.progress.reset" = "Réinitialiser";
 "book.progress.resetConfirm" = "Oublier où tu en es dans ce livre ? Plus rien ne sera chargé tant que tu n'auras pas dit jusqu'où tu as lu.";
 "book.progress.pausedHint" = "Figé ici pendant que tu consultes plus loin. Lire n'y changera rien.";
+
+// Conversation search (sidebar) + conversations as composer context
+"sidebar.search_placeholder" = "Rechercher dans les conversations…";
+"sidebar.search_clear" = "Effacer la recherche";
+"sidebar.search_searching" = "Recherche…";
+"sidebar.search_none" = "Aucun résultat.";
+"conversation.meta.messages" = "%d messages";
+"conversation.meta.fullText" = "texte intégral";
+"conversation.meta.summary" = "résumé";
+"conversation.meta.summaryStale" = "résumé · %d nouveaux messages depuis";
+"conversation.meta.summarising" = "résumé en cours…";
+"conversation.representation" = "Charger comme";
+"conversation.representation.summary" = "Résumé";
+"conversation.representation.full" = "Texte intégral";
+"conversation.hint.fullText" = "La transcription entière, ~%@ tokens.";
+"conversation.hint.summary" = "Un résumé remplace la transcription (~%@ tokens). Si la conversation se poursuit, il est refait.";
+"conversation.hint.summaryStale" = "La conversation a continué : %d messages après le résumé sont chargés en entier jusqu'au prochain résumé.";
+"conversation.hint.summarising" = "La transcription (~%@ tokens) est chargée en attendant le résumé.";

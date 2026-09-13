@@ -4,6 +4,7 @@ import { resolveSubtree, readNoteBody, estimateTokens } from "./notes";
 import { readChapters } from "./calibre";
 import { resolveFileItem, resolveFolderItem, fileText, fileBinary, type FileAttachment } from "./files";
 import { ficheText, resolveFicheItem } from "./fiches";
+import { conversationContext, type SummaryStatus } from "./conversationSummary";
 import {
   resolveBookItem,
   conversationWeight,
@@ -31,6 +32,13 @@ export interface SpecItemSnapshot {
   progressChapter?: number;
   /** fiche: how many fragments the item carries. */
   fragments?: number;
+  /** conversation: hash of the transcript at freeze time — what the summary
+   *  is keyed on, so a continued thread reads as changed. */
+  hash?: string;
+  /** conversation: the transcript's weight, whatever was loaded. */
+  fullWeight?: number;
+  /** conversation: state of the summary at freeze time. */
+  summary?: SummaryStatus;
   encrypted?: boolean;
   archivedWithheld?: number;
   // file/folder
@@ -128,9 +136,17 @@ function freeze(memberId: string, it: any): SpecItem {
       },
     };
   }
-  // conversation
-  const r = conversationWeight(memberId, it.id);
-  return { ...it, snapshot: { weight: r.weight, count: r.count, resolved_at: at } };
+  // conversation — the snapshot records what was loaded and the transcript
+  // hash it was loaded from. The resolver re-derives both: a conversation is
+  // the one item whose content is expected to move under the snapshot.
+  const r = conversationWeight(memberId, it);
+  return {
+    ...it,
+    snapshot: {
+      weight: r.weight, count: r.count, representation: r.representation,
+      fullWeight: r.fullWeight, summary: r.summary, resolved_at: at,
+    },
+  };
 }
 
 export function getSpec(memberId: string, conversationId: string): ContextSpec {
@@ -216,20 +232,6 @@ export interface ResolvedPayload {
   tier: string;
 }
 
-function transcriptText(conversationId: string): string {
-  const rows = db
-    .query(
-      `SELECT m.role, m.content, u.display_name
-       FROM messages m LEFT JOIN users u ON u.id = m.author_id
-       WHERE m.conversation_id = ? ORDER BY m.created_at`,
-    )
-    .all(conversationId) as Array<{ role: string; content: string; display_name: string | null }>;
-  return rows
-    .filter((r) => r.role !== "system")
-    .map((r) => `${r.role === "assistant" ? "Maurice" : r.display_name || "User"}: ${r.content}`)
-    .join("\n\n");
-}
-
 /** Produce the assembled context text from the FROZEN snapshots. Never truncates
  *  — reports per-item weight + total against the budget so the UI can trim. */
 export function resolveToText(memberId: string, conversationId: string): ResolvedPayload {
@@ -275,9 +277,10 @@ export function resolveSpecToText(memberId: string, spec: ContextSpec): Resolved
       const text = ids.map((fid) => fileText(memberId, fid)).filter(Boolean).join("\n\n---\n\n");
       return { type: "folder", id: it.id, text, weight: estimateTokens(text) };
     }
-    // conversation
-    const text = transcriptText(String(it.id));
-    return { type: "conversation", id: it.id, text, weight: estimateTokens(text) };
+    // conversation: summary when long (fresh, or stale + the tail since), the
+    // transcript when short or when the item pins `representation: "full"`.
+    const ctx = conversationContext(String(it.id), it.representation === "full");
+    return { type: "conversation", id: it.id, text: ctx.text, weight: ctx.weight };
   });
   const total = items.reduce((s, i) => s + i.weight, 0);
   const f = total / CTX_BUDGET;

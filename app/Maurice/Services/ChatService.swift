@@ -101,6 +101,39 @@ final class ChatService {
         conversations.first { $0.id == activeConversationId }
     }
 
+    // ── Search ──────────────────────────────────────────────────
+    /// What the sidebar search box holds; empty = the plain list.
+    var searchQuery = ""
+    /// Hits for `searchQuery`, in the server's rank order.
+    var searchResults: [ConversationSearchHit] = []
+    var isSearching = false
+    private var searchTask: Task<Void, Never>?
+
+    /// Full-text search over the member's own rooms (messages + titles). Debounced:
+    /// a keystroke cancels the request the previous one was about to make.
+    func searchConversations(_ q: String) {
+        searchQuery = q
+        searchTask?.cancel()
+        let trimmed = q.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed.count >= 2 else { searchResults = []; isSearching = false; return }
+        isSearching = true
+        searchTask = Task {
+            try? await Task.sleep(for: .milliseconds(220))
+            guard !Task.isCancelled, let api, let token else { return }
+            let qs = trimmed.addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? trimmed
+            let res: ConversationSearchResponse? = try? await api.get(
+                "/api/conversations/search?q=\(qs)&limit=40", token: token)
+            guard !Task.isCancelled, let res, res.q == trimmed else { return }
+            searchResults = res.results
+            isSearching = false
+        }
+    }
+
+    func clearSearch() {
+        searchTask?.cancel()
+        searchQuery = ""; searchResults = []; isSearching = false
+    }
+
     func loadConversations() async {
         guard let api, let token else { return }
         do {

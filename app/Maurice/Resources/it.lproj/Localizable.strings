@@ -403,3 +403,21 @@
 "book.progress.reset" = "Azzera";
 "book.progress.resetConfirm" = "Dimenticare a che punto sei in questo libro? Non verrà caricato nulla finché non dirai fin dove hai letto.";
 "book.progress.pausedHint" = "Fermo qui mentre consulti più avanti. Continuare a leggere non lo sposterà.";
+
+// Conversation search (sidebar) + conversations as composer context
+"sidebar.search_placeholder" = "Cerca nelle conversazioni…";
+"sidebar.search_clear" = "Cancella ricerca";
+"sidebar.search_searching" = "Ricerca…";
+"sidebar.search_none" = "Nessun risultato.";
+"conversation.meta.messages" = "%d messaggi";
+"conversation.meta.fullText" = "testo integrale";
+"conversation.meta.summary" = "riassunto";
+"conversation.meta.summaryStale" = "riassunto · %d nuovi messaggi da allora";
+"conversation.meta.summarising" = "riassunto in corso…";
+"conversation.representation" = "Carica come";
+"conversation.representation.summary" = "Riassunto";
+"conversation.representation.full" = "Testo integrale";
+"conversation.hint.fullText" = "L'intera trascrizione, ~%@ token.";
+"conversation.hint.summary" = "Un riassunto sostituisce la trascrizione (~%@ token). Se la conversazione prosegue, viene rifatto.";
+"conversation.hint.summaryStale" = "La conversazione è proseguita: %d messaggi dopo il riassunto sono caricati per intero finché non ne arriva uno nuovo.";
+"conversation.hint.summarising" = "La trascrizione (~%@ token) è caricata in attesa del riassunto.";

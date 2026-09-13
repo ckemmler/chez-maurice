@@ -60,6 +60,19 @@ private func bookScopeLabel(_ item: TrayItem) -> String {
     return "\(scope) · \(rep)"
 }
 
+// A conversation's meta line says what is loaded: the transcript, or a
+// summary — and, for a summary, whether it is behind the thread.
+private func conversationMeta(_ item: TrayItem, count: Int) -> String {
+    let messages = String(format: L("conversation.meta.messages"), count)
+    if item.conversationFull { return "\(messages) · \(L("conversation.meta.fullText"))" }
+    switch item.summaryStatus {
+    case "ready":   return "\(messages) · \(L("conversation.meta.summary"))"
+    case "stale":   return "\(messages) · \(String(format: L("conversation.meta.summaryStale"), item.uncovered))"
+    case "pending": return "\(messages) · \(L("conversation.meta.summarising"))"
+    default:        return item.sub.isEmpty ? messages : item.sub
+    }
+}
+
 // The mono meta subline shown under a card title.
 private func cardMeta(_ item: TrayItem, count: Int) -> String {
     switch item.type {
@@ -71,7 +84,7 @@ private func cardMeta(_ item: TrayItem, count: Int) -> String {
         let author = item.sub.isEmpty ? "" : item.sub + " · "
         return author + bookScopeLabel(item)
     case .conversation:
-        return item.sub.isEmpty ? L("context.conversation") : item.sub
+        return conversationMeta(item, count: count)
     case .file:
         // kind · path (· size when search-supplied). na files note they ride along.
         return item.sub.isEmpty ? item.kind : item.sub
@@ -246,8 +259,15 @@ struct TrayCard: View {
     private var isOpen: Bool { openId == item.id }
     // Accordion: when another card is open, this one collapses to a fine line.
     private var condensed: Bool { openId != nil && openId != item.id }
-    // Conversations and single files are leaves — nothing to expand.
-    private var expandable: Bool { item.type != .conversation && item.type != .file }
+    // Single files are leaves — nothing to expand. So is a short conversation;
+    // a long one opens on the summary / full-text choice.
+    private var expandable: Bool {
+        switch item.type {
+        case .file: return false
+        case .conversation: return item.summarisable || item.conversationFull
+        default: return true
+        }
+    }
 
     private var radius: CGFloat { condensed ? 7 : 9 }
 
@@ -373,7 +393,50 @@ struct TrayCard: View {
         case .book: BookCardBody(item: item, accent: accent)
         case .folder: FolderCardBody(item: item, accent: accent)
         case .fiche: FicheCardBody(item: item, accent: accent)
-        case .conversation, .file: EmptyView()
+        case .conversation: ConversationCardBody(item: item, accent: accent)
+        case .file: EmptyView()
+        }
+    }
+}
+
+// MARK: Conversation card body — summary or the whole transcript
+//
+// A conversation past the summary threshold is loaded as a summary the
+// composer makes and keeps against a hash of the transcript; continue the
+// thread and the summary is behind, so the new turns ride along verbatim
+// until a fresh one lands. The one control pins the full transcript instead.
+
+private struct ConversationCardBody: View {
+    @Environment(\.mauriceTheme) private var theme
+    @Environment(ComposerStore.self) private var store
+    let item: TrayItem
+    let accent: Color
+
+    private var hint: String {
+        if item.conversationFull { return String(format: L("conversation.hint.fullText"), fmtTok(item.fullWeight)) }
+        switch item.summaryStatus {
+        case "ready":   return String(format: L("conversation.hint.summary"), fmtTok(item.fullWeight))
+        case "stale":   return String(format: L("conversation.hint.summaryStale"), item.uncovered)
+        case "pending": return String(format: L("conversation.hint.summarising"), fmtTok(item.fullWeight))
+        default:        return ""
+        }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text(L("conversation.representation")).font(.system(size: 12.5)).foregroundStyle(theme.ink)
+                Spacer()
+                ComposerSegmented(
+                    options: [("summary", L("conversation.representation.summary")), ("full", L("conversation.representation.full"))],
+                    value: Binding(get: { item.conversationFull ? "full" : "summary" },
+                                   set: { var c = item; c.conversationFull = ($0 == "full"); store.update(c) }),
+                    accent: accent)
+            }
+            if !hint.isEmpty {
+                Text(hint).font(.system(size: 9.5, design: .monospaced)).foregroundStyle(theme.inkMute)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         }
     }
 }
