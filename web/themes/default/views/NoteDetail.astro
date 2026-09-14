@@ -405,7 +405,19 @@ function monthSeparator(d: Date): string | null {
                 if (archivedSlugs[s]) card.classList.add('child-link--archived');
                 anyChildReplaced = true;
               }
-              // Collect remaining sibling nodes as annotation
+              // Keep the prose around the link. Everything AFTER it becomes the
+              // card's annotation; everything BEFORE it stays a paragraph above
+              // the card — it used to be dropped on the floor with the
+              // paragraph it lived in, so a note that said "Half a day is
+              // plenty. See [[nara-deer]]." lost its first sentence in the
+              // browser while the server had sent it whole.
+              var before = document.createDocumentFragment();
+              var node = parent.firstChild;
+              while (node && node !== link) {
+                var nextBefore = node.nextSibling;
+                before.appendChild(node);
+                node = nextBefore;
+              }
               var annotation = document.createElement('span');
               annotation.className = 'moc-inline-annotation';
               var sib = link.nextSibling;
@@ -425,7 +437,13 @@ function monthSeparator(d: Date): string | null {
                   titleEl.appendChild(annotation);
                 }
               }
-              parent.replaceWith(wrapper);
+              if (before.textContent.trim()) {
+                var lead = document.createElement('p');
+                lead.appendChild(before);
+                parent.replaceWith(lead, wrapper);
+              } else {
+                parent.replaceWith(wrapper);
+              }
               processed.add(link);
             }
           });

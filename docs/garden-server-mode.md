@@ -1,6 +1,7 @@
 # The garden engine, out of the dev server
 
-Status: plan, 2026-09-14. Owner: Candide. Sessions pick up from the phase table.
+Status: **done, 2026-09-14** — all five phases landed on `main` and are running.
+Owner: Candide. Kept as the record of what changed and why.
 
 ## Why
 
@@ -269,6 +270,52 @@ into `/g/<member>/api/images/<name>` and every illustration 404'd in a
 member's garden; `/api/` is the server's own root and is now left alone. One
 pinned test remains — the MOC-card script dropping text before a wiki-link,
 a client-side bug with no bearing on the engine.
+
+### Phase 5 — done 2026-09-14. The chantier is closed.
+
+Removed: `scripts/start-garden.sh` and `infra/container/start-member-gardens.sh`
+(they would still have started a dev server per member), the `.garden-roots`
+symlink shells with their container volume and dockerignore entry, the
+per-member Astro and Vite cache dirs, and the port each member carried in
+`gardens.json` — `GARDEN_PORTS` is now `GARDEN_MEMBERS`, a set, because all it
+ever answers is "does this member have a garden here". `provision-member.ts`
+no longer allocates a port; an older manifest still round-trips.
+
+Kept, with the reason written down rather than assumed:
+
+- **The websocket proxy.** The built engine opens no socket — a page subscribes
+  to `/api/v1/garden-tools/events`. Forwarding upgrades is what lets a
+  developer run `npm run dev` in `web/` behind the authenticated proxy, which
+  is the only way to work on the web UI at all.
+- **`preserveSymlinks`.** The member shells are gone, but the private overlays
+  still symlink files into the tree, and without it Vite follows one to its
+  realpath in the other repo and its relative imports break.
+- **The Cloudflare adapter**, for the static publish: candide.me goes to
+  Cloudflare Pages and a handful of its routes are server-rendered, so that
+  build needs an adapter of its own.
+
+And the last pinned test came unpinned: the MOC-card script kept only the text
+*after* a wiki-link, dropping whatever came before it along with the paragraph
+— the server sent the note whole and the browser lost its first sentence. Text
+before the link is now a paragraph above the card. Fixed in the shipped theme
+and in the private one.
+
+**73 tests, green in both modes, none pinned.** Every bug the battery found
+across the five phases is fixed:
+
+| Found in phase 0 | Fixed in |
+|---|---|
+| `reorder-children` wrote nothing | 2 |
+| the toolbar reached the default garden's engine | 2 |
+| note images 404'd under `/g/<member>/` | 4 |
+| text before a wiki-link vanished in the browser | 5 |
+
+Found later and fixed on the way: an unpublished resource 404'd for its own
+author (phase 1's filter, reused in SSR); a non-owner could read another
+garden's drafts through its search index; the private overlay's pages and its
+whole theme were missed by three sweeps because `grep -r` does not follow
+symlinked directories; `garden_settings.web_theme` was written by the app and
+read by nobody, so changing the theme in Settings did nothing.
 
 ## Measurements
 

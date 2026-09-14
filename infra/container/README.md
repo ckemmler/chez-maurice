@@ -78,8 +78,7 @@ or shared:
 |---|---|
 | `server/node_modules`, `web/node_modules` | darwin-arm64 binaries (sharp) that cannot load on Linux |
 | `data`, `logs` | repo-relative paths both servers write to at once |
-| `web/.garden-roots` | per-instance Astro roots, rebuilt per install |
-| `web/public/images`, `web/public/avatars` | symlinks `download-images.ts` rewrites at every Astro start — shared, the two installs break each other's |
+| `web/public/images`, `web/public/avatars` | symlinks `garden-image-links.ts` writes at every engine start — shared, the two installs break each other's |
 | `tools/corpus/data` | the sqlite-vec vector store — it lives in the *repo tree*, so the bind mount had the container and the Mac writing to one SQLite file across virtiofs |
 | `/home/maurice/.maurice` | the application's own state; see rule 2 |
 

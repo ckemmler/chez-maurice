@@ -66,9 +66,8 @@ services:
       - web-modules:/app/web/node_modules
       - repo-data:/app/data
       - repo-logs:/app/logs
-      - garden-roots:/app/web/.garden-roots
       # These two hold symlinks into the gardens dir that
-      # web/src/integrations/download-images.ts rewrites every time Astro
+      # web/src/integrations/garden-image-links.ts rewrites every time Astro
       # starts. Shared, the two installs overwrite each other's: the container
       # pointed /images/candide at /home/maurice/… and the Mac's site stopped
       # serving its own images until its next restart.
@@ -90,7 +89,6 @@ volumes:
   web-modules:
   repo-data:
   repo-logs:
-  garden-roots:
   public-images:
   public-avatars:
   corpus-data:

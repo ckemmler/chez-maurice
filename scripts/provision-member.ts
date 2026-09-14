@@ -4,14 +4,13 @@
  *
  * `createUser` (server/src/services/users.ts) creates a row in maurice.db and
  * stops there. It does not create the member's garden directory, and it does not
- * add them to gardens.json — which nothing in the repo writes: the manifest is
- * read by server/index.ts, start-garden.sh and start-all.sh, and maintained by
- * hand. So on a fresh install a member exists, can log in, and has no garden:
- * /g/<them> answers "Garden not available" and nothing explains why.
+ * add them to gardens.json — the manifest naming the household's gardens, read
+ * by server/index.ts. So on a fresh install a member exists, can log in, and has
+ * no garden: /g/<them> answers "Garden not available" and nothing explains why.
  *
  * This is the missing half. Idempotent — run it as often as you like.
  *
- *   bun run scripts/provision-member.ts <username> [--locale en] [--port 4325]
+ *   bun run scripts/provision-member.ts <username> [--locale en]
  *
  * Inside the container:
  *
@@ -26,6 +25,8 @@ import { gardensRoot } from "../server/src/services/gardensRoot";
 import { getMauriceDbPath } from "../server/lib/appDir";
 
 interface GardenEntry {
+  /** Vestigial: one engine serves the household now. Kept so an older
+   *  manifest round-trips unchanged. */
   port?: number;
   base: string;
   title: string;
@@ -43,7 +44,7 @@ const flag = (name: string) => {
 };
 
 if (!username) {
-  console.error("usage: bun run scripts/provision-member.ts <username> [--locale en] [--port N]");
+  console.error("usage: bun run scripts/provision-member.ts <username> [--locale en]");
   process.exit(1);
 }
 
@@ -79,24 +80,7 @@ const manifest: Record<string, GardenEntry> = existsSync(manifestPath)
   ? JSON.parse(readFileSync(manifestPath, "utf8"))
   : {};
 
-// One Astro process per garden, each on its own port, because Astro keys its
-// dev content store to the project root and instances sharing one root
-// cross-contaminate. 4321 belongs to the default garden (start-web.sh), so
-// members start at 4322.
-function nextFreePort(): number {
-  const taken = new Set(
-    Object.values(manifest)
-      .map((g) => g.port)
-      .filter((p): p is number => typeof p === "number"),
-  );
-  taken.add(4321);
-  let port = 4322;
-  while (taken.has(port)) port++;
-  return port;
-}
-
 const existing = manifest[username];
-const port = Number(flag("port")) || existing?.port || nextFreePort();
 
 // The avatar is served by the API from the data dir, not from the garden, so it
 // is only claimed here if the file is actually there — a broken image is worse
@@ -105,15 +89,13 @@ const avatarFile = join(process.env.HOME || "", ".maurice", "avatars", `${userna
 const avatar = existsSync(avatarFile) ? `/api/avatars/${username}-sq.png` : null;
 
 manifest[username] = {
-  port,
   base: `/g/${username}`,
   title: `${user.display_name}'s garden`,
   name: user.display_name,
   avatar,
   ...(existing ?? {}),
-  // Re-asserted after the spread: these are derived, and a stale port or base
-  // from an earlier run should not win over what we just resolved.
-  port,
+  // Re-asserted after the spread: derived, so a stale base from an earlier run
+  // must not win over what we just resolved.
   base: `/g/${username}`,
 };
 
@@ -131,7 +113,7 @@ mkdirSync(join(root, username, "images"), { recursive: true });
 
 console.log(`✓ ${username} (${user.display_name})`);
 console.log(`  garden   ${join(root, username)}${created ? "  (created)" : "  (already there)"}`);
-console.log(`  manifest ${manifestPath}  → port ${port}, base /g/${username}`);
+console.log(`  manifest ${manifestPath}  → base /g/${username}`);
 console.log();
 console.log("  Restart so the engine picks it up:");
 console.log("    scripts/container.sh restart      (container)");

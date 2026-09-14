@@ -51,8 +51,10 @@ export default defineConfig({
   output: process.env.WEB_SSR === "1" ? "server" : "static",
   // The garden engine is a plain node server: one process per household,
   // reading the gardens off the local disk. Cloudflare's adapter targets
-  // workerd, which has no `node:fs` at runtime — fine for the static publish
-  // (nothing runs there), impossible for the engine.
+  // workerd, which has no `node:fs` at runtime — impossible for the engine,
+  // and right for the public publish, which goes to Cloudflare Pages. (That
+  // build needs an adapter too: a handful of routes are server-rendered
+  // there, so it is not a pure static site.)
   adapter: process.env.WEB_SSR === "1" ? node({ mode: "standalone" }) : cloudflare(),
   // Hosts the dev server accepts. In the garden topology this engine is only ever
   // reached through the authenticated Bun reverse proxy (server/index.ts) — the
@@ -71,10 +73,6 @@ export default defineConfig({
       ? process.env.ALLOWED_HOSTS.split(",").map((s) => s.trim()).filter(Boolean)
       : true,
   },
-  // Per-member cache so concurrent engine instances don't race on the shared
-  // node_modules/.astro + .vite dirs (an ENOTEMPTY crash otherwise). Candide
-  // (no GARDEN) keeps the defaults; each member gets its own.
-  cacheDir: process.env.GARDEN ? `./node_modules/.astro-${process.env.GARDEN}` : undefined,
   build: {
     format: "file", // Clean URLs: /about.html served as /about
   },
@@ -86,26 +84,14 @@ export default defineConfig({
   },
   vite: {
     plugins: [themeResolver()],
-    cacheDir: process.env.GARDEN ? `./node_modules/.vite-${process.env.GARDEN}` : undefined,
-    // Member gardens run from a symlink-shell root (.garden-roots/<member>/),
-    // where src/ is a symlink to the shared web/src. Without this, Vite follows
-    // the symlink to its realpath — which sits OUTSIDE the shell root — and
-    // serves assets via /@fs/<realpath> URLs, which breaks Astro's stylesheet
-    // collection (global.css is dropped entirely → no chrome). Preserving
-    // symlinks keeps modules rooted at the shell, so assets stay /src/-relative
-    // like Candide's. (Now always on — see preserveSymlinks below.)
-    // `@theme` = the active theme folder (THEME env, default "default"); `@app`
-    // = the engine (src). Swapping themes is just pointing `@theme` elsewhere.
-    // Root at process.cwd() (the per-member shell root when a garden runs from
-    // .garden-roots/<member>/, web/ for Candide) — NOT import.meta.dirname, which
-    // resolves to the realpath and escapes the symlinked shell, dropping the CSS
-    // ("No Astro CSS at index 0"). themes/ is symlinked into each shell like src/.
+    // `@theme` = the active theme folder; `@app` = the engine (src). Both root
+    // at process.cwd(), NOT import.meta.dirname, which resolves to a realpath
+    // and escapes a symlinked path, dropping the CSS ("No Astro CSS at index 0").
     resolve: {
-      // Always preserve symlinks. Member garden shells symlink src/, and the
-      // private overlays (maurice-tools, maurice-web) symlink tool/web paths into
-      // the tree; without this, Vite follows a symlinked file to its realpath in
-      // the overlay repo and its relative imports (../../layouts/Base.astro, …)
-      // break. Harmless when no symlinks are present (the public checkout).
+      // The private overlays (maurice-tools, maurice-web) symlink files into
+      // this tree; without this, Vite follows one to its realpath in the other
+      // repo and its relative imports (../../layouts/Base.astro, …) break.
+      // Harmless when no symlinks are present (the public checkout).
       preserveSymlinks: true,
       // `@theme` is handled by themeResolver() (with default fallback); `@app`
       // is the engine (src). Both root at the shell via process.cwd().

@@ -72,12 +72,11 @@ test("the note image (/api/images/…) loads under /g/<member>/", async ({ as })
   expect(r.headers()["content-type"]).toContain("png");
 });
 
-// KNOWN BUG: the MOC-card script (NoteDetail.astro, "mixed paragraph" branch)
-// keeps only the text AFTER a wiki-link as the card's annotation; whatever
-// came before the link in the same paragraph is dropped from the DOM. The
-// server HTML is complete; the browser loses "Half a day is plenty…".
+// The MOC-card script turns a paragraph that mixes prose and a wiki-link into
+// a card. Text after the link becomes the card's annotation; text before it
+// used to go down with the paragraph — the server sent the note whole and the
+// browser dropped its first sentence.
 test("text before a wiki-link survives the MOC card script", async ({ as }) => {
-  test.fail();
   const page = await as("theo");
   const res = await page.goto(`${G}/notes/nara-deer`);
   expect(await res!.text()).toContain("Half a day is plenty");

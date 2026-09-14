@@ -109,7 +109,7 @@ if [[ "$MODE" == "production" ]]; then
   fi
 fi
 
-mkdir -p /app/data /app/data/tmp /app/logs /app/web/.garden-roots
+mkdir -p /app/data /app/data/tmp /app/logs
 mkdir -p /app/tools/corpus/data/vectors
 mkdir -p /app/web/public/images /app/web/public/avatars
 

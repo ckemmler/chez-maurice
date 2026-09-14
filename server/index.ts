@@ -152,31 +152,34 @@ app.use("/api/v1/*", async (c, next) => {
 // Member garden engine instances: /g/<member>/… proxies to that member's dev
 // server. Sourced from web/gardens/gardens.json (members with a /g/ base);
 // Candide is the root fallback (webPort), so he's not in this map.
-const GARDEN_PORTS: Record<string, number> = (() => {
+// The household's gardens, from the manifest. It used to carry a port per
+// member because each ran its own engine; one engine serves them all now, so
+// all this answers is "does <member> have a garden here".
+//
+// Via gardensRoot(), like every other reader of this tree: hardcoding the repo
+// path meant the manifest could not follow MAURICE_GARDENS_DIR, so the one file
+// naming a household's members had to live inside the checkout — where every
+// branch switch restored the public demo placeholder and 404'd every garden.
+const GARDEN_MEMBERS: Set<string> = (() => {
   try {
-    // Via gardensRoot(), like every other reader of this tree. Hardcoding the
-    // repo path meant the manifest could not follow MAURICE_GARDENS_DIR, so the
-    // one file naming this household's members and ports had to live inside the
-    // checkout — where it is tracked, and where every branch switch restored the
-    // public demo placeholder and 404'd every garden.
     const manifest = JSON.parse(
       readFileSync(join(gardensRoot(), "gardens.json"), "utf8"),
-    ) as Record<string, { port: number; base?: string }>;
-    const out: Record<string, number> = {};
-    for (const [member, cfg] of Object.entries(manifest)) {
-      if (cfg.base?.startsWith("/g/")) out[member] = cfg.port;
-    }
-    return out;
+    ) as Record<string, { base?: string }>;
+    return new Set(
+      Object.entries(manifest)
+        .filter(([, cfg]) => cfg.base?.startsWith("/g/"))
+        .map(([member]) => member),
+    );
   } catch (err) {
     console.error("[gardens] could not load gardens.json:", (err as Error).message);
-    return {};
+    return new Set<string>();
   }
 })();
 // Bring home any cover image still pointing at someone else's server. Once,
 // a few seconds after boot, so it never delays a start; the writers handle
 // what they write, this catches the rest (see services/gardenImages.ts).
 setTimeout(() => {
-  for (const member of Object.keys(GARDEN_PORTS)) {
+  for (const member of GARDEN_MEMBERS) {
     const garden = { root: join(gardensRoot(), member), username: member };
     localiseRemoteImages(garden)
       .then((n) => { if (n) console.log(`[gardens] localised ${n} image reference(s) for ${member}`); })
@@ -186,7 +189,7 @@ setTimeout(() => {
 
 /** Is this a member whose garden the household serves? */
 function gardenExists(member: string): boolean {
-  return member in GARDEN_PORTS;
+  return GARDEN_MEMBERS.has(member);
 }
 
 function gardenSlug(path: string): string | null {
@@ -697,13 +700,16 @@ try {
     // as a bare "TypeError: Failed to fetch" on the import upload. Lift to 4 GB.
     maxRequestBodySize: 4 * 1024 * 1024 * 1024,
     async fetch(req, srv) {
-      // Proxy WebSocket upgrades to the Astro dev server. Its Vite HMR client
-      // opens a WS; the fetch-based reverse proxy below can't carry it, which
-      // made the dev client loop reconnect→full-reload through the tunnel.
-      // Forwarding the upgrade restores native HMR (no loop). The MCP gateway
-      // uses HTTP streaming, not WS, so any upgrade here is the dev socket.
+      // Forward WebSocket upgrades to the garden engine.
+      //
+      // The built engine opens none — a page that wants to know its note
+      // changed subscribes to /api/v1/garden-tools/events instead. This is for
+      // developing the web UI: `npm run dev` in web/ behind this proxy, where
+      // Vite's HMR client opens a socket the fetch-based proxy below cannot
+      // carry (it looped reconnect→full-reload through the tunnel). The MCP
+      // gateway streams over HTTP, so any upgrade reaching here is that.
       if (req.headers.get("upgrade")?.toLowerCase() === "websocket") {
-        // The HMR socket can stream source modules — gate it on a session, and
+        // A dev socket can stream source modules — gate it on a session, and
         // scope a member's /g/<member>/ socket to that member.
         const sessionUser = await webSessionUser(req);
         if (!sessionUser) return new Response("Unauthorized", { status: 401 });

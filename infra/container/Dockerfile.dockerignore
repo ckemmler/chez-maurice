@@ -33,13 +33,12 @@ server/test
 !web
 web/node_modules
 web/dist
-web/.garden-roots
 web/.astro
 # Only the bundled demo garden ships; real gardens are personal content.
 web/gardens/*
 !web/gardens/demo
 !web/gardens/gardens.json
-# Generated per-install symlinks into the gardens dir (download-images.ts).
+# Generated per-install symlinks into the gardens dir (garden-image-links.ts).
 web/public/images/*
 !web/public/images/demo
 web/public/avatars
