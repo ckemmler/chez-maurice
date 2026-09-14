@@ -113,13 +113,57 @@ test("the search index carries every public entry", async ({ as }) => {
   }
 });
 
-test("every shipped theme renders the home and a note", async ({ as }) => {
+test("a chosen theme sticks across pages, without the parameter", async ({ as }) => {
   const page = await as("theo");
+  // How the app opens a garden: /login?token=…&theme=X redirects to
+  // /g/<member>/?theme=X. The engine must set the cookie, and every page
+  // after must honour it with no parameter of its own.
+  await page.goto(`${G}/?theme=newsprint`);
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "newsprint");
+  const cookie = (await page.context().cookies()).find((c) => c.name === "theme");
+  expect(cookie?.value, "the theme cookie").toBe("newsprint");
+
+  await page.goto(`${G}/notes/`);
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "newsprint");
+  await page.goto(`${G}/notes/nara-deer`);
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "newsprint");
+  // And a different one replaces it.
+  await page.goto(`${G}/notes/?theme=terminal`);
+  await page.goto(`${G}/notes/nara-deer`);
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "terminal");
+});
+
+test("every shipped theme renders the home and a note, and they differ", async ({ as }) => {
+  const page = await as("theo");
+  const bodies = new Map<string, string>();
   for (const theme of ["manuscript", "newsprint", "terminal", "botanical", "default"]) {
     for (const path of ["/", "/notes/nara-deer"]) {
       const res = await page.goto(`${G}${path}?theme=${theme}`);
       expect(res?.status(), `${theme} ${path}`).toBe(200);
       await expect(page.locator("html")).toHaveAttribute("data-theme", theme);
+      if (path === "/notes/nara-deer") bodies.set(theme, await res!.text());
     }
+  }
+  // `data-theme` is set from the request whether or not the theme exists, so
+  // it proves nothing on its own: a theme missing from the registry renders
+  // somebody else's layout under its own name. Compare what came back.
+  // (Themes share the default's views by design — the difference is the
+  // layout and its CSS, so compare documents, not component ids.)
+  const rendered = [...bodies.values()];
+  expect(new Set(rendered).size, "each theme renders its own page").toBe(rendered.length);
+  // And each one carries the note itself, not just its own chrome.
+  for (const [theme, html] of bodies) expect(html, theme).toContain("bow for crackers");
+});
+
+test("a draft is visible to its owner in every theme", async ({ as }) => {
+  // The one regression a theme can hide: a view that still decides visibility
+  // for itself. A theme with its own views (the private one does) can drop
+  // every draft in every list while looking perfectly healthy.
+  const page = await as("theo");
+  for (const theme of ["manuscript", "newsprint", "terminal", "botanical", "default"]) {
+    const html = await (await page.goto(`${G}/notes/?theme=${theme}`))!.text();
+    expect(html, `${theme}: the owner's draft`).toContain("Draft packing list");
+    const books = await (await page.goto(`${G}/resources/books/?theme=${theme}`))!.text();
+    expect(books, `${theme}: the owner's unpublished book`).toContain("An unpublished book");
   }
 });
