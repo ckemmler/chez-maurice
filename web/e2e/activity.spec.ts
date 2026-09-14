@@ -3,7 +3,7 @@
  * the garden MCP tool, read per request) and the socket the browser opens
  * through the proxy — today Vite's HMR channel, tomorrow the reload signal.
  */
-import { test, expect, api } from "./helpers";
+import { test, expect, api, notes } from "./helpers";
 import { mkdirSync, writeFileSync, rmSync } from "node:fs";
 
 const G = "/g/theo";
@@ -26,17 +26,33 @@ test("garden-activity.json is idle without a file", async () => {
   expect(await r.json()).toEqual({ active: false, pages: [] });
 });
 
-test("the page opens its live socket through the proxy", async ({ as }) => {
+test("the page subscribes to its garden's changes", async ({ as }) => {
   const page = await as("theo");
-  const sockets: string[] = [];
-  page.on("websocket", (ws) => sockets.push(ws.url()));
-  const messages: string[] = [];
-  page.on("console", (m) => messages.push(m.text()));
+  const events: number[] = [];
+  page.on("response", (r) => { if (r.url().includes("/garden-tools/events")) events.push(r.status()); });
   await page.goto(`${G}/notes/nara-deer`);
-  await expect.poll(() => sockets.length, { timeout: 10_000 }).toBeGreaterThan(0);
-  // Today this is Vite's HMR client; it must report a connection, not a loop.
-  await expect.poll(() => messages.some((m) => /connected/.test(m)), { timeout: 10_000 }).toBe(true);
-  expect(messages.filter((m) => /server connection lost|full reload/i.test(m))).toHaveLength(0);
+  await expect.poll(() => events.length, { timeout: 10_000 }).toBeGreaterThan(0);
+  expect(events[0]).toBe(200);
+});
+
+test("a note rewritten under the reader reloads the page", async ({ as }) => {
+  const page = await as("theo");
+  notes.write("live-reload", "Before the rewrite", "RELOAD-MARKER-before");
+  await page.goto(`${G}/notes/live-reload`);
+  expect(await page.locator("body").innerText()).toContain("RELOAD-MARKER-before");
+  // What Maurice does mid-read: rewrite the file the page is showing.
+  notes.write("live-reload", "After the rewrite", "RELOAD-MARKER-after");
+  await expect
+    .poll(async () => (await page.locator("body").innerText()).includes("RELOAD-MARKER-after"), { timeout: 15_000 })
+    .toBe(true);
+  notes.remove("live-reload");
+});
+
+test("the stream is the caller's own garden, and none for a guest", async () => {
+  const guest = await api("visitor", "/api/v1/garden-tools/events");
+  expect(guest.status).toBe(403);
+  await guest.body?.cancel();
+  expect((await api(null, "/api/v1/garden-tools/events")).status).toBe(401);
 });
 
 test("HTML is served uncached so a theme switch is immediate", async () => {

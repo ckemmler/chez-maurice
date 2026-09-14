@@ -1,12 +1,14 @@
 import fs from "node:fs";
 import path from "node:path";
+import { currentGarden } from "./garden-context";
 
 /**
- * Which member's garden this engine instance serves. Defaults to the bundled
- * `demo` garden, so a plain `astro dev`/`astro build` (no GARDEN) renders the
- * example garden. Set GARDEN=<member> to serve a real one.
+ * Which member's garden is being served. Per request (see garden-context.ts),
+ * so one built engine serves a whole household; falls back to the GARDEN
+ * environment variable outside a request — a static publish, a script — and
+ * to the bundled `demo` garden when nothing says otherwise.
  */
-export const GARDEN = process.env.GARDEN || "demo";
+export { currentGarden as GARDEN_OF_REQUEST };
 
 /** Root of all gardens. MAURICE_GARDENS_DIR (set in production) wins; otherwise
  *  the cwd-relative `gardens/` used by dev and the public-site build. */
@@ -16,12 +18,12 @@ export function gardensRoot(): string {
 
 /** Absolute path to this garden (gardens/<member>). */
 export function gardenRoot(): string {
-  return path.join(gardensRoot(), GARDEN);
+  return path.join(gardensRoot(), currentGarden());
 }
 
 /** Absolute path to this garden's notes tree (gardens/<member>/notes). */
 export function notesDir(): string {
-  return path.join(gardensRoot(), GARDEN, "notes");
+  return path.join(gardenRoot(), "notes");
 }
 
 export interface GardenConfig {
@@ -32,28 +34,33 @@ export interface GardenConfig {
   domain?: string;
 }
 
-let _config: GardenConfig | null = null;
+// One entry per member: a single engine serves them all, so a single cached
+// config would hand the second member the first one's name.
+const _configs = new Map<string, GardenConfig>();
 
 /** This garden's identity (name, title, avatar) from gardens/gardens.json. */
 export function gardenConfig(): GardenConfig {
-  if (_config) return _config;
+  const member = currentGarden();
+  const cached = _configs.get(member);
+  if (cached) return cached;
   let cfg: Partial<GardenConfig> = {};
   try {
     const manifest = JSON.parse(
       fs.readFileSync(path.join(gardensRoot(), "gardens.json"), "utf8"),
     );
-    cfg = manifest[GARDEN] ?? {};
+    cfg = manifest[member] ?? {};
   } catch {
     /* fall through to defaults */
   }
-  _config = {
-    name: cfg.name || GARDEN,
-    title: cfg.title || `${GARDEN}'s garden`,
+  const config: GardenConfig = {
+    name: cfg.name || member,
+    title: cfg.title || `${member}'s garden`,
     avatar: siteAvatarPath(cfg.avatar ?? null),
     base: cfg.base,
     domain: cfg.domain,
   };
-  return _config;
+  _configs.set(member, config);
+  return config;
 }
 
 /**

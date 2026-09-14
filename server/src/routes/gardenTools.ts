@@ -21,6 +21,7 @@ import { Hono } from "hono";
 import path from "node:path";
 import { existsSync } from "node:fs";
 import { isGuest } from "../services/users";
+import { watchGarden } from "../services/gardenWatch";
 import { gardenFor } from "../../data-api/services/gardenFiche";
 import {
   REPO_ROOT, deleteNote, editorTargets, privateState, publicState, recordShare,
@@ -89,6 +90,38 @@ tools.post("/reorder-children", async (c) => {
     console.error("[garden-tools] reorder-children:", (err as Error).message);
     return c.json({ error: "Failed" }, 500);
   }
+});
+
+/**
+ * A stream of "this changed" for the caller's own garden, so an open page can
+ * refresh itself when Maurice (or the owner, or the toolbar) writes to it.
+ * This is what replaces Vite's HMR socket, which only existed because the
+ * engine was a dev server. Events carry a slug, never content.
+ */
+tools.get("/events", (c) => {
+  const garden = mine(c);
+  if (garden instanceof Response) return garden;
+  const encoder = new TextEncoder();
+  let unsubscribe = () => {};
+  const stream = new ReadableStream({
+    start(controller) {
+      const send = (event: string, data: unknown) =>
+        controller.enqueue(encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`));
+      send("ready", { garden: garden.username });
+      unsubscribe = watchGarden(garden.username, (change) => {
+        try { send("changed", change); } catch { /* closed */ }
+      });
+      // A comment every 25 s so an idle connection is not reaped by a proxy.
+      const beat = setInterval(() => {
+        try { controller.enqueue(encoder.encode(": beat\n\n")); } catch { clearInterval(beat); }
+      }, 25_000);
+      (beat as { unref?: () => void }).unref?.();
+    },
+    cancel() { unsubscribe(); },
+  });
+  return new Response(stream, {
+    headers: { "Content-Type": "text/event-stream", "Cache-Control": "no-cache", Connection: "keep-alive" },
+  });
 });
 
 // ── The owner's publishing pipeline ─────────────────────────────

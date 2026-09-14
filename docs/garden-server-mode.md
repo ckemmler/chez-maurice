@@ -221,6 +221,55 @@ Battery: 65 tests green (one new: a resource links to its fiche, and the fiche
 is in the owner's search index). Static publish smoked again — same pages, no
 fiche, no draft, no private note.
 
+### Phase 4 — done 2026-09-14
+
+One built node server per household. The member comes from a header, per
+request.
+
+- **`web/src/lib/garden-context.ts`** — an `AsyncLocalStorage` opened by the
+  middleware and read by `garden.ts`, `notes-fs`, `content-fs`, `fiche.ts`.
+  That is what makes a per-request member possible at all: those are plain
+  functions called deep inside a render, with no access to `Astro`. Outside a
+  request (a static publish, a script) there is no store and `GARDEN` answers,
+  exactly as before.
+- **The proxy** sends `X-Maurice-Garden` and `X-Maurice-Base`, and strips
+  `/g/<member>` before forwarding. The engine has no `base` of its own any
+  more, so its asset URLs live at the root and one build serves everyone; the
+  middleware puts the prefix back into the HTML, as it always did.
+- **`@astrojs/node` standalone** when `WEB_SSR=1`; the Cloudflare adapter stays
+  for the static publish (it targets workerd, which has no `node:fs` — fine
+  where nothing runs, impossible for the engine).
+- **Reload replaces HMR.** `GET /api/v1/garden-tools/events` streams
+  `{collection, locale, slug}` from one `fs.watch` per garden;
+  `GardenReload.astro` reloads when the change plausibly concerns the page,
+  debounced, capped, with backoff. HMR pushed changed *modules*; what changes
+  here is content, which is the server's to announce.
+- **Ops.** `start-web.sh` builds if the build is missing or older than its
+  sources, then runs `node dist/server/entry.mjs`. `start-all.sh` and the
+  container's supervisord no longer start per-member engines; the image builds
+  the engine at build time.
+
+**The measurement the whole chantier was for** — the real household (Candide's
+266-note garden plus three others), every member warmed through one process:
+
+| | Before (4 × `astro dev`) | After (1 built server) |
+|---|---|---|
+| Resident memory | ~1.44 GB | **127 MB** |
+| A page | — | 13 ms |
+| The search index | 3–5 ms | 3 ms |
+
+Two members served from the same process return their own garden's title,
+which is the isolation this rests on.
+
+Battery: **69 tests green in both modes** — `npm run e2e` (dev) and
+`npm run e2e:server` (built). The two-mode switch was the point of phase 0.
+
+Also fixed here: note images. The base rewriter turned `/api/images/<name>`
+into `/g/<member>/api/images/<name>` and every illustration 404'd in a
+member's garden; `/api/` is the server's own root and is now left alone. One
+pinned test remains — the MOC-card script dropping text before a wiki-link,
+a client-side bug with no bearing on the engine.
+
 ## Measurements
 
 | When | Household | Engine RSS | Note |
@@ -229,6 +278,7 @@ fiche, no draft, no private note.
 | 2026-09-14 | Candide's garden (266 notes), phase 2 | 648 MB | `astro dev`, hours old — not comparable |
 | 2026-09-14 | Candide's garden (266 notes), phase 3 | 460–500 MB | `astro dev`, fresh, warmed |
 | 2026-09-14 | A skeleton member garden, phase 3 | ~314 MB | `astro dev` — Vite's floor, per member |
+| 2026-09-14 | The whole household (4 members), phase 4 | **127 MB** | one built node server, every member warmed |
 
 ## Decisions log
 

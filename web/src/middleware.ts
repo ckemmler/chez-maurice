@@ -1,24 +1,29 @@
 import { defineMiddleware } from "astro:middleware";
+import { runInGarden } from "@app/lib/garden-context";
 
 /**
- * Garden base-path rewriter.
+ * Who this request is for, and where their garden hangs.
  *
- * A member's garden is served under /g/<member>/ on the private tunnel
- * (GARDEN_BASE), but templates, note content, and the wikilink resolver all
- * emit root-absolute links like `/notes/foo`. Astro prefixes its own
- * asset/route URLs with `base`, but not these author-written ones. Rather than
- * touch dozens of templates (and every future link), this rewrites the final
- * HTML once: absolute internal href/src get the base prefix, so source stays
- * clean yet resolves to the member's root.
+ * Both come from the Bun proxy, per request: `X-Maurice-Garden` names the
+ * member and `X-Maurice-Base` the prefix they are served under (`/g/<member>`).
+ * One built engine therefore serves a whole household, where an engine told
+ * once by a `GARDEN` environment variable needed one process per member. With
+ * no headers — a bare `astro dev`, a static publish — the environment answers
+ * and nothing changes.
  *
- * No-op when GARDEN_BASE is unset — Candide's tunnel and every public build run
- * at root, so candide.me is untouched.
+ * The base matters because templates, note bodies and the wikilink resolver
+ * all emit root-absolute links like `/notes/foo`. Astro prefixes its own asset
+ * URLs, but not these author-written ones, so the final HTML is rewritten once
+ * here: source stays clean and resolves to the member's root.
  */
-const BASE = (process.env.GARDEN_BASE || "").replace(/\/+$/, "");
 
-// Paths that must NOT be prefixed: protocol-relative, and Vite/Astro dev
-// internals (modules, source, deps) which are always served from the root.
-const SKIP = /^\/(@|_astro\/|\.astro\/|src\/|node_modules\/|\.well-known\/)/;
+// Paths that must NOT be prefixed: Vite/Astro internals (modules, source,
+// deps), and `/api/…` — the Maurice server's own routes, which live at the
+// root whatever garden is being read. A note written by Maurice carries
+// `![](/api/images/<name>)`, and prefixing that produced
+// `/g/<member>/api/images/<name>`, which the engine answered 404: every note
+// illustration was broken in a member's garden.
+const SKIP = /^\/(@|_astro\/|\.astro\/|src\/|node_modules\/|api\/|\.well-known\/)/;
 
 // The active theme when none is chosen (no ?theme / cookie / THEME env). The
 // internal "default" theme is the hidden view-base, not a user-facing look —
@@ -26,6 +31,13 @@ const SKIP = /^\/(@|_astro\/|\.astro\/|src\/|node_modules\/|\.well-known\/)/;
 const DEFAULT_THEME = process.env.THEME || "manuscript";
 
 export const onRequest = defineMiddleware(async (ctx, next) => {
+  const req = ctx.request.headers;
+  const member = req.get("x-maurice-garden") || process.env.GARDEN || "demo";
+  const BASE = (req.get("x-maurice-base") ?? process.env.GARDEN_BASE ?? "").replace(/\/+$/, "");
+  const owner = req.get("x-maurice-owner") === "1" || process.env.GARDEN_OWNER === "1";
+  const shared = req.get("x-maurice-shared") === "1";
+  ctx.locals.member = member;
+
   // Per-request theme selection: ?theme=X sets a year-long cookie and wins;
   // otherwise the cookie; otherwise the build default. This is what enables live
   // theme switching without a rebuild (the shims read ctx.locals.theme).
@@ -34,16 +46,17 @@ export const onRequest = defineMiddleware(async (ctx, next) => {
   ctx.locals.theme = q || ctx.cookies.get("theme")?.value || DEFAULT_THEME;
 
   // Owner mode: the garden's owner is looking at their own garden — drafts,
-  // private notes and the toolbar are theirs. The Bun proxy decides (session
-  // user == garden slug) and says so with X-Maurice-Owner, after stripping any
-  // such header a client sent. GARDEN_OWNER=1 makes a bare `astro dev` (no
-  // proxy) behave as the owner. A static build has no request: never owner.
-  ctx.locals.owner =
-    ctx.request.headers.get("x-maurice-owner") === "1" || process.env.GARDEN_OWNER === "1";
+  // private notes and the toolbar are theirs. The proxy decides (session user
+  // == garden slug) and strips any such header a client sent. GARDEN_OWNER=1
+  // makes a bare `astro dev` behave as the owner; a static build has no
+  // request and is never owner.
+  ctx.locals.owner = owner;
   // A note page another member may read because it was shared with them.
-  ctx.locals.shared = ctx.request.headers.get("x-maurice-shared") === "1";
+  ctx.locals.shared = shared;
 
-  const res = await next();
+  // Everything rendered below — including every file the content readers
+  // touch — runs as this member (see lib/garden-context.ts).
+  const res = await runInGarden({ member, base: BASE, owner, shared }, () => next());
 
   const ct = res.headers.get("content-type") || "";
   const isHtml = ct.includes("text/html");

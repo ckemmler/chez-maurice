@@ -10,10 +10,13 @@
     "import": "npx tsx scripts/import-from-akita.ts",
     "astro": "astro",
     "e2e": "playwright test",
-    "e2e:server": "E2E_ENGINE=server playwright test"
+    "e2e:server": "E2E_ENGINE=server playwright test",
+    "build:server": "WEB_SSR=1 astro build",
+    "start:server": "node ./dist/server/entry.mjs"
   },
   "dependencies": {
     "@astrojs/cloudflare": "^12.6.13",
+    "@astrojs/node": "^9.5.5",
     "astro": "^5.17.1",
     "d3-hierarchy": "^3.1.2",
     "lucide": "^0.577.0",

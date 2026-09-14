@@ -1,6 +1,7 @@
 // @ts-check
 import { defineConfig } from "astro/config";
 import cloudflare from "@astrojs/cloudflare";
+import node from "@astrojs/node";
 import { readFileSync, existsSync } from "node:fs";
 import { resolve } from "node:path";
 import remarkCrossRef from "./src/plugins/remark-cross-ref.mjs";
@@ -37,17 +38,22 @@ export default defineConfig({
   devToolbar: { enabled: false },
   integrations: [gardenImageLinks(), encryptPrivate()],
   site: process.env.SITE_URL || "http://localhost:4321",
-  // A member's garden is served under /g/<member>/ on the private tunnel
-  // (GARDEN_BASE); unset for Candide's tunnel and every public build, so
-  // candide.me stays at root. Astro prefixes assets/routes; the rehype plugin
-  // prefixes in-content links to match.
-  base: process.env.GARDEN_BASE || undefined,
+  // No base. A member's garden is served under /g/<member>/, but that prefix
+  // is now a property of the REQUEST, not of the build: one engine serves
+  // every member of a household (src/middleware.ts + lib/garden-context.ts).
+  // The proxy strips the prefix before forwarding and the middleware puts it
+  // back into the HTML, so Astro's own asset URLs stay at the root where a
+  // single build can share them.
   // WEB_SSR=1 (the everyday/dynamic garden servers) renders per request so live
   // theme switching (?theme= / cookie) works; unset = static publish (a baked
   // theme). Content [id] pages are dual-mode: getStaticPaths for the static
   // build, a request-time param lookup under SSR.
   output: process.env.WEB_SSR === "1" ? "server" : "static",
-  adapter: cloudflare(),
+  // The garden engine is a plain node server: one process per household,
+  // reading the gardens off the local disk. Cloudflare's adapter targets
+  // workerd, which has no `node:fs` at runtime — fine for the static publish
+  // (nothing runs there), impossible for the engine.
+  adapter: process.env.WEB_SSR === "1" ? node({ mode: "standalone" }) : cloudflare(),
   // Hosts the dev server accepts. In the garden topology this engine is only ever
   // reached through the authenticated Bun reverse proxy (server/index.ts) — the
   // single gated ingress that the tunnel / Tailnet / custom domain points at, never

@@ -42,15 +42,7 @@ echo "Starting: ${SERVICES[*]}"
 rc=0
 for s in "${SERVICES[@]}"; do start_one "$s" || rc=1; done
 
-# Member gardens (from web/gardens/gardens.json). Candide is the 'web' service
-# above; every other member with a /g/ base gets its own engine instance, so a
-# plain start-all brings the whole household online. start-garden.sh is
-# idempotent (skips ones already running).
-if [[ $# -eq 0 ]]; then
-  NODE="$(command -v node || echo "$HOME/.bun/bin/bun")"
-  members="$("$NODE" -e "const g=require('$(gardens_root)/gardens.json'); console.log(Object.entries(g).filter(([m,c])=>m!=='candide'&&(c.base||'').startsWith('/g/')&&c.port).map(([m])=>m).join(' '))" 2>/dev/null || true)"
-  for m in $members; do
-    "$REPO/scripts/start-garden.sh" "$m" || rc=1
-  done
-fi
+# One engine serves every member's garden since September 2026 (the member
+# comes from a request header, not from the environment), so there is nothing
+# per-member left to start — `web` above is the household's engine.
 exit $rc

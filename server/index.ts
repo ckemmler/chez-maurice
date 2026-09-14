@@ -184,6 +184,11 @@ setTimeout(() => {
   }
 }, 5000).unref?.();
 
+/** Is this a member whose garden the household serves? */
+function gardenExists(member: string): boolean {
+  return member in GARDEN_PORTS;
+}
+
 function gardenSlug(path: string): string | null {
   return path.match(/^\/g\/([^/]+)(?:\/|$)/)?.[1] ?? null;
 }
@@ -549,21 +554,25 @@ app.get("/healthz", async (c) => {
   return c.json(publicHealth());
 });
 
-// ── Reverse proxy: Astro (fallback → localhost:{web-port}) ──────────
+// ── Reverse proxy: the garden engine ────────────────────────────
+//
+// ONE engine serves the whole household. It is told whose garden a request is
+// for by a header, not by an environment variable — which is what let a
+// household stop running one Astro process per member. The prefix is stripped
+// here and put back by the engine's middleware, so the engine's own asset
+// URLs (/_astro/…) live at the root and every member shares one build.
 
 const webPort = getPort("web");
 app.notFound(async (c) => {
   const slug = gardenSlug(c.req.path);
-  let port = webPort;
+  const port = webPort;
 
   if (slug) {
-    if (!GARDEN_PORTS[slug]) return c.text("Garden not available", 404);
-    port = GARDEN_PORTS[slug];
+    if (!gardenExists(slug)) return c.text("Garden not available", 404);
   } else {
-    // No /g/<member>/ prefix. An HTML navigation → send the member to their own
-    // garden. But shared-engine dev assets (/src, /@vite, /@id, /_astro …) are
-    // referenced at root by every page and must be served, not redirected —
-    // the engine is symlinked, so the default instance has them.
+    // No /g/<member>/ prefix. An HTML navigation → send the member to their
+    // own garden. Engine assets (/src, /@vite, /@id, /_astro …) are referenced
+    // at root by every page and must be served, not redirected.
     const isNav =
       c.req.method === "GET" && (c.req.header("accept") || "").includes("text/html");
     if (isNav) {
@@ -577,10 +586,12 @@ app.notFound(async (c) => {
     // else: fall through and proxy the asset from the default (webPort) instance.
   }
 
+  // Strip /g/<member> before forwarding: the engine has no base of its own.
   const target = new URL(c.req.url);
   target.protocol = "http:";
   target.hostname = "127.0.0.1";
   target.port = String(port);
+  if (slug) target.pathname = target.pathname.slice(`/g/${slug}`.length) || "/";
 
   // Owner mode for the engine: the session user is this garden's owner. The
   // header is ours alone — whatever a client sent under that name is dropped.
@@ -589,6 +600,13 @@ app.notFound(async (c) => {
   const headers = new Headers(c.req.raw.headers);
   headers.delete("x-maurice-owner");
   headers.delete("x-maurice-shared");
+  headers.delete("x-maurice-garden");
+  headers.delete("x-maurice-base");
+  if (slug) {
+    // Whose garden, and the prefix its links must carry.
+    headers.set("x-maurice-garden", slug);
+    headers.set("x-maurice-base", `/g/${slug}`);
+  }
   if (slug && c.get("userId")) {
     const me = getUser(c.get("userId"));
     if (me && me.username === slug) {
@@ -710,7 +728,7 @@ try {
         if (slug && getUser(sessionUser)?.username !== slug) {
           return new Response("Forbidden", { status: 403 });
         }
-        const port = slug ? (GARDEN_PORTS[slug] ?? webPort) : webPort;
+        const port = webPort; // one engine for the household
         const subprotocol = req.headers.get("sec-websocket-protocol") || undefined;
         const upstream = subprotocol
           ? new WebSocket(`ws://127.0.0.1:${port}${u.pathname}${u.search}`, subprotocol.split(",").map((s) => s.trim()))

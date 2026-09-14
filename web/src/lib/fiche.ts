@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { marked } from "marked";
-import { GARDEN, gardensRoot } from "./garden";
+import { gardenRoot } from "./garden";
 
 /**
  * Reading the parts of a fiche that do not come through the content layer.
@@ -19,7 +19,7 @@ export interface Fragment {
 
 /** `<gardens>/<member>/<collection>/<locale>/<slug>-fiche/_fragments/`. */
 export function fragmentsDirFor(ficheId: string): string {
-  return path.join(gardensRoot(), GARDEN, ficheId, "_fragments");
+  return path.join(gardenRoot(), ficheId, "_fragments");
 }
 
 export function parseFragments(dir: string): Fragment[] {

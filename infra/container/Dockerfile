@@ -152,6 +152,13 @@ RUN dangling="$(find /app -xtype l -not -path '*/node_modules/*')"; \
 RUN cd /app/server && bun install --frozen-lockfile \
  && cd /app/web && npm ci
 
+# Build the garden engine into the image. One built node server serves every
+# member of the household (the member comes from a request header), so this is
+# the whole of the web tier — no dev server, no process per member. Building
+# here rather than at boot keeps the first request fast and the image honest
+# about what it ships.
+RUN cd /app/web && WEB_SSR=1 npm run build
+
 # MAURICE_GARDEN_PROFILE=public mirrors what infra/installer/build.sh does for a
 # public .pkg: the garden tool exposes its note tools only.
 #

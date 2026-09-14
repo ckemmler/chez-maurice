@@ -93,21 +93,25 @@ export async function startStack(): Promise<State> {
   });
   keep("api", api);
 
-  // One engine per member, like start-garden.sh: a symlink shell of web/ so
-  // each instance owns its cwd-keyed caches.
-  for (const [member, port] of Object.entries(seeded.ports as Record<string, number>)) {
-    const shell = join(root, "shells", member);
-    mkdirSync(shell, { recursive: true });
-    for (const entry of readdirSync(WEB)) {
-      if (entry === "e2e" || entry.startsWith(".")) continue;
-      symlinkSync(join(WEB, entry), join(shell, entry));
-    }
-    const env = { ...base, GARDEN: member, GARDEN_BASE: `/g/${member}`, GARDEN_SHELL: "1", WEB_SSR: "1", THEME: "manuscript" };
-    const engine = ENGINE === "dev"
-      ? spawn(join(WEB, "node_modules/.bin/astro"), ["dev", "--port", String(port), "--host", "127.0.0.1"], { cwd: shell, env, stdio: ["ignore", "pipe", "pipe"] })
-      : spawn("node", [join(WEB, "dist/server/entry.mjs")], { cwd: shell, env: { ...env, PORT: String(port), HOST: "127.0.0.1" }, stdio: ["ignore", "pipe", "pipe"] });
-    keep(`engine-${member}`, engine);
+  // The built engine has to exist before it can serve. Building here rather
+  // than asking the runner to remember keeps `E2E_ENGINE=server` one command.
+  if (ENGINE === "server") {
+    log("building the engine…");
+    const built = spawnSync("npm", ["run", "build:server"], { cwd: WEB, env: base, encoding: "utf8" });
+    if (built.status !== 0) throw new Error(`engine build failed:\n${built.stdout}\n${built.stderr}`);
   }
+
+  // ONE engine for the household: the member comes from a header the proxy
+  // sets, per request. GARDEN names only the fallback for a request that
+  // carries no garden at all.
+  const enginePort = seeded.ports.hana as number;
+  const env = { ...base, GARDEN: "hana", WEB_SSR: "1", THEME: "manuscript" };
+  const engine = ENGINE === "dev"
+    ? spawn(join(WEB, "node_modules/.bin/astro"), ["dev", "--port", String(enginePort), "--host", "127.0.0.1"],
+            { cwd: WEB, env, stdio: ["ignore", "pipe", "pipe"] })
+    : spawn("node", [join(WEB, "dist/server/entry.mjs")],
+            { cwd: WEB, env: { ...env, PORT: String(enginePort), HOST: "127.0.0.1" }, stdio: ["ignore", "pipe", "pipe"] });
+  keep("engine", engine);
 
   const state: State = {
     root, dataDir, gardensDir, apiPort: API_PORT, ports: seeded.ports,
@@ -116,11 +120,8 @@ export async function startStack(): Promise<State> {
   writeFileSync(STATE_FILE, JSON.stringify(state, null, 2));
 
   await waitFor(`http://127.0.0.1:${API_PORT}/healthz`, 30_000);
-  for (const [member, port] of Object.entries(state.ports)) {
-    await waitFor(`http://127.0.0.1:${port}/g/${member}/`, 90_000);
-    log(`engine ${member} up on :${port}`);
-  }
-  log(`api up on :${API_PORT} (${ENGINE}); logs in ${logs}`);
+  await waitFor(`http://127.0.0.1:${enginePort}/`, 90_000);
+  log(`engine up on :${enginePort}; api up on :${API_PORT} (${ENGINE}); logs in ${logs}`);
   return state;
 }
 

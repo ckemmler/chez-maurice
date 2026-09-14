@@ -1,0 +1,66 @@
+---
+// Refresh the page when the note behind it changes.
+//
+// A garden is written while it is being read — by Maurice through the MCP
+// tool, by the owner in an editor, by the toolbar. Under `astro dev` the
+// browser found out through Vite's HMR socket; a built engine has none, and
+// should not: HMR pushes changed *modules*, and what changed here is content.
+//
+// So the server tells us: /api/v1/garden-tools/events streams {collection,
+// locale, slug} as files change in the reader's own garden. We reload only
+// when it plausibly concerns this page — the entry it shows, or a list that
+// would include it — so a burst of writes elsewhere does not yank the page
+// from under someone reading it.
+---
+<script>
+  (() => {
+    const path = location.pathname.replace(/\/+$/, "");
+    // An index/list page ends at a collection ("/g/me/notes", "/g/me"); an
+    // entry page ends with its slug.
+    const currentSlug = path.split("/").pop() || "";
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    let reloads = 0;
+
+    function concerns(change: { collection: string; slug: string }): boolean {
+      if (change.slug === currentSlug) return true;
+      // A list page: the last segment names the collection, in either locale.
+      // (The French segments differ from the directory names, so match loosely.)
+      const tail = currentSlug.toLowerCase();
+      if (!tail) return true; // the garden home lists recent notes
+      return (
+        change.collection.startsWith(tail) ||
+        tail.startsWith(change.collection) ||
+        ["notes", "resources", "trouvailles", "fiches", "library"].includes(tail)
+      );
+    }
+
+    function scheduleReload() {
+      if (timer) clearTimeout(timer);
+      // A write arrives as several events (frontmatter, body, git); wait for
+      // the burst to settle. And never loop: a page that reloads itself ten
+      // times is worse than a stale one.
+      if (reloads >= 10) return;
+      timer = setTimeout(() => { reloads++; location.reload(); }, 600);
+    }
+
+    let source: EventSource | null = null;
+    let retry = 2000;
+    function connect() {
+      source = new EventSource("/api/v1/garden-tools/events");
+      source.addEventListener("ready", () => { retry = 2000; });
+      source.addEventListener("changed", (e) => {
+        try {
+          if (concerns(JSON.parse((e as MessageEvent).data))) scheduleReload();
+        } catch { /* malformed event: ignore */ }
+      });
+      source.onerror = () => {
+        source?.close();
+        // Back off rather than hammer a server that is restarting.
+        setTimeout(connect, retry);
+        retry = Math.min(retry * 2, 60_000);
+      };
+    }
+    connect();
+    addEventListener("pagehide", () => source?.close());
+  })();
+</script>

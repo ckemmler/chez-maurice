@@ -57,12 +57,11 @@ test("wikilinks resolve under the member's base", async ({ as }) => {
   expect(hrefs.some((h) => new RegExp(`^${G}/notes/kansai-journal/?$`).test(h ?? ""))).toBe(true);
 });
 
-// KNOWN BUG (documented, not yet fixed): the base-prefixing middleware turns a
-// note image `/api/images/<name>` — what Maurice writes — into
-// `/g/<member>/api/images/<name>`, which the engine answers 404. The image is
-// broken in every member garden under /g/. Flip to a plain test when fixed.
+// The base rewriter used to turn `/api/images/<name>` — what Maurice writes —
+// into `/g/<member>/api/images/<name>`, which the engine answered 404: every
+// note illustration was broken in a member's garden. `/api/` is the server's
+// own root and is now left alone.
 test("the note image (/api/images/…) loads under /g/<member>/", async ({ as }) => {
-  test.fail();
   const page = await as("theo");
   await page.goto(`${G}/notes/nara-deer`);
   const img = page.locator("img[alt='deer']");

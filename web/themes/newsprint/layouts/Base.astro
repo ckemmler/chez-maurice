@@ -2,6 +2,7 @@
 import "../global.css";
 import Nav from "@app/components/Nav.astro";
 import DevToolbar from "@app/components/DevToolbar.astro";
+import GardenReload from "@app/components/GardenReload.astro";
 import type { Locale } from "@app/i18n/config";
 import { t, localizedPath, getAlternatePath } from "@app/i18n/utils";
 import { gardenConfig } from "@app/lib/garden";
@@ -132,6 +133,7 @@ const alternateAvailable = alternatePath !== null;
       </footer>
     </div>
     {Astro.locals.owner && <DevToolbar />}
+    <GardenReload />
   </body>
 </html>
 

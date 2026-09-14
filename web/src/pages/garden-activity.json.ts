@@ -6,7 +6,7 @@
 import type { APIRoute } from "astro";
 import fs from "node:fs";
 import path from "node:path";
-import { GARDEN } from "@app/lib/garden";
+import { currentGarden } from "@app/lib/garden-context";
 
 // SSR — read the file at request time (never prerendered/cached).
 export const prerender = false;
@@ -16,7 +16,7 @@ const WINDOW_SECONDS = 30;
 export const GET: APIRoute = () => {
   let pages: string[] = [];
   try {
-    const file = path.join("/tmp/maurice-garden-activity", `${GARDEN}.json`);
+    const file = path.join("/tmp/maurice-garden-activity", `${currentGarden()}.json`);
     const data = JSON.parse(fs.readFileSync(file, "utf8")) as Record<string, number>;
     const now = Math.floor(Date.now() / 1000);
     pages = Object.entries(data)
