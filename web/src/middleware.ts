@@ -38,12 +38,18 @@ export const onRequest = defineMiddleware(async (ctx, next) => {
   const shared = req.get("x-maurice-shared") === "1";
   ctx.locals.member = member;
 
-  // Per-request theme selection: ?theme=X sets a year-long cookie and wins;
-  // otherwise the cookie; otherwise the build default. This is what enables live
-  // theme switching without a rebuild (the shims read ctx.locals.theme).
+  // Which look to render, most specific first:
+  //   1. ?theme=X — a reader trying one on, remembered in a cookie;
+  //   2. that cookie, for the rest of their visits;
+  //   3. X-Maurice-Theme — what the garden's OWNER chose in the app
+  //      (garden_settings.web_theme, which the engine used to ignore entirely,
+  //      so the Settings picker appeared to do nothing);
+  //   4. the household default (THEME), then a real garden theme.
+  // None of this rebuilds anything, which is the point.
   const q = new URL(ctx.request.url).searchParams.get("theme");
   if (q) ctx.cookies.set("theme", q, { path: "/", maxAge: 60 * 60 * 24 * 365, sameSite: "lax" });
-  ctx.locals.theme = q || ctx.cookies.get("theme")?.value || DEFAULT_THEME;
+  ctx.locals.theme =
+    q || ctx.cookies.get("theme")?.value || req.get("x-maurice-theme") || DEFAULT_THEME;
 
   // Owner mode: the garden's owner is looking at their own garden — drafts,
   // private notes and the toolbar are theirs. The proxy decides (session user

@@ -113,6 +113,23 @@ test("the search index carries every public entry", async ({ as }) => {
   }
 });
 
+test("the theme its owner picked in the app is what the garden serves", async ({ as }) => {
+  // `garden_settings.web_theme` is written by the app's picker and was read by
+  // nobody: the engine chose from its own environment, so changing the theme
+  // in Settings did nothing at all. The proxy now carries it.
+  const page = await as("theo");
+  await page.goto(`${G}/notes/`);
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "botanical");
+});
+
+test("a reader trying a theme on still wins over the owner's", async ({ as }) => {
+  const page = await as("theo");
+  await page.goto(`${G}/notes/?theme=terminal`);
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "terminal");
+  await page.goto(`${G}/notes/nara-deer`);
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "terminal");
+});
+
 test("a chosen theme sticks across pages, without the parameter", async ({ as }) => {
   const page = await as("theo");
   // How the app opens a garden: /login?token=…&theme=X redirects to

@@ -28,7 +28,7 @@ const SERVER = resolve(import.meta.dir, "../../../server");
 const db = (await import(join(SERVER, "src/db.ts"))).default;
 const { createUser, updateHousehold } = await import(join(SERVER, "src/services/users.ts"));
 const { createSession } = await import(join(SERVER, "src/services/auth.ts"));
-const { addShare } = await import(join(SERVER, "src/services/gardens.ts"));
+const { addShare, setGardenTheme } = await import(join(SERVER, "src/services/gardens.ts"));
 
 const existing = (db.query(`SELECT COUNT(*) c FROM users`).get() as { c: number }).c;
 if (existing > 0) { console.error(`✗ ${DATA} already seeded`); process.exit(1); }
@@ -111,6 +111,9 @@ md("series/en/unpublished-series.md", { title: "An unpublished series", date_wat
 md("books/en/unpublished-book.md", { title: "An unpublished book", author: "Nobody", date_read: D, status: "read", flags: [], locale: "en" }, `DRAFT-BOOK-MARKER.`);
 
 addShare(theo.id, "shared-with-mei", mei.id);
+
+// The look Théo picked in the app (garden_settings.web_theme).
+setGardenTheme(theo.id, "botanical");
 
 // A garden is a git repository; the toolbar commits what it changes.
 for (const args of [["init", "-q"], ["config", "user.name", "e2e"], ["config", "user.email", "e2e@example.com"], ["add", "-A"], ["commit", "-q", "-m", "seed"]]) {
