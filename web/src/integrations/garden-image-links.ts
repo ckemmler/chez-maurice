@@ -35,10 +35,14 @@ async function ensureImageLink(
 
   try {
     const current = await readlink(link).catch(() => null);
-    // Compare where the link POINTS, not how it is written: the committed
-    // `demo` link is relative, and comparing the literal string rewrote it
-    // absolute on every start — a tracked file, dirtied by running the engine.
+    // Compare where the link POINTS, not how it is written.
     if (current !== null && resolve(publicImages, current) === target) return;
+    // A RELATIVE link here is the repository's own — `demo` is committed,
+    // pointing at the bundled garden — and belongs to whoever wrote it. The
+    // integration writes absolute links and only ever replaces its own;
+    // otherwise running the engine dirtied a tracked file on every start, and
+    // left an absolute path that is wrong on any other machine.
+    if (current !== null && !current.startsWith("/")) return;
     // Clear anything else sitting there — including the directory the old
     // build-mode code used to leave behind.
     if (current !== null || existsSync(link)) {
