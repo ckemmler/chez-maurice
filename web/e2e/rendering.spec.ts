@@ -94,6 +94,16 @@ test("the MOC lists its children in order", async ({ as }) => {
   expect(text.indexOf("Nara and the deer")).toBeLessThan(text.indexOf("Kyoto with the kids"));
 });
 
+test("a resource links to its fiche, which is the garden's alone", async ({ as }) => {
+  const page = await as("theo");
+  const html = await (await page.goto(`${G}/resources/books/the-makioka-sisters`))!.text();
+  // The fiche lives beside the book (books/en/…-fiche.md) and its link spans
+  // the collection: /fiches/books/<slug>-fiche.
+  expect(html).toContain("/fiches/books/the-makioka-sisters-fiche");
+  const index = await (await page.request.get(`${G}/search-index.json`)).text();
+  expect(index).toContain("The Makioka Sisters — fiche");
+});
+
 test("the search index carries every public entry", async ({ as }) => {
   const page = await as("theo");
   const r = await page.request.get(`${G}/search-index.json`);

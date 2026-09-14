@@ -2,7 +2,7 @@
 import Base from "@app/layouts/Base.astro";
 import type { Locale } from "@app/i18n/config";
 import { t, localizedPath, formatDate, stripLocalePrefix } from "@app/i18n/utils";
-import { getCollection } from "astro:content";
+import { getCollection } from "@app/lib/content-fs";
 import { isPublic } from "@app/lib/flags";
 
 interface Props {

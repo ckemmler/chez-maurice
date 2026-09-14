@@ -4,7 +4,7 @@ import Breadcrumb from "@app/components/Breadcrumb.astro";
 import type { Locale } from "@app/i18n/config";
 import { t, resourcePath } from "@app/i18n/utils";
 import { getAlternateContentPath } from "@app/i18n/translations";
-import { render } from "astro:content";
+import { renderEntry } from "@app/lib/content-fs";
 
 interface Props {
   person: any;
@@ -12,7 +12,7 @@ interface Props {
 }
 
 const { person, locale = "en" } = Astro.props;
-const { Content } = await render(person);
+const contentHtml = await renderEntry(person);
 const alternatePath = await getAlternateContentPath("people", person.data.translationKey, locale);
 ---
 
@@ -33,7 +33,7 @@ const alternatePath = await getAlternateContentPath("people", person.data.transl
     </header>
 
     <div class="body-text">
-      <Content />
+      <Fragment set:html={contentHtml} />
     </div>
 
     <footer>

@@ -1,14 +1,14 @@
 ---
 import Base from "../../layouts/Base.astro";
-import { getCollection, render } from "astro:content";
+import { getCollection, renderEntry } from "@app/lib/content-fs";
 
 const locale = "fr";
 const [page] = await getCollection("pages", ({ data }) => data.translationKey === "about" && data.locale === locale);
-const { Content } = page ? await render(page) : { Content: null };
+const contentHtml = page ? await renderEntry(page) : null;
 ---
 
 <Base title={page?.data.title ?? "À propos"} description={page?.data.description} locale={locale} alternatePath="/about">
   <article class="prose">
-    {Content ? <Content /> : <p>Cette page « à propos » n'a pas encore été rédigée.</p>}
+    {contentHtml ? <Fragment set:html={contentHtml} /> : <p>Cette page « à propos » n'a pas encore été rédigée.</p>}
   </article>
 </Base>

@@ -1,4 +1,4 @@
-import { getCollection } from "astro:content";
+import { getCollection } from "@app/lib/content-fs";
 import type { Locale } from "../i18n/config";
 import { localizedPath, resourceItemPath, stripLocalePrefix } from "../i18n/utils";
 import { isPublic, isEncrypted, isMoc as isMocFlag } from "../lib/flags";

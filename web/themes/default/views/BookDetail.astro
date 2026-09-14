@@ -4,7 +4,7 @@ import Breadcrumb from "@app/components/Breadcrumb.astro";
 import type { Locale } from "@app/i18n/config";
 import { t, resourcePath, formatDate, localizedPath, stripLocalePrefix } from "@app/i18n/utils";
 import { getAlternateContentPath } from "@app/i18n/translations";
-import { render, getCollection } from "astro:content";
+import { getCollection, renderEntry } from "@app/lib/content-fs";
 
 interface Props {
   book: any;
@@ -12,7 +12,7 @@ interface Props {
 }
 
 const { book, locale = "en" } = Astro.props;
-const { Content } = await render(book);
+const contentHtml = await renderEntry(book);
 const alternatePath = await getAlternateContentPath("books", book.data.translationKey, locale);
 
 const bookSlug = stripLocalePrefix(book.id);
@@ -48,7 +48,7 @@ const fiche = fiches.length > 0 ? fiches[0] : null;
     </header>
 
     <div class="body-text">
-      <Content />
+      <Fragment set:html={contentHtml} />
     </div>
 
     <footer>

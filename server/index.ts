@@ -48,6 +48,7 @@ import composer from "./src/routes/composer";
 import gardens from "./src/routes/gardens";
 import gardenTools from "./src/routes/gardenTools";
 import { maybeRegenerateAdherence } from "./src/services/gardenTools";
+import { localiseRemoteImages } from "./src/services/gardenImages";
 import { isNoteSharedWith, gardenFor } from "./src/services/gardens";
 import maurices from "./src/routes/maurices";
 import models from "./src/routes/models";
@@ -171,6 +172,18 @@ const GARDEN_PORTS: Record<string, number> = (() => {
     return {};
   }
 })();
+// Bring home any cover image still pointing at someone else's server. Once,
+// a few seconds after boot, so it never delays a start; the writers handle
+// what they write, this catches the rest (see services/gardenImages.ts).
+setTimeout(() => {
+  for (const member of Object.keys(GARDEN_PORTS)) {
+    const garden = { root: join(gardensRoot(), member), username: member };
+    localiseRemoteImages(garden)
+      .then((n) => { if (n) console.log(`[gardens] localised ${n} image reference(s) for ${member}`); })
+      .catch((err) => console.error(`[gardens] image sweep failed for ${member}:`, (err as Error).message));
+  }
+}, 5000).unref?.();
+
 function gardenSlug(path: string): string | null {
   return path.match(/^\/g\/([^/]+)(?:\/|$)/)?.[1] ?? null;
 }

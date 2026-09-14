@@ -1,19 +1,18 @@
+/**
+ * Make the member's images reachable from the engine's public/ dir, and keep
+ * the published build free of private note art. Symlinks only.
+ *
+ * It used to also walk every collection at engine start, download any cover
+ * still pointing at someone else's server, and rewrite the garden's markdown —
+ * the renderer editing the content it renders, on every boot. That moved to
+ * the server (`server/src/services/gardenImages.ts`), which is where writes
+ * belong and where the on-write download already lived.
+ */
 import type { AstroIntegration } from "astro";
-import { readFile, writeFile, mkdir, symlink, readlink, rm, readdir } from "node:fs/promises";
+import { symlink, readlink, rm, readdir, mkdir } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { join, extname, resolve } from "node:path";
-import { glob } from "node:fs/promises";
-
-const COLLECTIONS = [
-  "books",
-  "movies",
-  "games",
-  "series",
-  "podcasts",
-  "articles",
-  "people",
-];
+import { join, resolve } from "node:path";
 
 /** Point public/images/<member> at that member's garden images.
  *
@@ -103,16 +102,15 @@ async function ensureAvatarLink(
   }
 }
 
-export default function downloadImages(): AstroIntegration {
+export default function gardenImageLinks(): AstroIntegration {
   return {
-    name: "download-images",
+    name: "garden-image-links",
     hooks: {
-      "astro:config:setup": async ({ logger, command }) => {
-        // Collections and their images live in the running member's garden.
+      "astro:config:setup": async ({ logger }) => {
+        // The images live in the running member's garden.
         const member = process.env.GARDEN || "demo";
         const gardensRoot = process.env.MAURICE_GARDENS_DIR || join(process.cwd(), "gardens");
         const gardenDir = join(gardensRoot, member);
-        const imagesDir = join(gardenDir, "images", "resources");
 
         // Entries reference their cover as /images/<member>/resources/… — an
         // absolute, member-scoped URL that has to resolve against Astro's
@@ -124,66 +122,6 @@ export default function downloadImages(): AstroIntegration {
         // the two can't disagree about where a garden lives.
         await ensureImageLink(member, gardenDir, logger);
         await ensureAvatarLink(member, gardensRoot, logger);
-
-        let downloaded = 0;
-
-        for (const collection of COLLECTIONS) {
-          const collectionDir = join(gardenDir, collection);
-          if (!existsSync(collectionDir)) continue;
-
-          for await (const entry of glob("**/*.md", { cwd: collectionDir })) {
-            const filePath = join(collectionDir, entry);
-            const content = await readFile(filePath, "utf-8");
-
-            const fmMatch = content.match(/^---\n([\s\S]*?)\n---/);
-            if (!fmMatch) continue;
-
-            const imageMatch = fmMatch[1].match(
-              /^image:\s+["']?(https?:\/\/[^\s"']+)["']?\s*$/m
-            );
-            if (!imageMatch) continue;
-
-            const remoteUrl = imageMatch[1];
-            const slug = entry.replace(/\.md$/, "").replace(/\//g, "-");
-            const ext = extname(new URL(remoteUrl).pathname) || ".jpg";
-            const localRelPath = `/images/${member}/resources/${collection}/${slug}${ext}`;
-            const localAbsPath = join(imagesDir, collection, `${slug}${ext}`);
-
-            if (existsSync(localAbsPath)) {
-              // Already cached — just ensure frontmatter points to local path
-              if (content.includes(remoteUrl)) {
-                const updated = content.replace(remoteUrl, localRelPath);
-                await writeFile(filePath, updated, "utf-8");
-              }
-              continue;
-            }
-
-            try {
-              logger.info(`Downloading ${remoteUrl}`);
-              const response = await fetch(remoteUrl);
-              if (!response.ok) {
-                logger.warn(
-                  `Failed to download ${remoteUrl}: ${response.status}`
-                );
-                continue;
-              }
-
-              await mkdir(join(imagesDir, collection), { recursive: true });
-              const buffer = Buffer.from(await response.arrayBuffer());
-              await writeFile(localAbsPath, buffer);
-
-              const updated = content.replace(remoteUrl, localRelPath);
-              await writeFile(filePath, updated, "utf-8");
-              downloaded++;
-            } catch (err) {
-              logger.warn(`Error downloading ${remoteUrl}: ${err}`);
-            }
-          }
-        }
-
-        if (downloaded > 0) {
-          logger.info(`Downloaded ${downloaded} image(s)`);
-        }
       },
 
       // Astro copies public/ wholesale into the output, following symlinks — so

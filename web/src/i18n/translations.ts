@@ -1,4 +1,4 @@
-import { getCollection } from "astro:content";
+import { getCollection } from "@app/lib/content-fs";
 import type { Locale } from "./config";
 import { stripLocalePrefix, localizedPath } from "./utils";
 

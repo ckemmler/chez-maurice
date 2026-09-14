@@ -3,7 +3,7 @@ import Base from "@app/layouts/Base.astro";
 import type { Locale } from "@app/i18n/config";
 import { t, localizedPath, formatFullDate, formatDate } from "@app/i18n/utils";
 import { getAlternateContentPath } from "@app/i18n/translations";
-import { render } from "astro:content";
+import { renderEntry } from "@app/lib/content-fs";
 
 interface Props {
   essay: any;
@@ -11,7 +11,7 @@ interface Props {
 }
 
 const { essay, locale = "en" } = Astro.props;
-const { Content } = await render(essay);
+const contentHtml = await renderEntry(essay);
 const alternatePath = await getAlternateContentPath("essays", essay.data.translationKey, locale);
 ---
 
@@ -29,7 +29,7 @@ const alternatePath = await getAlternateContentPath("essays", essay.data.transla
     </header>
 
     <div class="body-text page-content">
-      <Content />
+      <Fragment set:html={contentHtml} />
     </div>
 
     <footer>

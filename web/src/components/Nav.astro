@@ -14,7 +14,7 @@ interface Props {
 
 const { locale, currentPath, isHome = false, alternatePath } = Astro.props;
 
-import { getCollection } from "astro:content";
+import { getCollection } from "@app/lib/content-fs";
 import { isPublic, isEncrypted } from "../lib/flags";
 import { listNotes } from "../lib/notes-fs";
 import { gardenConfig, gardenInitials } from "../lib/garden";

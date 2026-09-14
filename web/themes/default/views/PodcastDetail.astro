@@ -4,7 +4,7 @@ import Breadcrumb from "@app/components/Breadcrumb.astro";
 import type { Locale } from "@app/i18n/config";
 import { t, resourcePath, formatDate, stripLocalePrefix, formatShortDate } from "@app/i18n/utils";
 import { getAlternateContentPath } from "@app/i18n/translations";
-import { render, getCollection } from "astro:content";
+import { getCollection, renderEntry } from "@app/lib/content-fs";
 import { isPublic } from "@app/lib/flags";
 
 interface Props {
@@ -13,7 +13,7 @@ interface Props {
 }
 
 const { podcast, locale = "en" } = Astro.props;
-const { Content } = await render(podcast);
+const contentHtml = await renderEntry(podcast);
 const alternatePath = await getAlternateContentPath("podcasts", podcast.data.translationKey, locale);
 
 // Derive show slug from entry ID
@@ -38,8 +38,8 @@ const episodes = allEpisodes.sort((a, b) => {
 // Render episode bodies
 const renderedEpisodes = await Promise.all(
   episodes.map(async (ep) => {
-    const { Content: EpContent } = await render(ep);
-    return { ep, EpContent };
+    const epHtml = await renderEntry(ep);
+    return { ep, epHtml };
   })
 );
 ---
@@ -62,14 +62,14 @@ const renderedEpisodes = await Promise.all(
     </header>
 
     <div class="body-text">
-      <Content />
+      <Fragment set:html={contentHtml} />
     </div>
 
     {renderedEpisodes.length > 0 && (
       <section class="episodes">
         <h2>{t(locale, "podcasts.episodes")}</h2>
         <ul class="episode-list">
-          {renderedEpisodes.map(({ ep, EpContent }) => (
+          {renderedEpisodes.map(({ ep, epHtml }) => (
             <li class="episode-item">
               <div class="episode-header">
                 {ep.data.episode_number != null && (
@@ -84,7 +84,7 @@ const renderedEpisodes = await Promise.all(
                 </div>
               )}
               <div class="episode-body">
-                <EpContent />
+                <Fragment set:html={epHtml} />
               </div>
             </li>
           ))}

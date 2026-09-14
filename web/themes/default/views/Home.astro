@@ -1,7 +1,7 @@
 ---
 import Base from "@app/layouts/Base.astro";
 import type { Locale } from "@app/i18n/config";
-import { getCollection, render } from "astro:content";
+import { getCollection, renderEntry } from "@app/lib/content-fs";
 import { gardenConfig, gardenInitials } from "@app/lib/garden";
 
 interface Props {
@@ -12,7 +12,7 @@ const { locale = "en" } = Astro.props;
 const garden = gardenConfig();
 
 const [page] = await getCollection("pages", ({ data }) => data.translationKey === "home" && data.locale === locale);
-const { Content } = page ? await render(page) : { Content: null };
+const contentHtml = page ? await renderEntry(page) : null;
 ---
 
 <Base title={page?.data.title ?? garden.title} locale={locale}>
@@ -24,7 +24,7 @@ const { Content } = page ? await render(page) : { Content: null };
     </div>
     <div class="hero-content">
       <h1>{page?.data.title ?? garden.name}</h1>
-      {Content && <Content />}
+      {contentHtml && <Fragment set:html={contentHtml} />}
     </div>
   </div>
 </Base>

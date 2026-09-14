@@ -3,7 +3,7 @@ import Base from "@app/layouts/Base.astro";
 import type { Locale } from "@app/i18n/config";
 import { t, localizedPath, formatFullDate } from "@app/i18n/utils";
 import { getAlternateContentPath } from "@app/i18n/translations";
-import { render } from "astro:content";
+import { renderEntry } from "@app/lib/content-fs";
 
 interface Props {
   post: any;
@@ -11,7 +11,7 @@ interface Props {
 }
 
 const { post, locale = "en" } = Astro.props;
-const { Content } = await render(post);
+const contentHtml = await renderEntry(post);
 const alternatePath = await getAlternateContentPath("blog", post.data.translationKey, locale);
 ---
 
@@ -25,7 +25,7 @@ const alternatePath = await getAlternateContentPath("blog", post.data.translatio
     </header>
 
     <div class="body-text">
-      <Content />
+      <Fragment set:html={contentHtml} />
     </div>
 
     <footer>

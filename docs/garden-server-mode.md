@@ -175,11 +175,52 @@ tests on resolution, confinement and the frontmatter edits.
 Still pinned: the note-image rewrite and the MOC-card script, both phase 3/4
 territory.
 
+### Phase 3 — done 2026-09-14
+
+`web/src/lib/content-fs.ts` replaces Astro's content layer with the same three
+calls (`getCollection`, `getEntry`, `renderEntry`), so 48 files changed only
+their import. `web/src/content.config.ts` is deleted: nothing loads a
+collection store any more, in the engine or in the static build.
+
+- **Reading.** A directory walk per call (fresh, so a write is visible at
+  once), a parse cache keyed by mtime+size, a render cache likewise. On
+  Candide's garden — 266 files — the walk costs **2.4 ms** and the whole
+  search index **3–5 ms**, so the planned index cache was not built: it would
+  buy nothing and cost a staleness window. If a garden ever reaches tens of
+  thousands of files, a fingerprint cache over the walk is the next step.
+- **Schemas.** The zod schemas go with the config. They mostly coerced quoted
+  dates, which YAML types anyway; `content-fs` coerces the fields views rely
+  on (dates, `tags`/`flags` arrays, a `date` fallback for sorting) and passes
+  the rest through as authored. A malformed file is skipped with a warning,
+  never taking its collection down — the trade `notes-fs` already made.
+- **Notes** keep `notes-fs` as their reader; `content-fs` delegates, so there
+  is one parse of a note, not two.
+- **Fiches** were "empty when `NODE_ENV=production`", which would also have
+  emptied them in a production *server* build (phase 4). The rule is now the
+  one that was meant: fiches exist in the garden engine (`WEB_SSR`), never in
+  a static publish.
+- **`download-images`** no longer walks the garden and rewrites its markdown at
+  engine start — the renderer editing what it renders. The sweep moved to
+  `server/src/services/gardenImages.ts`, run once a few seconds after boot per
+  garden, beside the on-write download the writers already did. What is left
+  of the integration is symlinks, and it is named `garden-image-links` for it.
+
+Memory, same garden (Candide's, 266 notes), `astro dev` both times: **463 MB**
+for a fresh phase-3 engine against **648 MB** for the long-running production
+one. The clean A/B is phase 4's, against the built server.
+
+Battery: 65 tests green (one new: a resource links to its fiche, and the fiche
+is in the owner's search index). Static publish smoked again — same pages, no
+fiche, no draft, no private note.
+
 ## Measurements
 
 | When | Household | Engine RSS | Note |
 |---|---|---|---|
 | 2026-09-13 | Aline's rehearsal container (1 member) | 786 MB total | `astro dev` |
+| 2026-09-14 | Candide's garden (266 notes), phase 2 | 648 MB | `astro dev`, long-running |
+| 2026-09-14 | Candide's garden (266 notes), phase 3 | 463 MB | `astro dev`, fresh — no content store |
+| 2026-09-14 | A skeleton member garden, phase 2 | ~290 MB | `astro dev` |
 
 ## Decisions log
 

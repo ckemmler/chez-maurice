@@ -95,6 +95,11 @@ function localeDir(locale: string): string {
   return path.join(notesDir(), locale);
 }
 
+/** Absolute path of a note's file. */
+export function noteFilePath(locale: string, slug: string): string {
+  return path.join(localeDir(locale), `${slug}.md`);
+}
+
 /**
  * All notes for a locale, as lightweight entries (no rendered HTML). Reads the
  * directory fresh on every call so an MCP edit is visible immediately. A note

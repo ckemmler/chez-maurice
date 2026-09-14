@@ -4,7 +4,7 @@ import LucideIcon from "@app/components/LucideIcon.astro";
 import type { Locale } from "@app/i18n/config";
 import { t, localizedPath, formatFullDate, stripLocalePrefix } from "@app/i18n/utils";
 import { getAlternateContentPath } from "@app/i18n/translations";
-import { render } from "astro:content";
+import { renderEntry } from "@app/lib/content-fs";
 import { isPublic, isEncrypted, isMoc as isMocFlag, hasFlag } from "@app/lib/flags";
 import { marked } from "marked";
 import fs from "node:fs";
@@ -20,11 +20,10 @@ interface Props {
 }
 
 const { note, locale = "en" } = Astro.props;
-// SSR garden engine: the note was read from disk and already carries rendered
-// HTML (note.html). Static build: it's a content-collection entry, so render it
-// through the content layer. Either way we end up with body HTML to emit.
-const contentHtml: string | undefined = note.html;
-const { Content } = contentHtml ? { Content: null } : await render(note);
+// A note detail page hands us the note already rendered (notes-fs did it on
+// the way in); a list-shaped caller may not, so render it here. Same HTML
+// either way.
+const contentHtml: string = note.html ?? (await renderEntry(note));
 
 // Read fragments from _fragments/ directory next to the parent note
 const contentBase = notesDir();
@@ -198,7 +197,7 @@ function monthSeparator(d: Date): string | null {
     )}
 
     <div class="body-text page-content">
-      {contentHtml ? <Fragment set:html={contentHtml} /> : <Content />}
+      <Fragment set:html={contentHtml} />
       {fragments.map(f => (
         <details class="fragment">
           <summary class="fragment__summary">{f.summary}</summary>

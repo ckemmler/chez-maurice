@@ -14,6 +14,11 @@ export function gardensRoot(): string {
   return process.env.MAURICE_GARDENS_DIR || path.join(process.cwd(), "gardens");
 }
 
+/** Absolute path to this garden (gardens/<member>). */
+export function gardenRoot(): string {
+  return path.join(gardensRoot(), GARDEN);
+}
+
 /** Absolute path to this garden's notes tree (gardens/<member>/notes). */
 export function notesDir(): string {
   return path.join(gardensRoot(), GARDEN, "notes");

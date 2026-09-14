@@ -2,7 +2,7 @@
 import Base from "@app/layouts/Base.astro";
 import type { Locale } from "@app/i18n/config";
 import { t, localizedPath, resourceItemPath, formatFullDate } from "@app/i18n/utils";
-import { render } from "astro:content";
+import { renderEntry } from "@app/lib/content-fs";
 import { fragmentsFor, ficheHeadline } from "@app/lib/fiche";
 
 interface Props {
@@ -11,7 +11,7 @@ interface Props {
 }
 
 const { fiche, locale = "en" } = Astro.props;
-const { Content } = await render(fiche);
+const contentHtml = await renderEntry(fiche);
 const resourceUrl = resourceItemPath(locale, fiche.data.resource_collection, fiche.data.resource_id);
 
 // Fragments live beside the fiche in the garden tree, not under src/content —
@@ -53,7 +53,7 @@ const head = ficheHeadline(fiche.data);
     )}
 
     <div class="body-text">
-      <Content />
+      <Fragment set:html={contentHtml} />
       {fragments.map(f => (
         <details class="fragment">
           <summary class="fragment__summary">{f.summary}</summary>
