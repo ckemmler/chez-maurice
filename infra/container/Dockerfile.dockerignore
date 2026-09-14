@@ -38,6 +38,12 @@ web/.astro
 web/gardens/*
 !web/gardens/demo
 !web/gardens/gardens.json
+# Left behind by an install that predates the single garden engine: one
+# symlink shell per member, all of them dangling in a build context. Nothing
+# creates these any more, but an upgraded checkout still has them and the
+# dangling-symlink tripwire below would fail its build.
+web/.garden-roots
+
 # Generated per-install symlinks into the gardens dir (garden-image-links.ts).
 web/public/images/*
 !web/public/images/demo
