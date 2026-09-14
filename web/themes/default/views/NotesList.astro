@@ -13,7 +13,7 @@ interface Props {
 const { locale = "en" } = Astro.props;
 
 const notes = listNotes(locale)
-  .filter((n) => import.meta.env.DEV || isPublic(n.data))
+  .filter((n) => Astro.locals.owner || isPublic(n.data))
   .sort((a, b) => b.data.date.valueOf() - a.data.date.valueOf());
 
 function isDraft(note: typeof notes[number]) {

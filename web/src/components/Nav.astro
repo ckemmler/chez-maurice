@@ -30,11 +30,11 @@ const CommandPalette = _loadPalette ? ((await _loadPalette()) as any).default : 
 
 const garden = gardenConfig();
 
-const blogPosts = await getCollection("blog", ({ data }) => data.locale === locale && (import.meta.env.DEV || isPublic(data)));
+const blogPosts = await getCollection("blog", ({ data }) => data.locale === locale && (Astro.locals.owner || isPublic(data)));
 const hasBlog = blogPosts.length > 0;
 const blogAllDrafts = hasBlog && blogPosts.every((p) => !isPublic(p.data));
 
-const essayPosts = await getCollection("essays", ({ data }) => data.locale === locale && (import.meta.env.DEV || isPublic(data)));
+const essayPosts = await getCollection("essays", ({ data }) => data.locale === locale && (Astro.locals.owner || isPublic(data)));
 const hasEssays = essayPosts.length > 0;
 const essaysAllDrafts = hasEssays && essayPosts.every((p) => !isPublic(p.data));
 
@@ -42,7 +42,7 @@ const allResourceCollections = ["books", "articles", "podcasts", "movies", "game
 let hasResources = false;
 let resourcesAllDrafts = true;
 for (const col of allResourceCollections) {
-  const items = await getCollection(col, ({ data }) => (data as any).locale === locale && (import.meta.env.DEV || isPublic(data as any)));
+  const items = await getCollection(col, ({ data }) => (data as any).locale === locale && (Astro.locals.owner || isPublic(data as any)));
   if (items.length > 0) {
     hasResources = true;
     if (items.some((i) => isPublic(i.data as any))) {
@@ -55,7 +55,7 @@ if (!hasResources) resourcesAllDrafts = false;
 // Read notes from disk (not the content layer) so the nav never blanks out when
 // the glob-loader store momentarily collapses during a burst of MCP edits.
 const noteEntries = listNotes(locale).filter(
-  (n) => !isEncrypted(n.data) && (import.meta.env.DEV || isPublic(n.data)),
+  (n) => !isEncrypted(n.data) && (Astro.locals.owner || isPublic(n.data)),
 );
 const hasNotes = noteEntries.length > 0;
 const notesAllDrafts = hasNotes && noteEntries.every((n) => !isPublic(n.data));

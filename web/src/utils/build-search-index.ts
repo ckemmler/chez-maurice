@@ -18,8 +18,9 @@ export interface SearchEntry {
   author?: string;
 }
 
-export async function buildSearchIndex(locale: Locale): Promise<SearchEntry[]> {
-  const isDev = import.meta.env.DEV;
+/** `owner`: the garden's owner is asking — drafts and private notes are theirs to find. */
+export async function buildSearchIndex(locale: Locale, owner = false): Promise<SearchEntry[]> {
+  const isDev = owner;
   const entries: SearchEntry[] = [];
 
   // Blog

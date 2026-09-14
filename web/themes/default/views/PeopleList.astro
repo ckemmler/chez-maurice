@@ -15,7 +15,7 @@ function isDraft(entry: { data: { flags?: string[] } }) {
   return !isPublic(entry.data);
 }
 
-const people = await getCollection("people", ({ data }) => (import.meta.env.DEV || isPublic(data)) && data.locale === locale)
+const people = await getCollection("people", ({ data }) => (Astro.locals.owner || isPublic(data)) && data.locale === locale)
   .then((p) => p.sort((a, b) => a.data.name.localeCompare(b.data.name)));
 
 const fiches = await getCollection("fiches", ({ data }) => data.locale === locale && data.resource_collection === "people");

@@ -123,6 +123,24 @@ strips only a wiki-link standing alone on its line; a deleted note that was
 never committed makes the backlink commit fail silently (`git add -A` on a
 gone untracked path).
 
+### Phase 1 — done 2026-09-14
+
+`Astro.locals.owner` replaces every `import.meta.env.DEV` (55 occurrences, 47
+files). The Bun proxy sets `X-Maurice-Owner: 1` when the session user is the
+garden's owner and `X-Maurice-Shared: 1` on a note page shared with a
+non-owner, after deleting any such header a client sent; `middleware.ts`
+reads them into `locals.owner` / `locals.shared`. `GARDEN_OWNER=1` makes a
+bare `astro dev` (no proxy) act as the owner. `getStaticPaths` filters are
+plain `isPublic` (a static build has no request), and `buildSearchIndex`
+takes the flag from its route.
+
+Side effect worth the phase on its own: a non-owner member could fetch
+`/g/<other>/search-index.json` (not a document navigation, so the proxy let it
+through as an asset) and get that garden's drafts and private notes. Under
+owner mode they get the public index. Two new tests pin it, and the shared
+note. 57 tests; the static publish build was smoked on the seeded garden and
+carries no draft, no private note, no toolbar.
+
 ## Measurements
 
 | When | Household | Engine RSS | Note |

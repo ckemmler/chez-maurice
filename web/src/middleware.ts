@@ -33,6 +33,16 @@ export const onRequest = defineMiddleware(async (ctx, next) => {
   if (q) ctx.cookies.set("theme", q, { path: "/", maxAge: 60 * 60 * 24 * 365, sameSite: "lax" });
   ctx.locals.theme = q || ctx.cookies.get("theme")?.value || DEFAULT_THEME;
 
+  // Owner mode: the garden's owner is looking at their own garden — drafts,
+  // private notes and the toolbar are theirs. The Bun proxy decides (session
+  // user == garden slug) and says so with X-Maurice-Owner, after stripping any
+  // such header a client sent. GARDEN_OWNER=1 makes a bare `astro dev` (no
+  // proxy) behave as the owner. A static build has no request: never owner.
+  ctx.locals.owner =
+    ctx.request.headers.get("x-maurice-owner") === "1" || process.env.GARDEN_OWNER === "1";
+  // A note page another member may read because it was shared with them.
+  ctx.locals.shared = ctx.request.headers.get("x-maurice-shared") === "1";
+
   const res = await next();
 
   const ct = res.headers.get("content-type") || "";

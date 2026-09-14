@@ -571,11 +571,28 @@ app.notFound(async (c) => {
   target.hostname = "127.0.0.1";
   target.port = String(port);
 
+  // Owner mode for the engine: the session user is this garden's owner. The
+  // header is ours alone — whatever a client sent under that name is dropped.
+  // X-Maurice-Shared marks a note page another member may read because it
+  // was shared with them (the auth middleware above already let it through).
+  const headers = new Headers(c.req.raw.headers);
+  headers.delete("x-maurice-owner");
+  headers.delete("x-maurice-shared");
+  if (slug && c.get("userId")) {
+    const me = getUser(c.get("userId"));
+    if (me && me.username === slug) headers.set("x-maurice-owner", "1");
+    else if (me) {
+      const owner = getUserByUsername(slug);
+      const note = c.req.path.match(/^\/g\/[^/]+(?:\/[a-z]{2})?\/notes\/([a-z0-9-]+)\/?$/)?.[1];
+      if (owner && note && isNoteSharedWith(owner.id, note, me.id)) headers.set("x-maurice-shared", "1");
+    }
+  }
+
   try {
     const resp = await fetch(
       new Request(target.toString(), {
         method: c.req.method,
-        headers: c.req.raw.headers,
+        headers,
         body: c.req.raw.body,
         // @ts-ignore
         duplex: "half",

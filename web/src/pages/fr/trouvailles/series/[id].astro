@@ -7,7 +7,7 @@ import { stripLocalePrefix } from "../../../../i18n/utils";
 export const prerender = process.env.WEB_SSR !== "1";
 
 export async function getStaticPaths() {
-  const allSeries = await getCollection("series", ({ data }) => data.locale === "fr" && (import.meta.env.DEV || isPublic(data)) && !data.show);
+  const allSeries = await getCollection("series", ({ data }) => data.locale === "fr" && isPublic(data) && !data.show);
   return allSeries.map((s) => ({
     params: { id: stripLocalePrefix(s.id) },
     props: { series: s },

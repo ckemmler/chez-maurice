@@ -8,7 +8,7 @@ import { getNote } from "../../lib/notes-fs";
 export const prerender = process.env.WEB_SSR !== "1";
 
 export async function getStaticPaths() {
-  const notes = await getCollection("notes", ({ data }) => data.locale === "en" && (import.meta.env.DEV || isPublic(data)));
+  const notes = await getCollection("notes", ({ data }) => data.locale === "en" && isPublic(data));
   return notes.map((note) => ({
     params: { id: stripLocalePrefix(note.id) },
     props: { note },
@@ -21,7 +21,7 @@ export async function getStaticPaths() {
 let note = Astro.props.note;
 if (!note) {
   note = await getNote("en", Astro.params.id);
-  if (note && !(import.meta.env.DEV || isPublic(note.data))) note = null;
+  if (note && !(Astro.locals.owner || Astro.locals.shared || isPublic(note.data))) note = null;
 }
 if (!note) return new Response("Not found", { status: 404 });
 ---

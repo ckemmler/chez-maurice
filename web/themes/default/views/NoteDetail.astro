@@ -83,7 +83,7 @@ const childSlugs = new Set<string>();
 if (isMocFlag(note.data) && note.body) {
   const slugs = [...note.body.matchAll(WIKI_RE)].map(m => m[1]);
   const allNotes = listNotes(locale).filter(
-    (n) => !isMocFlag(n.data) && (import.meta.env.DEV || isPublic(n.data))
+    (n) => !isMocFlag(n.data) && (Astro.locals.owner || isPublic(n.data))
   );
   const notesBySlug = new Map(allNotes.map(n => [stripLocalePrefix(n.id), n]));
   childNotes = slugs.map(s => notesBySlug.get(s)).filter((n): n is NonNullable<typeof n> => !!n);
@@ -215,7 +215,7 @@ function monthSeparator(d: Date): string | null {
             return (<>
             {sep && <li class="child-notes__month-sep" aria-hidden="true">{sep}</li>}
             <li data-slug={stripLocalePrefix(child.id)} data-order={child.data.order ?? ""} data-archived={hasFlag(child.data, "archived") ? "true" : undefined}>
-              {import.meta.env.DEV && isBacklog && (
+              {Astro.locals.owner && isBacklog && (
                 <span class="drag-handle" draggable="true" title="Drag to reorder">⠿</span>
               )}
               <a href={localizedPath(locale, `/notes/${stripLocalePrefix(child.id)}`)} class="child-link">
@@ -875,7 +875,7 @@ function monthSeparator(d: Date): string | null {
     })();
     </script>
 
-    {import.meta.env.DEV && note.data.tags?.includes("backlog") && (
+    {Astro.locals.owner && note.data.tags?.includes("backlog") && (
       <script is:inline>
       (function() {
         var list = document.querySelector('.child-notes__list[data-backlog]');

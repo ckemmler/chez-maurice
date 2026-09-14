@@ -15,7 +15,7 @@ function isDraft(entry: { data: { flags?: string[] } }) {
   return !isPublic(entry.data);
 }
 
-const movies = await getCollection("movies", ({ data }) => (import.meta.env.DEV || isPublic(data)) && data.locale === locale)
+const movies = await getCollection("movies", ({ data }) => (Astro.locals.owner || isPublic(data)) && data.locale === locale)
   .then((m) => m.sort((a, b) => b.data.date_watched.valueOf() - a.data.date_watched.valueOf()));
 
 const fiches = await getCollection("fiches", ({ data }) => data.locale === locale && data.resource_collection === "movies");

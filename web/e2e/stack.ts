@@ -9,7 +9,7 @@
  *   E2E_ENGINE=server  the built node server (phase 4)
  */
 import { spawn, spawnSync, type ChildProcess } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, readlinkSync, realpathSync, rmSync, symlinkSync, unlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
@@ -129,6 +129,20 @@ export function stopStack(): void {
   const state = readState();
   for (const pid of state.pids) {
     try { process.kill(pid, "SIGTERM"); } catch {}
+  }
+  // The engines' download-images integration symlinks web/public/images/<m>
+  // and public/avatars/* into the gardens root — ours is about to vanish, and
+  // a dangling symlink under public/ makes the next `astro build` fail.
+  for (const dir of ["images", "avatars"]) {
+    const base = join(WEB, "public", dir);
+    if (!existsSync(base)) continue;
+    for (const entry of readdirSync(base)) {
+      const p = join(base, entry);
+      try {
+        const target = readlinkSync(p);
+        if (target.startsWith(state.root)) unlinkSync(p);
+      } catch { /* not a symlink */ }
+    }
   }
   if (!process.env.E2E_KEEP) rmSync(state.root, { recursive: true, force: true });
   else log(`kept ${state.root}`);

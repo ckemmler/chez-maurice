@@ -21,7 +21,7 @@ const showSlug = stripLocalePrefix(series.id);
 
 // Query episodes for this show
 const allEpisodes = await getCollection("series", ({ data }) =>
-  data.show === showSlug && data.locale === locale && (import.meta.env.DEV || isPublic(data))
+  data.show === showSlug && data.locale === locale && (Astro.locals.owner || isPublic(data))
 );
 
 // Sort: season desc → episode_number desc → date desc

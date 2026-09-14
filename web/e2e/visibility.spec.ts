@@ -50,6 +50,26 @@ test.describe("another member", () => {
     expect(r.status).toBe(403);
   });
 
+  test("sees no toolbar on the shared note, forged owner header or not", async ({ as }) => {
+    const page = await as("mei");
+    await page.goto(`${G}/notes/shared-with-mei`);
+    await expect(page.locator("#dev-toolbar")).toHaveCount(0);
+    const forged = await api("mei", `${G}/notes/shared-with-mei`, { headers: { accept: "text/html", "x-maurice-owner": "1" } });
+    expect(forged.status).toBe(200);
+    expect(await forged.text()).not.toContain('id="dev-toolbar"');
+  });
+
+  test("gets only public entries from the search index", async () => {
+    // Not a document navigation, so the proxy lets it through as an asset —
+    // the engine must not hand drafts and private notes to a non-owner.
+    const r = await api("mei", `${G}/search-index.json`, { headers: { accept: "application/json", "x-maurice-owner": "1" } });
+    expect(r.status).toBe(200);
+    const text = await r.text();
+    expect(text).toContain("Kansai journal");
+    expect(text).not.toContain("Draft packing list");
+    expect(text).not.toContain("Secret budget");
+  });
+
   test("has their own garden", async ({ as }) => {
     const page = await as("mei");
     const res = await page.goto(`/g/mei/notes/hello`);

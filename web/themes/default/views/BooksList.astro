@@ -11,7 +11,7 @@ interface Props {
 
 const { locale = "en" } = Astro.props;
 
-const books = await getCollection("books", ({ data }) => (import.meta.env.DEV || isPublic(data)) && data.locale === locale)
+const books = await getCollection("books", ({ data }) => (Astro.locals.owner || isPublic(data)) && data.locale === locale)
   .then((books) => books.sort((a, b) => b.data.date_read.valueOf() - a.data.date_read.valueOf()));
 
 function isDraft(entry: typeof books[number]) {
