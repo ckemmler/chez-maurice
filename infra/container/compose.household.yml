@@ -1,0 +1,66 @@
+# ONE household, on a host that holds several.
+#
+# `compose.prod.yml` is one Maurice and its own Caddy — the right shape for a
+# machine a client owns. A machine that hosts other people's households (and
+# the demo fleet) needs the other shape: a household per compose project, all
+# of them behind ONE Caddy, which is `compose.caddy.yml`.
+#
+#   docker compose -p maurice-<name> --env-file households/<name>.env \
+#     -f compose.household.yml up -d
+#
+# The project name gives the volume its own name (maurice-<name>_home), so two
+# households can never read each other's data by accident. The container name
+# is what Caddy proxies to, which is why it is fixed rather than left to
+# compose's numbering.
+#
+# Nothing here publishes a port to the outside: Caddy is the only door. The
+# loopback publish is for the admin console, which refuses any request that is
+# not local — reach it with `ssh -L`.
+
+name: maurice-${MAURICE_HOUSEHOLD:?set MAURICE_HOUSEHOLD in the env file}
+
+services:
+  maurice:
+    image: ${MAURICE_IMAGE:-maurice:production}
+    container_name: maurice-${MAURICE_HOUSEHOLD}
+    ports:
+      # ssh -L ${MAURICE_ADMIN_PORT}:localhost:${MAURICE_ADMIN_PORT} <host>
+      # then http://localhost:${MAURICE_ADMIN_PORT}/admin
+      - "127.0.0.1:${MAURICE_ADMIN_PORT:?set MAURICE_ADMIN_PORT}:3001"
+    environment:
+      MAURICE_CONFIG: /home/maurice/.maurice/config.toml
+      MAURICE_GARDENS_DIR: /home/maurice/.maurice/gardens
+      MAURICE_TIMEZONE: ${MAURICE_TIMEZONE:-Europe/Paris}
+      TZ: ${MAURICE_TIMEZONE:-Europe/Paris}
+      # The name people reach this household by. The startup banner reads it;
+      # the MCP gateway builds its OAuth URLs from X-Forwarded-Host, which
+      # Caddy sets.
+      MAURICE_PUBLIC_HOST: ${MAURICE_DOMAIN:?set MAURICE_DOMAIN}
+      # TLS is Caddy's. Pointing these at nothing is how the server is told.
+      MAURICE_TLS_CERT: /home/maurice/.maurice/tls/server.crt
+      MAURICE_TLS_KEY: /home/maurice/.maurice/tls/server.key
+      MAURICE_OAUTH_PASSWORD: ${MAURICE_OAUTH_PASSWORD:-}
+      CORPUS_EMBEDDING_BASE_URL: ${CORPUS_EMBEDDING_BASE_URL:-}
+      CORPUS_EMBEDDING_MODEL: ${CORPUS_EMBEDDING_MODEL:-}
+      CORPUS_EMBEDDING_API_KEY: ${CORPUS_EMBEDDING_API_KEY:-}
+      CORPUS_EMBEDDING_DIM: ${CORPUS_EMBEDDING_DIM:-}
+    volumes:
+      # Everything that must survive: the databases, the gardens, images,
+      # uploads, the corpus vector store.
+      - home:/home/maurice/.maurice
+    networks:
+      - maurice-edge
+    restart: unless-stopped
+    # A household is ~380 MB idle. The cap is not a diet, it is a fuse: one
+    # runaway household must not take its neighbours down with it.
+    mem_limit: ${MAURICE_MEM_LIMIT:-1g}
+    logging:
+      driver: json-file
+      options: { max-size: "20m", max-file: "5" }
+
+volumes:
+  home:
+
+networks:
+  maurice-edge:
+    external: true

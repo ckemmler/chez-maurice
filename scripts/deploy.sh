@@ -42,12 +42,39 @@ else
 fi
 
 # 3. Ship the configuration ─────────────────────────────────────────────────
-echo "  sync  compose.prod.yml, Caddyfile"
-ssh "$HOST" "mkdir -p $REMOTE_DIR"
+echo "  sync  compose files, Caddyfile"
+ssh "$HOST" "mkdir -p $REMOTE_DIR $REMOTE_DIR/sites $REMOTE_DIR/households"
 rsync -q "$COMPOSE" "$REPO/infra/container/Caddyfile" "$HOST:$REMOTE_DIR/"
+# The multi-household pair travels too: a host that carries several (Aline,
+# the App Review instance, friends, the demo fleet) uses these instead, one
+# compose project per household behind one Caddy. See MULTI-HOUSEHOLD.md.
+rsync -q "$REPO/infra/container/compose.household.yml" \
+  "$REPO/infra/container/compose.caddy.yml" \
+  "$REPO/infra/container/Caddyfile.multi" "$HOST:$REMOTE_DIR/"
 
 # The .env is never overwritten: it holds the keys, and clobbering it from a
 # developer machine is how a deploy takes an instance down at the worst moment.
+# A multi-household host keeps its households in households/*.env and has no
+# top-level .env — bring its households up instead of the single instance.
+if ssh "$HOST" "ls $REMOTE_DIR/households/*.env >/dev/null 2>&1"; then
+  echo "  up…  (multi-household host)"
+  ssh "$HOST" "cd $REMOTE_DIR && for f in households/*.env; do
+    n=\$(basename \"\$f\" .env)
+    MAURICE_IMAGE='$REMOTE_IMAGE' docker compose -p maurice-\$n --env-file \"\$f\" \
+      -f compose.household.yml up -d
+  done"
+  echo
+  echo "✓ deployed to every household on $HOST:"
+  ssh "$HOST" "cd $REMOTE_DIR && for f in households/*.env; do
+    n=\$(basename \"\$f\" .env)
+    printf '  %-16s %s\\n' \"\$n\" \"\$(docker inspect -f '{{.State.Status}}' maurice-\$n 2>/dev/null || echo absent)\"
+  done"
+  echo
+  echo "  Add one:   ops/household.sh add $HOST <name> <domain>"
+  echo "  Watch:     ops/fleet-status.sh   ·   ops/tower.ts"
+  exit 0
+fi
+
 if ! ssh "$HOST" "test -f $REMOTE_DIR/.env"; then
   echo "  ✗ no $REMOTE_DIR/.env on the host."
   echo "    Copy infra/container/.env.prod.example there, fill it in, and re-run."

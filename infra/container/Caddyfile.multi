@@ -1,0 +1,23 @@
+# The shared door of a multi-household host. It names nobody: each household
+# writes its own file into sites/, and this imports the lot. Adding one is
+# therefore a new file and a reload, never an edit here.
+#
+# (`Caddyfile` beside this one is the single-household version, for a machine
+# that holds exactly one Maurice — a client's own.)
+
+{
+	# Where Let's Encrypt writes when a certificate is about to lapse.
+	email {$MAURICE_ACME_EMAIL}
+}
+
+import /etc/caddy/sites/*.caddy
+
+# A name nobody here serves. Without this Caddy answers an empty 200, which
+# tells a scanner that something is listening and tells a mistyped name
+# nothing at all. Over HTTPS the refusal is already firm — Caddy holds no
+# certificate for a name it was never told about, so the handshake fails.
+http:// {
+	respond 404 {
+		body "No household by that name here."
+	}
+}

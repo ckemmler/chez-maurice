@@ -1,0 +1,44 @@
+# The one door, for a host that holds several households.
+#
+#   docker compose -p maurice-edge -f compose.caddy.yml up -d
+#
+# Caddy is the only thing with a published port. Each household sits behind it
+# on the `maurice-edge` network, reachable by container name and nothing else;
+# no household publishes a port to the world.
+#
+# Adding a household is writing `sites/<name>.caddy` and reloading — the
+# Caddyfile imports that directory rather than naming anyone, so this file and
+# the reload command never change. `ops/household.sh` does both.
+#
+# Certificates: one per name, from Let's Encrypt, obtained and renewed by
+# Caddy on its own. It needs :80 reachable for the HTTP challenge, which is
+# also what redirects http → https.
+
+name: maurice-edge
+
+services:
+  caddy:
+    image: caddy:2-alpine
+    container_name: maurice-caddy
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./sites:/etc/caddy/sites:ro
+      - caddy-data:/data      # the certificates — losing this re-issues them
+      - caddy-config:/config
+    networks:
+      - maurice-edge
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options: { max-size: "20m", max-file: "5" }
+
+volumes:
+  caddy-data:
+  caddy-config:
+
+networks:
+  maurice-edge:
+    external: true
