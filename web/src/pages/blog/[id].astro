@@ -16,7 +16,12 @@ export async function getStaticPaths() {
 
 let __props = Astro.props;
 if (!__props.post) {
-  __props = (await getStaticPaths()).find((e) => e.params.id === Astro.params.id)?.props ?? {};
+  // SSR: look the entry up here rather than through getStaticPaths,
+  // which describes the public static build — the owner sees their
+  // drafts in their own garden.
+  const found = (await getCollection("blog", ({ data }) => data.locale === "en" && (Astro.locals.owner || isPublic(data))))
+    .find((e) => stripLocalePrefix(e.id) === Astro.params.id);
+  __props = found ? { post: found } : {};
 }
 const { post } = __props;
 if (!post) return new Response("Not found", { status: 404 });

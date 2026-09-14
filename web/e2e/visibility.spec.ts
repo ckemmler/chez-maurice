@@ -21,6 +21,21 @@ test.describe("the owner", () => {
     expect(await (await page.goto(`${G}/notes/secret-budget`))!.text()).toContain("PRIVATE-MARKER-7731");
   });
 
+  test("sees an unpublished resource, in the list and on its own page", async ({ as }) => {
+    const page = await as("theo");
+    // getStaticPaths describes the public static build; SSR must not reuse it
+    // to decide what the owner may open (it did, and every draft 404'd).
+    for (const [path, marker] of [
+      ["/resources/series/unpublished-series", "DRAFT-SERIES-MARKER"],
+      ["/resources/books/unpublished-book", "DRAFT-BOOK-MARKER"],
+    ] as const) {
+      const res = await page.goto(`${G}${path}`);
+      expect(res?.status(), path).toBe(200);
+      expect(await res!.text()).toContain(marker);
+    }
+    expect(await (await page.goto(`${G}/resources/books/`))!.text()).toContain("An unpublished book");
+  });
+
   test("sees the toolbar", async ({ as }) => {
     const page = await as("theo");
     await page.goto(`${G}/notes/nara-deer`);
@@ -70,6 +85,13 @@ test.describe("another member", () => {
     expect(text).toContain("Kansai journal");
     expect(text).not.toContain("Draft packing list");
     expect(text).not.toContain("Secret budget");
+  });
+
+  test("does not see an unpublished resource of this garden", async () => {
+    const r = await api("mei", `${G}/resources/books/unpublished-book`, {
+      headers: { accept: "text/html", "sec-fetch-dest": "document" },
+    });
+    expect(r.status).toBe(403); // the proxy stops them before the engine
   });
 
   test("has their own garden", async ({ as }) => {

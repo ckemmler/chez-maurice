@@ -107,6 +107,8 @@ md("podcasts/en/kansai-radio.md", { title: "Kansai radio", date_listened: D, fla
 md("movies/en/tampopo.md", { title: "Tampopo", director: "Juzo Itami", year: 1985, date_watched: D, rating: 5, flags: ["public"], locale: "en" }, `MOVIE-MARKER.`);
 md("series/en/midnight-diner.md", { title: "Midnight Diner", date_watched: D, status: "watched", flags: ["public"], locale: "en" }, `SERIES-MARKER.`);
 md("games/en/animal-crossing.md", { title: "Animal Crossing", date_played: D, flags: ["public"], locale: "en" }, `GAME-MARKER.`);
+md("series/en/unpublished-series.md", { title: "An unpublished series", date_watched: D, status: "watched", flags: [], locale: "en" }, `DRAFT-SERIES-MARKER.`);
+md("books/en/unpublished-book.md", { title: "An unpublished book", author: "Nobody", date_read: D, status: "read", flags: [], locale: "en" }, `DRAFT-BOOK-MARKER.`);
 
 addShare(theo.id, "shared-with-mei", mei.id);
 
