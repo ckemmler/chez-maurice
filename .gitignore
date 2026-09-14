@@ -132,3 +132,8 @@ notarization/
 
 # Stamped by scripts/build-info.sh at image build
 server/build-info.json
+
+# Garden e2e (Playwright)
+web/e2e/.state.json
+web/test-results/
+web/playwright-report/

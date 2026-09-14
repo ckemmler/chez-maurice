@@ -8,7 +8,9 @@
     "preview": "astro preview",
     "pages:dev": "wrangler pages dev dist --compatibility-date=2024-01-01 --r2=SNAPSHOTS",
     "import": "npx tsx scripts/import-from-akita.ts",
-    "astro": "astro"
+    "astro": "astro",
+    "e2e": "playwright test",
+    "e2e:server": "E2E_ENGINE=server playwright test"
   },
   "dependencies": {
     "@astrojs/cloudflare": "^12.6.13",
@@ -20,6 +22,7 @@
   "devDependencies": {
     "@anthropic-ai/sdk": "^0.78.0",
     "@cloudflare/workers-types": "^4.20240129.0",
+    "@playwright/test": "^1.63.0",
     "@types/d3-hierarchy": "^3.1.7",
     "wrangler": "^3.28.0"
   }
