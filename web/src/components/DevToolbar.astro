@@ -1,5 +1,12 @@
 ---
-// Dev-only toolbar — only rendered when Astro.locals.owner
+// The owner's toolbar — only rendered when Astro.locals.owner (see middleware.ts).
+//
+// Its calls go to /api/v1/garden-tools/* on the Maurice server, root-absolute
+// on purpose: that is the server's own API, not a garden path, so it must NOT
+// carry the /g/<member> base (the base middleware rewrites href/src anyway,
+// never a string inside a script). The server acts on the session user's own
+// garden, which is what makes these safe — and what the old /_dev/* calls got
+// wrong, reaching the default garden's dev server whoever was asking.
 ---
 
 <div id="dev-toolbar">
@@ -321,7 +328,7 @@
   const publicInput = document.getElementById("dev-public") as HTMLInputElement;
 
   // Check public state on load
-  fetch("/_dev/public-state", {
+  fetch("/api/v1/garden-tools/public-state", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ path: location.pathname }),
@@ -336,7 +343,7 @@
     publicInput.disabled = true;
     status.textContent = "Toggling public…";
     try {
-      const res = await fetch("/_dev/toggle-public", {
+      const res = await fetch("/api/v1/garden-tools/toggle-public", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ path: location.pathname }),
@@ -357,7 +364,7 @@
   const privateWrap = document.getElementById("dev-private-wrap") as HTMLLabelElement;
   const privateInput = document.getElementById("dev-private") as HTMLInputElement;
 
-  fetch("/_dev/private-state", {
+  fetch("/api/v1/garden-tools/private-state", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ path: location.pathname }),
@@ -372,7 +379,7 @@
     privateInput.disabled = true;
     status.textContent = "Toggling private…";
     try {
-      const res = await fetch("/_dev/toggle-private", {
+      const res = await fetch("/api/v1/garden-tools/toggle-private", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ path: location.pathname }),
@@ -390,7 +397,7 @@
 
   // --- Delete note ---
   const deleteBtn = document.getElementById("dev-delete") as HTMLButtonElement;
-  fetch("/_dev/content-path", {
+  fetch("/api/v1/garden-tools/content-path", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ path: location.pathname }),
@@ -409,7 +416,7 @@
     deleteBtn.disabled = true;
     status.textContent = "Deleting…";
     try {
-      const res = await fetch("/_dev/delete-note", {
+      const res = await fetch("/api/v1/garden-tools/delete-note", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ path: location.pathname }),
@@ -438,7 +445,7 @@
   const iPad =
     /iPad|iPhone|iPod/.test(navigator.userAgent) ||
     (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
-  fetch("/_dev/content-path", {
+  fetch("/api/v1/garden-tools/content-path", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ path: location.pathname }),
@@ -465,7 +472,7 @@
     status.textContent = "Translating…";
 
     try {
-      const res = await fetch("/_dev/translate", { method: "POST" });
+      const res = await fetch("/api/v1/garden-tools/translate", { method: "POST" });
       const reader = res.body?.getReader();
       const decoder = new TextDecoder();
       let last = "";
@@ -508,7 +515,7 @@
   let socialState: any = null;
 
   // Fetch social state on load
-  fetch("/_dev/social-state", {
+  fetch("/api/v1/garden-tools/social-state", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ path: location.pathname }),
@@ -628,7 +635,7 @@
       }
 
       try {
-        const res = await fetch("/_dev/social-publish", {
+        const res = await fetch("/api/v1/garden-tools/social-publish", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({

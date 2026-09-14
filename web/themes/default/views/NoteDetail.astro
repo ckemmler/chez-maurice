@@ -931,7 +931,7 @@ function monthSeparator(d: Date): string | null {
             payload.push({ slug: li.dataset.slug, order: (i + 1) * 10 });
           });
 
-          fetch('/_dev/reorder-children', {
+          fetch('/api/v1/garden-tools/reorder-children', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ items: payload }),

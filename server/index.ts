@@ -46,6 +46,8 @@ import webAdmin from "./src/routes/web-admin";
 import webLogin from "./src/routes/web-login";
 import composer from "./src/routes/composer";
 import gardens from "./src/routes/gardens";
+import gardenTools from "./src/routes/gardenTools";
+import { maybeRegenerateAdherence } from "./src/services/gardenTools";
 import { isNoteSharedWith, gardenFor } from "./src/services/gardens";
 import maurices from "./src/routes/maurices";
 import models from "./src/routes/models";
@@ -217,14 +219,9 @@ app.use("/*", async (c, next) => {
       if (me.role === "guest") return c.json({ error: "Forbidden" }, 403);
       const owner = getUserByUsername(slug);
       if (!owner) return c.json({ error: "Forbidden" }, 403);
-      // The garden engine's /_dev/* tools delete notes, flip them public and
-      // write files, and they carry no auth of their own — they trust this
-      // proxy. Never let them be reached for someone else's garden, whatever
-      // the request looks like. (The sec-fetch-dest rule below is about assets
-      // on a shared note page; a fetch() POST would sail straight past it.)
-      if (/^\/g\/[^/]+\/_dev\//.test(path)) {
-        return c.json({ error: "Forbidden" }, 403);
-      }
+      // (The garden engine used to serve unauthenticated /_dev/* write tools,
+      // guarded here. They are /api/v1/garden-tools now, which acts on the
+      // caller's own garden and cannot be aimed at another member's.)
 
       const note = path.match(/^\/g\/[^/]+(?:\/[a-z]{2})?\/notes\/([a-z0-9-]+)\/?$/)?.[1];
       if (note) {
@@ -272,6 +269,7 @@ app.route("/api/admin", admin);
 app.route("/admin", webAdmin);
 app.route("/login", webLogin);
 app.route("/api/v1/gardens", gardens);
+app.route("/api/v1/garden-tools", gardenTools);
 
 // ── Shared garden on the web ─────────────────────────────────────
 // The garden IS a website: a shared set's "root note" is, by default, a plain
@@ -580,7 +578,10 @@ app.notFound(async (c) => {
   headers.delete("x-maurice-shared");
   if (slug && c.get("userId")) {
     const me = getUser(c.get("userId"));
-    if (me && me.username === slug) headers.set("x-maurice-owner", "1");
+    if (me && me.username === slug) {
+      headers.set("x-maurice-owner", "1");
+      maybeRegenerateAdherence(c.req.path, true);
+    }
     else if (me) {
       const owner = getUserByUsername(slug);
       const note = c.req.path.match(/^\/g\/[^/]+(?:\/[a-z]{2})?\/notes\/([a-z0-9-]+)\/?$/)?.[1];

@@ -141,6 +141,40 @@ owner mode they get the public index. Two new tests pin it, and the shared
 note. 57 tests; the static publish build was smoked on the seeded garden and
 carries no draft, no private note, no toolbar.
 
+### Phase 2 — done 2026-09-14
+
+The 11 `/_dev/*` Vite middlewares are gone; `web/src/integrations/dev-tools.ts`
+is deleted and the integration unregistered. In their place:
+
+- `server/src/services/gardenTools.ts` — URL→file resolution, the frontmatter
+  helpers, the toggles, delete, reorder, editor targets, the sharing helpers,
+  and the adherence regeneration. It reuses `atomicWrite` / `autoCommit` /
+  `gardenFor` from `data-api/services/gardenFiche`, so the toolbar writes the
+  way the MCP tool writes.
+- `server/src/routes/gardenTools.ts` — `POST /api/v1/garden-tools/*`, ten
+  routes. **No member in the URL**: each acts on the caller's own garden,
+  resolved from the session. That is what makes them safe, and it is why the
+  client calls them root-absolute (they are the server's API, not a garden
+  path).
+- The adherence regeneration moved into the proxy, owner-only and debounced;
+  translate and social-publish answer 501 on an install that is not a source
+  checkout, instead of spawning something that is not there.
+
+Two pinned tests flipped to plain tests: `reorder-children` now writes (it
+resolved under the empty `web/src/content`), and the toolbar's switches now
+reach the right garden (they POSTed to a root-absolute `/_dev/*`, which the
+proxy handed to the *default* garden's engine — in a household, a member's
+toolbar edited nobody's garden). The proxy's `/g/*/\_dev/` 403 went with the
+routes it guarded.
+
+Battery: 64 tests green (7 new on the toolbar, including a guest refused, an
+anonymous caller refused, and another member's call landing in their own
+garden rather than this one). Plus `server/test/garden-tools.test.ts`, 12
+tests on resolution, confinement and the frontmatter edits.
+
+Still pinned: the note-image rewrite and the MOC-card script, both phase 3/4
+territory.
+
 ## Measurements
 
 | When | Household | Engine RSS | Note |

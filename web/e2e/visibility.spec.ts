@@ -43,11 +43,13 @@ test.describe("another member", () => {
     }
   });
 
-  test("cannot reach the owner's toolbar routes", async () => {
+  test("finds no toolbar route in this garden to reach", async () => {
+    // The engine serves none since phase 2; the API they do reach acts on
+    // their own garden (toolbar.spec).
     const r = await api("mei", `${G}/_dev/public-state`, {
       method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ path: "/notes/nara-deer" }),
     });
-    expect(r.status).toBe(403);
+    expect(r.status).not.toBe(200);
   });
 
   test("sees no toolbar on the shared note, forged owner header or not", async ({ as }) => {

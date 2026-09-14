@@ -4,7 +4,6 @@ import cloudflare from "@astrojs/cloudflare";
 import { readFileSync, existsSync } from "node:fs";
 import { resolve } from "node:path";
 import remarkCrossRef from "./src/plugins/remark-cross-ref.mjs";
-import devTools from "./src/integrations/dev-tools.ts";
 import encryptPrivate from "./src/integrations/encrypt-private.ts";
 import downloadImages from "./src/integrations/download-images.ts";
 
@@ -36,7 +35,7 @@ const hasTls = existsSync(certFile) && existsSync(keyFile);
 // https://astro.build/config
 export default defineConfig({
   devToolbar: { enabled: false },
-  integrations: [downloadImages(), devTools(), encryptPrivate()],
+  integrations: [downloadImages(), encryptPrivate()],
   site: process.env.SITE_URL || "http://localhost:4321",
   // A member's garden is served under /g/<member>/ on the private tunnel
   // (GARDEN_BASE); unset for Candide's tunnel and every public build, so
