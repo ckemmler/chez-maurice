@@ -3,7 +3,9 @@
  * Wikilinks resolve under the member's base; images load; the search index
  * knows the entry. This is the reference the server build must match.
  */
-import { test, expect } from "./helpers";
+import { test, expect, api, garden } from "./helpers";
+import { join } from "node:path";
+import { readFileSync, writeFileSync, unlinkSync } from "node:fs";
 
 const G = "/g/theo";
 
@@ -55,6 +57,44 @@ test("wikilinks resolve under the member's base", async ({ as }) => {
   await page.goto(`${G}/notes/nara-deer`);
   const hrefs = await page.locator("article a, main a, .prose a").evaluateAll((as) => as.map((a) => a.getAttribute("href")));
   expect(hrefs.some((h) => new RegExp(`^${G}/notes/kansai-journal/?$`).test(h ?? ""))).toBe(true);
+});
+
+// A garden's own images are served by the server, off disk, at request time.
+// They used to come out of the engine's public/ dir — which became a build
+// artefact, and the publish step prunes note art out of it, so every note
+// illustration 404'd. An image added after the build must work too.
+test("a garden's images are served, notes and covers alike", async ({ as }) => {
+  const page = await as("theo");
+  for (const path of [
+    "/images/theo/notes/kansai-journal.jpg",
+    "/images/theo/resources/books/en-the-makioka-sisters.jpg",
+  ]) {
+    const r = await page.request.get(path);
+    expect(r.status(), path).toBe(200);
+    expect(r.headers()["content-type"], path).toContain("image");
+  }
+});
+
+test("an image added after the build is served at once", async ({ as }) => {
+  const page = await as("theo");
+  const file = join(garden(), "images", "notes", "added-just-now.jpg");
+  expect((await page.request.get("/images/theo/notes/added-just-now.jpg")).status()).toBe(404);
+  writeFileSync(file, readFileSync(join(garden(), "images", "notes", "kansai-journal.jpg")));
+  try {
+    expect((await page.request.get("/images/theo/notes/added-just-now.jpg")).status()).toBe(200);
+  } finally {
+    unlinkSync(file);
+  }
+});
+
+test("another member sees a cover, never a note's illustration", async () => {
+  expect((await api("mei", "/images/theo/resources/books/en-the-makioka-sisters.jpg")).status).toBe(200);
+  expect((await api("mei", "/images/theo/notes/kansai-journal.jpg")).status).toBe(403);
+  expect((await api(null, "/images/theo/notes/kansai-journal.jpg")).status).toBe(401);
+  // And nothing escapes the images tree.
+  for (const p of ["/images/theo/../../maurice.db", "/images/theo/notes/../../../gardens.json"]) {
+    expect([400, 403, 404], p).toContain((await api("theo", p)).status);
+  }
 });
 
 // The base rewriter used to turn `/api/images/<name>` — what Maurice writes —

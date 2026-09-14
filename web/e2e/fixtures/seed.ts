@@ -88,6 +88,16 @@ md("notes/en/shared-with-mei.md", { title: "Shared with Mei", date: D, flags: []
   `SHARED-MARKER-9902: Mei can read this one.`);
 md("notes/fr/journal-kansai.md", { title: "Journal du Kansai", date: D, flags: ["public"], locale: "fr", tags: ["japon"], translationKey: "kansai-journal" },
   `Deux semaines dans le Kansai. Voir [[nara-deer]].`);
+// A note illustration, in the garden itself: MOC cards and note bodies point
+// at /images/<member>/notes/<file>. And a cover under resources/, which is the
+// half another member may see.
+const PNG = Buffer.from(
+  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==", "base64");
+mkdirSync(join(G, "images", "notes"), { recursive: true });
+writeFileSync(join(G, "images", "notes", "kansai-journal.jpg"), PNG);
+mkdirSync(join(G, "images", "resources", "books"), { recursive: true });
+writeFileSync(join(G, "images", "resources", "books", "en-the-makioka-sisters.jpg"), PNG);
+
 // Note images are what Maurice writes: /api/images/<name>, served by the Bun
 // server from the data dir. A 1×1 PNG is enough.
 mkdirSync(join(DATA, "images"), { recursive: true });

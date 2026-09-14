@@ -1,4 +1,4 @@
-import { readFileSync, existsSync, readdirSync } from "node:fs";
+import { readFileSync, existsSync, readdirSync, statSync } from "node:fs";
 import { resolve, join, extname } from "node:path";
 import { gardensRoot } from "./src/services/gardensRoot";
 
@@ -385,6 +385,51 @@ app.get("/api/avatars/:filename", (c) => {
 // Rooted at images/RESOURCES, not images/: the sibling images/notes holds the
 // illustrations of private notes, and this route has no authentication at all.
 // Cover art is already public-facing metadata; a member's note images are not.
+// A garden's own images, read off disk at request time.
+//
+// Note bodies and MOC cards point at `/images/<member>/notes/<file>` and
+// `/images/<member>/resources/…`. Those used to be served by the engine out of
+// its `public/` dir, through a symlink into the garden — which stopped working
+// when the engine became a build: `public/` is copied into the bundle at build
+// time, and the publish step prunes note art out of it (rightly — that build
+// also feeds the public site). Every note illustration 404'd.
+//
+// Serving them here fixes more than the 404: an image added after the build
+// appears immediately, like every other thing in a garden. The engine's
+// symlinks now matter only to the static publish.
+//
+// Who may see what: your own garden's images entirely; anyone else's only
+// under `resources/`, which is cover art — the same line /api/garden-images
+// draws, and the reason `images/notes` is not on it.
+app.get("/images/:member/*", (c) => {
+  const member = c.req.param("member");
+  const rest = c.req.path.split(`/images/${member}/`)[1] || "";
+  if (!/^[a-z0-9][a-z0-9._-]*$/i.test(member) || rest.includes("..")) {
+    return c.json({ error: "Invalid path" }, 400);
+  }
+  const me = getUser(c.get("userId"));
+  if (!me) return c.json({ error: "Forbidden" }, 403);
+  if (me.username !== member && !rest.startsWith("resources/")) {
+    return c.json({ error: "Forbidden" }, 403);
+  }
+  const root = resolve(join(gardensRoot(), member, "images"));
+  const filePath = resolve(join(root, rest));
+  if (!filePath.startsWith(root + "/") || !existsSync(filePath) || !statSync(filePath).isFile()) {
+    return c.json({ error: "Not found" }, 404);
+  }
+  const ext = extname(filePath).toLowerCase();
+  const mime = ext === ".png" ? "image/png"
+    : ext === ".jpg" || ext === ".jpeg" ? "image/jpeg"
+    : ext === ".webp" ? "image/webp"
+    : ext === ".svg" ? "image/svg+xml"
+    : ext === ".gif" ? "image/gif"
+    : "application/octet-stream";
+  return new Response(readFileSync(filePath), {
+    // Private to a member: cache in their browser, never in a shared proxy.
+    headers: { "Content-Type": mime, "Cache-Control": "private, max-age=3600" },
+  });
+});
+
 app.get("/api/garden-images/:member/*", (c) => {
   const member = c.req.param("member");
   const rest = c.req.path.split(`/api/garden-images/${member}/`)[1] || "";
