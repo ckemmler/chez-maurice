@@ -205,9 +205,17 @@ collection store any more, in the engine or in the static build.
   garden, beside the on-write download the writers already did. What is left
   of the integration is symlinks, and it is named `garden-image-links` for it.
 
-Memory, same garden (Candide's, 266 notes), `astro dev` both times: **463 MB**
-for a fresh phase-3 engine against **648 MB** for the long-running production
-one. The clean A/B is phase 4's, against the built server.
+**Memory — and a correction.** A fresh phase-3 engine on Candide's garden
+(266 notes) settles at **460–500 MB**; the phase-2 engine on the same garden
+read 648 MB, but it had been running for hours, so the gap is not cleanly the
+content layer's and it was wrong of this note to claim it was. What *is*
+certain: no glob scan runs at boot and the store file is empty.
+
+The number that matters is the one beside it: a member engine on a skeleton
+garden costs **~314 MB** with or without the content layer. That is Vite's own
+floor, and it is what a household pays per member today. So phase 3 did not
+save the memory — it removed the thing that made a build impossible. Phase 4
+collects, by running one built engine instead of N dev servers.
 
 Battery: 65 tests green (one new: a resource links to its fiche, and the fiche
 is in the owner's search index). Static publish smoked again — same pages, no
@@ -218,9 +226,9 @@ fiche, no draft, no private note.
 | When | Household | Engine RSS | Note |
 |---|---|---|---|
 | 2026-09-13 | Aline's rehearsal container (1 member) | 786 MB total | `astro dev` |
-| 2026-09-14 | Candide's garden (266 notes), phase 2 | 648 MB | `astro dev`, long-running |
-| 2026-09-14 | Candide's garden (266 notes), phase 3 | 463 MB | `astro dev`, fresh — no content store |
-| 2026-09-14 | A skeleton member garden, phase 2 | ~290 MB | `astro dev` |
+| 2026-09-14 | Candide's garden (266 notes), phase 2 | 648 MB | `astro dev`, hours old — not comparable |
+| 2026-09-14 | Candide's garden (266 notes), phase 3 | 460–500 MB | `astro dev`, fresh, warmed |
+| 2026-09-14 | A skeleton member garden, phase 3 | ~314 MB | `astro dev` — Vite's floor, per member |
 
 ## Decisions log
 
