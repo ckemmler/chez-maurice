@@ -10,7 +10,7 @@
  */
 import type { AstroIntegration } from "astro";
 import { symlink, readlink, rm, readdir, mkdir } from "node:fs/promises";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { join, resolve } from "node:path";
 
@@ -35,7 +35,10 @@ async function ensureImageLink(
 
   try {
     const current = await readlink(link).catch(() => null);
-    if (current === target) return;
+    // Compare where the link POINTS, not how it is written: the committed
+    // `demo` link is relative, and comparing the literal string rewrote it
+    // absolute on every start — a tracked file, dirtied by running the engine.
+    if (current !== null && resolve(publicImages, current) === target) return;
     // Clear anything else sitting there — including the directory the old
     // build-mode code used to leave behind.
     if (current !== null || existsSync(link)) {
@@ -107,10 +110,18 @@ export default function gardenImageLinks(): AstroIntegration {
     name: "garden-image-links",
     hooks: {
       "astro:config:setup": async ({ logger }) => {
-        // The images live in the running member's garden.
-        const member = process.env.GARDEN || "demo";
+        // One engine serves the whole household, so every member's images have
+        // to resolve — not just the fallback member's. A garden that is not in
+        // the manifest yet (or has no images) is simply skipped.
         const gardensRoot = process.env.MAURICE_GARDENS_DIR || join(process.cwd(), "gardens");
-        const gardenDir = join(gardensRoot, member);
+        let members: string[] = [];
+        try {
+          members = Object.keys(JSON.parse(readFileSync(join(gardensRoot, "gardens.json"), "utf8")));
+        } catch {
+          /* no manifest (a public build, a fresh checkout) — the env member alone */
+        }
+        const fallback = process.env.GARDEN || "demo";
+        if (!members.includes(fallback)) members.push(fallback);
 
         // Entries reference their cover as /images/<member>/resources/… — an
         // absolute, member-scoped URL that has to resolve against Astro's
@@ -120,8 +131,10 @@ export default function gardenImageLinks(): AstroIntegration {
         // committed by hand long ago. Recreate the member's link on every start,
         // from the same config the collections themselves are loaded from, so
         // the two can't disagree about where a garden lives.
-        await ensureImageLink(member, gardenDir, logger);
-        await ensureAvatarLink(member, gardensRoot, logger);
+        for (const member of members) {
+          await ensureImageLink(member, join(gardensRoot, member), logger);
+          await ensureAvatarLink(member, gardensRoot, logger);
+        }
       },
 
       // Astro copies public/ wholesale into the output, following symlinks — so
@@ -131,13 +144,21 @@ export default function gardenImageLinks(): AstroIntegration {
       // Pruning here, rather than by linking less, keeps the dev server's view
       // untouched: nothing outside dist/ is modified.
       "astro:build:done": async ({ dir, logger }) => {
-        const member = process.env.GARDEN || "demo";
-        const memberImages = join(fileURLToPath(dir), "images", member);
-        if (!existsSync(memberImages)) return;
-        for (const entry of await readdir(memberImages)) {
-          if (entry === "resources") continue;
-          await rm(join(memberImages, entry), { recursive: true, force: true });
-          logger.info(`Pruned images/${member}/${entry} from the build`);
+        const images = join(fileURLToPath(dir), "images");
+        if (!existsSync(images)) return;
+        for (const member of await readdir(images)) {
+          const memberImages = join(images, member);
+          let entries: string[];
+          try {
+            entries = await readdir(memberImages);
+          } catch {
+            continue; // not a directory
+          }
+          for (const entry of entries) {
+            if (entry === "resources") continue;
+            await rm(join(memberImages, entry), { recursive: true, force: true });
+            logger.info(`Pruned images/${member}/${entry} from the build`);
+          }
         }
       },
     },
