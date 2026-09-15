@@ -1,0 +1,5 @@
+# The notarized installer was retired on 14 September 2026 (container-only).
+# Without this line Pages answers the old download URL with the homepage and a
+# 200, so `curl -O` saves an HTML file called ChezMaurice.pkg. Send people to
+# the install guide instead.
+/ChezMaurice.pkg  /docs  301
