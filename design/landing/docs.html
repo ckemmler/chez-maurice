@@ -69,7 +69,7 @@
   <div class="doc-head">
     <div class="eyebrow">Documentation</div>
     <h1>Set up Chez Maurice</h1>
-    <p>Run the server on your Mac, connect the apps, and reach it from anywhere. Fifteen minutes, no Docker, no cloud account.</p>
+    <p>Run the server in a container on a machine you own, connect the apps, and reach it from anywhere. Fifteen minutes, no cloud account.</p>
     <div class="toc">
       <a href="#start">1 · Getting started</a>
       <a href="#connect">2 · Connect an app</a>
@@ -82,16 +82,19 @@
   <!-- ── 1. GETTING STARTED ── -->
   <section id="start">
     <h2>1 · Get the server running</h2>
-    <p>The server is the engine — it holds your data and gardens and talks to the models. It runs on a Mac you own. Two ways to get it:</p>
+    <p>The server is the engine — it holds your data and gardens and talks to the models. It ships as one container image and runs on any machine you own: a Mac with <a href="https://orbstack.dev" target="_blank" rel="noopener">OrbStack</a> or Docker Desktop, or a Linux box. Two ways to get it:</p>
 
-    <h3>Option A — the installer (simplest)</h3>
-    <ol>
-      <li>Download <a href="/#download">Chez Maurice Server</a> (a notarized <code>.pkg</code>) and open it.</li>
-      <li>It installs a background service that starts automatically and listens on <code>http://localhost:3001</code>. Config lives in <code>~/.maurice/</code>.</li>
-    </ol>
+    <h3>Option A — the container (what Maurice ships as)</h3>
+    <p>Needs Docker. Everything — the server, the garden engine, the search index — is inside the image; your data lives in a named volume beside it.</p>
+<pre><code>git clone https://github.com/ckemmler/chez-maurice.git
+cd chez-maurice/infra/container
+cp .env.prod.example .env   <span class="c"># then edit it: domain, timezone</span>
+docker compose -f compose.prod.yml build
+docker compose -f compose.prod.yml up -d   <span class="c"># → http://localhost:3001</span></code></pre>
+    <p>The application is published on <b>loopback only</b> (<code>127.0.0.1:3001</code>) — the admin console refuses any request that is not local, which is why it is not on the public internet even once the rest of the instance is. On a remote machine, reach it with <code>ssh -L 3001:localhost:3001 &lt;host&gt;</code>.</p>
 
-    <h3>Option B — from source</h3>
-    <p>Needs <a href="https://bun.sh" target="_blank" rel="noopener">Bun</a>.</p>
+    <h3>Option B — from source, without a container</h3>
+    <p>For hacking on it. Needs <a href="https://bun.sh" target="_blank" rel="noopener">Bun</a>.</p>
 <pre><code>git clone https://github.com/ckemmler/chez-maurice.git
 cd chez-maurice/server
 bun install
@@ -124,7 +127,7 @@ bun run index.ts            <span class="c"># → http://localhost:3001</span></
   <!-- ── 3. REMOTE ACCESS ── -->
   <section id="remote">
     <h2>3 · Reach it from anywhere</h2>
-    <p>Phones can't reach <code>localhost</code>, and the apps expect HTTPS. So the server needs a real hostname with a valid certificate. Two good ways — pick one. Both keep your data on your Mac; they only create a private, encrypted path to it.</p>
+    <p>Phones can't reach <code>localhost</code>, and the apps expect HTTPS. So the server needs a real hostname with a valid certificate. Two good ways — pick one. Both keep your data on your own machine; they only create a private, encrypted path to it.</p>
 
     <div class="two">
       <!-- Tailscale -->

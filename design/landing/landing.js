@@ -39,6 +39,6 @@
     revealAll();
   }
 
-  // Download links are hardcoded in the markup (real .pkg + TestFlight URLs),
+  // Download links are hardcoded in the markup (the docs page + TestFlight URLs),
   // so they work with no JS. Nothing to wire up here.
 })();

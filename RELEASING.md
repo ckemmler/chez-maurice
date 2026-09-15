@@ -43,34 +43,18 @@ env vars; nothing secret is committed.
   ```
   App Store Connect also keeps a per-platform build history under TestFlight.
 
-## 1. Server `.pkg` (notarized, direct download)
+## 1. The landing site
 
-```
-MAURICE_VERSION=1.0.1 \
-MAURICE_SIGN_IDENTITY="Developer ID Application: Candide Kemmler (33DB976938)" \
-MAURICE_INSTALLER_IDENTITY="Developer ID Installer: Candide Kemmler (33DB976938)" \
-MAURICE_NOTARY_PROFILE="maurice-notary" \
-./infra/installer/build.sh --public
-```
-Output: `infra/installer/ChezMaurice.pkg` (signed + notarized + stapled; gitignored).
-Unset the `MAURICE_*` vars for a plain unsigned local build — useless as a public
-download, since Gatekeeper blocks it on any Mac but this one.
+**The notarized `.pkg` is retired.** Maurice ships as a container image since
+14 September 2026 — one build, one set of assumptions about the host. The
+installer that used to be built here (`infra/installer/build.sh`, signed,
+notarized, stapled, published at `www.chezmaurice.eu/ChezMaurice.pkg`) is no
+longer produced and no longer offered: the site points at the container guide in
+`design/landing/docs.html` instead, and the old download URL is left to 404.
 
-**`--public` is required for the hosted download.** It ships only the note tools of
-the MCP gateway; a full build hands every internal tool (coaching, calibre, akita
-pipelines) to anyone who downloads the installer.
-
-Signing needs the login keychain **unlocked in the same session** as the build —
-`codesign` reads the Developer ID private key from it, and `notarytool` reads the
-`maurice-notary` credentials. Over SSH each login gets its own keychain session, so
-unlocking in another terminal does not carry:
+### Publish the site
 ```
-security unlock-keychain ~/Library/Keychains/login.keychain-db
-```
-
-### Publish it
-```
-scripts/deploy-landing.sh          # copies the .pkg into design/landing/, wrangler pages deploy
+scripts/deploy-landing.sh          # wrangler pages deploy design/landing/
 ```
 Needs a Cloudflare API token with **`Account → Cloudflare Pages → Edit`** (the
 zone-scoped `server/.secrets/cloudflare-token` used for tunnels will NOT work — it
@@ -79,12 +63,7 @@ has no account-level access), plus the account id:
 CLOUDFLARE_API_TOKEN=… CLOUDFLARE_ACCOUNT_ID=… scripts/deploy-landing.sh
 ```
 The edge may serve the previous object for a few seconds after the deploy; re-check
-before concluding anything went wrong. Verify what users actually get:
-```
-curl -sLO https://www.chezmaurice.eu/ChezMaurice.pkg
-spctl -a -vvv -t install ChezMaurice.pkg     # expect: accepted / Notarized Developer ID
-xcrun stapler validate ChezMaurice.pkg
-```
+before concluding anything went wrong.
 
 ## 2 & 3. macOS + iOS apps → TestFlight
 
@@ -124,9 +103,9 @@ up CI), re-create/import these. Provisioning profiles install to
 
 ## Download links (landing page)
 
-`design/landing/index.html` hardcodes all three in the markup (no JS wiring):
-- **server** → `https://www.chezmaurice.eu/ChezMaurice.pkg`, published by
-  `scripts/deploy-landing.sh` alongside the site itself.
+`design/landing/index.html` hardcodes them in the markup (no JS wiring):
+- **server** → `/docs#start`, the container install guide. There is no binary to
+  download any more; see §1.
 - **mac** and **ios** → the **same TestFlight public link** (see below).
 
 ## TestFlight: one link for all platforms
