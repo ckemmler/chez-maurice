@@ -16,6 +16,7 @@ import { openaiTurn, type OpenAIToolCall } from "./openaiChat";
 import { resolveFamilies, toolInFamilies, canUseExperimental, isExperimentalTool } from "./toolFamilies";
 import { t, userLocale } from "./i18n";
 import { newUsage, priceUsage, hasUsage, type TurnUsage } from "./pricing";
+import { verdict as budgetVerdict } from "./budget";
 
 interface StreamEvent {
   // thinking: the model is reasoning and nothing visible is coming yet — an
@@ -491,6 +492,16 @@ async function* runOpenAIAgentic(
     if (hasUsage(usage)) yield { type: "usage", usage: priceUsage(usage) };
   }
   for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
+    // The fuse. Checked every round, not just before the first: a turn with six
+    // tool rounds is six billed requests, and a cap consulted once would let the
+    // other five through. `priceUsage` gives what this turn has run up so far,
+    // which the ledger does not know about until the turn is persisted.
+    const budget = budgetVerdict(provider, model, priceUsage(usage).cost ?? 0);
+    if (!budget.ok) {
+      yield* reportUsage();
+      yield { type: "error", message: budget.reason };
+      return;
+    }
     usage.rounds++;
     let content = "";
     let toolCalls: OpenAIToolCall[] = [];
@@ -982,6 +993,13 @@ function trackedBooks(
 
   try {
     for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
+      // The fuse — see the twin of this check in the OpenAI-compatible loop.
+      const budget = budgetVerdict("anthropic", resolved, priceUsage(usage).cost ?? 0);
+      if (!budget.ok) {
+        yield* reportUsage();
+        yield { type: "error", message: budget.reason };
+        return;
+      }
       usage.rounds++;
       const body: any = {
         model: resolved,

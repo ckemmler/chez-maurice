@@ -1,5 +1,6 @@
 import db from "../db";
 import type { TurnUsage } from "./pricing";
+import { recordSpend } from "./budget";
 
 export interface Conversation {
   id: string;
@@ -364,6 +365,11 @@ export function addMessage(
     `UPDATE conversations SET updated_at = datetime('now') WHERE id = ?`,
     [conversationId]
   );
+
+  // What the turn cost goes to the spending ledger as well as to the message.
+  // Here rather than in the route because this is the one place every turn
+  // passes through, and because a deleted message must not un-spend its money.
+  recordSpend(opts.usage ?? null);
 
   return hydrateMessage(
     db.query(`SELECT * FROM messages WHERE id = ?`).get(id)
