@@ -261,6 +261,7 @@
 "composer.camera" = "Câmara";
 "composer.photo" = "Fototeca";
 "composer.file" = "Ficheiros";
+"composer.paste_image" = "Colar imagem";
 
 /* Files library */
 "settings.files.group" = "Os seus ficheiros";

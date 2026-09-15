@@ -2206,6 +2206,67 @@ private struct ComposerBar: View {
         return DictationAnchor(base: text, offsets: end..<end)
     }
 
+    // MARK: Paste an image
+
+    /// Whether the system clipboard holds an image the composer could attach —
+    /// pixels, or a file URL that points at an image.
+    private var clipboardHasImage: Bool {
+        #if os(iOS)
+        return UIPasteboard.general.hasImages
+        #else
+        let pb = NSPasteboard.general
+        if pb.canReadObject(forClasses: [NSImage.self], options: nil) { return true }
+        return (pb.readObjects(forClasses: [NSURL.self], options: [.urlReadingFileURLsOnly: true]) as? [URL])?
+            .contains { isImageFile($0) } ?? false
+        #endif
+    }
+
+    /// Attach the clipboard's image as the pending photo, through the same
+    /// JPEG normalisation the picker and the camera use.
+    private func pasteImageFromClipboard() {
+        #if os(iOS)
+        guard let image = UIPasteboard.general.image, let data = image.pngData() else { return }
+        pendingImageData = normalizeToJPEG(data) ?? data
+        #else
+        let pb = NSPasteboard.general
+        if let image = pb.readObjects(forClasses: [NSImage.self], options: nil)?.first as? NSImage,
+           let data = image.tiffRepresentation {
+            pendingImageData = normalizeToJPEG(data) ?? data
+            return
+        }
+        if let url = (pb.readObjects(forClasses: [NSURL.self], options: [.urlReadingFileURLsOnly: true]) as? [URL])?
+            .first(where: { isImageFile($0) }), let data = try? Data(contentsOf: url) {
+            pendingImageData = normalizeToJPEG(data) ?? data
+        }
+        #endif
+    }
+
+    #if os(macOS)
+    private func isImageFile(_ url: URL) -> Bool {
+        (try? url.resourceValues(forKeys: [.contentTypeKey]).contentType)?.conforms(to: .image) ?? false
+    }
+
+    /// The paste command's providers: an image's bytes, or a file URL to one.
+    private func attachImage(from providers: [NSItemProvider]) {
+        guard let provider = providers.first(where: {
+            $0.hasItemConformingToTypeIdentifier(UTType.image.identifier)
+                || $0.hasItemConformingToTypeIdentifier(UTType.fileURL.identifier)
+        }) else { return }
+        if provider.hasItemConformingToTypeIdentifier(UTType.image.identifier) {
+            provider.loadDataRepresentation(forTypeIdentifier: UTType.image.identifier) { data, _ in
+                guard let data else { return }
+                Task { @MainActor in pendingImageData = normalizeToJPEG(data) ?? data }
+            }
+        } else {
+            provider.loadDataRepresentation(forTypeIdentifier: UTType.fileURL.identifier) { data, _ in
+                guard let data, let url = URL(dataRepresentation: data, relativeTo: nil),
+                      isImageFile(url), let bytes = try? Data(contentsOf: url) else { return }
+                Task { @MainActor in pendingImageData = normalizeToJPEG(bytes) ?? bytes }
+            }
+        }
+    }
+    #endif
+
     /// Send, closing dictation first. stop() delivers the final text
     /// synchronously, so the words spoken up to the tap are in the field before
     /// the send reads it — and, more to the point, dictation can no longer
@@ -2368,6 +2429,24 @@ private struct ComposerBar: View {
                 .lineLimit(2...10)
                 .focused($isFocused)
                 .submitLabel(.send)
+                // ⌘V with an image on the clipboard attaches it, the way a
+                // photo from the picker would. The text field handles string
+                // pastes itself; an image is not something it can read, so the
+                // command falls through to us (macOS) — or, on iPad, arrives
+                // as a hardware-keyboard press we take only when there is no
+                // text to paste instead.
+                #if os(macOS)
+                .onPasteCommand(of: [.image, .fileURL]) { providers in
+                    attachImage(from: providers)
+                }
+                #else
+                .onKeyPress(phases: .down) { press in
+                    guard press.modifiers.contains(.command), press.characters == "v",
+                          !UIPasteboard.general.hasStrings, clipboardHasImage else { return .ignored }
+                    pasteImageFromClipboard()
+                    return .handled
+                }
+                #endif
                 // macOS: Return sends, Shift-Return breaks the line. SwiftUI's
                 // vertical TextField gives Return to onSubmit and lets
                 // Shift-Return submit too, so both keys had the same effect and
@@ -2398,6 +2477,15 @@ private struct ComposerBar: View {
                         }
                         Button { showFileImporter = true } label: {
                             Label(session.localized("composer.file"), systemImage: "folder")
+                        }
+                        // Only offered while the clipboard holds an image, so
+                        // the menu never shows a paste that would do nothing.
+                        // Read at menu-open time; a mere "has image" check
+                        // doesn't trigger the system's paste banner.
+                        if clipboardHasImage {
+                            Button { pasteImageFromClipboard() } label: {
+                                Label(session.localized("composer.paste_image"), systemImage: "doc.on.clipboard")
+                            }
                         }
                     } label: {
                         Image(systemName: "paperclip")

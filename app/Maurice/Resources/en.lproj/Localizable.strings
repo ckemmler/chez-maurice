@@ -261,6 +261,7 @@
 "composer.camera" = "Camera";
 "composer.photo" = "Photo Library";
 "composer.file" = "Files";
+"composer.paste_image" = "Paste Image";
 
 /* Files library */
 "settings.files.group" = "Your files";

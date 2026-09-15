@@ -261,6 +261,7 @@
 "composer.camera" = "Camera";
 "composer.photo" = "Fotobibliotheek";
 "composer.file" = "Bestanden";
+"composer.paste_image" = "Afbeelding plakken";
 
 /* Files library */
 "settings.files.group" = "Jouw bestanden";
