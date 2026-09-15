@@ -1,0 +1,62 @@
+# The demo fleet's door. Drop this in sites/ on the demo host.
+#
+# It names no demo. One block routes the whole fleet by the subdomain label,
+# so creating a demo writes no file here and reloads nothing — which is the
+# difference between the demo fleet and the hand-made households of
+# ops/household.sh, where a name is a deliberate act.
+#
+# ── What this needs that caddy:2-alpine cannot do ───────────────────────────
+#
+# A wildcard certificate, which Let's Encrypt only issues over the DNS-01
+# challenge, which needs a DNS provider module compiled in:
+#
+#   FROM caddy:2-builder AS builder
+#   RUN xcaddy build --with github.com/caddy-dns/cloudflare
+#   FROM caddy:2-alpine
+#   COPY --from=builder /usr/bin/caddy /usr/bin/caddy
+#
+# and a Cloudflare API token scoped to Zone:DNS:Edit on chezmaurice.eu alone,
+# in CF_API_TOKEN. That is the whole cost of the wildcard, and it buys: no ACME
+# round trip when a demo is born, no waiting for a certificate on first use,
+# and distance from the ceiling of 50 certificates per registered domain per
+# week — which a fleet with a two-week TTL would otherwise reach in days.
+#
+# The A record is `*.demo.chezmaurice.eu` → the host, **unproxied** (grey
+# cloud). Whoever proxies the traffic terminates the TLS and reads the clear
+# text; that is the line this whole arrangement exists to stay on the right
+# side of.
+
+*.demo.chezmaurice.eu {
+	tls {
+		dns cloudflare {env.CF_API_TOKEN}
+	}
+
+	# calm-otter.demo.chezmaurice.eu → maurice-demo-calm-otter:3001
+	# Labels count from the right: 0=eu, 1=chezmaurice, 2=demo, 3=the name.
+	reverse_proxy maurice-demo-{labels.3}:3001 {
+		header_up X-Forwarded-Host {host}
+		header_up X-Forwarded-Proto {scheme}
+	}
+
+	request_body {
+		max_size 512MB
+	}
+	encode gzip
+
+	# A name whose container is gone — reaped, or never finished being born.
+	# Saying so is better than a bare 502, because for a demo it is the
+	# ordinary end of life rather than a fault.
+	handle_errors {
+		@gone expression {err.status_code} in [502, 503]
+		respond @gone "This demo has expired. Demos last two weeks and are then deleted." 410
+		respond "{err.status_code} {err.status_text}" {err.status_code}
+	}
+}
+
+# The door itself: where the app asks for a demo.
+demo.chezmaurice.eu {
+	tls {
+		dns cloudflare {env.CF_API_TOKEN}
+	}
+	reverse_proxy maurice-demo-door:7777
+}
