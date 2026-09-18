@@ -330,8 +330,42 @@ struct PersonaCreator: View {
                     Spacer()
                     Text(session.localized("persona.creativity.creative")).font(.system(size: 9, design: .monospaced)).foregroundStyle(theme.inkMute)
                 }
+
+                // The reasoning switch, only where the roster says the model
+                // takes one (GLM-5.3 and Flash, Anthropic 4.6+, a local model
+                // Ollama reports as thinking). A choice is kept when the model
+                // changes: it is the persona's, and the server ignores it on a
+                // model that has no switch.
+                if selectedModel?.thinkingIsOptional == true {
+                    fieldLabel(session.localized("persona.field.reasoning")).padding(.top, 6)
+                    HStack(spacing: 8) {
+                        reasoningChoice(nil)
+                        reasoningChoice(false)
+                        reasoningChoice(true)
+                    }
+                    Text(session.localized("persona.reasoning.hint"))
+                        .font(.system(size: 11)).foregroundStyle(theme.inkMute)
+                }
             }
         }
+    }
+
+    /// The model the persona will run on, as the roster describes it.
+    private var selectedModel: MauriceModel? {
+        store.model(for: draft.model)
+    }
+
+    private func reasoningChoice(_ value: Bool?) -> some View {
+        let on = draft.thinking == value
+        return Button { draft.thinking = value } label: {
+            Text(reasoningLabel(value))
+                .font(.system(size: 11, weight: on ? .medium : .regular))
+                .foregroundStyle(on ? accent.legible(onDark: theme.isDark) : theme.inkSoft)
+                .padding(.horizontal, 11).padding(.vertical, 6)
+                .background(Capsule().fill(on ? accent.opacity(0.1) : theme.bg))
+                .overlay(Capsule().strokeBorder(on ? accent : theme.ruleHard, lineWidth: on ? 1 : 0.5))
+        }
+        .buttonStyle(.plain)
     }
 
     // MARK: 4 · Context
@@ -694,6 +728,9 @@ struct PersonaPreview: View {
                 previewRow(session.localized("persona.preview.model"), store.modelName(for: draft))
                 previewRow(session.localized("persona.preview.context"), count == 0 ? session.localized("persona.preview.none") : (count == 1 ? session.localized("persona.preview.sources.one", count, fmtTok(weight)) : session.localized("persona.preview.sources.other", count, fmtTok(weight))))
                 previewRow(session.localized("persona.preview.creativity"), creativityLabel(draft.temp))
+                if store.model(for: draft.model)?.thinkingIsOptional == true {
+                    previewRow(session.localized("persona.preview.reasoning"), reasoningLabel(draft.thinking))
+                }
             }
             .padding(.horizontal, 16).padding(.bottom, 16)
         }

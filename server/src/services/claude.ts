@@ -49,10 +49,12 @@ function getHouseholdConfig(): {
   falApiKey: string | null;
   defaultModel: string;
   maxTokens: number;
+  /** The everyday Maurice's reasoning choice (see maurices.thinking). */
+  everydayThinking: boolean | null;
 } {
   const row = db
     .query(
-      `SELECT api_key, openai_api_key, mistral_api_key, zai_api_key, scaleway_api_key, scaleway_project_id, fal_api_key, default_model, max_tokens FROM households WHERE id = 'default'`
+      `SELECT api_key, openai_api_key, mistral_api_key, zai_api_key, scaleway_api_key, scaleway_project_id, fal_api_key, default_model, max_tokens, everyday_thinking FROM households WHERE id = 'default'`
     )
     .get() as any;
 
@@ -66,6 +68,7 @@ function getHouseholdConfig(): {
     falApiKey: row.fal_api_key,
     defaultModel: row.default_model,
     maxTokens: row.max_tokens,
+    everydayThinking: row.everyday_thinking == null ? null : row.everyday_thinking === 1,
   };
 }
 
@@ -441,6 +444,7 @@ async function* runOllamaAgentic(
   lang: string,
   conversationId: string,
   signal?: AbortSignal,
+  thinking?: boolean,
 ): AsyncGenerator<StreamEvent> {
   const convo: any[] = [{ role: "system", content: system }, ...baseMessages];
   const calls: ToolCallLog[] = [];
@@ -451,10 +455,12 @@ async function* runOllamaAgentic(
     let toolCalls: OllamaToolCall[] = [];
     let unsupported = false;
     const started = performance.now();
-    for await (const ev of ollamaTurn(model, convo, useTools ? tools : [], maxTokens, signal)) {
+    for await (const ev of ollamaTurn(model, convo, useTools ? tools : [], maxTokens, signal, thinking)) {
       if (ev.type === "text") {
         content += ev.text;
         yield { type: "text_delta", text: ev.text };
+      } else if (ev.type === "thinking") {
+        yield { type: "thinking" };
       } else if (ev.type === "turn_end") {
         toolCalls = ev.toolCalls;
       } else if (ev.type === "error") {
@@ -552,6 +558,19 @@ export function openaiStyleKey(
   }
 }
 
+/** The request field that turns a reasoning phase on or off, per provider.
+ *  Z.ai's GLM models think unless told not to — `thinking.type = disabled` is
+ *  what makes GLM-5.3-Flash answer in seconds rather than minutes. No other
+ *  OpenAI-style provider here documents a switch (Mistral and OpenAI's models
+ *  on the roster do not reason; Scaleway's reasoning models are `always`), so
+ *  nothing is sent to them: an unknown field is a 422 on a strict server.
+ *  Exported for tests. */
+export function thinkingBody(provider: string, thinking: boolean | undefined): Record<string, unknown> | undefined {
+  if (thinking === undefined) return undefined;
+  if (provider === "zai") return { thinking: { type: thinking ? "enabled" : "disabled" } };
+  return undefined;
+}
+
 /** Agentic loop for an OpenAI-style provider (OpenAI, Mistral, Z.ai, Scaleway). Same shape as
  *  the others, but the Chat Completions message format (assistant tool_calls +
  *  role:"tool" results keyed by tool_call_id). */
@@ -568,6 +587,7 @@ async function* runOpenAIAgentic(
   provider: string,
   conversationId: string,
   signal?: AbortSignal,
+  thinking?: boolean,
 ): AsyncGenerator<StreamEvent> {
   const convo: any[] = [{ role: "system", content: system }, ...baseMessages];
   const calls: ToolCallLog[] = [];
@@ -581,6 +601,7 @@ async function* runOpenAIAgentic(
   const turnOpts = {
     signal,
     cacheKey: PROMPT_CACHE_KEY_PROVIDERS.has(provider) ? conversationId : undefined,
+    extraBody: thinkingBody(provider, thinking),
   };
   for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
     if (signal?.aborted) { yield* reportUsage(); return; }
@@ -1048,6 +1069,11 @@ function trackedBooks(
   const isLocal = rec?.tier === "local";
   const provider = rec?.provider ?? (isLocal ? "ollama" : "anthropic");
   const temperature = maurice ? maurice.temp : undefined;
+  // The reasoning choice — the persona's, or the household's factory setting
+  // for the everyday Maurice — honoured only where the roster says the model
+  // takes one; undefined means "send nothing, the provider decides".
+  const choice = maurice ? maurice.thinking : config.everydayThinking;
+  const thinking: boolean | undefined = rec?.thinking === "optional" && choice != null ? choice : undefined;
 
   // Which tool families may this turn use? (conversation → persona → household
   // → tier default). Filter the member's MCP tools to those families so a small
@@ -1101,7 +1127,7 @@ function trackedBooks(
   if (provider === "ollama") {
     const tools = mcpTools.map(mcpToolToFunction);
     if (wantsWeb && hasWebSearch()) tools.push(WEB_SEARCH_FUNCTION);
-    yield* runOllamaAgentic(resolved, systemPrompt, toTextMessages(messages), tools, mcp, config.maxTokens, userLang, conversationId, signal);
+    yield* runOllamaAgentic(resolved, systemPrompt, toTextMessages(messages), tools, mcp, config.maxTokens, userLang, conversationId, signal, thinking);
     return;
   }
 
@@ -1120,7 +1146,7 @@ function trackedBooks(
     yield* runOpenAIAgentic(
       baseUrl, key, resolved, systemPrompt,
       toOpenAIMessages(messages, !!rec?.vision),
-      tools, mcp, temperature, userLang, provider, conversationId, signal,
+      tools, mcp, temperature, userLang, provider, conversationId, signal, thinking,
     );
     return;
   }
@@ -1185,6 +1211,13 @@ function trackedBooks(
       };
       if (temperature !== undefined) body.temperature = temperature;
       if (tools.length) body.tools = tools;
+      // Adaptive thinking is the one on-mode of the 4.6+ family (the fixed
+      // budget is gone from the newer models); sampling parameters are refused
+      // beside it on 4.7+, so the persona's creativity yields to its choice to
+      // reason. The blocks come back with a signature and are replayed as-is
+      // in the tool rounds below — see contentBlocks.
+      if (thinking === true) { body.thinking = { type: "adaptive" }; delete body.temperature; }
+      else if (thinking === false) body.thinking = { type: "disabled" };
 
       const roundStarted = performance.now();
       const roundUsage = { prompt: 0, cached: 0, completion: 0 };
@@ -1228,7 +1261,7 @@ function trackedBooks(
 
       // Accumulators for this assistant turn.
       const contentBlocks: any[] = []; // final assistant content (text + tool_use)
-      const blockState: Record<number, { type: string; text?: string; id?: string; name?: string; partialJson?: string }> = {};
+      const blockState: Record<number, { type: string; text?: string; id?: string; name?: string; partialJson?: string; thinking?: string; signature?: string; data?: string }> = {};
       let stopReason: string | null = null;
       // Output tokens already credited to `usage` for this round, so the running
       // total from message_delta can be applied as a delta rather than a sum.
@@ -1274,6 +1307,14 @@ function trackedBooks(
               blockState[idx] = { type: "text", text: "" };
             } else if (cb?.type === "tool_use") {
               blockState[idx] = { type: "tool_use", id: cb.id, name: cb.name, partialJson: "" };
+            } else if (cb?.type === "thinking") {
+              // The reasoning stays private: only an activity signal reaches
+              // the client. The block itself is kept, signature included, so
+              // a tool round can hand the turn back to the model unchanged.
+              blockState[idx] = { type: "thinking", thinking: "", signature: "" };
+              yield { type: "thinking" };
+            } else if (cb?.type === "redacted_thinking") {
+              blockState[idx] = { type: "redacted_thinking", data: cb.data || "" };
             }
           } else if (event.type === "content_block_delta") {
             const idx = event.index;
@@ -1284,6 +1325,11 @@ function trackedBooks(
               yield { type: "text_delta", text: event.delta.text };
             } else if (event.delta?.type === "input_json_delta") {
               st.partialJson = (st.partialJson || "") + (event.delta.partial_json || "");
+            } else if (event.delta?.type === "thinking_delta") {
+              st.thinking = (st.thinking || "") + (event.delta.thinking || "");
+              yield { type: "thinking" };
+            } else if (event.delta?.type === "signature_delta") {
+              st.signature = (st.signature || "") + (event.delta.signature || "");
             }
           } else if (event.type === "content_block_stop") {
             const idx = event.index;
@@ -1291,6 +1337,10 @@ function trackedBooks(
             if (!st) continue;
             if (st.type === "text") {
               contentBlocks.push({ type: "text", text: st.text || "" });
+            } else if (st.type === "thinking") {
+              contentBlocks.push({ type: "thinking", thinking: st.thinking || "", signature: st.signature || "" });
+            } else if (st.type === "redacted_thinking") {
+              contentBlocks.push({ type: "redacted_thinking", data: st.data || "" });
             } else if (st.type === "tool_use") {
               let input: any = {};
               try {

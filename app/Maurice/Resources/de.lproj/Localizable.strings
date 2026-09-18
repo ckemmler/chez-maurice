@@ -73,6 +73,11 @@
 "persona.creativity.precise" = "Präzise";
 "persona.creativity.balanced" = "Ausgewogen";
 "persona.creativity.creative" = "Kreativ";
+"persona.field.reasoning" = "NACHDENKEN";
+"persona.reasoning.auto" = "Vorgabe des Anbieters";
+"persona.reasoning.on" = "Erst nachdenken";
+"persona.reasoning.off" = "Direkt antworten";
+"persona.reasoning.hint" = "Dieses Modell kann vor der Antwort nachdenken. Ohne diese Phase antwortet es viel schneller; mit ihr hilft es bei schwierigen Fragen.";
 "persona.context.description" = "Fest eingebautes Wissen — Notizen, Bücher und frühere Unterhaltungen, die dieser Maurice immer dabei hat.";
 "persona.tools.local_hint" = "Kleinere Modelle auf dem Gerät kommen mit wenigen Familien am besten zurecht.";
 "model.ondevice" = "Auf dem Gerät";
@@ -87,6 +92,7 @@
 "persona.preview.model" = "Modell";
 "persona.preview.context" = "Kontext";
 "persona.preview.creativity" = "Kreativität";
+"persona.preview.reasoning" = "Nachdenken";
 "persona.preview.family" = "Familie";
 "persona.preview.none" = "keine";
 "persona.preview.sources.one" = "%d Quelle · ~%@";

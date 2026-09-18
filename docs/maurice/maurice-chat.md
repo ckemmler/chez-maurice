@@ -45,7 +45,7 @@ also carries the conversation's totals (see below).
 
 ## Streaming
 
-The client reads the newline-delimited `StreamEvent`s and reacts per type: `text_delta` appends to the live text, `thinking` raises a "Thinking" activity label until the first visible word (reasoning models such as GLM go quiet for a while before answering), `ping` is a server keepalive and shows nothing, `tool_call` raises a transient activity label ("Searching the web…"), `tool_data` appends a structured result, `usage` is kept for the cost meter, `done` captures the `message_id`, `error` surfaces a banner. Image generation shows a spinner while it runs, then drops the image inline.
+The client reads the newline-delimited `StreamEvent`s and reacts per type: `text_delta` appends to the live text, `thinking` raises a "Thinking" activity label until the first visible word (reasoning models such as GLM go quiet for a while before answering — minutes on GLM-5.3-Flash, unless the persona turned the phase off, see [[maurice-personas-hats]]), `ping` is a server keepalive and shows nothing, `tool_call` raises a transient activity label ("Searching the web…"), `tool_data` appends a structured result, `usage` is kept for the cost meter, `done` captures the `message_id`, `error` surfaces a banner. Image generation shows a spinner while it runs, then drops the image inline.
 
 Two touches make it feel alive rather than mechanical:
 

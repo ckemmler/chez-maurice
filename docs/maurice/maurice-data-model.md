@@ -1,6 +1,6 @@
 ---
 title: The data model
-date: '2026-09-15'
+date: '2026-09-18'
 flags: []
 locale: en
 description: 'The SQLite schema behind the chat engine: identity, conversations, files,
@@ -23,7 +23,7 @@ One **SQLite** file (`maurice.db`, WAL mode, in the Maurice home `~/.maurice/`) 
 
 | Table | Key columns | Notes |
 |---|---|---|
-| `households` | one row `id='default'`; `api_key`, `openai_api_key`, `mistral_api_key`, `zai_api_key`, `fal_api_key`, `default_model`, `max_tokens`, `ollama_host`, `default_tool_families`, `color`, `icon`, `providers_seeded`, `zai_seeded` | **A server is one household.** Multiple households is a multi-*server* feature (the app's foyer switcher, and at home one launchd agent per extra household), not multiple rows. `color`/`icon` give the foyer its identity; the `*_seeded` flags guard the one-time model seeds so a deleted model stays deleted. |
+| `households` | one row `id='default'`; `api_key`, `openai_api_key`, `mistral_api_key`, `zai_api_key`, `fal_api_key`, `default_model`, `max_tokens`, `everyday_thinking` (nullable 0/1, seeded 0), `ollama_host`, `default_tool_families`, `color`, `icon`, `providers_seeded`, `zai_seeded`, `scaleway_seeded`, `vision_seeded`, `thinking_seeded` | **A server is one household.** `everyday_thinking` is the everyday Maurice's reasoning choice — the conversation with no persona has no place in the apps to set anything, so its settings come "from the factory" and are corrected in the admin console only. Multiple households is a multi-*server* feature (the app's foyer switcher, and at home one launchd agent per extra household), not multiple rows. `color`/`icon` give the foyer its identity; the `*_seeded` flags guard the one-time model seeds so a deleted model stays deleted. |
 | `users` | `id`, `username` (unique), `display_name`, `role ∈ {admin,standard,guest}`, `password_hash`, `pin_hash`, `avatar_color`, `avatar_url`, `profile_text`, `notes_domain`, `experimental_tools`, `everyday_model` | `everyday_model` = the member's preferred model for the unspecialized Maurice (null → household default). `username` is also the member's garden directory. |
 | `user_preferences` | `user_id` (PK), `theme`, `serif_font`, `density`, `palette`, `locale` | Per-member app appearance and language. |
 
@@ -86,7 +86,7 @@ The garden's *content* is not in SQLite at all: it is Markdown under `~/.maurice
 
 | Table | Key columns | Notes |
 |---|---|---|
-| `maurices` | `id`, `name`, `hat`, `palette`, `model` (nullable), `temp` (creativity), `tagline`, `prompt`, `context_json` (frozen spec), `tool_families` (nullable), `created_by` | A [[maurice-personas-hats|specialized Maurice]]. `context_json` is the persona's **baked-in** context. |
+| `maurices` | `id`, `name`, `hat`, `palette`, `model` (nullable), `temp` (creativity), `thinking` (nullable 0/1), `tagline`, `prompt`, `context_json` (frozen spec), `tool_families` (nullable), `created_by` | A [[maurice-personas-hats|specialized Maurice]]. `context_json` is the persona's **baked-in** context. `thinking` is its reasoning choice for a model whose roster entry is `optional`: NULL leaves the provider's default, 1 asks for the phase, 0 skips it. |
 | `maurice_access` | `maurice_id` + `member_id` (PK) | Which members may use a persona (also how guests get curated Maurices). |
 | `composer_specs` | `conversation_id` + `account_id` (PK), `spec_json` | The [[maurice-composer|composer's]] context for a conversation. |
 
@@ -97,7 +97,7 @@ Both `context_json` and `spec_json` store the **resolved set frozen at save time
 | Table | Key columns | Notes |
 |---|---|---|
 | `ancillary_models` | `invocation` (PK), `model_id`, `updated_at` | A pin: this ancillary function (conversation summary, flashcards, a tool's classifier…) runs on that model. No row means the household's `ancillary_model`, itself backfilled from `default_model`. Read by the server and, read-only, by the Python tools. See [[maurice-server]]. |
-| `models` | `id`, `name`, `tier ∈ {cloud,local}`, `vendor`, `provider ∈ {anthropic,openai,mistral,zai,ollama}`, `ctx` (k tokens), `ram` (local), `discovered`, `vision`, `sort` | Cloud roster is seeded once per provider (Anthropic, OpenAI/Mistral, Z.ai); local models are discovered from Ollama's `/api/tags`. `ctx` is what the [[maurice-server|engine]] bounds the conversation by, and the admin can correct it. `vision` gates whether images are sent to an OpenAI-style model. |
+| `models` | `id`, `name`, `tier ∈ {cloud,local}`, `vendor`, `provider ∈ {anthropic,openai,mistral,zai,scaleway,ollama}`, `ctx` (k tokens), `ram` (local), `discovered`, `vision`, `thinking ∈ {none,optional,always}`, `sort` | Cloud roster is seeded once per provider (Anthropic, OpenAI/Mistral, Z.ai, Scaleway); local models are discovered from Ollama's `/api/tags`. `ctx` is what the [[maurice-server|engine]] bounds the conversation by, and the admin can correct it. `vision` gates whether images are sent to an OpenAI-style model. `thinking` (18 September 2026) is what the roster knows about a model's reasoning phase: `none` it has none, `optional` it has one and the request can turn it on or off, `always` it has one and no switch is known — the persona editor offers its choice only on `optional`, and the admin can correct the value per model. Seeded on a generation counter (`thinking_seeded`) like `vision`; Ollama fills it at discovery from the `thinking` capability `/api/show` reports. Prices are *not* here: they live in `pricing.ts`, a hand-copied sheet, and the two are the roster's metadata split by whether an admin should be able to change it (yes for a window or a capability, no for a list price). |
 | `user_model_access` | `user_id` + `model_id` (PK) | Which models a *standard* member may use; admins are computed-all (no rows). |
 
 `households.default_tool_families`, `maurices.tool_families`, and `conversations.tool_families` together encode the resolution order **conversation → persona → household default → tier default** (all tools for cloud, none for local) — so small local models aren't drowned in 100+ tools.

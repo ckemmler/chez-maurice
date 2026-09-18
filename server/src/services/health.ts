@@ -117,18 +117,42 @@ export function _resetErrors(): void {
   kinds.clear();
   lastKind = null;
   startedAt = Date.now();
+  dbVerdict = null;
+  _dbChecks = 0;
 }
 
 // ── Checks ──────────────────────────────────────────────────────
 
-function checkDb(): "ok" | "degraded" {
+/** How long one `quick_check` verdict stands. The check reads every page of
+ *  the file — a third of a second on a 100 MB database — on the same thread
+ *  that streams every chat, so it froze the whole server for that long on
+ *  every probe; with two towers polling every thirty seconds, that was a
+ *  visible stall in the middle of a reply four times a minute, and `/healthz`
+ *  answering in one to two seconds. Corruption is not a thing that comes and
+ *  goes between two probes: a verdict a few minutes old is as good as a fresh
+ *  one, and the liveness half (`SELECT 1`) still runs every time. */
+export const DB_CHECK_TTL_MS = 5 * 60_000;
+let dbVerdict: { at: number; value: "ok" | "degraded" } | null = null;
+/** Test seam: how many times the full check actually ran. */
+export let _dbChecks = 0;
+
+function checkDb(now = Date.now()): "ok" | "degraded" {
   try {
     db.query("SELECT 1").get();
-    const r = db.query("PRAGMA quick_check(1)").get() as { quick_check?: string } | undefined;
-    return r?.quick_check === "ok" ? "ok" : "degraded";
   } catch {
     return "degraded";
   }
+  if (dbVerdict && now - dbVerdict.at < DB_CHECK_TTL_MS) return dbVerdict.value;
+  let value: "ok" | "degraded";
+  try {
+    _dbChecks++;
+    const r = db.query("PRAGMA quick_check(1)").get() as { quick_check?: string } | undefined;
+    value = r?.quick_check === "ok" ? "ok" : "degraded";
+  } catch {
+    value = "degraded";
+  }
+  dbVerdict = { at: now, value };
+  return value;
 }
 
 function diskFreeMb(): number | null {
@@ -146,10 +170,10 @@ export function publicHealth() {
   return { status: "ok", service: "maurice", version: BUILD.version };
 }
 
-export function fullHealth() {
+export function fullHealth(now = Date.now()) {
   const errors_1h = countSince(3600_000);
   const errors_24h = countSince(86_400_000);
-  const dbState = checkDb();
+  const dbState = checkDb(now);
   const disk = diskFreeMb();
   const status: "ok" | "degraded" = dbState !== "ok" || (disk !== null && disk < 512) ? "degraded" : "ok";
   const lastAt = errorsAt[errorsAt.length - 1];

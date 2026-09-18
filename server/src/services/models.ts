@@ -18,6 +18,18 @@ export interface Model {
   descr: string;
   /** can read images — gates whether the OpenAI-compatible path sends them */
   vision: boolean;
+  /** whether it reasons before answering, and whether that can be switched:
+   *  `optional` is the only value the persona editor acts on */
+  thinking: Thinking;
+}
+
+/** `none`: the model does not reason. `optional`: it does, and the request
+ *  can turn the phase on or off. `always`: it does, with no switch we know. */
+export type Thinking = "none" | "optional" | "always";
+export const THINKING_VALUES: readonly Thinking[] = ["none", "optional", "always"];
+
+export function isThinking(v: unknown): v is Thinking {
+  return typeof v === "string" && (THINKING_VALUES as readonly string[]).includes(v);
 }
 
 /** The shape the apps consume (matches the iOS ModelInfo decoder). */
@@ -31,6 +43,8 @@ export interface ModelInfo {
   note: string;     // "metered" | "private"
   available: boolean;
   is_default?: boolean; // the household default — used by everyday conversations
+  /** the apps show a reasoning switch only when this is `optional` */
+  thinking: Thinking;
 }
 
 function rowToModel(r: any): Model {
@@ -45,6 +59,7 @@ function rowToModel(r: any): Model {
     discovered: !!r.discovered,
     descr: r.descr,
     vision: !!r.vision,
+    thinking: isThinking(r.thinking) ? r.thinking : "none",
   };
 }
 
@@ -74,6 +89,7 @@ export function toModelInfo(m: Model): ModelInfo {
     desc: m.descr,
     note: m.tier === "local" ? "private" : "metered",
     available: true,
+    thinking: m.thinking,
   };
 }
 
@@ -112,17 +128,21 @@ export interface ModelInput {
    *  model is a hard request error on the OpenAI-compatible path, so a model
    *  opts in rather than out. */
   vision?: boolean;
+  /** Reasoning capability. Left out, a re-upsert keeps what the row has —
+   *  a rescan must not undo what the admin set — and a new row is `none`. */
+  thinking?: Thinking;
 }
 
 export function addModel(input: ModelInput): Model {
   const provider = input.provider ?? (input.tier === "local" ? "ollama" : "anthropic");
   db.run(
-    `INSERT INTO models (id, name, tier, vendor, provider, ctx, ram, discovered, descr, vision, sort)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 100)
+    `INSERT INTO models (id, name, tier, vendor, provider, ctx, ram, discovered, descr, vision, thinking, sort)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 100)
      ON CONFLICT(id) DO UPDATE SET
        name = excluded.name, tier = excluded.tier, vendor = excluded.vendor,
        provider = excluded.provider, ctx = excluded.ctx, ram = excluded.ram,
-       descr = excluded.descr, vision = excluded.vision`,
+       descr = excluded.descr, vision = excluded.vision,
+       thinking = CASE WHEN ? IS NULL THEN models.thinking ELSE excluded.thinking END`,
     [
       input.id,
       input.name,
@@ -134,9 +154,19 @@ export function addModel(input: ModelInput): Model {
       input.discovered ? 1 : 0,
       input.descr ?? "",
       input.vision ? 1 : 0,
+      input.thinking ?? "none",
+      input.thinking ?? null,
     ],
   );
   return getModel(input.id)!;
+}
+
+/** Set what the roster says about a model's reasoning. The seed knows the
+ *  models it shipped; a model added by hand, or a provider that grows a
+ *  switch, is corrected here. */
+export function setModelThinking(id: string, thinking: string): boolean {
+  if (!isThinking(thinking)) return false;
+  return db.run(`UPDATE models SET thinking = ? WHERE id = ?`, [thinking, id]).changes > 0;
 }
 
 /** Flip a model's image support. The seed only knows the models it shipped

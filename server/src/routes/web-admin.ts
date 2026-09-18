@@ -35,7 +35,7 @@ import {
   removeLibrary,
   validateLibraryRoot,
 } from "../services/calibreLibraries";
-import { listModels, getModel, addModel, removeModel, setModelCtx, configuredProviders, type Model } from "../services/models";
+import { listModels, getModel, addModel, removeModel, setModelCtx, setModelThinking, configuredProviders, THINKING_VALUES, type Model } from "../services/models";
 import {
   ancillaryTable, applyRecommendedPins, hasRecommendations, householdAncillaryModel,
   presentInvocations, recommendedModel, setHouseholdAncillaryModel, setPinnedModel,
@@ -608,6 +608,11 @@ web.get("/dashboard", async (c) => {
         <form method="POST" action="/admin/models/${encodeURIComponent(m.id)}/ctx" class="inline" title="${escape(t(lang, "models.ctx_title"))}">
           <input type="number" name="ctx" value="${m.ctx}" min="1" max="10000" class="mono ctx-in" onchange="this.form.submit()" />k
         </form>
+        <form method="POST" action="/admin/models/${encodeURIComponent(m.id)}/thinking" class="inline" title="${escape(t(lang, "models.thinking_title"))}">
+          <select name="thinking" class="mono" onchange="this.form.submit()">
+            ${THINKING_VALUES.map((v) => `<option value="${v}"${m.thinking === v ? " selected" : ""}>${escape(t(lang, `models.thinking.${v}`))}</option>`).join("")}
+          </select>
+        </form>
         ${m.tier === "local" ? `<span class="mono-num" style="width:60px">${m.ram ?? "?"} GB</span>` : ""}
         ${callable(m)
           ? `<span class="mono-num" style="width:92px;color:${counts[m.id] ? "var(--ink)" : "var(--ink-mute)"}">${escape(t(lang, "models.can_use", counts[m.id] || 0, memberCount))}</span>`
@@ -769,8 +774,16 @@ web.get("/dashboard", async (c) => {
               <select name="default_model">${modelOptions}</select>
               <span class="hint">${escape(t(lang, "settings.default_model_hint"))}</span></div>
           </div>
-          <div class="field" style="margin-top:16px;max-width:200px"><label class="label">${escape(t(lang, "settings.max_tokens"))}</label>
-            <input type="number" name="max_tokens" value="${household.max_tokens}" min="256" max="200000" /></div>
+          <div class="grid2" style="margin-top:16px">
+            <div class="field" style="max-width:200px"><label class="label">${escape(t(lang, "settings.max_tokens"))}</label>
+              <input type="number" name="max_tokens" value="${household.max_tokens}" min="256" max="200000" /></div>
+            <div class="field"><label class="label">${escape(t(lang, "settings.everyday_thinking"))}</label>
+              <select name="everyday_thinking">
+                ${[["", "auto"], ["0", "off"], ["1", "on"]].map(([v, k]) =>
+                  `<option value="${v}"${(household.everyday_thinking == null ? "" : String(household.everyday_thinking)) === v ? " selected" : ""}>${escape(t(lang, `settings.thinking.${k}`))}</option>`).join("")}
+              </select>
+              <span class="hint">${escape(t(lang, "settings.everyday_thinking_hint"))}</span></div>
+          </div>
           <div class="grid-actions"><button type="submit" class="btn primary">${escape(t(lang, "settings.save"))}</button></div>
         </form>
       </section>
@@ -878,6 +891,11 @@ web.post("/settings", async (c) => {
   if (form.ollama_host) put("ollama_host", (form.ollama_host as string).trim().replace(/\/+$/, ""));
   if (form.default_model && getModel((form.default_model as string).trim())) put("default_model", (form.default_model as string).trim());
   if (form.max_tokens) put("max_tokens", parseInt(form.max_tokens as string) || 4096);
+  // A select always posts: "" is the provider's default, "0"/"1" a choice.
+  if (form.everyday_thinking !== undefined) {
+    const v = String(form.everyday_thinking);
+    if (v === "" || v === "0" || v === "1") put("everyday_thinking", v === "" ? null : Number(v));
+  }
   if (sets.length) db.run(`UPDATE households SET ${sets.join(", ")} WHERE id = 'default'`, params);
   return c.redirect("/admin/dashboard?msg=settings_saved#sec-settings");
 });
@@ -1006,6 +1024,13 @@ web.post("/models/:id/ctx", async (c) => {
   const ctx = parseInt(form.ctx as string, 10);
   const ok = setModelCtx(c.req.param("id"), ctx);
   return c.redirect(ok ? "/admin/dashboard?msg=model_ctx_saved" : "/admin/dashboard?msg=model_ctx_invalid");
+});
+web.post("/models/:id/thinking", async (c) => {
+  const redir = requireWebAdmin(c);
+  if (redir) return redir;
+  const form = await c.req.parseBody();
+  const ok = setModelThinking(c.req.param("id"), String(form.thinking ?? ""));
+  return c.redirect(ok ? "/admin/dashboard?msg=model_thinking_saved" : "/admin/dashboard?msg=model_ctx_invalid");
 });
 web.post("/models/:id/delete", (c) => {
   const redir = requireWebAdmin(c);

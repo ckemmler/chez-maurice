@@ -1,6 +1,6 @@
 import os from "node:os";
 import db from "../db";
-import { addModel, listModels, getModel, type Model } from "./models";
+import { addModel, listModels, getModel, type Model, type Thinking } from "./models";
 
 // Ollama on the household Mac mini: discovery (GET /api/tags) and streaming
 // inference (POST /api/chat). Local models are private and metered-free.
@@ -64,8 +64,11 @@ async function fetchJson(url: string, init?: RequestInit, ms = 4000): Promise<an
   }
 }
 
-/** Best-effort context window (k tokens) for a tag via /api/show. */
-async function contextK(host: string, tag: string): Promise<number> {
+/** Best-effort facts about a tag via /api/show: the context window (k
+ *  tokens) and whether it reasons — Ollama lists `thinking` among a model's
+ *  capabilities, and such a model takes `think: true|false` per request, so
+ *  it is `optional` in the roster's terms. Unknown on failure. */
+async function showInfo(host: string, tag: string): Promise<{ ctx: number; thinking: Thinking | null }> {
   try {
     const info = await fetchJson(`${host}/api/show`, {
       method: "POST",
@@ -75,9 +78,10 @@ async function contextK(host: string, tag: string): Promise<number> {
     const mi = info?.model_info || {};
     const key = Object.keys(mi).find((k) => k.endsWith(".context_length"));
     const n = key ? Number(mi[key]) : 0;
-    return n > 0 ? Math.round(n / 1000) : 8;
+    const caps: unknown[] = Array.isArray(info?.capabilities) ? info.capabilities : [];
+    return { ctx: n > 0 ? Math.round(n / 1000) : 8, thinking: caps.includes("thinking") ? "optional" : "none" };
   } catch {
-    return 8;
+    return { ctx: 8, thinking: null };
   }
 }
 
@@ -117,9 +121,12 @@ export async function discover(): Promise<DiscoverResult> {
     if (/embed/i.test(tag) || /embed/i.test(e?.details?.family || "")) continue;
     seen.add(tag);
     const ram = e.size ? Math.max(1, Math.round(e.size / 1e9)) : 0;
-    // Reuse a previously-probed context window so re-scans stay fast.
+    // Reuse a previously-probed context window so re-scans stay fast; a model
+    // not yet known to reason is asked again, since the column arrived after
+    // the first scans and a row that says `none` may simply predate it.
     const existing = getModel(tag);
-    const ctx = existing?.ctx ? existing.ctx : await contextK(host, tag);
+    const probe = !existing?.ctx || existing.thinking === "none" ? await showInfo(host, tag) : null;
+    const ctx = existing?.ctx ? existing.ctx : probe!.ctx;
     addModel({
       id: tag,
       name: friendlyName(tag),
@@ -128,6 +135,7 @@ export async function discover(): Promise<DiscoverResult> {
       ctx,
       ram,
       discovered: true,
+      thinking: probe?.thinking ?? undefined,
       descr: e?.details?.parameter_size
         ? `${e.details.parameter_size} · on-device`
         : "On-device via Ollama.",
@@ -151,6 +159,8 @@ export interface OllamaToolCall {
 
 export type OllamaTurnEvent =
   | { type: "text"; text: string }
+  /** A reasoning delta arrived (`message.thinking`): an activity signal only. */
+  | { type: "thinking" }
   | { type: "turn_end"; content: string; toolCalls: OllamaToolCall[] }
   | { type: "error"; message: string };
 
@@ -163,12 +173,15 @@ export async function* ollamaTurn(
   tools: any[],
   maxTokens: number,
   signal?: AbortSignal,
+  think?: boolean,
 ): AsyncGenerator<OllamaTurnEvent> {
   const host = ollamaHost();
-  // think:false — skip the (silent, very slow) reasoning phase of thinking
-  // models like Qwen3/DeepSeek-R1. It streamed nothing to the client during
-  // thinking, which blew past the request timeout. Non-thinking models ignore it.
-  const body: any = { model, messages, stream: true, think: false, keep_alive: OLLAMA_KEEP_ALIVE, options: { num_predict: maxTokens, num_ctx: OLLAMA_NUM_CTX } };
+  // think:false by default — skip the (silent, very slow) reasoning phase of
+  // thinking models like Qwen3/DeepSeek-R1. It streamed nothing to the client
+  // during thinking, which blew past the request timeout; since then the
+  // reasoning deltas are surfaced as an activity signal, so a persona can ask
+  // for the phase (`think: true`). Non-thinking models ignore the field.
+  const body: any = { model, messages, stream: true, think: think === true, keep_alive: OLLAMA_KEEP_ALIVE, options: { num_predict: maxTokens, num_ctx: OLLAMA_NUM_CTX } };
   if (tools.length) body.tools = tools;
 
   let response: Response;
@@ -219,6 +232,7 @@ export async function* ollamaTurn(
       try { evt = JSON.parse(t); } catch { continue; }
       if (evt.error) { yield { type: "error", message: String(evt.error) }; return; }
       const msg = evt.message;
+      if (typeof msg?.thinking === "string" && msg.thinking) yield { type: "thinking" };
       if (msg?.content) { content += msg.content; yield { type: "text", text: msg.content }; }
       if (Array.isArray(msg?.tool_calls)) for (const tc of msg.tool_calls) toolCalls.push(tc);
       if (evt.done) {

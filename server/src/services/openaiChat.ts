@@ -99,6 +99,10 @@ export interface OpenAITurnOptions {
   cacheKey?: string;
   /** Override of IDLE_TIMEOUT_MS (tests). */
   idleTimeoutMs?: number;
+  /** Provider-specific fields merged into the request body as they are — the
+   *  caller knows which provider it is talking to and what it accepts (Z.ai's
+   *  `thinking`, say); this client stays provider-neutral. */
+  extraBody?: Record<string, unknown>;
 }
 
 /** One Chat Completions turn: streams content as `text`, accumulates tool calls
@@ -119,6 +123,7 @@ export async function* openaiTurn(
   if (tools.length) { body.tools = tools; body.tool_choice = "auto"; }
   if (temperature !== undefined) body.temperature = temperature;
   if (opts.cacheKey) body.prompt_cache_key = opts.cacheKey;
+  if (opts.extraBody) Object.assign(body, opts.extraBody);
   // Note: max-tokens param is omitted — OpenAI's o-series wants
   // max_completion_tokens while others want max_tokens; the defaults are ample.
 

@@ -16,6 +16,10 @@ struct Maurice: Identifiable, Equatable {
     var palette: String = "ink"
     var model: String?
     var temp: Double = 0.5
+    /// For a model that reasons optionally: nil = the provider's own default,
+    /// true = think before answering, false = answer directly. The server
+    /// ignores it on any other model.
+    var thinking: Bool? = nil
     var tagline: String = ""
     var prompt: String = ""
     /// member ids allowed to use this Maurice
@@ -61,6 +65,7 @@ struct Maurice: Identifiable, Equatable {
             palette: d["palette"] as? String ?? "ink",
             model: d["model"] as? String,
             temp: (d["temp"] as? NSNumber)?.doubleValue ?? 0.5,
+            thinking: d["thinking"] as? Bool,
             tagline: d["tagline"] as? String ?? "",
             prompt: d["prompt"] as? String ?? "",
             users: d["users"] as? [String] ?? [],
@@ -94,8 +99,12 @@ struct MauriceModel: Identifiable, Equatable {
     let desc: String
     let note: String
     let available: Bool
+    /// "none" | "optional" | "always" — the persona editor offers the
+    /// reasoning switch only on "optional".
+    let thinking: String
 
     var isLocal: Bool { tier == "local" }
+    var thinkingIsOptional: Bool { thinking == "optional" }
 }
 
 @Observable @MainActor
@@ -219,7 +228,8 @@ final class MauriceStore {
                 sub: d["sub"] as? String ?? "",
                 desc: d["desc"] as? String ?? "",
                 note: d["note"] as? String ?? "",
-                available: d["available"] as? Bool ?? true
+                available: d["available"] as? Bool ?? true,
+                thinking: d["thinking"] as? String ?? "none"
             )
         }
     }
@@ -254,6 +264,7 @@ final class MauriceStore {
             "palette": m.palette,
             "model": m.model as Any,
             "temp": m.temp,
+            "thinking": m.thinking ?? NSNull(),
             "tagline": m.tagline,
             "prompt": m.prompt,
             "context": m.contextItems.map { $0.payload() },

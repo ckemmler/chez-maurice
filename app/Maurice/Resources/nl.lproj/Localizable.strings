@@ -73,6 +73,11 @@
 "persona.creativity.precise" = "Precies";
 "persona.creativity.balanced" = "Gebalanceerd";
 "persona.creativity.creative" = "Creatief";
+"persona.field.reasoning" = "NADENKEN";
+"persona.reasoning.auto" = "Standaard van de aanbieder";
+"persona.reasoning.on" = "Eerst nadenken";
+"persona.reasoning.off" = "Direct antwoorden";
+"persona.reasoning.hint" = "Dit model kan nadenken voor het antwoordt. Die fase overslaan maakt antwoorden veel sneller; erom vragen helpt bij moeilijke vragen.";
 "persona.context.description" = "Ingebakken kennis — notities, boeken en eerdere gesprekken die deze Maurice altijd bij zich draagt.";
 "persona.tools.local_hint" = "Kleinere modellen op het apparaat werken het best met een paar families.";
 "model.ondevice" = "Op apparaat";
@@ -87,6 +92,7 @@
 "persona.preview.model" = "Model";
 "persona.preview.context" = "Context";
 "persona.preview.creativity" = "Creativiteit";
+"persona.preview.reasoning" = "Nadenken";
 "persona.preview.family" = "Familie";
 "persona.preview.none" = "geen";
 "persona.preview.sources.one" = "%d bron · ~%@";

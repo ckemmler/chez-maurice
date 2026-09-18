@@ -73,6 +73,11 @@
 "persona.creativity.precise" = "Preciso";
 "persona.creativity.balanced" = "Equilibrado";
 "persona.creativity.creative" = "Creativo";
+"persona.field.reasoning" = "RAZONAMIENTO";
+"persona.reasoning.auto" = "Ajuste del proveedor";
+"persona.reasoning.on" = "Razonar primero";
+"persona.reasoning.off" = "Responder directamente";
+"persona.reasoning.hint" = "Este modelo puede razonar antes de responder. Saltarse esa fase acelera mucho las respuestas; pedirla ayuda en las preguntas difíciles.";
 "persona.context.description" = "Conocimiento integrado: notas, libros y conversaciones pasadas que este Maurice lleva siempre consigo.";
 "persona.tools.local_hint" = "Los modelos pequeños en el dispositivo rinden mejor con pocas familias.";
 "model.ondevice" = "En el dispositivo";
@@ -87,6 +92,7 @@
 "persona.preview.model" = "Modelo";
 "persona.preview.context" = "Contexto";
 "persona.preview.creativity" = "Creatividad";
+"persona.preview.reasoning" = "Razonamiento";
 "persona.preview.family" = "Familia";
 "persona.preview.none" = "ninguno";
 "persona.preview.sources.one" = "%d fuente · ~%@";

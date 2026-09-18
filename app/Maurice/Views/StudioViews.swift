@@ -59,6 +59,15 @@ func creativityLabel(_ temp: Double) -> String {
     return L("persona.creativity.balanced")
 }
 
+/// The persona's reasoning choice as a label; nil = the provider's default.
+func reasoningLabel(_ thinking: Bool?) -> String {
+    switch thinking {
+    case .some(true): return L("persona.reasoning.on")
+    case .some(false): return L("persona.reasoning.off")
+    case .none: return L("persona.reasoning.auto")
+    }
+}
+
 /// A small mono pill used in greetings and previews.
 struct StudioPill: View {
     @Environment(\.mauriceTheme) private var theme
@@ -251,6 +260,10 @@ struct StudioGreeting: View {
                                text: "\(String(format: maurice.count == 1 ? L("studio.source_count_one") : L("studio.source_count_other"), maurice.count)) · ~\(fmtTok(maurice.weight))")
                 }
                 StudioPill(icon: "dial.medium", text: creativityLabel(maurice.temp))
+                // Only a choice worth a word: the provider's default says nothing.
+                if let thinking = maurice.thinking, store.model(for: maurice.model)?.thinkingIsOptional == true {
+                    StudioPill(icon: thinking ? "brain" : "bolt", text: reasoningLabel(thinking))
+                }
             }
             .fixedSize(horizontal: true, vertical: false)
 

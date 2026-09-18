@@ -28,6 +28,7 @@ interface MauriceRow {
   palette: string;
   model: string | null;
   temp: number;
+  thinking: number | null;
   tagline: string;
   prompt: string;
   context_json: string;
@@ -44,6 +45,10 @@ export interface Maurice {
   palette: string;
   model: string | null;
   temp: number;
+  /** For a model that reasons optionally: null = the provider's own default,
+   *  true = reason before answering, false = answer directly. Ignored on any
+   *  other model — the roster (`models.thinking`) says which is which. */
+  thinking: boolean | null;
   tagline: string;
   prompt: string;
   /** member ids allowed to use this Maurice */
@@ -69,6 +74,8 @@ export interface MauriceInput {
   palette?: string;
   model?: string | null;
   temp?: number;
+  /** see Maurice.thinking; undefined leaves the stored value alone */
+  thinking?: boolean | null;
   tagline?: string;
   prompt?: string;
   users?: string[];
@@ -119,6 +126,7 @@ function toMaurice(row: MauriceRow): Maurice {
     palette: row.palette,
     model: row.model,
     temp: row.temp,
+    thinking: row.thinking == null ? null : row.thinking === 1,
     tagline: row.tagline,
     prompt: row.prompt,
     users: accessFor(row.id),
@@ -208,6 +216,8 @@ export function builtinMaurice(lang = "en"): Maurice {
     palette: "ink",
     model: builtinMauriceModel(),
     temp: 0.3,
+    // Answers about the docs are lookups, not puzzles: no reasoning phase.
+    thinking: false,
     tagline: builtinTagline(lang),
     prompt: BUILTIN_PROMPT,
     users: [],
@@ -269,6 +279,13 @@ export function setAccess(mauriceId: string, memberIds: string[]): void {
   }
 }
 
+/** The stored form of a persona's reasoning choice: NULL for "the provider's
+ *  default", else 0/1. Anything that is not a boolean (a client sending a
+ *  string, say) is read as "no choice" rather than as a request. */
+function thinkingColumn(v: unknown): number | null {
+  return v === true ? 1 : v === false ? 0 : null;
+}
+
 export function createMaurice(
   memberId: string,
   input: MauriceInput,
@@ -279,8 +296,8 @@ export function createMaurice(
   const id = crypto.randomUUID();
   db.run(
     `INSERT INTO maurices
-       (id, name, hat, palette, model, temp, tagline, prompt, context_json, tool_families, created_by)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       (id, name, hat, palette, model, temp, thinking, tagline, prompt, context_json, tool_families, created_by)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       id,
       input.name.trim(),
@@ -288,6 +305,7 @@ export function createMaurice(
       input.palette ?? "ink",
       input.model ?? null,
       input.temp ?? 0.5,
+      thinkingColumn(input.thinking ?? null),
       input.tagline ?? "",
       input.prompt ?? "",
       JSON.stringify(frozen.spec),
@@ -323,7 +341,7 @@ export function updateMaurice(
 
   db.run(
     `UPDATE maurices SET
-       name = ?, hat = ?, palette = ?, model = ?, temp = ?, tagline = ?,
+       name = ?, hat = ?, palette = ?, model = ?, temp = ?, thinking = ?, tagline = ?,
        prompt = ?, context_json = ?, tool_families = ?, updated_at = datetime('now')
      WHERE id = ?`,
     [
@@ -332,6 +350,7 @@ export function updateMaurice(
       input.palette ?? row.palette,
       input.model !== undefined ? input.model : row.model,
       input.temp ?? row.temp,
+      input.thinking !== undefined ? thinkingColumn(input.thinking) : row.thinking,
       input.tagline ?? row.tagline,
       input.prompt ?? row.prompt,
       contextJson,

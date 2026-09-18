@@ -32,6 +32,7 @@ Each persona is a row in the `maurices` table (`server/src/services/maurices.ts`
 | `prompt` | The system instruction that gives the persona its voice and rules |
 | `model` | Preferred LLM (nullable → falls back to the member's everyday model) |
 | `temp` | Creativity (0–1 → precise / balanced / creative) |
+| `thinking` | Reasoning choice, for a model the roster marks `optional` (see [[maurice-data-model]]): `null` = the provider's own default, `true` = think first, `false` = answer directly. Ignored on any other model, and kept when the model changes. Maurice Maurice is `false`: his answers are lookups. |
 | `context_json` | A **frozen** composer spec — notes/books/files baked in (see below) |
 | `tool_families` | Optional restriction of which tool groups this persona may use |
 | `created_by` | Owner; drives access (and guest-granting) |
@@ -62,8 +63,8 @@ Hats are defined in `app/Maurice/Hats.swift`, with the brand boater logomark dra
 ## Creating and using a persona (app)
 
 - **Maurice Studio** (`StudioViews.swift`) — the picker: everyday Maurice always first, then the member's custom Maurices, then "Create New." Tapping a row *arms* that Maurice for the conversation; an edit affordance opens the creator.
-- **Persona Creator** (`PersonaCreatorView.swift`) — form fields (name, tagline, prompt), the hat grid, a palette/hue selector, a creativity slider, and a context section to bind notes/books/files. On iPad (regular width) a live preview is pinned beside the form; the controls' accent follows the chosen hat. Delete is destructive (red).
-- **Greeting** — when a conversation is empty, the persona's hat, name, tagline, and creativity pill are shown as a greeting card.
+- **Persona Creator** (`PersonaCreatorView.swift`) — form fields (name, tagline, prompt), the hat grid, a palette/hue selector, a creativity slider, a **reasoning switch** (three pills under the slider — provider default / answer directly / think first — shown only when the chosen model's roster entry says the phase is optional, since 18 September 2026), and a context section to bind notes/books/files. On iPad (regular width) a live preview is pinned beside the form; the controls' accent follows the chosen hat. Delete is destructive (red).
+- **Greeting** — when a conversation is empty, the persona's hat, name, tagline, and creativity pill are shown as a greeting card, with a reasoning pill beside it when the persona made a choice on a model that takes one.
 
 The armed persona persists per conversation; switching personas is done from the picker on the composer's send button.
 
@@ -80,6 +81,7 @@ A persona can be limited to specific **tool families** (`tool_families`), so e.g
 - **Emergent hats.** The vision has the hat *emerge* from whichever note subtree is active ("Maurice is in scientist mode because you opened the dinosaur folder"). Today the hat is a property the member sets on a persona. Closing this means deriving a hat/scope from the loaded composer context automatically.
 - **Consent-driven creation.** The vision's Layer 2 ("You've been curious about black holes — want me to start remembering this?") would create a persona/note pair on consent. Persona creation is currently fully manual.
 - **Maurice Maurice reads a snapshot, in English.** A hosted household gets the docs as they were when its image was built; nothing pulls a newer set. And the notes are English only — he translates as he answers, which is fine for the answer and less so for a quoted heading. Both are acceptable while the docs live in one garden; a docs bundle published from the garden (a versioned tarball the server fetches) would close the first.
+- **The everyday Maurice's settings are the household's, not the member's.** The conversation with no persona has no editor in the apps, so its reasoning choice is a factory setting on the household (`everyday_thinking`, seeded to "answer directly": reasoning is something a persona asks for), corrected in the admin console and nowhere else. A per-member or per-conversation choice would need a column beside the everyday model.
 - **Fine detail lives in the delta or nowhere.** Between condensations, a question about an old note's fine print — why the Scaleway key names its project, say — gets the digest's one line. If that bites, the next step is a read-on-demand tool for one full note, not a bigger digest.
 
 These two are the most interesting feature conversations this note is meant to seed.

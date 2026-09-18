@@ -612,6 +612,29 @@ try { db.run(`ALTER TABLE households ADD COLUMN vision_seeded INTEGER NOT NULL D
 // seedVisionFlags(). Ordering matters more than it looks: run it here and it
 // matches nothing on a fresh database, then marks itself done forever.
 
+// Whether — and how — the model reasons before it answers. `none`: it does not.
+// `optional`: it does, and the request can turn the phase on or off (Z.ai's
+// `thinking`, Anthropic's `thinking`, Ollama's `think`). `always`: it reasons
+// and Maurice knows no switch for it (the Scaleway-hosted reasoning models).
+// Only `optional` models offer the setting in the persona editor; the other
+// two values are documentation the roster carries about itself. Seeded below,
+// after the rows exist, on a generation counter like vision's.
+try { db.run(`ALTER TABLE models ADD COLUMN thinking TEXT NOT NULL DEFAULT 'none'`); } catch {}
+try { db.run(`ALTER TABLE households ADD COLUMN thinking_seeded INTEGER NOT NULL DEFAULT 0`); } catch {}
+
+// A persona's choice for a model that reasons optionally: NULL leaves the
+// provider's own default (Z.ai thinks unless told not to; Anthropic 4.6+ does
+// not unless asked), 1 asks for the reasoning phase, 0 asks it to be skipped.
+// Ignored on a model whose `thinking` is not `optional`.
+try { db.run(`ALTER TABLE maurices ADD COLUMN thinking INTEGER`); } catch {}
+
+// The same choice for the everyday Maurice — the conversation with no persona,
+// which the member cannot configure and which therefore needs its settings
+// "from the factory". Seeded to 0: the everyday Maurice answers directly and
+// reasoning is something a persona asks for. NULL = the provider's default,
+// 1 = reason. Editable in the admin console, nowhere in the apps.
+try { db.run(`ALTER TABLE households ADD COLUMN everyday_thinking INTEGER DEFAULT 0`); } catch {}
+
 // Migration: `garden` was one 54-tool family, now sub-split. Expand any stored
 // "garden" selection to its sub-families so existing personas/chats keep the
 // same tools. Idempotent (only acts on the exact "garden" element). Ids mirror
@@ -865,6 +888,39 @@ try {
                     'glm-5.3-flash')`,
     );
     db.run(`UPDATE households SET vision_seeded = ? WHERE id = 'default'`, [VISION_SEED_GENERATION]);
+  }
+} catch {}
+
+// The reasoning capability of the seeded roster, on the same generation-counter
+// pattern. Anthropic: every 4.6+ model takes `thinking` (Haiku 4.5 still wants
+// the old budget form, which Maurice does not send, so it stays `none`). Z.ai:
+// both GLM-5.3 models think by default and accept `thinking.type = disabled` —
+// this is the switch that turns a three-minute Flash answer into a thirty-second
+// one. Scaleway: the models that stream a `reasoning` delta do so with no
+// documented switch, so they are `always`. Local models are set by discovery
+// (Ollama reports a `thinking` capability), not here.
+const THINKING_SEED_GENERATION = 1;
+try {
+  const seeded =
+    (db.query(`SELECT thinking_seeded FROM households WHERE id = 'default'`).get() as
+      | { thinking_seeded: number }
+      | undefined
+    )?.thinking_seeded ?? 0;
+  if (seeded < THINKING_SEED_GENERATION) {
+    db.run(
+      `UPDATE models SET thinking = 'optional'
+       WHERE id IN ('glm-5.3', 'glm-5.3-flash')
+          OR (provider = 'anthropic' AND (
+                id LIKE 'claude-opus-5%' OR id LIKE 'claude-sonnet-5%' OR id LIKE 'claude-fable-%'
+             OR id LIKE 'claude-opus-4-6%' OR id LIKE 'claude-opus-4-7%' OR id LIKE 'claude-opus-4-8%'
+             OR id LIKE 'claude-sonnet-4-6%'))`,
+    );
+    db.run(
+      `UPDATE models SET thinking = 'always'
+       WHERE provider = 'scaleway'
+         AND id IN ('qwen3.6-35b-a3b', 'gpt-oss-120b', 'deepseek-v4-flash-0731', 'qwen3.5-397b-a17b', 'glm-5.2')`,
+    );
+    db.run(`UPDATE households SET thinking_seeded = ? WHERE id = 'default'`, [THINKING_SEED_GENERATION]);
   }
 } catch {}
 

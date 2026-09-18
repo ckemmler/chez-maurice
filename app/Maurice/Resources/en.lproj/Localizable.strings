@@ -73,6 +73,11 @@
 "persona.creativity.precise" = "Precise";
 "persona.creativity.balanced" = "Balanced";
 "persona.creativity.creative" = "Creative";
+"persona.field.reasoning" = "REASONING";
+"persona.reasoning.auto" = "Provider default";
+"persona.reasoning.on" = "Think first";
+"persona.reasoning.off" = "Answer directly";
+"persona.reasoning.hint" = "This model can reason before it answers. Skipping that phase makes replies much faster; asking for it helps on hard questions.";
 "persona.context.description" = "Baked-in knowledge — notes, books, and past conversations this Maurice always carries.";
 "persona.tools.local_hint" = "Smaller on-device models do best with a few families.";
 "model.ondevice" = "On-device";
@@ -87,6 +92,7 @@
 "persona.preview.model" = "Model";
 "persona.preview.context" = "Context";
 "persona.preview.creativity" = "Creativity";
+"persona.preview.reasoning" = "Reasoning";
 "persona.preview.family" = "Family";
 "persona.preview.none" = "none";
 "persona.preview.sources.one" = "%d source · ~%@";
