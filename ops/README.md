@@ -142,19 +142,20 @@ machine in your hands.
 
 `version` is `git describe` against the `*v[0-9]*` tags (`server-v1.0.1-126-g…`
 means 126 commits past that tag). The Mac install runs from the checkout and
-reads git itself. The container image does not: `scripts/build-info.sh`
-writes `server/build-info.json` (git-ignored) and `scripts/deploy.sh` and
+reads git itself. The container image cannot: `scripts/build-info.sh` writes
+`server/build-info.json` (git-ignored) and `scripts/deploy.sh` and
 `scripts/container.sh build|up` call it, so an image always knows its commit.
-`MAURICE_VERSION`, `MAURICE_GIT_SHA`, `MAURICE_BUILT_AT` override everything.
 
-The trap that follows from that order, and it caught the home row on
-18 September 2026: `server/build-info.json` is written into the **checkout**,
-not into the image, and nothing removes it afterwards. A `scripts/deploy.sh`
-or `scripts/container.sh build` run on the mac leaves it behind, where it
-outranks git for every later launchd restart — so the table kept announcing
-the commit of the last image built here while the checkout had moved eleven
-commits on. When the home row looks stale after a restart, delete
-`server/build-info.json` and restart again; the next build writes it back.
+The precedence is **env → git → the file**, and git comes first for a reason
+the home row taught twice on 18 September 2026. `build-info.json` is written
+into the **checkout**, not into the image it is preparing, and nothing removes
+it afterwards — so a `scripts/deploy.sh` or `scripts/container.sh build` run
+on the mac leaves a stamp behind. While the file outranked git, every launchd
+restart after such a build reported the commit of that image rather than the
+one the service was running, which is the single question this table exists to
+answer. A checkout that answers `git rev-parse` knows what it runs; an image
+ships without a `.git`, so there the stamp is still the only answer, and the
+three `MAURICE_*` variables still win over both.
 
 `schema_version` is the `PRAGMA user_version` stamped by `server/src/db.ts`
 (`SCHEMA_VERSION`). Bump it by hand with any migration that changes the
