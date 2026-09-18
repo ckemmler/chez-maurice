@@ -262,6 +262,106 @@ struct TurnUsage: Decodable, Equatable {
     }
 }
 
+/// Every metered turn of a conversation, folded into one figure per column:
+/// what the whole thread has cost so far, how much of its prompt traffic the
+/// cache served, and which models did the work. Built client-side from the
+/// usage the server persists on each assistant message, so it needs no route
+/// and is exact for the messages on screen.
+///
+/// Turns that carry no usage (local models before the server recorded it,
+/// providers that report none) are counted in `unmetered` and left out of the
+/// sums rather than silently rounding the total down to "cheap".
+struct ConversationUsage: Equatable {
+    struct ModelShare: Equatable, Identifiable {
+        let model: String
+        let turns: Int
+        let cost: Double?
+        var id: String { model }
+    }
+
+    let turns: Int
+    let unmetered: Int
+    let rounds: Int
+    let input: Int
+    let output: Int
+    let cache_read: Int
+    let cache_write: Int
+    /// Sum over priced turns; nil when no turn was priced. `pricedTurns` says
+    /// whether the sum covers everything.
+    let cost: Double?
+    let cost_uncached: Double?
+    let pricedTurns: Int
+    let costliestTurn: Double?
+    /// Models in order of first appearance.
+    let models: [ModelShare]
+
+    init(assistantTurns: [TurnUsage?]) {
+        let metered = assistantTurns.compactMap { $0 }
+        turns = metered.count
+        unmetered = assistantTurns.count - metered.count
+        rounds = metered.reduce(0) { $0 + $1.rounds }
+        input = metered.reduce(0) { $0 + $1.input }
+        output = metered.reduce(0) { $0 + $1.output }
+        cache_read = metered.reduce(0) { $0 + $1.cache_read }
+        cache_write = metered.reduce(0) { $0 + $1.cache_write }
+        let priced = metered.compactMap { $0.cost }
+        pricedTurns = priced.count
+        cost = priced.isEmpty ? nil : priced.reduce(0, +)
+        costliestTurn = priced.max()
+        let uncached = metered.compactMap { $0.cost_uncached }
+        cost_uncached = uncached.isEmpty ? nil : uncached.reduce(0, +)
+        var order: [String] = []
+        var byModel: [String: (turns: Int, cost: Double?)] = [:]
+        for u in metered {
+            var entry = byModel[u.model] ?? { order.append(u.model); return (0, nil) }()
+            entry.turns += 1
+            if let c = u.cost { entry.cost = (entry.cost ?? 0) + c }
+            byModel[u.model] = entry
+        }
+        models = order.compactMap { name in
+            byModel[name].map { ModelShare(model: name, turns: $0.turns, cost: $0.cost) }
+        }
+    }
+
+    var promptTokens: Int { input + cache_read + cache_write }
+    var totalTokens: Int { promptTokens + output }
+
+    /// Share of all prompt tokens served from cache, 0…1. Nil with no prompt.
+    var cacheHitRate: Double? {
+        promptTokens > 0 ? Double(cache_read) / Double(promptTokens) : nil
+    }
+
+    var saved: Double? {
+        guard let cost, let cost_uncached else { return nil }
+        return max(0, cost_uncached - cost)
+    }
+
+    var averageCost: Double? {
+        guard let cost, pricedTurns > 0 else { return nil }
+        return cost / Double(pricedTurns)
+    }
+}
+
+/// How cost and token figures are spelled everywhere they appear, so the
+/// per-turn coin and the conversation summary can't disagree on rounding.
+enum UsageFormat {
+    /// Dollars at a resolution that doesn't round a real cost to "$0.00".
+    static func money(_ v: Double) -> String {
+        if v == 0 { return "$0" }
+        if v < 0.01 { return String(format: "$%.4f", v) }
+        return String(format: "$%.2f", v)
+    }
+
+    static func tokens(_ n: Int) -> String {
+        if n >= 1_000_000 { return String(format: "%.2fM", Double(n) / 1_000_000) }
+        return n >= 1000 ? String(format: "%.1fk", Double(n) / 1000) : "\(n)"
+    }
+
+    static func percent(_ rate: Double) -> String {
+        "\(Int((rate * 100).rounded()))%"
+    }
+}
+
 // MARK: - Structured tool data
 
 /// One tool's structured result for a turn — the raw rows, rendered beside the

@@ -585,12 +585,21 @@ private struct ConversationDetailsSheet: View {
     @State private var title = ""
     @State private var saving = false
     @FocusState private var titleFocused: Bool
+    /// Same switch as the per-turn coin: when the meter is on, the sheet also
+    /// totals the whole conversation.
+    @AppStorage(TurnCostPref.key) private var showTurnCost = false
 
     private var maurice: Maurice { maurices.maurice(for: conversation.maurice_id) }
     private var multi: Bool { chat.participants.count > 1 }
     private var trimmedTitle: String { title.trimmingCharacters(in: .whitespacesAndNewlines) }
     private var titleChanged: Bool {
         !trimmedTitle.isEmpty && trimmedTitle != (conversation.title ?? "")
+    }
+
+    /// Every Maurice turn on screen, metered or not — the sheet opens on the
+    /// active conversation, whose messages the service holds in full.
+    private var usage: ConversationUsage {
+        ConversationUsage(assistantTurns: chat.messages.filter { $0.role == "assistant" }.map(\.usage))
     }
 
     var body: some View {
@@ -614,6 +623,10 @@ private struct ConversationDetailsSheet: View {
                         row(session.localized("chat.details.last_message"), s)
                     }
                     if let n = conversation.message_count { row(session.localized("chat.details.messages"), "\(n)") }
+                }
+
+                if showTurnCost {
+                    usageSection
                 }
 
                 if multi {
@@ -669,6 +682,60 @@ private struct ConversationDetailsSheet: View {
 
     private func row(_ label: String, _ value: String) -> some View {
         LabeledContent(label, value: value)
+    }
+
+    /// The whole conversation's meter: total cost first, then what the cache
+    /// did for it, the token split, and which models did the work. Unpriced
+    /// turns (local models) fall back to token volume rather than a fake "$0".
+    @ViewBuilder
+    private var usageSection: some View {
+        let u = usage
+        let L = session.localized
+        Section(L("chat.details.usage")) {
+            if u.turns == 0 {
+                Text(L("chat.details.usage.empty"))
+                    .font(.system(size: 13))
+                    .foregroundStyle(theme.inkMute)
+            } else {
+                if let cost = u.cost {
+                    row(L("chat.details.usage.total"), UsageFormat.money(cost))
+                    if u.pricedTurns < u.turns {
+                        row(L("chat.details.usage.priced_turns"), "\(u.pricedTurns) / \(u.turns)")
+                    }
+                    if let avg = u.averageCost {
+                        row(L("chat.details.usage.average"), UsageFormat.money(avg))
+                    }
+                    if let top = u.costliestTurn, u.pricedTurns > 1 {
+                        row(L("chat.details.usage.costliest"), UsageFormat.money(top))
+                    }
+                    if let uncached = u.cost_uncached {
+                        row(L("chat.details.usage.without_cache"), UsageFormat.money(uncached))
+                        if let saved = u.saved, saved > 0 {
+                            row(L("chat.details.usage.saved"), UsageFormat.money(saved))
+                        }
+                    }
+                } else {
+                    row(L("chat.details.usage.total"), L("chat.details.usage.unpriced"))
+                }
+                let turns = u.unmetered > 0
+                    ? L("chat.details.usage.turns_unmetered", u.turns, u.unmetered)
+                    : "\(u.turns)"
+                row(L("chat.details.usage.turns"), turns)
+                row(L("chat.details.usage.rounds"), "\(u.rounds)")
+                if let rate = u.cacheHitRate {
+                    row(L("chat.details.usage.cache"), UsageFormat.percent(rate))
+                }
+                row(L("chat.details.usage.prompt"),
+                    L("chat.details.usage.prompt_split",
+                      UsageFormat.tokens(u.input), UsageFormat.tokens(u.cache_read), UsageFormat.tokens(u.cache_write)))
+                row(L("chat.details.usage.reply"), UsageFormat.tokens(u.output))
+                row(L("chat.details.usage.tokens"), UsageFormat.tokens(u.totalTokens))
+                ForEach(u.models) { share in
+                    let figure = share.cost.map(UsageFormat.money) ?? L("chat.details.usage.unpriced")
+                    row(share.model, L("chat.details.usage.model_share", share.turns, figure))
+                }
+            }
+        }
     }
 
     private func formatted(_ raw: String) -> String? {
@@ -1222,16 +1289,8 @@ struct TurnUsageFooter: View {
     let usage: TurnUsage
     @State private var showDetails = false
 
-    /// Dollars at a resolution that doesn't round a real cost to "$0.00".
-    private func money(_ v: Double) -> String {
-        if v == 0 { return "$0" }
-        if v < 0.01 { return String(format: "$%.4f", v) }
-        return String(format: "$%.2f", v)
-    }
-
-    private func tokens(_ n: Int) -> String {
-        n >= 1000 ? String(format: "%.1fk", Double(n) / 1000) : "\(n)"
-    }
+    private func money(_ v: Double) -> String { UsageFormat.money(v) }
+    private func tokens(_ n: Int) -> String { UsageFormat.tokens(n) }
 
     /// Cost if priced, token volume otherwise — never a bare "$0.00" for a model
     /// we simply have no price for.
@@ -1243,7 +1302,7 @@ struct TurnUsageFooter: View {
     private var cacheLabel: String? {
         guard let rate = usage.cacheHitRate else { return nil }
         if usage.cache_read == 0 { return "no cache" }
-        return "\(Int((rate * 100).rounded()))% cached"
+        return "\(UsageFormat.percent(rate)) cached"
     }
 
     var body: some View {

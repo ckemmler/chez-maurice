@@ -4,7 +4,7 @@ date: '2026-09-18'
 flags: []
 locale: en
 description: Streaming render, tool-result data cards, math, markdown, images, dictation,
-  the model switcher and the cost meter — the native chat surface.
+  the model switcher, the cost meter and its per-conversation summary — the native chat surface.
 tags:
 - maurice
 - documentation
@@ -40,7 +40,8 @@ explicit sidebar toggle). "…" opens the **details sheet**: the title, editable
 Save sends `PATCH /api/conversations/:id` and the sidebar follows in place —
 plus the metadata the old bar showed (Maurice, model, created, last message,
 message count, the room's people) and the room actions (edit Maurice, review
-reports for the operator, leave the room).
+reports for the operator, leave the room). When the cost meter is on, the sheet
+also carries the conversation's totals (see below).
 
 ## Streaming
 
@@ -77,13 +78,15 @@ The composer's model pill opens a Menu grouped by provider (Anthropic, OpenAI, M
 
 Off by default; "Show what each reply cost" in Settings turns it on. A coin then joins the copy and regenerate controls under each of Maurice's replies, with the turn's cost and the share of the prompt served from cache beside it; tapping the coin drops down a popover with the token split, the uncached figure for comparison, the number of rounds and the model (a popover on the phone too, not a sheet, and the transcript never reflows). Local models are free; cloud models show a figure when their price is on file (Anthropic, Mistral Medium, GLM-5.3 and Flash), token counts otherwise — never a bare "$0.00" for a model nobody has priced. The data is the `usage` event the [[maurice-server|server]] emits and stores on the message.
 
+The same switch adds a **"Cost and tokens" section to the details sheet** behind "…": the whole conversation folded into one figure per column. Total cost first (with how many of the metered turns were priced when the sum doesn't cover them all), the average and costliest turn, what the thread would have cost without cache and what the cache saved; then the number of metered turns (with the count of turns that carry no usage — local models before the server recorded it), the model calls, the share of all prompt tokens served from cache, the prompt split (fresh / from cache / written), reply tokens and the grand total; and one line per model that answered, with its turns and its share of the cost. It is computed client-side (`ConversationUsage`) from the usage persisted on each assistant message, so it is exact for the messages on screen and needs no route; a conversation with no metered turn says so instead of showing zeros. Cost and token figures are spelled by one `UsageFormat` helper, so the coin and the summary can't disagree on rounding.
+
 ## Platform
 
 The app adopts **Liquid Glass** on iOS/macOS 26 (a material fallback before; the deployment target stays iOS 17 / macOS 14) through one shared helper file, `app/Maurice/Views/Glass.swift`: the composer floats over the stream as a glass panel on every platform, custom controls (icon buttons, pills, fields) are interactive glass, `.bordered` buttons take the system glass styles, and the split view's sidebar keeps the system material. This deliberately goes further than Apple's "use sparingly" guidance — glass sits on glass in the composer — and every helper can be dialled back per call site. "Reduce transparency" in Accessibility renders it all opaque. Composing context for a turn is the [[maurice-composer|context composer]].
 
 ## Ships vs. exists
 
-The chat surface — streaming, data cards, math, markdown, images, dictation, model switching, the cost meter — is **core and ships**. Data cards will show results from any tool, but most data-returning tools are the experimental [[maurice-tools|fleet]]; with garden-only, you mostly see prose plus the occasional garden result.
+The chat surface — streaming, data cards, math, markdown, images, dictation, model switching, the cost meter and its conversation summary — is **core and ships**. Data cards will show results from any tool, but most data-returning tools are the experimental [[maurice-tools|fleet]]; with garden-only, you mostly see prose plus the occasional garden result.
 
 ## Gaps & notes
 
@@ -91,3 +94,4 @@ The chat surface — streaming, data cards, math, markdown, images, dictation, m
 - **Files reach a chat only through the composer's omnibox**, not a drag onto the transcript (see [[maurice-files]]).
 - **Regenerate is single-step** — it re-runs the last turn; there's no branch/alternatives history.
 - **No web chat client.** The only conversational surface is the native app; the web is the garden.
+- **No cross-conversation cost view** — the summary is per thread; there is no household or monthly total anywhere in the app yet.
