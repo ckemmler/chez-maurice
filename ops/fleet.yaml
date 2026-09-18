@@ -23,14 +23,18 @@ instances:
     insecure: true
     # launchd runs the checkout itself: deploying is restarting on main.
     deploy: scripts/service.sh restart api
+  # The two below live on the Scaleway host maurice-fleet (BASIC2-A2C-8G,
+  # fr-par-1, since 2026-09-17) behind its one Caddy — one compose project each,
+  # infra/container/MULTI-HOUSEHOLD.md. One deploy line serves every household
+  # on that host: it builds here, pushes to rg.fr-par.scw.cloud/maurice and
+  # recreates each of them on the new image.
   - name: aline
     url: https://aline.chezmaurice.eu
     owner: Aline
     since: 2026-09-01
-    # The rehearsal container at :13003, started by hand; rebuilt from the checkout.
-    deploy: ops/recreate-container.sh maurice-repet
+    deploy: MAURICE_REGISTRY=rg.fr-par.scw.cloud/maurice scripts/deploy.sh maurice-fleet
   - name: review
     url: https://review.chezmaurice.eu
     owner: Candide (App Review account)
     since: 2026-09-12
-    deploy: launchctl kickstart -k gui/501/com.maurice.household.review
+    deploy: MAURICE_REGISTRY=rg.fr-par.scw.cloud/maurice scripts/deploy.sh maurice-fleet

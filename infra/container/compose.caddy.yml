@@ -12,7 +12,10 @@
 #
 # Certificates: one per name, from Let's Encrypt, obtained and renewed by
 # Caddy on its own. It needs :80 reachable for the HTTP challenge, which is
-# also what redirects http → https.
+# also what redirects http → https. Let's Encrypt wants a contact address for
+# that; it comes from the host's defaults.env like every other host-wide
+# setting, and `ops/household.sh edge` passes that file in. Without it this
+# refuses to start rather than run with an empty address.
 
 name: maurice-edge
 
@@ -23,8 +26,13 @@ services:
     ports:
       - "80:80"
       - "443:443"
+    environment:
+      MAURICE_ACME_EMAIL: ${MAURICE_ACME_EMAIL:?set MAURICE_ACME_EMAIL in defaults.env}
     volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      # The multi-household Caddyfile — the one that imports sites/. The plain
+      # `Caddyfile` beside it is the single-household version and names a
+      # `maurice` container that does not exist here.
+      - ./Caddyfile.multi:/etc/caddy/Caddyfile:ro
       - ./sites:/etc/caddy/sites:ro
       - caddy-data:/data      # the certificates — losing this re-issues them
       - caddy-config:/config

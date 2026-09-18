@@ -41,12 +41,16 @@ three times that — see `docs/garden-server-mode.md`.)
 1. **The machine.** `infra/cloud-init/maurice.yaml` as its user data: it
    installs Docker, makes `/opt/maurice`, and does nothing else. Put your own
    ssh key in it first.
-2. **The shared secrets**, once, on the host: `/opt/maurice/defaults.env`
-   holding what every household needs (the embedding endpoint and key —
-   `CORPUS_EMBEDDING_*`, see `.env.prod.example`). Every household's env file
-   starts as a copy of it.
+2. **The shared settings**, once, on the host: `/opt/maurice/defaults.env`
+   holding what every household needs — the embedding endpoint and key
+   (`CORPUS_EMBEDDING_*`, see `.env.prod.example`) and `MAURICE_ACME_EMAIL`,
+   the address Let's Encrypt writes to about certificates. Every household's
+   env file starts as a copy of it, and the edge reads it too.
 3. **The image and the compose files**: `scripts/deploy.sh <ssh-host>` builds
-   here and ships there.
+   here and ships there. Through a registry, or it pipes 2 GB over ssh every
+   time: `export MAURICE_REGISTRY=rg.fr-par.scw.cloud/<namespace>` here, and on
+   the host, once, `docker login rg.fr-par.scw.cloud -u nologin` with a secret
+   key that can only read that registry.
 4. **The door**: `ops/household.sh edge <ssh-host>`.
 5. **A household**: `ops/household.sh add <ssh-host> aline aline.chezmaurice.eu`,
    then point that name at the machine with a plain A record — **unproxied**.
@@ -66,10 +70,23 @@ ops/household.sh purge   <host> <name>     stop it, delete its data
 scripts/deploy.sh        <host> [tag]      a new image for everyone on the host
 ```
 
-A new version reaches a household when its container is recreated on the new
-image; `deploy.sh` ships the image, `ops/household.sh up <host> <name>` picks
-it up. `ops/fleet-status.sh` and `ops/tower.ts` watch what is running where —
-add the household's public name to `ops/fleet.yaml` when you add it here.
+## Updating everyone
+
+```
+scripts/deploy.sh <host>
+```
+
+That is the whole update: build the image here, push it, and recreate every
+household on the host onto it, one after the other — each is down for the few
+seconds its container takes to answer `/healthz` again, and its data volume
+never moves. The image shipped is recorded in `/opt/maurice/image.env`, which
+`ops/household.sh` reads on every `up`, `restart` and `add`, so a restart
+later lands on the same image. The previous image stays on the host for a
+rollback (`MAURICE_IMAGE=<registry>/maurice:<old tag> ops/household.sh up
+<host> <name>`); dangling layers are pruned. `ops/fleet-status.ts` and
+`ops/tower.ts` show which version each household runs — add the household's
+public name to `ops/fleet.yaml` when you add it here, with `deploy:
+scripts/deploy.sh <host>`.
 
 ## Moving a household off this machine
 

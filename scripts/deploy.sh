@@ -24,10 +24,17 @@ COMPOSE="$REPO/infra/container/compose.prod.yml"
 echo "▸ Deploying to $HOST  (tag $TAG)"
 
 # 1. Build ──────────────────────────────────────────────────────────────────
-echo "  build…"
-"$REPO/scripts/build-info.sh" "$TAG"
-docker build -f "$REPO/infra/container/Dockerfile" --target production \
-  -t "maurice:$TAG" -t maurice:production "$REPO"
+# A tag that is already built is shipped as it is — the same image to a second
+# host, or a known-good one back onto a host after a bad deploy — rather than
+# rebuilt with a fresh timestamp, which would make it a different image.
+if docker image inspect "maurice:$TAG" >/dev/null 2>&1; then
+  echo "  maurice:$TAG is already built here — shipping that"
+else
+  echo "  build…"
+  "$REPO/scripts/build-info.sh" "$TAG"
+  docker build -f "$REPO/infra/container/Dockerfile" --target production \
+    -t "maurice:$TAG" -t maurice:production "$REPO"
+fi
 
 # 2. Ship the image ─────────────────────────────────────────────────────────
 if [[ -n "${MAURICE_REGISTRY:-}" ]]; then
@@ -54,18 +61,30 @@ rsync -q "$REPO/infra/container/compose.household.yml" \
 
 # The .env is never overwritten: it holds the keys, and clobbering it from a
 # developer machine is how a deploy takes an instance down at the worst moment.
-# A multi-household host keeps its households in households/*.env and has no
-# top-level .env — bring its households up instead of the single instance.
-if ssh "$HOST" "ls $REMOTE_DIR/households/*.env >/dev/null 2>&1"; then
+# A multi-household host is the one with a defaults.env (MULTI-HOUSEHOLD.md);
+# it keeps its households in households/*.env and has no top-level .env —
+# bring its households up instead of the single instance.
+if ssh "$HOST" "test -f $REMOTE_DIR/defaults.env"; then
+  # The image every household runs is recorded once, host-wide, and read by
+  # ops/household.sh on every up/restart/add — so a restart after a deploy
+  # lands on the deployed image, not on whatever the household's env file
+  # remembered from the day it was made. A fresh host with no household yet
+  # gets the record too, which is what its first `add` needs.
+  ssh "$HOST" "printf 'MAURICE_IMAGE=%s\\n' '$REMOTE_IMAGE' > $REMOTE_DIR/image.env"
   echo "  up…  (multi-household host)"
   ssh "$HOST" "cd $REMOTE_DIR && for f in households/*.env; do
+    [ -e \"\$f\" ] || continue
     n=\$(basename \"\$f\" .env)
-    MAURICE_IMAGE='$REMOTE_IMAGE' docker compose -p maurice-\$n --env-file \"\$f\" \
+    docker compose -p maurice-\$n --env-file image.env --env-file \"\$f\" \
       -f compose.household.yml up -d
   done"
+  # Each image is ~2 GB and a 60 GB disk fills in a season. Dangling layers
+  # go; the previous tagged image stays, which is what a rollback needs.
+  ssh "$HOST" "docker image prune -f >/dev/null 2>&1 || true"
   echo
   echo "✓ deployed to every household on $HOST:"
   ssh "$HOST" "cd $REMOTE_DIR && for f in households/*.env; do
+    [ -e \"\$f\" ] || { echo '  (no household yet)'; continue; }
     n=\$(basename \"\$f\" .env)
     printf '  %-16s %s\\n' \"\$n\" \"\$(docker inspect -f '{{.State.Status}}' maurice-\$n 2>/dev/null || echo absent)\"
   done"
