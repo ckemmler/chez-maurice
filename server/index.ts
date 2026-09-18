@@ -103,7 +103,10 @@ hookConsoleErrors();
 
 // ── Middleware ───────────────────────────────────────────────────
 
-app.use("/*", logger());
+// Every request line carries the clock: a 42-second turn is invisible in a log
+// that has no timestamps, and a by-hand autopsy otherwise has to date the
+// lines from the database's created_at columns.
+app.use("/*", logger((msg, ...rest) => console.log(new Date().toISOString(), msg, ...rest)));
 
 // Errors that escape a route: log the tag, count it, answer 500. Without this
 // Hono answers 500 silently and the operator never learns the rate.

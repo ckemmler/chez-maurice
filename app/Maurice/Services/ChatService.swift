@@ -341,19 +341,42 @@ final class ChatService {
     func deleteConversation(_ id: String) async {
         guard let api, let token else { return }
         do {
+            // A reply still streaming into the thread being deleted must stop
+            // first: left running, the server keeps calling tools for a room
+            // that no longer exists (a fragment was once appended to a garden
+            // fiche from a conversation deleted a minute earlier).
+            if activeConversationId == id { await stopAndWait() }
             try await api.delete("/api/conversations/\(id)", token: token)
-            conversations.removeAll { $0.id == id }
-            if activeConversationId == id {
-                activeConversationId = conversations.first?.id
-                if let nextId = activeConversationId {
-                    await loadMessages(for: nextId)
-                } else {
-                    messages = []
-                }
-            }
+            dropRoom(id)
         } catch {
             self.error = error.localizedDescription
         }
+    }
+
+    /// Forget a room that is gone — deleted here, or found missing on the
+    /// server. The room socket must go with it: left connected, it fails its
+    /// upgrade (no longer a participant), reconnects with backoff forever, and
+    /// refetches a conversation that answers 404 every time — for hours.
+    private func dropRoom(_ id: String) {
+        conversations.removeAll { $0.id == id }
+        guard activeConversationId == id else { return }
+        socket?.disconnect()
+        socket = nil
+        activeConversationId = conversations.first?.id
+        if let nextId = activeConversationId {
+            Task { await loadMessages(for: nextId) }
+        } else {
+            messages = []
+            participants = []
+            knownIds = []
+            messagesLoadedFor = nil
+        }
+    }
+
+    /// True when a fetch of the conversation says it no longer exists.
+    private static func isVanished(_ error: Error) -> Bool {
+        if case APIError.server(404, _) = error { return true }
+        return false
     }
 
     /// Drop the active conversation if it was never used — a freshly created
@@ -425,6 +448,7 @@ final class ChatService {
             error = nil
             connectSocket(conversationId)
         } catch {
+            if Self.isVanished(error) { dropRoom(conversationId); return }
             self.error = error.localizedDescription
         }
     }
@@ -449,9 +473,14 @@ final class ChatService {
     /// in-flight reply isn't disturbed.
     private func reloadActiveMessages() async {
         guard let api, let token, let id = activeConversationId, !isStreaming else { return }
-        guard let detail: ServerConversationDetail = try? await api.get(
-            "/api/conversations/\(id)", token: token
-        ) else { return }
+        let detail: ServerConversationDetail
+        do {
+            detail = try await api.get("/api/conversations/\(id)", token: token)
+        } catch {
+            // Deleted from another device (or by the web): stop chasing it.
+            if Self.isVanished(error), id == activeConversationId { dropRoom(id) }
+            return
+        }
         guard id == activeConversationId else { return } // room changed meanwhile
         messages = detail.messages
         participants = detail.participants ?? []

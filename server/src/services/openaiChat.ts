@@ -78,6 +78,29 @@ function collect(acc: Record<number, { id: string; name: string; args: string }>
     }));
 }
 
+/** Providers whose Chat Completions accept `prompt_cache_key`. Mistral caches
+ *  nothing without it — every round of every turn was billed at full price —
+ *  and OpenAI uses it to route a prefix to the machine that already holds it.
+ *  Z.ai and Scaleway cache on their own and reject or ignore unknown fields,
+ *  so the key is sent only where it is known to be read. */
+export const PROMPT_CACHE_KEY_PROVIDERS = new Set(["mistral", "openai"]);
+
+/** How long a round may sit with no byte from the provider before the turn
+ *  gives up on it. A reasoning model can think in silence for a minute or two;
+ *  a stalled connection stays silent forever, and without this the member saw
+ *  a spinner that never ended and a Stop that did nothing. */
+export const IDLE_TIMEOUT_MS = 180_000;
+
+export interface OpenAITurnOptions {
+  /** The member's ⏹ Stop, or the request tearing down: aborts the provider
+   *  call instead of letting it run on unseen. */
+  signal?: AbortSignal;
+  /** Stable per-conversation key, sent as `prompt_cache_key` where read. */
+  cacheKey?: string;
+  /** Override of IDLE_TIMEOUT_MS (tests). */
+  idleTimeoutMs?: number;
+}
+
 /** One Chat Completions turn: streams content as `text`, accumulates tool calls
  *  (arguments arrive in fragments by index), finishes with `turn_end`. */
 export async function* openaiTurn(
@@ -87,6 +110,7 @@ export async function* openaiTurn(
   messages: any[],
   tools: any[],
   temperature: number | undefined,
+  opts: OpenAITurnOptions = {},
 ): AsyncGenerator<OpenAITurnEvent> {
   // include_usage adds a final chunk carrying the round's token counts (it has
   // an empty `choices` array, so the parse loop below must read usage before it
@@ -94,9 +118,29 @@ export async function* openaiTurn(
   const body: any = { model, messages, stream: true, stream_options: { include_usage: true } };
   if (tools.length) { body.tools = tools; body.tool_choice = "auto"; }
   if (temperature !== undefined) body.temperature = temperature;
+  if (opts.cacheKey) body.prompt_cache_key = opts.cacheKey;
   // Note: max-tokens param is omitted — OpenAI's o-series wants
   // max_completion_tokens while others want max_tokens; the defaults are ample.
 
+  // One controller for the whole round: the caller's signal (Stop) and the idle
+  // watchdog both abort through it, and the watchdog is re-armed on every byte.
+  const ctrl = new AbortController();
+  const onOuterAbort = () => ctrl.abort();
+  if (opts.signal?.aborted) return;
+  opts.signal?.addEventListener("abort", onOuterAbort, { once: true });
+  const idleMs = opts.idleTimeoutMs ?? IDLE_TIMEOUT_MS;
+  let idleTimer: ReturnType<typeof setTimeout> | null = null;
+  let idled = false;
+  const armIdle = () => {
+    if (idleTimer) clearTimeout(idleTimer);
+    idleTimer = setTimeout(() => { idled = true; ctrl.abort(); }, idleMs);
+  };
+  const cleanup = () => {
+    if (idleTimer) clearTimeout(idleTimer);
+    opts.signal?.removeEventListener("abort", onOuterAbort);
+  };
+
+  try {
   // "OpenAI-compatible" is a family resemblance, not a contract: some servers
   // ignore fields they don't know, others reject the request outright (Mistral
   // answers 422 "Extra inputs are not permitted" to an unknown key). Losing all
@@ -105,14 +149,19 @@ export async function* openaiTurn(
   let response: Response;
   let withUsage = true;
   for (;;) {
+    armIdle();
     try {
       response = await fetch(`${baseUrl}/chat/completions`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
         body: JSON.stringify(body),
+        signal: ctrl.signal,
       });
     } catch (err: any) {
-      yield { type: "error", message: `${baseUrl} unreachable: ${err?.message || "error"}` };
+      if (opts.signal?.aborted) return; // the member stopped it; nothing to report
+      yield idled
+        ? { type: "error", message: `${baseUrl} gave no answer for ${Math.round(idleMs / 1000)}s` }
+        : { type: "error", message: `${baseUrl} unreachable: ${err?.message || "error"}` };
       return;
     }
     // 400/422 are the shapes a strict server uses to refuse an unknown field.
@@ -139,7 +188,18 @@ export async function* openaiTurn(
   const toolAcc: Record<number, { id: string; name: string; args: string }> = {};
 
   while (true) {
-    const { done, value } = await reader.read();
+    armIdle();
+    let step: { done: boolean; value?: Uint8Array };
+    try {
+      step = await reader.read();
+    } catch (err: any) {
+      if (opts.signal?.aborted) return;
+      yield idled
+        ? { type: "error", message: `${baseUrl} went silent for ${Math.round(idleMs / 1000)}s mid-reply` }
+        : { type: "error", message: `${baseUrl} stream failed: ${err?.message || "error"}` };
+      return;
+    }
+    const { done, value } = step;
     if (done) break;
     buffer += decoder.decode(value, { stream: true });
     const lines = buffer.split("\n");
@@ -184,4 +244,7 @@ export async function* openaiTurn(
     }
   }
   yield { type: "turn_end", content, toolCalls: collect(toolAcc), usage };
+  } finally {
+    cleanup();
+  }
 }

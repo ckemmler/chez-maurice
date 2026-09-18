@@ -106,12 +106,22 @@ export function searchBooks(memberId: string, q: string, limit = 20): BookHit[] 
 // OR sitting after the last substantial body chapter is back_matter. Front/back
 // are `hidden` (out of "all"); only an explicit Select tick can pull one in.
 
+// Mirrored verbatim in maurice-tools/calibre/mcp_server.py (_FRONT): the tools
+// number chapters over the same body list, and a pattern added on one side
+// only would make "chapter 3" mean two different chapters.
 const FRONT = [
   /^none$/, /^cover/, /^landing\s*page/, /^praise/, /^half[\s-]*title/, /^title\s*page/,
   /^frontispiece/, /^copyright/, /^colophon/, /^dedication/, /^epigraph/, /^contents?$/,
   /^table\s+of\s+contents/, /^toc$/, /^list\s+of\s+(figures|tables|illustrations|maps|plates)/,
   /^foreword/, /^preface/, /^also\s+by/, /^by\s+the\s+same\s+author/, /^a\s+note\s+(on|about|to)\b/,
   /^maps?$/,
+  // The apparatus of a scholarly edition, ahead of chapter 1: a translator's
+  // 40,000-word introduction is not the book's first chapter, and counting it
+  // as one put a reader "at chapter 3" of a book whose chapter 1 they had just
+  // opened.
+  /^(list\s+of\s+)?abbreviations/, /^introduction/, /^chronology/, /^translator'?s?\s+(note|preface|introduction)/,
+  /^editor'?s?\s+(note|preface|introduction)/, /^note\s+on\s+(the\s+)?(text|translation|transliteration|pronunciation|names)/,
+  /^how\s+to\s+use\s+this\s+book/,
 ];
 const BACK = [
   /^notes?(\s+\d+)?$/, /^end\s*notes/, /^references?$/, /^bibliography/, /^works\s+cited/,

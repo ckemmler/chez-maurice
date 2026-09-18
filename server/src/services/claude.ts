@@ -12,7 +12,7 @@ import { getConversationMaurice, resolveMauriceContext, resolveMauriceAttachment
 import { resolveModelId, getModel } from "./models";
 import { resolveUsableModel, getEverydayModel } from "./modelAccess";
 import { ollamaTurn, OLLAMA_NUM_CTX, type OllamaToolCall } from "./ollama";
-import { openaiTurn, type OpenAIToolCall } from "./openaiChat";
+import { openaiTurn, PROMPT_CACHE_KEY_PROVIDERS, type OpenAIToolCall } from "./openaiChat";
 import { resolveFamilies, toolInFamilies, canUseExperimental, isExperimentalTool } from "./toolFamilies";
 import { t, userLocale } from "./i18n";
 import { newUsage, priceUsage, hasUsage, type TurnUsage } from "./pricing";
@@ -337,6 +337,7 @@ function logToolCall(
   console.log(
     "[tool]",
     JSON.stringify({
+      t: new Date().toISOString(),
       convo: ctx.conversationId,
       provider: ctx.provider,
       round: ctx.round,
@@ -369,6 +370,34 @@ function logToolCapHit(
       provider,
       rounds,
       calls: calls.map((c) => (c.ok ? c.tool : `${c.tool}!`)),
+    }),
+  );
+}
+
+/** One line per model request, with how long the provider took to answer it:
+ *  a turn of six rounds at ten seconds each looks, from the app, exactly like
+ *  one slow tool, and the `[tool]` lines (all under 100ms) say nothing about
+ *  where the minute went. `cached` is what the provider served from its
+ *  prompt cache, so a cache that is not working shows up as a zero here. */
+function logRound(
+  ctx: { conversationId: string; provider: string; model: string; round: number },
+  ms: number,
+  usage: { prompt?: number; cached?: number; completion?: number } | null,
+  toolCalls: number,
+): void {
+  console.log(
+    "[round]",
+    JSON.stringify({
+      t: new Date().toISOString(),
+      convo: ctx.conversationId,
+      provider: ctx.provider,
+      model: ctx.model,
+      round: ctx.round,
+      ms: Math.round(ms),
+      prompt: usage?.prompt ?? null,
+      cached: usage?.cached ?? null,
+      output: usage?.completion ?? null,
+      tool_calls: toolCalls,
     }),
   );
 }
@@ -411,14 +440,17 @@ async function* runOllamaAgentic(
   maxTokens: number,
   lang: string,
   conversationId: string,
+  signal?: AbortSignal,
 ): AsyncGenerator<StreamEvent> {
   const convo: any[] = [{ role: "system", content: system }, ...baseMessages];
   const calls: ToolCallLog[] = [];
   let useTools = tools.length > 0;
   for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
+    if (signal?.aborted) return;
     let content = "";
     let toolCalls: OllamaToolCall[] = [];
     let unsupported = false;
+    const started = performance.now();
     for await (const ev of ollamaTurn(model, convo, useTools ? tools : [], maxTokens)) {
       if (ev.type === "text") {
         content += ev.text;
@@ -440,12 +472,16 @@ async function* runOllamaAgentic(
       round--;
       continue;
     }
+    logRound({ conversationId, provider: "ollama", model, round }, performance.now() - started, null, toolCalls.length);
     if (!toolCalls.length) {
       yield { type: "done", message_id: crypto.randomUUID() };
       return;
     }
     convo.push({ role: "assistant", content, tool_calls: toolCalls });
     for (const tc of toolCalls) {
+      // A Stop between two tool calls means the rest of the plan is unwanted:
+      // a tool that writes (a fragment, a note) must not run for nobody.
+      if (signal?.aborted) return;
       const name = tc.function?.name || "";
       yield { type: "tool_call", tool: name, status: "start" };
       const r = await executeTool(name, tc.function?.arguments || {}, mcp, { conversationId, provider: "ollama", round });
@@ -531,6 +567,7 @@ async function* runOpenAIAgentic(
   lang: string,
   provider: string,
   conversationId: string,
+  signal?: AbortSignal,
 ): AsyncGenerator<StreamEvent> {
   const convo: any[] = [{ role: "system", content: system }, ...baseMessages];
   const calls: ToolCallLog[] = [];
@@ -538,7 +575,15 @@ async function* runOpenAIAgentic(
   function* reportUsage(): Generator<StreamEvent> {
     if (hasUsage(usage)) yield { type: "usage", usage: priceUsage(usage) };
   }
+  // The conversation id is the cache key: every round of every turn in a
+  // thread shares the same prefix (tools, persona, loaded context, history),
+  // which is exactly what the provider's cache is for.
+  const turnOpts = {
+    signal,
+    cacheKey: PROMPT_CACHE_KEY_PROVIDERS.has(provider) ? conversationId : undefined,
+  };
   for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
+    if (signal?.aborted) { yield* reportUsage(); return; }
     // The fuse. Checked every round, not just before the first: a turn with six
     // tool rounds is six billed requests, and a cap consulted once would let the
     // other five through. `priceUsage` gives what this turn has run up so far,
@@ -552,7 +597,8 @@ async function* runOpenAIAgentic(
     usage.rounds++;
     let content = "";
     let toolCalls: OpenAIToolCall[] = [];
-    for await (const ev of openaiTurn(baseUrl, apiKey, model, convo, tools, temperature)) {
+    const started = performance.now();
+    for await (const ev of openaiTurn(baseUrl, apiKey, model, convo, tools, temperature, turnOpts)) {
       if (ev.type === "text") {
         content += ev.text;
         yield { type: "text_delta", text: ev.text };
@@ -560,6 +606,7 @@ async function* runOpenAIAgentic(
         yield { type: "thinking" };
       } else if (ev.type === "turn_end") {
         toolCalls = ev.toolCalls;
+        logRound({ conversationId, provider, model, round }, performance.now() - started, ev.usage, toolCalls.length);
         if (ev.usage) {
           // prompt_tokens is the whole prompt including whatever the cache
           // served, so the full-price slice is the remainder.
@@ -593,6 +640,9 @@ async function* runOpenAIAgentic(
       tool_calls: toolCalls.map((tc) => ({ id: tc.id, type: "function", function: tc.function })),
     });
     for (const tc of toolCalls) {
+      // Stopped (or the thread deleted under it) between two tool calls: the
+      // rest of the plan runs for nobody, and a writing tool would still write.
+      if (signal?.aborted) { yield* reportUsage(); return; }
       const name = tc.function.name;
       let args: any = {};
       try { args = JSON.parse(tc.function.arguments || "{}"); } catch {}
@@ -640,6 +690,43 @@ function breakpointOn(message: any): any | null {
   return last;
 }
 
+// ── Tool trail ──────────────────────────────────────────────────
+//
+// The history sent to the model is the text of each turn: the tool calls a
+// turn made, and what they returned, are not part of it. So every turn started
+// over — a reading companion that had found the book (calibre id 190) and the
+// reader's chapter in one turn looked them up again in the next, three rounds
+// and thirty seconds each time, and sometimes guessed an id instead. The
+// structured results are already persisted with the turn (messages.data, for
+// the client's cards); a compact rendering of them rides along with the
+// assistant text so the next turn can reuse what the last one learned. Kept
+// short and deterministic: it is part of the cached prefix from then on.
+
+const TRAIL_PER_TOOL = 240; // chars of each result
+const TRAIL_TOOLS = 6;      // results per turn
+
+/** Compact one-line JSON, truncated. Arrays are cut to their first entries
+ *  before stringifying so a long listing does not eat the whole budget. */
+function trailValue(v: unknown): string {
+  const cut = Array.isArray(v) ? v.slice(0, 3) : v;
+  let s: string;
+  try { s = JSON.stringify(cut) ?? String(cut); } catch { s = String(cut); }
+  if (Array.isArray(v) && v.length > 3) s = s.replace(/\]$/, `,…+${v.length - 3}]`);
+  return s.length > TRAIL_PER_TOOL ? s.slice(0, TRAIL_PER_TOOL) + "…" : s;
+}
+
+/** What to append to an assistant turn's text: its tool results, compacted;
+ *  empty when the turn used no tools. Exported for tests. */
+export function toolTrail(m: { role: string; data?: { tool: string; data: unknown }[] | null }): string {
+  if (m.role !== "assistant" || !Array.isArray(m.data) || m.data.length === 0) return "";
+  const lines = m.data
+    .filter((d) => d && typeof d.tool === "string")
+    .slice(0, TRAIL_TOOLS)
+    .map((d) => `${d.tool} → ${trailValue(d.data)}`);
+  if (!lines.length) return "";
+  return `\n\n[Tool results from this turn, for reference in later turns:\n${lines.join("\n")}]`;
+}
+
 /** The history as API messages, plus each one's database id (parallel array)
  *  so the context window can be anchored to a message. Starts at the
  *  conversation's `context_from` cursor when one is set — see windowMessages. */
@@ -673,7 +760,7 @@ function buildApiMessages(conversationId: string): { messages: any[]; ids: strin
       const tag = speaker(m);
       const images = [...m.content.matchAll(imagePattern)];
       if (images.length === 0) {
-        const text = tag + m.content;
+        const text = tag + m.content + toolTrail(m);
         // Block form even for plain text, so a message's shape doesn't depend on
         // where it happens to sit: a cache breakpoint has to be attached to a
         // block, and a message that were a bare string on one turn and a block on
@@ -701,7 +788,7 @@ function buildApiMessages(conversationId: string): { messages: any[]; ids: strin
           // missing image — skip
         }
       }
-      const textContent = (tag + m.content.replace(imagePattern, "")).trim();
+      const textContent = (tag + m.content.replace(imagePattern, "") + toolTrail(m)).trim();
       if (textContent) content.push({ type: "text", text: textContent });
       // Every referenced image can fail to load (deleted file, bad path) while
       // the turn was nothing but that image — which leaves an empty array, and
@@ -795,6 +882,31 @@ export async function* streamResponse(
       ? buildRoomSystemPrompt(conversationId, userDisplayName)
       : buildSystemPrompt(userDisplayName, profileText);
 
+/** One line per book loaded into the conversation, whatever its scope: the
+ *  title and, above all, its calibre id — the loaded text carries no identity
+ *  of its own, and a model that does not know the id guesses one or looks the
+ *  book up again every turn. Says how the calibre tools number chapters, so
+ *  "chapter 3" means the same thing in the prompt, the tools and the book. */
+function loadedBooks(
+  memberId: string,
+  conversationId: string,
+  maurice: { context: any[] } | null,
+): string[] {
+  const items = [...(maurice?.context ?? []), ...getSpec(memberId, conversationId).items];
+  const seen = new Set<string>();
+  const lines: string[] = [];
+  for (const it of items) {
+    if (it.type !== "book") continue;
+    if (seen.has(String(it.id))) continue;
+    seen.add(String(it.id));
+    const r = resolveBookItem(memberId, it);
+    if (r.missing) continue;
+    const rep = r.representation === "full" ? "full text" : "chapter summaries";
+    lines.push(`- **${r.title}** — calibre book_id ${it.id}; ${r.visibleCount} chapters; loaded as ${rep}.`);
+  }
+  return lines;
+}
+
 /** One line per book loaded on the `progress` scope, across the persona's
  *  bundle and the conversation's own items: what it is, and where the reader
  *  has got to. Empty when no book is being tracked, which is the usual case —
@@ -855,6 +967,19 @@ function trackedBooks(
       if (block.trim()) {
         systemPrompt +=
           `\n\n## Loaded context\nThe following material has been loaded into this conversation${maurice ? ` (some baked into ${maurice.name})` : ""}. Treat it as authoritative background and draw on it when relevant.\n\n${block}`;
+      }
+
+      // Every loaded book, named with its calibre id: the chapters above are
+      // bare text, and the tools want the id. Chapter numbers are the ones a
+      // reader uses — 1-based over the real chapters, front and back matter
+      // unnumbered — on every side: the headers above, the calibre tools'
+      // `chapter` fields, and the book itself.
+      const books = loadedBooks(memberId, conversationId, maurice);
+      if (books.length) {
+        systemPrompt += `\n\n## Books in this conversation\n${books.join("\n")}\n` +
+          `Use these book_ids with the calibre tools; do not look the book up again or guess an id. ` +
+          `Chapter numbers here, in the chapter headers above and in the calibre tools' \`chapter\` fields all count the same way: ` +
+          `1-based over the book's real chapters, front and back matter unnumbered — so "chapter 3" is the chapter the book itself calls 3.`;
       }
 
       // A book loaded on the `progress` scope makes the conversation a reading
@@ -972,7 +1097,7 @@ function trackedBooks(
   if (provider === "ollama") {
     const tools = mcpTools.map(mcpToolToFunction);
     if (wantsWeb && hasWebSearch()) tools.push(WEB_SEARCH_FUNCTION);
-    yield* runOllamaAgentic(resolved, systemPrompt, toTextMessages(messages), tools, mcp, config.maxTokens, userLang, conversationId);
+    yield* runOllamaAgentic(resolved, systemPrompt, toTextMessages(messages), tools, mcp, config.maxTokens, userLang, conversationId, signal);
     return;
   }
 
@@ -991,7 +1116,7 @@ function trackedBooks(
     yield* runOpenAIAgentic(
       baseUrl, key, resolved, systemPrompt,
       toOpenAIMessages(messages, !!rec?.vision),
-      tools, mcp, temperature, userLang, provider, conversationId,
+      tools, mcp, temperature, userLang, provider, conversationId, signal,
     );
     return;
   }
@@ -1057,6 +1182,8 @@ function trackedBooks(
       if (temperature !== undefined) body.temperature = temperature;
       if (tools.length) body.tools = tools;
 
+      const roundStarted = performance.now();
+      const roundUsage = { prompt: 0, cached: 0, completion: 0 };
       const response = await fetch("https://api.anthropic.com/v1/messages", {
         method: "POST",
         headers: {
@@ -1133,6 +1260,8 @@ function trackedBooks(
               usage.output += roundOutput;
               usage.cache_read += u.cache_read_input_tokens ?? 0;
               usage.cache_write += u.cache_creation_input_tokens ?? 0;
+              roundUsage.cached = u.cache_read_input_tokens ?? 0;
+              roundUsage.prompt = (u.input_tokens ?? 0) + roundUsage.cached + (u.cache_creation_input_tokens ?? 0);
             }
           } else if (event.type === "content_block_start") {
             const idx = event.index;
@@ -1185,6 +1314,13 @@ function trackedBooks(
           }
         }
       }
+
+      roundUsage.completion = roundOutput;
+      logRound(
+        { conversationId, provider: "anthropic", model: resolved, round },
+        performance.now() - roundStarted, roundUsage,
+        contentBlocks.filter((b) => b.type === "tool_use").length,
+      );
 
       // Not a tool turn → we're done.
       if (stopReason !== "tool_use") {

@@ -1,7 +1,7 @@
 import db from "../../db";
 import { isParticipant } from "../conversations";
 import { resolveSubtree, readNoteBody, estimateTokens } from "./notes";
-import { readChapters } from "./calibre";
+import { readChapters, listChapters } from "./calibre";
 import { resolveFileItem, resolveFolderItem, fileText, fileBinary, type FileAttachment } from "./files";
 import { ficheText, resolveFicheItem } from "./fiches";
 import { conversationContext, type SummaryStatus } from "./conversationSummary";
@@ -215,6 +215,52 @@ export function canCompose(memberId: string, conversationId: string): boolean {
   return isParticipant(conversationId, memberId);
 }
 
+// ── Book rendering ──
+//
+// A loaded book used to be its chapter texts joined by rules: no title, no
+// chapter numbers, no id. Twenty thousand tokens of prose the model could not
+// name — so it asked calibre which book this was, every turn, and called the
+// third file "chapter 3" when the book calls it 1. Each chapter now carries a
+// header with the reader's number (1-based over the body chapters, the count
+// the calibre tools use) and its title, under one header naming the book and
+// its calibre id. Deterministic, so the cached prefix stays byte-stable.
+
+/** Chapter headers for a book's loaded refs: `ref → header line`. Exported
+ *  for tests. Front and back matter are labelled as such, unnumbered. */
+export function chapterHeaders(
+  chapters: { ref: string; name: string; section_type: string }[],
+): Map<string, string> {
+  const out = new Map<string, string>();
+  let n = 0;
+  for (const c of chapters) {
+    if (c.section_type === "body") {
+      n += 1;
+      out.set(c.ref, `## Chapter ${n}: ${c.name}`);
+    } else {
+      const kind = c.section_type === "front_matter" ? "Front matter" : "Back matter";
+      out.set(c.ref, `## ${kind}: ${c.name}`);
+    }
+  }
+  return out;
+}
+
+function renderBook(
+  memberId: string,
+  bookId: number,
+  rep: "summary" | "full",
+  chs: { ref: string; text: string }[],
+): string {
+  const book = listChapters(memberId, bookId);
+  const headers = book ? chapterHeaders(book.chapters) : new Map<string, string>();
+  const parts = chs
+    .filter((c) => c.text)
+    .map((c) => `${headers.get(c.ref) ?? `## ${c.ref}`}\n\n${c.text}`);
+  if (!parts.length) return "";
+  const title = book ? `${book.title}${book.authors.length ? ` — ${book.authors.join(", ")}` : ""}` : `Book ${bookId}`;
+  const what = rep === "full" ? "full text" : "chapter summaries";
+  return `# ${title} (calibre book_id ${bookId}) — ${what}, ${parts.length} chapter${parts.length === 1 ? "" : "s"}\n\n${parts.join("\n\n---\n\n")}`;
+}
+
 // ── Resolution to the actual text payload Maurice loads ──
 
 export interface ResolvedItemText {
@@ -260,7 +306,7 @@ export function resolveSpecToText(memberId: string, spec: ContextSpec): Resolved
         : (it.snapshot?.refs ?? []);
       const rep = (it.snapshot?.representation ?? "summary") as "summary" | "full";
       const chs = readChapters(memberId, Number(it.id), refs, rep);
-      const text = chs.map((c) => c.text).filter(Boolean).join("\n\n---\n\n");
+      const text = renderBook(memberId, Number(it.id), rep, chs);
       return { type: "book", id: it.id, text, weight: estimateTokens(text) };
     }
     if (it.type === "fiche") {
