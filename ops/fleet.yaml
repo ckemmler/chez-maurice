@@ -8,6 +8,13 @@
 # shell command, run from the repo root, that puts the current checkout live
 # there. The tower runs it on `d`; without one the instance is read-only.
 #
+# admin: is where that instance's console is, which is never its public name —
+# the console refuses anything that is not a loopback request. A household on
+# a shared host publishes it on one loopback port there (ops/household.sh
+# list <host> prints them), so its door is `ssh://<ssh-host>:<port>` and the
+# tower's `a` — or ops/admin.ts <name> — forwards that port and opens it. An
+# instance whose url is already localhost needs no line: that IS the door.
+#
 # The health token of each instance lives OUTSIDE the repo, one line per
 # instance, in ~/.maurice/ops/fleet-tokens:
 #     aline=maur_…
@@ -33,8 +40,10 @@ instances:
     owner: Aline
     since: 2026-09-01
     deploy: MAURICE_REGISTRY=rg.fr-par.scw.cloud/maurice scripts/deploy.sh maurice-fleet
+    admin: ssh://maurice-fleet:3101
   - name: review
     url: https://review.chezmaurice.eu
     owner: Candide (App Review account)
     since: 2026-09-12
     deploy: MAURICE_REGISTRY=rg.fr-par.scw.cloud/maurice scripts/deploy.sh maurice-fleet
+    admin: ssh://maurice-fleet:3102

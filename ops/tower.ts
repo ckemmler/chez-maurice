@@ -8,15 +8,24 @@
  *   ops/tower.ts --once       one frame to stdout, no keys (a pipe, a test)
  *
  *   ↑/↓ or j/k  select      r  probe now       d  deploy the selected one
- *   l           toggle log  q  quit            (a deploy asks y/n first)
+ *   l           toggle log  q  quit            a  its admin console
+ *                                              (a deploy asks y/n first)
  *
  * Deploying runs the instance's `deploy:` command from fleet.yaml, from the
- * repo root, one at a time, its output in the log pane. No daemon, no port,
- * no tunnel: this runs where the operator is (a terminal on the Mac mini, or
- * an ssh session into it), which is the whole of its access control. Tokens
- * are read from ~/.maurice/ops/fleet-tokens, never shown.
+ * repo root, one at a time, its output in the log pane. No daemon, no port:
+ * this runs where the operator is (a terminal on the Mac mini, or an ssh
+ * session into it), which is the whole of its access control. Tokens are read
+ * from ~/.maurice/ops/fleet-tokens, never shown.
+ *
+ * `a` opens the selected instance's admin console. A console never answers a
+ * public name, so for a hosted household that means holding an ssh forward
+ * onto the loopback port it publishes (`admin:` in fleet.yaml) and pointing
+ * the browser at it. The forwards belong to this program and die with it.
  */
-import { REPO_DIR, age, isBad, probeAll, readFleet, table, type Instance, type Row } from "./fleet";
+import {
+  REPO_DIR, adminDoor, age, isBad, loopbackAnswers, noDoorReason, openInBrowser, probeAll,
+  readFleet, table, waitForLoopback, type Instance, type Row,
+} from "./fleet";
 
 const argv = process.argv.slice(2);
 const everyIdx = argv.indexOf("--every");
@@ -36,6 +45,8 @@ let lastPoll = 0;
 let nextPoll = Date.now();
 let log: string[] = [];
 let timer: ReturnType<typeof setTimeout> | null = null;
+/** ssh forwards opened by `a`, one per instance, closed when this program ends. */
+const tunnels = new Map<string, { port: number; host: string; proc: ReturnType<typeof Bun.spawn> }>();
 
 function say(line: string) {
   const stamp = new Date().toTimeString().slice(0, 8);
@@ -95,6 +106,68 @@ async function deploy(i: Instance) {
   await poll();
 }
 
+// ── The admin console ───────────────────────────────────────────
+
+/** Open the console of an instance, forwarding its loopback port first if it needs one. */
+async function openAdmin(i: Instance) {
+  const door = adminDoor(i);
+  if (!door) {
+    say(`${i.name}: ${noDoorReason(i)}`);
+    render();
+    return;
+  }
+  if (door.kind === "tunnel" && !tunnels.has(i.name)) {
+    if (await loopbackAnswers(door.port)) {
+      say(`${i.name}: something already answers on :${door.port} — using it`);
+    } else {
+      say(`▶ ${i.name}: ${door.forward.join(" ")}`);
+      render();
+      const proc = Bun.spawn(door.forward, { stdout: "ignore", stderr: "pipe" });
+      tunnels.set(i.name, { port: door.port, host: door.host, proc });
+      void watchTunnel(i.name, proc);
+      if (!(await waitForLoopback(door.port))) {
+        say(`✗ ${i.name}: nothing answered on :${door.port} — is it up? ops/household.sh list ${door.host}`);
+        closeTunnel(i.name);
+        render();
+        return;
+      }
+      say(`⇄ ${i.name}: forward open on :${door.port}`);
+    }
+  }
+  if (openInBrowser(door.url)) say(`${i.name}: opened ${door.url}`);
+  else say(`${i.name}: ${door.url} — open that where your browser is; the forward is held here`);
+  render();
+}
+
+/** ssh's complaints into the log, and the map honest about what is still open. */
+async function watchTunnel(name: string, proc: ReturnType<typeof Bun.spawn>) {
+  const err = proc.stderr;
+  if (err && typeof err !== "number") {
+    let rest = "";
+    for await (const chunk of err as ReadableStream<Uint8Array>) {
+      rest += new TextDecoder().decode(chunk);
+      const lines = rest.split("\n");
+      rest = lines.pop() ?? "";
+      for (const l of lines) if (l.trim()) say(`  ! ssh ${name}: ${l}`);
+      render();
+    }
+    if (rest.trim()) say(`  ! ssh ${name}: ${rest}`);
+  }
+  const code = await proc.exited;
+  if (tunnels.get(name)?.proc === proc) {
+    tunnels.delete(name);
+    say(`${name}: forward closed${code ? ` (ssh exit ${code})` : ""}`);
+    render();
+  }
+}
+
+function closeTunnel(name: string) {
+  const t = tunnels.get(name);
+  if (!t) return;
+  tunnels.delete(name);
+  try { t.proc.kill(); } catch {}
+}
+
 // ── Rendering ───────────────────────────────────────────────────
 
 const ESC = "\x1b[";
@@ -130,7 +203,10 @@ function render() {
   const summary = rows.length
     ? bad ? red(`${bad} of ${rows.length} need attention`) : green(`${rows.length} instances ok`)
     : dim("probing…");
-  out.push(`${bold("Maurice — tour de contrôle")}   ${summary}   ${dim(`last ${lastPoll ? age(Math.floor((Date.now() - lastPoll) / 1000)) || "<1m" : "—"} ago · next in ${secs}s · every ${EVERY_S}s`)}`);
+  const forwards = tunnels.size
+    ? `   ${green(`⇄ ${[...tunnels].map(([n, t]) => `${n}:${t.port}`).join(" ")}`)}`
+    : "";
+  out.push(`${bold("Maurice — tour de contrôle")}   ${summary}${forwards}   ${dim(`last ${lastPoll ? age(Math.floor((Date.now() - lastPoll) / 1000)) || "<1m" : "—"} ago · next in ${secs}s · every ${EVERY_S}s`)}`);
   out.push("");
 
   const lines = table(rows);
@@ -152,13 +228,20 @@ function render() {
   if (sel) {
     out.push(`${dim("url")} ${sel.url}   ${dim("owner")} ${sel.owner ?? "—"}   ${dim("since")} ${sel.since ?? "—"}`);
     out.push(`${dim("deploy")} ${sel.deploy ? sel.deploy : dim("none — read-only")}`);
+    const door = adminDoor(sel);
+    const held = tunnels.has(sel.name) ? green("  ⇄ forward open") : "";
+    out.push(`${dim("admin")} ${
+      !door ? dim(noDoorReason(sel))
+      : door.kind === "direct" ? `${door.url}${held}`
+      : `${door.url}  ${dim(`through ${door.host}`)}${held}`
+    }`);
   }
   out.push("");
 
   if (confirming) {
     out.push(yellow(bold(`Deploy ${confirming.name} with "${confirming.deploy}"?  y / n`)));
   } else {
-    out.push(dim("↑/↓ select   r probe now   d deploy   l log   q quit"));
+    out.push(dim("↑/↓ select   r probe now   a admin   d deploy   l log   q quit"));
   }
 
   if (showLog) {
@@ -199,6 +282,13 @@ function onKey(key: string) {
     case "\x1b[B": case "j": selected = (selected + 1) % fleet.length; break;
     case "r": void poll(); return;
     case "l": showLog = !showLog; break;
+    case "a": {
+      const i = fleet[selected];
+      if (!i) break;
+      showLog = true;
+      void openAdmin(i);
+      break;
+    }
     case "d": {
       const i = fleet[selected];
       if (!i) break;
@@ -212,6 +302,7 @@ function onKey(key: string) {
 }
 
 function quit() {
+  for (const name of [...tunnels.keys()]) closeTunnel(name);
   process.stdout.write(`${ESC}?25h${ESC}?1049l`);
   try { process.stdin.setRawMode(false); } catch {}
   process.exit(0);

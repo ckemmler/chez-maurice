@@ -34,7 +34,9 @@ three times that — see `docs/garden-server-mode.md`.)
   a new file and a reload — never an edit to a file someone else's household
   depends on, and never a restart of the others.
 - **The admin console** is published on loopback only, one port per household,
-  because it refuses any request that is not local. Reach it with `ssh -L`.
+  because it refuses any request that is not local. Reach it with `ssh -L`, or
+  let `ops/admin.ts <household>` do it (`admin: ssh://<host>:<port>` in
+  `ops/fleet.yaml`, the tower's `a` key).
 
 ## The first time, on a fresh machine
 
@@ -57,7 +59,9 @@ three times that — see `docs/garden-server-mode.md`.)
    Whoever proxies the traffic terminates the TLS and reads the clear text,
    which is the line this arrangement exists to stay on the right side of.
 6. **Finish the setup** through the tunnel the command prints:
-   `ssh -L <port>:localhost:<port> <host>`, then `/admin`.
+   `ssh -L <port>:localhost:<port> <host>`, then `/admin`. Once the household
+   has a line in `ops/fleet.yaml` with that port as `admin: ssh://<host>:<port>`,
+   `ops/admin.ts <name>` is the same thing in one word.
 
 ## Afterwards
 
@@ -86,7 +90,8 @@ rollback (`MAURICE_IMAGE=<registry>/maurice:<old tag> ops/household.sh up
 <host> <name>`); dangling layers are pruned. `ops/fleet-status.ts` and
 `ops/tower.ts` show which version each household runs — add the household's
 public name to `ops/fleet.yaml` when you add it here, with `deploy:
-scripts/deploy.sh <host>`.
+scripts/deploy.sh <host>` and `admin: ssh://<host>:<its loopback port>`. The
+`add` command prints that entry ready to paste.
 
 ## Moving a household off this machine
 

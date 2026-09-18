@@ -97,6 +97,14 @@ SITE"
   echo "  Point DNS at this host:   $domain  A  <the host's address>   (unproxied)"
   echo "  Finish the setup:         ssh -L $port:localhost:$port $HOST"
   echo "                            then http://localhost:$port/admin"
+  echo
+  echo "  Its line in ops/fleet.yaml, which makes that one word (ops/admin.ts $name):"
+  echo "    - name: $name"
+  echo "      url: https://$domain"
+  echo "      owner: <who>"
+  echo "      since: $(date +%Y-%m-%d)"
+  echo "      deploy: scripts/deploy.sh $HOST"
+  echo "      admin: ssh://$HOST:$port"
   ;;
 
 list)

@@ -1,8 +1,8 @@
 # Running a fleet of Maurices
 
 This directory is the operator's toolbox for the instances Candide runs on
-behalf of friends. It is deliberately small: an inventory, one script, and a
-note on which off-the-shelf tools do the rest. Nothing here is a product, and
+behalf of friends. It is deliberately small: an inventory, a handful of short
+commands over it, and a note on which off-the-shelf tools do the rest. Nothing here is a product, and
 nothing here sees a household's data — the only thing an instance tells the
 operator is its technical health.
 
@@ -33,11 +33,12 @@ is outside the repo on purpose.
 ## The inventory: `fleet.yaml`
 
 Hand-kept. One entry per instance: `name`, `url`, `owner`, `since`,
-`insecure: true` for a self-signed local certificate, and `deploy:` — the
+`insecure: true` for a self-signed local certificate, `deploy:` — the
 shell command, run from the repo root, that puts the current checkout live
-there. Adding an instance to the fleet is adding a line; handing it over is
-removing the line and revoking its health token in its admin. There is no
-discovery and there will not be.
+there — and `admin:`, the door to its admin console (below). Adding an
+instance to the fleet is adding a line; handing it over is removing the line
+and revoking its health token in its admin. There is no discovery and there
+will not be.
 
 Three shapes of `deploy:` exist today, one per kind of instance:
 
@@ -80,15 +81,52 @@ ops/tower.ts --once         # one frame, no keys — for a pipe or a test
 
 The same table, refreshed every 30 s, an error sparkline per instance over
 the last 40 polls (a red dot is an unreachable poll), the selected instance's
-url / owner / deploy line, and a log pane. Keys: `↑/↓` select, `r` probe now,
-`d` deploy the selected instance (asks `y/n`, then streams the command's
-output into the log, one deploy at a time), `l` toggle the log, `q` quit.
+url / owner / deploy / admin lines, and a log pane. Keys: `↑/↓` select, `r`
+probe now, `a` open the selected instance's admin console (below), `d` deploy
+it (asks `y/n`, then streams the command's output into the log, one deploy at
+a time), `l` toggle the log, `q` quit.
 
 It is a terminal program on purpose: no daemon, no port, no tunnel, no login
 page. Its access control is the shell it runs in — the Mac mini's, or an ssh
 session into it (Tailscale from the phone works). A web face on the same
 `fleet.ts` core is a later option if the terminal ever falls short; it would
 need Cloudflare Access in front of it before it gets a deploy button.
+
+## The admin console of an instance: `admin.ts`
+
+```
+ops/admin.ts                 where each console is, and how it is reached
+ops/admin.ts aline           forward the port, open the console, hold it open
+ops/admin.ts aline --print   the ssh line and the url, open nothing
+```
+
+The console hands out every provider API key, so the server refuses any
+request whose `Host` is not loopback and any request carrying a Cloudflare
+header (`server/src/routes/web-admin.ts`). `https://aline.chezmaurice.eu/admin`
+answers `403`, by design and for good. The way in is the loopback port that
+household publishes on its host — `ops/household.sh` allots one per household
+from 3101 up, and `ops/household.sh list <host>` prints them — reached by an
+ssh forward.
+
+`admin:` in the inventory is that door, one line:
+
+| The instance is | `admin:` | What happens |
+|---|---|---|
+| this very machine | nothing to write — its `url` is already `localhost` | the browser opens `<url>/admin` |
+| a household on a host you can ssh into | `ssh://<ssh-host>:<port>` | the port is forwarded, then `http://localhost:<port>/admin` opens |
+| reachable at some other local address | an `http(s)://…` url | that url opens |
+
+The forward belongs to whatever opened it: `ops/admin.ts` holds it until `^C`,
+the tower's `a` until you quit it (the header shows `⇄ aline:3101` while one
+is open). It is made with `ControlPath=none` on purpose — a forward asked of
+the multiplexed connection the deploys share would outlive the process that
+asked for it, and a console left open on a loopback port is exactly what this
+should not do. If a port already answers, that forward is reused rather than
+doubled.
+
+Over ssh into the mac mini there is no browser to hand the url to, so both
+faces print it and keep the forward: chain your own `-L` if you want it on the
+machine in your hands.
 
 ## Versions
 

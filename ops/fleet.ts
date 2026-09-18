@@ -16,6 +16,8 @@ export type Instance = {
   name: string; url: string; owner?: string; since?: string; insecure?: boolean;
   /** Shell command, run from the repo root, that puts the current checkout live there. */
   deploy?: string;
+  /** Where that instance's admin console is: `ssh://<host>:<port>`, or an http(s) url. */
+  admin?: string;
 };
 
 /** The inventory is a flat list of mappings; that is all this reads. */
@@ -139,4 +141,91 @@ export function table(rows: Row[], head = HEAD, lines = rows.map(cells)): string
   const widths = head.map((h, c) => Math.max(h.length, ...lines.map((l) => l[c]!.length)));
   const fmt = (l: string[]) => l.map((v, c) => v.padEnd(widths[c]!)).join("  ");
   return [fmt(head), fmt(widths.map((w) => "─".repeat(w))), ...lines.map(fmt)];
+}
+
+// ── The door to an instance's admin console ─────────────────────
+// The console (server/src/routes/web-admin.ts) hands out every provider API
+// key, so it refuses any request whose Host is not loopback and any request
+// carrying a Cloudflare edge header. A public url therefore never opens it: a
+// hosted household needs `admin: ssh://<host>:<port>` in the inventory — the
+// loopback port ops/household.sh published for it — and the door is an ssh
+// forward onto that port. An instance that IS this machine needs no line.
+
+export type AdminDoor =
+  | { kind: "direct"; url: string }
+  | { kind: "tunnel"; host: string; port: number; url: string; forward: string[] };
+
+const LOOPBACK = new Set(["localhost", "127.0.0.1", "::1", "[::1]"]);
+
+export function isLoopbackUrl(url: string): boolean {
+  try { return LOOPBACK.has(new URL(url).hostname); } catch { return false; }
+}
+
+function adminPath(base: string): string {
+  const b = base.replace(/\/+$/, "");
+  return /\/admin$/.test(b) ? b : `${b}/admin`;
+}
+
+export function adminDoor(i: Instance): AdminDoor | null {
+  const spec = (i.admin ?? "").trim();
+  const ssh = spec.match(/^ssh:\/\/([^/\s:]+):(\d+)\/?$/);
+  if (ssh) {
+    const host = ssh[1]!;
+    const port = Number(ssh[2]);
+    return {
+      kind: "tunnel", host, port, url: `http://localhost:${port}/admin`,
+      // ControlPath=none on purpose: a forward asked of a shared multiplexed
+      // connection (the hosts here set ControlMaster/ControlPersist for the
+      // deploys) outlives the client that asked for it, so killing this
+      // process would leave the console open on a loopback port for as long
+      // as the master persists. A connection of our own dies when we do.
+      forward: ["ssh", "-N", "-o", "ControlPath=none", "-o", "ExitOnForwardFailure=yes",
+        "-o", "ConnectTimeout=10", "-L", `${port}:localhost:${port}`, host],
+    };
+  }
+  if (/^https?:\/\//.test(spec)) return { kind: "direct", url: adminPath(spec) };
+  if (spec) return null; // an admin: line we can't read — better said than guessed
+  // No line: the console opens only when the instance is this very machine.
+  return isLoopbackUrl(i.url) ? { kind: "direct", url: adminPath(i.url) } : null;
+}
+
+/** Why an instance has no door — so both faces say it the same way. */
+export function noDoorReason(i: Instance): string {
+  const spec = (i.admin ?? "").trim();
+  return spec
+    ? `admin: "${spec}" is not a door I can read — expected ssh://<ssh-host>:<port> or an http(s) url`
+    : `no door — a console answers loopback only; give it an "admin: ssh://<ssh-host>:<port>" line in fleet.yaml`;
+}
+
+/** Is a forward already in place? Any HTTP answer on that loopback port counts. */
+export async function loopbackAnswers(port: number, timeoutMs = 1500): Promise<boolean> {
+  try {
+    await fetch(`http://127.0.0.1:${port}/healthz`, { signal: AbortSignal.timeout(timeoutMs) });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export async function waitForLoopback(port: number, timeoutMs = 15000): Promise<boolean> {
+  const until = Date.now() + timeoutMs;
+  while (Date.now() < until) {
+    if (await loopbackAnswers(port)) return true;
+    await new Promise((r) => setTimeout(r, 300));
+  }
+  return false;
+}
+
+/**
+ * Hand a url to the operator's browser. False when there is no browser here to
+ * hand it to — an ssh session into the mac mini is the common case: the
+ * forward is on that machine and the operator's browser is not, so the caller
+ * prints the url instead and holds the forward open.
+ */
+export function openInBrowser(url: string): boolean {
+  if (process.env.SSH_CONNECTION || process.env.SSH_TTY) return false;
+  const opener = process.platform === "darwin" ? "open" : process.platform === "linux" ? "xdg-open" : null;
+  if (!opener) return false;
+  Bun.spawn([opener, url], { stdout: "ignore", stderr: "ignore" });
+  return true;
 }
