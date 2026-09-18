@@ -561,6 +561,11 @@ db.run(`UPDATE households SET ancillary_model = default_model WHERE ancillary_mo
 // range has actually applied, so an instance with no provider key yet still
 // gets its pins the day it has one.
 try { db.run(`ALTER TABLE households ADD COLUMN ancillary_pins_seeded INTEGER NOT NULL DEFAULT 0`); } catch {}
+// Who chose a pin. 'auto' is this codebase's own advice, which may therefore be
+// revised when the advice changes; 'admin' is a person's decision and is never
+// touched again. The default is 'auto' because the only pins that exist on any
+// instance today were written by that first seed, hours before this column.
+try { db.run(`ALTER TABLE ancillary_models ADD COLUMN source TEXT NOT NULL DEFAULT 'auto'`); } catch {}
 
 // Non-model API keys, for the tools that enrich garden entries with metadata
 // and cover art. The Python MCP tools read these columns straight out of

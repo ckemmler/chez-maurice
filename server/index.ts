@@ -54,7 +54,7 @@ import maurices from "./src/routes/maurices";
 import models from "./src/routes/models";
 import toolFamilies from "./src/routes/toolFamilies";
 import { adminExists, getUser, getUserByUsername, householdName, householdInfo } from "./src/services/users";
-import { seedAncillaryPinsOnce } from "./src/services/ancillary";
+import { refreshAutoPins, seedAncillaryPinsOnce } from "./src/services/ancillary";
 import { dataDir } from "./src/db";
 import { imagesDir } from "./src/services/images";
 import { avatarsDir } from "./src/services/avatars";
@@ -713,7 +713,13 @@ const host = hasTls
 // them and the Python tools read the same table.
 const seededPins = seedAncillaryPinsOnce();
 if (seededPins.length) {
-  console.log(`[ancillary] pinned ${seededPins.length} function(s) to this household's model range`);
+  console.log(`[ancillary] pinned ${seededPins.length} function(s) to a model their size`);
+}
+// And the ones this codebase chose on an earlier start follow its current
+// advice — what the admin chose by hand never moves.
+const movedPins = refreshAutoPins();
+if (movedPins.length) {
+  console.log(`[ancillary] moved ${movedPins.length} unchosen pin(s) onto what is advised now`);
 }
 
 console.log(`

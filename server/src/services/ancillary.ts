@@ -170,7 +170,7 @@ export function applyRecommendedPins(): string[] {
   for (const inv of ANCILLARY_INVOCATIONS) {
     const want = recommendedModel(inv.id);
     if (!want || pinnedModel(inv.id) === want) continue;
-    setPinnedModel(inv.id, want);
+    setPinnedModel(inv.id, want, "auto");
     changed.push(inv.id);
   }
   return changed;
@@ -236,16 +236,55 @@ export function ancillaryModel(invocation: string): string {
   );
 }
 
-export function setPinnedModel(invocation: string, modelId: string | null): void {
+/**
+ * Pin an invocation. `source` says who decided: "admin" is a person's choice
+ * and nothing in here ever moves it again; "auto" is this file's own advice,
+ * which `refreshAutoPins` revises when the advice changes. The admin screen
+ * passes "auto" when the value it submits is what was advised anyway — being
+ * of the same opinion is not a decision to freeze.
+ */
+export function setPinnedModel(
+  invocation: string,
+  modelId: string | null,
+  source: "admin" | "auto" = "admin",
+): void {
   if (!modelId) {
     db.run(`DELETE FROM ancillary_models WHERE invocation = ?`, [invocation]);
     return;
   }
   db.run(
-    `INSERT INTO ancillary_models (invocation, model_id, updated_at) VALUES (?, ?, datetime('now'))
-     ON CONFLICT(invocation) DO UPDATE SET model_id = excluded.model_id, updated_at = datetime('now')`,
-    [invocation, modelId],
+    `INSERT INTO ancillary_models (invocation, model_id, updated_at, source) VALUES (?, ?, datetime('now'), ?)
+     ON CONFLICT(invocation) DO UPDATE SET model_id = excluded.model_id, updated_at = datetime('now'), source = excluded.source`,
+    [invocation, modelId, source],
   );
+}
+
+/** Who chose the current pin, if there is one. */
+export function pinSource(invocation: string): "admin" | "auto" | null {
+  const row = db
+    .query(`SELECT source FROM ancillary_models WHERE invocation = ?`)
+    .get(invocation) as { source: "admin" | "auto" } | null;
+  return row?.source ?? null;
+}
+
+/**
+ * Bring the pins nobody chose back in line with what is advised now. Aline is
+ * why: her five pins were written by an earlier version of this file, which
+ * read her GLM chat and advised GLM for everything, and she should not have to
+ * press a button to be moved onto the Scaleway models her household can call.
+ * An "admin" pin is left exactly where it is, and a pin that was deleted stays
+ * deleted — this only revises, it never re-creates.
+ */
+export function refreshAutoPins(): string[] {
+  const changed: string[] = [];
+  for (const inv of ANCILLARY_INVOCATIONS) {
+    if (pinSource(inv.id) !== "auto") continue;
+    const want = recommendedModel(inv.id);
+    if (!want || pinnedModel(inv.id) === want) continue;
+    setPinnedModel(inv.id, want, "auto");
+    changed.push(inv.id);
+  }
+  return changed;
 }
 
 export function setHouseholdAncillaryModel(modelId: string): void {

@@ -11,7 +11,7 @@ import { beforeEach, expect, test } from "bun:test";
 const db = (await import("../src/db")).default;
 const {
   ANCILLARY_INVOCATIONS, PREFERRED, ancillaryModel, applyRecommendedPins, hasRecommendations,
-  recommendedModel, seedAncillaryPinsOnce, setPinnedModel,
+  pinSource, recommendedModel, refreshAutoPins, seedAncillaryPinsOnce, setPinnedModel,
 } = await import("../src/services/ancillary");
 
 const NO_KEYS = {
@@ -92,6 +92,27 @@ test("Scaleway wins over Anthropic for the server's own work", () => {
   // …while a tools invocation still takes the Anthropic entry, since that is
   // the only one its dispatcher can reach.
   expect(recommendedModel("dossier_title")).toBe("claude-haiku-4-5-20251001");
+});
+
+test("a pin this file chose follows the advice; a pin a person chose does not", () => {
+  household("glm-5.3-flash", { zai_api_key: "k-zai", scaleway_api_key: "k-scw" });
+  // Aline's shape before this change: pins written by the older version, which
+  // read her GLM chat and advised GLM for everything.
+  setPinnedModel("conversation_summary", "glm-5.3-flash", "auto");
+  setPinnedModel("flashcards", "glm-5.3", "admin");
+  db.run(`UPDATE households SET ancillary_pins_seeded = 1 WHERE id = 'default'`);
+
+  // A start on this code moves the one nobody chose, and only that one.
+  expect(seedAncillaryPinsOnce()).toEqual([]);
+  expect(refreshAutoPins()).toEqual(["conversation_summary"]);
+  expect(ancillaryModel("conversation_summary")).toBe("gpt-oss-120b");
+  expect(ancillaryModel("flashcards")).toBe("glm-5.3");
+  expect(pinSource("flashcards")).toBe("admin");
+
+  // And it does not re-create a pin the admin deleted.
+  setPinnedModel("article_summary", null);
+  expect(refreshAutoPins()).toEqual([]);
+  expect(pinSource("article_summary")).toBe(null);
 });
 
 test("seeding is a one-off; the button is not", () => {

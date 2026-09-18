@@ -898,9 +898,13 @@ web.post("/ancillary-models", async (c) => {
   if (hh && callable(hh)) setHouseholdAncillaryModel(hh);
   for (const inv of ANCILLARY_INVOCATIONS) {
     const v = String(form[`pin:${inv.id}`] ?? "").trim();
-    setPinnedModel(inv.id, v && callable(v) ? v : null);
+    const model = v && callable(v) ? v : null;
+    // Saving the form as it stands is agreement, not a decision: a value that
+    // matches the advice stays "auto" and keeps following it, while anything
+    // else is the admin's and is never moved again.
+    setPinnedModel(inv.id, model, model && model === recommendedModel(inv.id) ? "auto" : "admin");
   }
-  return c.redirect("/admin/dashboard?msg=settings_saved#sec-settings");
+  return c.redirect("/admin/dashboard?msg=settings_saved#sec-ancillary");
 });
 
 // ── Ancillary models: back to the provider range (POST) ─────────
