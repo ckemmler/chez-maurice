@@ -10,7 +10,7 @@ import { beforeEach, expect, test } from "bun:test";
 import { existsSync } from "fs";
 import { join } from "path";
 
-const db = (await import("../src/db")).default;
+const { default: db, migrateAncillaryPinSource } = await import("../src/db");
 const {
   ANCILLARY_INVOCATIONS, PREFERRED, ancillaryModel, applyRecommendedPins, hasRecommendations,
   pinSource, presentInvocations, recommendedModel, refreshAutoPins, seedAncillaryPinsOnce,
@@ -159,5 +159,40 @@ test("seeding is a one-off; the button is not", () => {
   expect(seedAncillaryPinsOnce()).toEqual([]);
   expect(ancillaryModel("conversation_summary")).toBe("glm-5.3");
   expect(applyRecommendedPins()).toEqual(["conversation_summary"]);
+  expect(ancillaryModel("conversation_summary")).toBe("gpt-oss-120b");
+});
+
+test("the first seed leaves a pin a person already set", () => {
+  household("glm-5.3-flash", { zai_api_key: "k-zai", scaleway_api_key: "k-scw" });
+  // Pinned by hand through the form before this code ever started here. A
+  // start is nobody pressing a button, so it stays.
+  setPinnedModel("flashcards", "glm-5.3", "admin");
+  const seeded = seedAncillaryPinsOnce();
+  expect(seeded).not.toContain("flashcards");
+  expect(ancillaryModel("flashcards")).toBe("glm-5.3");
+  expect(pinSource("flashcards")).toBe("admin");
+  // …and everything around it is seeded as usual.
+  expect(seeded).toContain("conversation_summary");
+  expect(ancillaryModel("conversation_summary")).toBe("gpt-oss-120b");
+});
+
+test("rows that predate the source column are a person's when no seed ever ran here", () => {
+  household("glm-5.3-flash", { zai_api_key: "k-zai", scaleway_api_key: "k-scw" });
+  // Replay the migration on the table shaped as it was before the column.
+  db.run(`ALTER TABLE ancillary_models DROP COLUMN source`);
+  db.run(`INSERT INTO ancillary_models (invocation, model_id) VALUES ('flashcards', 'glm-5.3')`);
+  migrateAncillaryPinSource();
+  expect(pinSource("flashcards")).toBe("admin");
+  expect(refreshAutoPins()).toEqual([]);
+  expect(ancillaryModel("flashcards")).toBe("glm-5.3");
+
+  // Whereas where the seed had written them (Aline), they follow the advice.
+  db.run(`DELETE FROM ancillary_models`);
+  db.run(`ALTER TABLE ancillary_models DROP COLUMN source`);
+  db.run(`UPDATE households SET ancillary_pins_seeded = 1 WHERE id = 'default'`);
+  db.run(`INSERT INTO ancillary_models (invocation, model_id) VALUES ('conversation_summary', 'glm-5.3-flash')`);
+  migrateAncillaryPinSource();
+  expect(pinSource("conversation_summary")).toBe("auto");
+  expect(refreshAutoPins()).toEqual(["conversation_summary"]);
   expect(ancillaryModel("conversation_summary")).toBe("gpt-oss-120b");
 });

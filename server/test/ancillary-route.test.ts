@@ -64,3 +64,26 @@ test("a household with no key for the chosen model says so, and does not fall ba
   const body = (await res.json()) as { error?: string };
   expect(body.error).toBeTruthy();
 });
+
+test("the socket has the last word: a forged local Host from another machine is refused", async () => {
+  // What index.ts hands Hono as env: the Bun server, whose requestIP() names
+  // the peer. A test harness has none, which is why the tests above pass on
+  // the headers alone.
+  const from = (address: string | null) => ({
+    requestIP: () => (address ? { address, family: "IPv4", port: 51000 } : null),
+  });
+  const body = JSON.stringify({ invocation: "no_such_thing", prompt: "hi" });
+  const ask = (env: unknown) => route.request("/", { method: "POST", headers: LOCAL, body }, env);
+
+  // A LAN or tailnet client that sets Host: localhost — the server listens on
+  // 0.0.0.0, so it reaches the port directly. Refused at the door.
+  expect((await ask(from("192.168.1.20"))).status).toBe(403);
+  // Caddy, from its own compose address, forwarding whatever Host it was sent.
+  expect((await ask(from("172.18.0.3"))).status).toBe(403);
+  // A server that cannot say where the socket came from cannot vouch either.
+  expect((await ask(from(null))).status).toBe(403);
+  // A genuine loopback socket passes the door, then fails on the body as it should.
+  for (const address of ["127.0.0.1", "::1", "::ffff:127.0.0.1"]) {
+    expect((await ask(from(address))).status).toBe(400);
+  }
+});

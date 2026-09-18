@@ -193,11 +193,15 @@ export function hasRecommendations(): boolean {
   return presentInvocations().some((i) => recommendedModel(i.id) !== null);
 }
 
-/** Pin every invocation that has a preferred model. Returns the ids actually changed, so
- *  the admin is told what moved rather than just "saved". */
-export function applyRecommendedPins(): string[] {
+/**
+ * The one loop behind the button, the first-start seed and the refresh: pin
+ * each eligible invocation to its advice, as "auto". Returns the ids actually
+ * changed, so the admin is told what moved rather than just "saved".
+ */
+function repin(eligible: (inv: AncillaryInvocation) => boolean): string[] {
   const changed: string[] = [];
   for (const inv of presentInvocations()) {
+    if (!eligible(inv)) continue;
     const want = recommendedModel(inv.id);
     if (!want || pinnedModel(inv.id) === want) continue;
     setPinnedModel(inv.id, want, "auto");
@@ -206,18 +210,29 @@ export function applyRecommendedPins(): string[] {
   return changed;
 }
 
+/** Pin every invocation that has a preferred model — the admin's button, which
+ *  is allowed to move a person's own pins because a person pressed it. */
+export function applyRecommendedPins(): string[] {
+  return repin(() => true);
+}
+
 /**
  * Put the range in place once, on a household that has never had a pin. New
  * instances therefore start fine-grained, and an existing one is moved off
  * "everything on the chat model" the first time it starts on this code — both
  * recorded as ordinary pins the admin can read and change.
+ *
+ * Only the invocations with no pin at all. The form has existed since 13
+ * September 2026, so a household may reach this code with pins a person set by
+ * hand, and a start is nobody pressing a button: those rows stay exactly as
+ * they are (db.ts marks them "admin" when no seed ever ran here).
  */
 export function seedAncillaryPinsOnce(): string[] {
   const row = db
     .query(`SELECT ancillary_pins_seeded FROM households WHERE id = 'default'`)
     .get() as { ancillary_pins_seeded: number } | null;
   if (row?.ancillary_pins_seeded) return [];
-  const changed = applyRecommendedPins();
+  const changed = repin((inv) => pinnedModel(inv.id) === null);
   // Only claim it is done when a range actually applied; a household with no
   // key yet must get its pins the day it has one.
   if (changed.length) {
@@ -306,15 +321,7 @@ export function pinSource(invocation: string): "admin" | "auto" | null {
  * deleted — this only revises, it never re-creates.
  */
 export function refreshAutoPins(): string[] {
-  const changed: string[] = [];
-  for (const inv of presentInvocations()) {
-    if (pinSource(inv.id) !== "auto") continue;
-    const want = recommendedModel(inv.id);
-    if (!want || pinnedModel(inv.id) === want) continue;
-    setPinnedModel(inv.id, want, "auto");
-    changed.push(inv.id);
-  }
-  return changed;
+  return repin((inv) => pinSource(inv.id) === "auto");
 }
 
 export function setHouseholdAncillaryModel(modelId: string): void {

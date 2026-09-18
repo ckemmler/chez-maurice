@@ -563,9 +563,27 @@ db.run(`UPDATE households SET ancillary_model = default_model WHERE ancillary_mo
 try { db.run(`ALTER TABLE households ADD COLUMN ancillary_pins_seeded INTEGER NOT NULL DEFAULT 0`); } catch {}
 // Who chose a pin. 'auto' is this codebase's own advice, which may therefore be
 // revised when the advice changes; 'admin' is a person's decision and is never
-// touched again. The default is 'auto' because the only pins that exist on any
-// instance today were written by that first seed, hours before this column.
-try { db.run(`ALTER TABLE ancillary_models ADD COLUMN source TEXT NOT NULL DEFAULT 'auto'`); } catch {}
+// touched again.
+//
+// The rows that predate the column have to be sorted the one time it is added,
+// and the seed guard above says how: on an instance where the seed has run
+// (ancillary_pins_seeded = 1) the rows are what it wrote and follow the advice;
+// on one where it never ran, every row was written by a person through the
+// admin form, which has existed since 13 September 2026, and is theirs. The
+// default stays 'auto' for rows written afterwards without a source, which is
+// only this codebase's own writes.
+export function migrateAncillaryPinSource(): void {
+  try {
+    db.run(`ALTER TABLE ancillary_models ADD COLUMN source TEXT NOT NULL DEFAULT 'auto'`);
+  } catch {
+    return; // already there: sorted on an earlier start
+  }
+  db.run(
+    `UPDATE ancillary_models SET source = 'admin'
+     WHERE (SELECT ancillary_pins_seeded FROM households WHERE id = 'default') = 0`,
+  );
+}
+migrateAncillaryPinSource();
 
 // Non-model API keys, for the tools that enrich garden entries with metadata
 // and cover art. The Python MCP tools read these columns straight out of
