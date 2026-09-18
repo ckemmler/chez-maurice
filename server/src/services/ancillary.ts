@@ -23,6 +23,8 @@
  * in the admin holds for the tools too.
  */
 
+import { existsSync } from "fs";
+import { join } from "path";
 import db from "../db";
 import { getModel, configuredProviders, householdDefaultModel } from "./models";
 import { getHouseholdConfig, isOpenAIStyle, openaiStyleBaseUrl, openaiStyleKey } from "./claude";
@@ -41,6 +43,17 @@ export interface AncillaryInvocation {
   blurb: string;
   /** What the function needs of a model — a hint for the admin, nothing more. */
   tier: AncillaryTier;
+  /**
+   * For a `tools` invocation: the directory, relative to the repo root, whose
+   * code actually runs it. Thirteen of the `tools/*` entries are symlinks into
+   * the private maurice-tools repo and the image's dockerignore keeps them out
+   * (infra/container/Dockerfile), so a hosted household ships `tools/corpus`,
+   * `tools/garden`, `tools/mcp_gateway` and `tools/shared` and nothing else.
+   * An invocation whose directory is absent is not a setting on that instance:
+   * it is a function that does not exist there, and listing it invites an
+   * admin to choose a model for something that will never run.
+   */
+  needs?: string;
 }
 
 export const ANCILLARY_INVOCATIONS: AncillaryInvocation[] = [
@@ -56,27 +69,45 @@ export const ANCILLARY_INVOCATIONS: AncillaryInvocation[] = [
   { id: "signal_nutrition", side: "server", tier: "standard", label: "Meal estimation",
     blurb: "A meal signal with its protein and calorie estimate." },
   // Python tools (models.yml's assignments, now settable here)
-  { id: "dossier_title", side: "tools", tier: "light", label: "Dossier title", blurb: "Naming a research dossier." },
-  { id: "topic_tags", side: "tools", tier: "light", label: "Topic tags", blurb: "Tagging a topic or an entry." },
-  { id: "search_queries", side: "tools", tier: "light", label: "Search queries", blurb: "Turning a question into web searches." },
-  { id: "git_descriptions", side: "tools", tier: "light", label: "Git descriptions", blurb: "Describing a repository's activity for the signals." },
-  { id: "moc_evocations", side: "tools", tier: "light", label: "MOC evocations", blurb: "The line a map-of-content says about each note." },
-  { id: "translation", side: "tools", tier: "light", label: "Translation", blurb: "Translating a note or a fiche." },
-  { id: "dream_analysis", side: "tools", tier: "light", label: "Dream analysis", blurb: "Reading a dream written in the journal." },
-  { id: "dossier_synthesis", side: "tools", tier: "standard", label: "Dossier synthesis", blurb: "Writing up a research dossier." },
-  { id: "gap_analysis", side: "tools", tier: "standard", label: "Gap analysis", blurb: "What a dossier still lacks." },
-  { id: "briefing_synthesis", side: "tools", tier: "standard", label: "Briefing synthesis", blurb: "The briefing's overview." },
-  { id: "briefing_content", side: "tools", tier: "standard", label: "Briefing content", blurb: "The briefing's sections." },
-  { id: "media_curation", side: "tools", tier: "standard", label: "Media curation", blurb: "Choosing and describing media for a dossier." },
-  { id: "signal_report", side: "tools", tier: "standard", label: "Signal report", blurb: "The periodic report over the signals." },
-  { id: "resonance_queries", side: "tools", tier: "standard", label: "Résonance queries", blurb: "What to look for when linking an entry to the garden." },
-  { id: "resonance_filtering", side: "tools", tier: "standard", label: "Résonance filtering", blurb: "Keeping the links that resonate." },
-  { id: "book_classification", side: "tools", tier: "standard", label: "Book classification", blurb: "Front matter, body, back matter — which chapters count." },
-  { id: "research_orchestration", side: "tools", tier: "standard", label: "Research orchestration", blurb: "Driving a deep-research run." },
+  { id: "dossier_title", side: "tools", tier: "light", label: "Dossier title", blurb: "Naming a research dossier.", needs: "tools/pipelines/research_tracks" },
+  { id: "topic_tags", side: "tools", tier: "light", label: "Topic tags", blurb: "Tagging a topic or an entry.", needs: "tools/pipelines/research_tracks" },
+  { id: "search_queries", side: "tools", tier: "light", label: "Search queries", blurb: "Turning a question into web searches.", needs: "tools/tracks" },
+  { id: "git_descriptions", side: "tools", tier: "light", label: "Git descriptions", blurb: "Describing a repository's activity for the signals.", needs: "tools/signals" },
+  { id: "moc_evocations", side: "tools", tier: "light", label: "MOC evocations", blurb: "The line a map-of-content says about each note.", needs: "tools/garden" },
+  { id: "translation", side: "tools", tier: "light", label: "Translation", blurb: "Translating a note or a fiche.", needs: "tools/garden" },
+  { id: "dream_analysis", side: "tools", tier: "light", label: "Dream analysis", blurb: "Reading a dream written in the journal.", needs: "tools/garden" },
+  { id: "dossier_synthesis", side: "tools", tier: "standard", label: "Dossier synthesis", blurb: "Writing up a research dossier.", needs: "tools/pipelines/research_tracks" },
+  { id: "gap_analysis", side: "tools", tier: "standard", label: "Gap analysis", blurb: "What a dossier still lacks.", needs: "tools/pipelines/research_tracks" },
+  { id: "briefing_synthesis", side: "tools", tier: "standard", label: "Briefing synthesis", blurb: "The briefing's overview.", needs: "tools/pipelines/research_tracks" },
+  { id: "briefing_content", side: "tools", tier: "standard", label: "Briefing content", blurb: "The briefing's sections.", needs: "tools/pipelines/research_tracks" },
+  { id: "media_curation", side: "tools", tier: "standard", label: "Media curation", blurb: "Choosing and describing media for a dossier.", needs: "tools/pipelines/research_tracks" },
+  { id: "signal_report", side: "tools", tier: "standard", label: "Signal report", blurb: "The periodic report over the signals.", needs: "tools/pipelines/research_tracks" },
+  { id: "resonance_queries", side: "tools", tier: "standard", label: "Résonance queries", blurb: "What to look for when linking an entry to the garden.", needs: "tools/pipelines/research_tracks" },
+  { id: "resonance_filtering", side: "tools", tier: "standard", label: "Résonance filtering", blurb: "Keeping the links that resonate.", needs: "tools/pipelines/research_tracks" },
+  { id: "book_classification", side: "tools", tier: "standard", label: "Book classification", blurb: "Front matter, body, back matter — which chapters count.", needs: "tools/calibre" },
+  { id: "research_orchestration", side: "tools", tier: "standard", label: "Research orchestration", blurb: "Driving a deep-research run.", needs: "tools/pipelines/research_tracks" },
 ];
 
 export function isAncillaryInvocation(id: string): boolean {
   return ANCILLARY_INVOCATIONS.some((i) => i.id === id);
+}
+
+/** The repo root this server was installed from — `/app` in the image. */
+const REPO_ROOT = join(import.meta.dir, "..", "..", "..");
+
+/**
+ * The invocations this instance can actually run. Everything the server does
+ * itself, plus the tools whose code shipped with it. A household that has no
+ * `tools/pipelines/research_tracks` has no dossier synthesis to configure, and
+ * saying otherwise in the admin is an offer it cannot keep. Cached: the
+ * filesystem does not change under a running server.
+ */
+let presentCache: AncillaryInvocation[] | null = null;
+export function presentInvocations(): AncillaryInvocation[] {
+  presentCache ??= ANCILLARY_INVOCATIONS.filter(
+    (i) => !i.needs || existsSync(join(REPO_ROOT, i.needs)),
+  );
+  return presentCache;
 }
 
 // ── The range: which model each tier deserves, per provider ──────────────────
@@ -160,14 +191,14 @@ export function recommendedModel(invocation: string): string | null {
 /** Does any function have advice to take? The admin screen asks before it
  *  offers the button. */
 export function hasRecommendations(): boolean {
-  return ANCILLARY_INVOCATIONS.some((i) => recommendedModel(i.id) !== null);
+  return presentInvocations().some((i) => recommendedModel(i.id) !== null);
 }
 
 /** Pin every invocation that has a preferred model. Returns the ids actually changed, so
  *  the admin is told what moved rather than just "saved". */
 export function applyRecommendedPins(): string[] {
   const changed: string[] = [];
-  for (const inv of ANCILLARY_INVOCATIONS) {
+  for (const inv of presentInvocations()) {
     const want = recommendedModel(inv.id);
     if (!want || pinnedModel(inv.id) === want) continue;
     setPinnedModel(inv.id, want, "auto");
@@ -277,7 +308,7 @@ export function pinSource(invocation: string): "admin" | "auto" | null {
  */
 export function refreshAutoPins(): string[] {
   const changed: string[] = [];
-  for (const inv of ANCILLARY_INVOCATIONS) {
+  for (const inv of presentInvocations()) {
     if (pinSource(inv.id) !== "auto") continue;
     const want = recommendedModel(inv.id);
     if (!want || pinnedModel(inv.id) === want) continue;
@@ -293,7 +324,7 @@ export function setHouseholdAncillaryModel(modelId: string): void {
 
 /** Every invocation with what it currently resolves to, for the admin. */
 export function ancillaryTable(): Array<AncillaryInvocation & { pinned: string | null; effective: string }> {
-  return ANCILLARY_INVOCATIONS.map((i) => ({ ...i, pinned: pinnedModel(i.id), effective: ancillaryModel(i.id) }));
+  return presentInvocations().map((i) => ({ ...i, pinned: pinnedModel(i.id), effective: ancillaryModel(i.id) }));
 }
 
 // ── The call ─────────────────────────────────────────────────────────────────

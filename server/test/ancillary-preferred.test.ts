@@ -7,11 +7,14 @@
  */
 
 import { beforeEach, expect, test } from "bun:test";
+import { existsSync } from "fs";
+import { join } from "path";
 
 const db = (await import("../src/db")).default;
 const {
   ANCILLARY_INVOCATIONS, PREFERRED, ancillaryModel, applyRecommendedPins, hasRecommendations,
-  pinSource, recommendedModel, refreshAutoPins, seedAncillaryPinsOnce, setPinnedModel,
+  pinSource, presentInvocations, recommendedModel, refreshAutoPins, seedAncillaryPinsOnce,
+  setPinnedModel,
 } = await import("../src/services/ancillary");
 
 const NO_KEYS = {
@@ -29,9 +32,32 @@ function household(defaultModel: string, keys: Record<string, string | null>) {
 const firstOfTier = (tier: string, side: "server" | "tools" = "server") =>
   ANCILLARY_INVOCATIONS.find((i) => i.tier === tier && i.side === side)!.id;
 
+/** A tools invocation this checkout actually has — the private ones are
+ *  symlinks that do not resolve in a worktree, exactly as in a hosted image. */
+const toolsHere = (tier: string) =>
+  presentInvocations().find((i) => i.side === "tools" && i.tier === tier)?.id ?? null;
+
 beforeEach(() => {
   db.run(`DELETE FROM ancillary_models`);
   db.run(`UPDATE households SET ancillary_pins_seeded = 0 WHERE id = 'default'`);
+});
+
+test("only the functions whose code is installed are offered", () => {
+  const present = presentInvocations();
+  // Everything the server runs itself is always there.
+  for (const inv of ANCILLARY_INVOCATIONS.filter((i) => i.side === "server")) {
+    expect(present.map((p) => p.id)).toContain(inv.id);
+  }
+  // A tools invocation is offered only when its directory is on disk. Thirteen
+  // of the tools/* entries are symlinks into the private repo that the image's
+  // dockerignore drops, so a hosted household has far fewer than the catalogue.
+  for (const inv of present) {
+    if (inv.needs) expect(existsSync(join(import.meta.dir, "..", "..", inv.needs))).toBe(true);
+  }
+  // Every tools invocation declares what serves it, or the filter cannot work.
+  for (const inv of ANCILLARY_INVOCATIONS.filter((i) => i.side === "tools")) {
+    expect(`${inv.id}: ${inv.needs ?? "UNDECLARED"}`).toBe(`${inv.id}: ${inv.needs}`);
+  }
 });
 
 test("every preferred model is really in the roster", () => {
@@ -80,9 +106,12 @@ test("a household with only Z.ai is advised nothing and keeps its own model", ()
 
 test("Anthropic alone covers the tools too, and leaves Opus to the chat", () => {
   household("claude-opus-4-8", { api_key: "k-ant" });
-  expect(seedAncillaryPinsOnce().length).toBe(ANCILLARY_INVOCATIONS.length);
+  // Every invocation this instance actually has — which is fewer than the
+  // catalogue wherever the private tools were not installed.
+  expect(seedAncillaryPinsOnce().length).toBe(presentInvocations().length);
   expect(ancillaryModel(firstOfTier("light"))).toBe("claude-haiku-4-5-20251001");
-  expect(ancillaryModel("dossier_title")).toBe("claude-haiku-4-5-20251001"); // a tools one
+  const tool = toolsHere("light");
+  if (tool) expect(ancillaryModel(tool)).toBe("claude-haiku-4-5-20251001");
   expect(ancillaryModel("flashcards")).toBe("claude-sonnet-4-6");
 });
 
@@ -91,7 +120,8 @@ test("Scaleway wins over Anthropic for the server's own work", () => {
   expect(recommendedModel("conversation_summary")).toBe("gpt-oss-120b");
   // …while a tools invocation still takes the Anthropic entry, since that is
   // the only one its dispatcher can reach.
-  expect(recommendedModel("dossier_title")).toBe("claude-haiku-4-5-20251001");
+  const tool = toolsHere("light");
+  if (tool) expect(recommendedModel(tool)).toBe("claude-haiku-4-5-20251001");
 });
 
 test("a pin this file chose follows the advice; a pin a person chose does not", () => {

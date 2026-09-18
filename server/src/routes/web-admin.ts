@@ -36,8 +36,8 @@ import {
 } from "../services/calibreLibraries";
 import { listModels, getModel, addModel, removeModel, setModelCtx, configuredProviders, type Model } from "../services/models";
 import {
-  ANCILLARY_INVOCATIONS, ancillaryTable, applyRecommendedPins, hasRecommendations,
-  householdAncillaryModel, recommendedModel, setHouseholdAncillaryModel, setPinnedModel,
+  ancillaryTable, applyRecommendedPins, hasRecommendations, householdAncillaryModel,
+  presentInvocations, recommendedModel, setHouseholdAncillaryModel, setPinnedModel,
 } from "../services/ancillary";
 import {
   accessMatrix,
@@ -322,10 +322,11 @@ function ancillaryCard(lang: string): string {
           ? `<span class="hint">${escape(t(lang, "ancillary.advised_is", getModel(advised)?.name ?? advised))}</span>`
           : "")
       : `<span class="hint">${escape(t(lang, "ancillary.runs_on", effective))}</span>`;
-    // The tools dispatch their own turns through Anthropic, so a pin to any
-    // other provider fails there rather than here. Say it on the rows it bites:
-    // the ones with no Anthropic model to advise.
-    const toolsWarning = r.side === "tools" && !advised
+    // A tools invocation is dispatched by the tool, which builds its own
+    // Anthropic client around whatever id it is given. That is a fact about
+    // the function, not about this household's keys, so it is said on every
+    // such row rather than only where it currently bites.
+    const toolsWarning = r.side === "tools"
       ? `<span class="hint" style="color:var(--caution)">${escape(t(lang, "ancillary.tools_anthropic_only"))}</span>`
       : "";
     return `
@@ -896,7 +897,7 @@ web.post("/ancillary-models", async (c) => {
   const callable = (id: string) => { const m = getModel(id); return !!m && ok.has(m.provider); };
   const hh = String(form.ancillary_model ?? "").trim();
   if (hh && callable(hh)) setHouseholdAncillaryModel(hh);
-  for (const inv of ANCILLARY_INVOCATIONS) {
+  for (const inv of presentInvocations()) {
     const v = String(form[`pin:${inv.id}`] ?? "").trim();
     const model = v && callable(v) ? v : null;
     // Saving the form as it stands is agreement, not a decision: a value that
