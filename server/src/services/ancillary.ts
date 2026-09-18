@@ -116,14 +116,34 @@ export const ANCILLARY_RANGE: Record<string, Record<AncillaryTier, string>> = {
   },
 };
 
-/** The provider whose range this household should use: the one its chat model
- *  speaks, when that provider has a range and a key. Null when none applies —
- *  a household on Ollama alone, or on a model added by hand. */
+/** A provider's range, but only when the household holds its key AND every
+ *  model it names is really in the roster. A range pointing at models someone
+ *  deleted is not a range: it would resolve to nothing and quietly leave each
+ *  function on the chat model, which is the thing being fixed. */
+function rangeFor(provider: string | undefined | null): Record<AncillaryTier, string> | null {
+  if (!provider) return null;
+  const range = ANCILLARY_RANGE[provider];
+  if (!range || !configuredProviders().has(provider)) return null;
+  const complete = (["light", "standard", "heavy"] as AncillaryTier[]).every((t) => usable(range[t]));
+  return complete ? range : null;
+}
+
+/** Ordered fallbacks when the chat's own provider has no usable range.
+ *  Anthropic first: it is the only one the Python tools can call, so it is the
+ *  only range that can cover all the invocations rather than the server's. */
+const RANGE_PREFERENCE = ["anthropic", "scaleway", "mistral", "openai", "zai"];
+
+/**
+ * Which range this household runs its ancillary work on. The provider its chat
+ * model speaks comes first — a Scaleway household stays on Scaleway — and
+ * anything else is a fallback for the households whose chat model was added by
+ * hand or whose seeded roster was pruned. Null when none applies: Ollama only,
+ * or no key at all, and those keep the household-model behaviour.
+ */
 export function rangeProvider(): string | null {
-  const chat = getModel(householdDefaultModel());
-  const provider = chat?.provider;
-  if (!provider || !ANCILLARY_RANGE[provider]) return null;
-  return configuredProviders().has(provider) ? provider : null;
+  const chat = getModel(householdDefaultModel())?.provider;
+  if (rangeFor(chat)) return chat!;
+  return RANGE_PREFERENCE.find((p) => rangeFor(p)) ?? null;
 }
 
 /**
@@ -149,7 +169,7 @@ export function recommendedModel(invocation: string): string | null {
   const inv = ANCILLARY_INVOCATIONS.find((i) => i.id === invocation);
   const provider = rangeProvider();
   if (!inv || !provider || !rangeCovers(inv, provider)) return null;
-  return usable(ANCILLARY_RANGE[provider]![inv.tier]);
+  return usable(rangeFor(provider)![inv.tier]);
 }
 
 /** Pin every invocation the range covers. Returns the ids actually changed, so

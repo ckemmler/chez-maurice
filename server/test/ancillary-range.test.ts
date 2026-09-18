@@ -75,6 +75,26 @@ test("a Scaleway household lands on Scaleway's range, tier by tier", () => {
   expect(ancillaryModel(byTier("light"))).toBe("mistral-small-3.2-24b-instruct-2506");
 });
 
+test("a range whose models were pruned falls through to one that is there", () => {
+  // Home's own shape: the chat runs on a hand-added mistral-medium-latest, and
+  // the two seeded Mistral models are long gone from the roster — so the
+  // Mistral range names nothing, and Anthropic's is the one that can serve.
+  db.run(`DELETE FROM models WHERE id IN ('mistral-small-latest', 'mistral-large-latest')`);
+  db.run(
+    `INSERT OR IGNORE INTO models (id, name, tier, vendor, ctx, discovered, descr, sort, provider)
+     VALUES ('mistral-medium-latest', 'Mistral Medium', 'cloud', 'Mistral', 128, 0, 'Hand-added.', 22, 'mistral')`,
+  );
+  household("mistral-medium-latest", {
+    api_key: "k-ant", mistral_api_key: "k-mis", zai_api_key: "k-zai", scaleway_api_key: null, openai_api_key: null,
+  });
+  expect(rangeProvider()).toBe("anthropic");
+  expect(recommendedModel("signal_parse")).toBe("claude-haiku-4-5-20251001");
+  // Without any Anthropic key it would take the next range that is complete.
+  db.run(`UPDATE households SET api_key = NULL WHERE id = 'default'`);
+  expect(rangeProvider()).toBe("zai");
+  expect(recommendedModel("signal_parse")).toBe("glm-5.3-flash");
+});
+
 test("no key, no range: nothing is pinned and nothing is marked done", () => {
   household("mistral-small-3.2-24b-instruct-2506", {
     scaleway_api_key: null, api_key: null, openai_api_key: null, mistral_api_key: null, zai_api_key: null,
