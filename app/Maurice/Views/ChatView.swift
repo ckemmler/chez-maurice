@@ -974,16 +974,14 @@ private struct MessageRow: View {
         if let blocks = message.data, !blocks.isEmpty {
             DataCardStack(blocks: blocks)
         }
-        if showTurnCost, let usage = message.usage {
-            TurnUsageFooter(usage: usage)
-        }
     }
 
     private var userDisplayName: String? {
         authorParticipant?.display_name ?? session.activeDeviceUser?.displayName
     }
 
-    /// Copy + regenerate controls shown under each Maurice response.
+    /// Copy + regenerate controls shown under each Maurice response, plus the
+    /// cost coin when the meter is on.
     @ViewBuilder
     private var actionRow: some View {
         HStack(spacing: 18) {
@@ -999,6 +997,7 @@ private struct MessageRow: View {
                     .font(.system(size: 12))
             }
             .buttonStyle(.plain)
+            .foregroundStyle(didCopy ? .green : theme.inkMute)
             .help(session.localized("chat.copy"))
 
             if isLast {
@@ -1012,8 +1011,12 @@ private struct MessageRow: View {
                 .disabled(chat.isStreaming)
                 .help(session.localized("chat.regenerate"))
             }
+
+            if showTurnCost, let usage = message.usage {
+                TurnUsageFooter(usage: usage)
+            }
         }
-        .foregroundStyle(didCopy ? .green : theme.inkMute)
+        .foregroundStyle(theme.inkMute)
         .padding(.top, 4)
     }
 
@@ -1204,18 +1207,20 @@ enum ServerDictationPref {
     static let key = "maurice.allowServerDictation"
 }
 
-/// What a turn cost, under the reply. Hidden unless the user turns it on in
-/// Settings — most people don't want a meter on every message, but when you're
-/// tuning prompt caching you need to see whether it's biting, per turn, without
-/// leaving the app.
+/// What a turn cost, in the action row under the reply. Hidden unless the user
+/// turns it on in Settings — most people don't want a meter on every message,
+/// but when you're tuning prompt caching you need to see whether it's biting,
+/// per turn, without leaving the app.
 ///
-/// Collapsed it answers the two questions that matter: what did this cost, and
-/// how much of the prompt came from cache. Expanded it shows the token split and
-/// what the same turn would have cost uncached.
+/// At rest it's a coin and a figure: what did this cost, and how much of the
+/// prompt came from cache. Tapping the coin drops down the token split and what
+/// the same turn would have cost uncached — a popover rather than a disclosure
+/// so the transcript doesn't reflow, and pinned to popover on the phone too,
+/// where SwiftUI would otherwise turn it into a sheet.
 struct TurnUsageFooter: View {
     @Environment(\.mauriceTheme) private var theme
     let usage: TurnUsage
-    @State private var expanded = false
+    @State private var showDetails = false
 
     /// Dollars at a resolution that doesn't round a real cost to "$0.00".
     private func money(_ v: Double) -> String {
@@ -1242,33 +1247,42 @@ struct TurnUsageFooter: View {
     }
 
     var body: some View {
-        DisclosureGroup(isExpanded: $expanded) {
-            VStack(alignment: .leading, spacing: 3) {
-                row("Prompt", "\(tokens(usage.input)) fresh · \(tokens(usage.cache_read)) from cache · \(tokens(usage.cache_write)) written")
-                row("Reply", "\(tokens(usage.output)) tok")
-                row("Rounds", "\(usage.rounds)")
-                if let uncached = usage.cost_uncached, usage.cost != nil {
-                    row("Without cache", money(uncached))
-                    if let saved = usage.saved, saved > 0 {
-                        row("Saved", money(saved))
-                    }
-                }
-                row("Model", usage.model)
-            }
-            .padding(.top, 5)
-            .frame(maxWidth: .infinity, alignment: .leading)
+        Button {
+            showDetails.toggle()
         } label: {
             HStack(spacing: 5) {
-                Image(systemName: "gauge.with.needle").font(.system(size: 10))
+                Image(systemName: "dollarsign.circle").font(.system(size: 12))
                 Text(headline).font(.system(size: 11, weight: .medium))
                 if let cacheLabel {
                     Text("·").font(.system(size: 11))
                     Text(cacheLabel).font(.system(size: 11))
                 }
             }
-            .foregroundStyle(theme.inkMute)
         }
-        .padding(.top, 2)
+        .buttonStyle(.plain)
+        .help("What this turn cost")
+        .popover(isPresented: $showDetails, arrowEdge: .top) {
+            details
+                .padding(14)
+                .frame(minWidth: 260, alignment: .leading)
+                .presentationCompactAdaptation(.popover)
+        }
+    }
+
+    private var details: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            row("Cost", headline)
+            row("Prompt", "\(tokens(usage.input)) fresh · \(tokens(usage.cache_read)) from cache · \(tokens(usage.cache_write)) written")
+            row("Reply", "\(tokens(usage.output)) tok")
+            row("Rounds", "\(usage.rounds)")
+            if let uncached = usage.cost_uncached, usage.cost != nil {
+                row("Without cache", money(uncached))
+                if let saved = usage.saved, saved > 0 {
+                    row("Saved", money(saved))
+                }
+            }
+            row("Model", usage.model)
+        }
     }
 
     @ViewBuilder
