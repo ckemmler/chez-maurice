@@ -39,6 +39,21 @@ export function replaceAccess(userId: string, modelIds: string[]): void {
   }
 }
 
+/** A member's stored rows for models outside `shown` — the ones the admin grid
+ *  leaves out because their provider has no key. The grid saves by replacing a
+ *  member's whole list, so these have to be carried over: a key taken out for
+ *  an afternoon must not quietly wipe who was allowed those models. */
+export function accessOutside(userId: string, shown: Set<string>): string[] {
+  if (isAdmin(userId)) return [];
+  return (
+    db
+      .query(`SELECT model_id FROM user_model_access WHERE user_id = ?`)
+      .all(userId) as Array<{ model_id: string }>
+  )
+    .map((r) => r.model_id)
+    .filter((id) => !shown.has(id));
+}
+
 export function setAccess(userId: string, modelId: string, on: boolean): void {
   if (isAdmin(userId)) return;
   if (on) {

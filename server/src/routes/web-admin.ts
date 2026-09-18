@@ -39,6 +39,7 @@ import { ANCILLARY_INVOCATIONS, ancillaryTable, householdAncillaryModel, setHous
 import {
   accessMatrix,
   accessCounts,
+  accessOutside,
   replaceAccess,
   seedDefaultAccess,
   allowedModelIds,
@@ -81,6 +82,21 @@ const PROVIDER_LOGO: Record<string, string> = {
   gemini: "gemini.svg",
   google: "gemini.svg",
 };
+
+/** How a provider is named on screen — the cards of section 03 and the note
+ *  under the access grid say it the same way. */
+const PROVIDER_TITLE: Record<string, string> = {
+  anthropic: "Anthropic",
+  openai: "OpenAI",
+  mistral: "Mistral",
+  zai: "Z.ai",
+  scaleway: "Scaleway",
+  ollama: "Ollama",
+};
+
+function providerTitle(provider: string): string {
+  return PROVIDER_TITLE[provider] ?? provider;
+}
 
 /** The header chip for a provider: its real logo, else a glyph fallback. */
 function headIcon(provider: string, fallback: string): string {
@@ -518,6 +534,14 @@ web.get("/dashboard", async (c) => {
   const models = listModels();
   const cloud = models.filter((m) => m.tier === "cloud");
   const local = models.filter((m) => m.tier === "local");
+  // A model whose provider has no key cannot be called by anyone: the apps
+  // never list it (`availableModels`), and a turn on it would fail. It is
+  // therefore not an access decision — it is a key decision, taken in the
+  // provider cards of section 03 — so the grid below leaves it out rather than
+  // offering a tick box that promises a member something they never get.
+  const keyed = configuredProviders();
+  const callable = (m: Model) => keyed.has(m.provider);
+  const unkeyed = models.filter((m) => !callable(m));
   const counts = accessCounts();
   const access = accessMatrix();
   const memberCount = users.length;
@@ -554,7 +578,10 @@ web.get("/dashboard", async (c) => {
           <input type="number" name="ctx" value="${m.ctx}" min="1" max="10000" class="mono ctx-in" onchange="this.form.submit()" />k
         </form>
         ${m.tier === "local" ? `<span class="mono-num" style="width:60px">${m.ram ?? "?"} GB</span>` : ""}
-        <span class="mono-num" style="width:92px;color:${counts[m.id] ? "var(--ink)" : "var(--ink-mute)"}">${escape(t(lang, "models.can_use", counts[m.id] || 0, memberCount))}</span>
+        ${callable(m)
+          ? `<span class="mono-num" style="width:92px;color:${counts[m.id] ? "var(--ink)" : "var(--ink-mute)"}">${escape(t(lang, "models.can_use", counts[m.id] || 0, memberCount))}</span>`
+          // No key, so nobody can use it whatever the access table says.
+          : `<span class="mono-num" style="width:92px;color:var(--ink-mute)">${escape(t(lang, "settings.no_key"))}</span>`}
         ${removable ? `<form method="POST" action="/admin/models/${encodeURIComponent(m.id)}/delete" class="inline" onsubmit="return confirm('${escape(t(lang, "models.confirm_remove", m.name))}')"><button class="trash" title="${escape(t(lang, "models.remove_title"))}">🗑</button></form>` : `<span style="width:21px"></span>`}
       </div>
     </div>`;
@@ -571,11 +598,19 @@ web.get("/dashboard", async (c) => {
   // ── 04 matrix ──
   const colW = 88, nameW = 208;
   const groups = [
-    { tier: "cloud", label: t(lang, "access.group_cloud"), items: cloud },
-    { tier: "local", label: t(lang, "access.group_local"), items: local },
+    { tier: "cloud", label: t(lang, "access.group_cloud"), items: cloud.filter(callable) },
+    { tier: "local", label: t(lang, "access.group_local"), items: local.filter(callable) },
   ];
   const minW = nameW + groups.reduce((a, g) => a + g.items.length * colW, 0);
-  const matrix = `
+  // Say what is missing and why, rather than let a provider's models vanish
+  // without a word. Names the providers, because that is where the fix is.
+  const unkeyedNote = unkeyed.length
+    ? `<div class="hint" style="padding:14px 18px 0">${escape(t(lang, "access.hidden_no_key", unkeyed.length,
+        [...new Set(unkeyed.map((m) => providerTitle(m.provider)))].join(", ")))}</div>`
+    : "";
+  const matrix = groups.every((g) => !g.items.length)
+    ? `${unkeyedNote}<div class="empty">${escape(t(lang, "access.nothing_callable"))}</div>`
+    : `${unkeyedNote}`.concat(`
     <div class="matrix-scroll"><div style="min-width:${minW}px">
       <div class="mx-grouphead">
         <div class="mx-namecol"></div>
@@ -607,7 +642,7 @@ web.get("/dashboard", async (c) => {
           }).join("")).join("")}
         </div>`;
       }).join("")}
-    </div></div>`;
+    </div></div>`);
 
   const modelOptions = models.map((m) =>
     `<option value="${escape(m.id)}" ${m.id === household.default_model ? "selected" : ""}>${escape(m.name)}${m.tier === "local" ? " · " + escape(t(lang, "settings.on_device")) : ""}</option>`).join("");
@@ -945,9 +980,14 @@ web.post("/access", async (c) => {
     const member = p.slice(0, i), model = p.slice(i + 1);
     (byMember[member] ||= []).push(model);
   }
+  // The grid only shows models the household can call, and saving replaces a
+  // member's whole list — so rows for the others are carried over rather than
+  // wiped by a save they were never part of.
+  const ok = configuredProviders();
+  const shown = new Set(listModels().filter((m) => ok.has(m.provider)).map((m) => m.id));
   for (const u of listUsers()) {
     if (u.role === "admin") continue;
-    replaceAccess(u.id, byMember[u.id] || []);
+    replaceAccess(u.id, [...(byMember[u.id] || []), ...accessOutside(u.id, shown)]);
   }
   return c.redirect("/admin/dashboard?msg=access_saved#sec-access");
 });
@@ -1041,7 +1081,10 @@ web.get("/users/:id/edit", (c) => {
   const admin = user.role === "admin";
   const allowed = new Set(allowedModelIds(user.id));
   const expOK = canUseExperimental(user.id);
-  const models = listModels();
+  // Same rule as the dashboard grid: only models the household can actually
+  // call are offered, so a tick here means what it says.
+  const keyed = configuredProviders();
+  const models = listModels().filter((m) => keyed.has(m.provider));
   const cloud = models.filter((m) => m.tier === "cloud");
   const local = models.filter((m) => m.tier === "local");
 
@@ -1200,7 +1243,10 @@ web.post("/users/:id/edit", async (c) => {
   else if (/^\d{4,6}$/.test(pinVal)) updates.pin = pinVal;
   await updateUser(id, updates);
   if (user.role !== "admin") {
-    replaceAccess(id, fd.getAll("access").map(String));
+    // Only callable models were offered, so keep the rest of this member's rows.
+    const ok = configuredProviders();
+    const shown = new Set(listModels().filter((m) => ok.has(m.provider)).map((m) => m.id));
+    replaceAccess(id, [...fd.getAll("access").map(String), ...accessOutside(id, shown)]);
     setExperimentalAccess(id, fd.get("experimental_tools") != null);
     const newRole = String(fd.get("role") || "standard") === "guest" ? "guest" : "standard";
     setUserRole(id, newRole);
