@@ -104,6 +104,7 @@ SITE"
   echo "      owner: <who>"
   echo "      since: $(date +%Y-%m-%d)"
   echo "      deploy: scripts/deploy.sh $HOST"
+  echo "      restart: ops/household.sh restart $HOST $name"
   echo "      admin: ssh://$HOST:$port"
   ;;
 

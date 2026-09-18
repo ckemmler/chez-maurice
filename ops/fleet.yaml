@@ -8,6 +8,11 @@
 # shell command, run from the repo root, that puts the current checkout live
 # there. The tower runs it on `d`; without one the instance is read-only.
 #
+# restart: is the other half — the command that bounces the instance on the
+# code it already has, for when it is wedged rather than out of date. The
+# tower runs it on `R`, asks y/n first like a deploy, and then waits for the
+# instance to answer again.
+#
 # admin: is where that instance's console is, which is never its public name —
 # the console refuses anything that is not a loopback request. A household on
 # a shared host publishes it on one loopback port there (ops/household.sh
@@ -28,8 +33,10 @@ instances:
     owner: Candide
     since: 2026-03-01
     insecure: true
-    # launchd runs the checkout itself: deploying is restarting on main.
+    # launchd runs the checkout itself: deploying is restarting on main, so
+    # the two commands are the same line here.
     deploy: scripts/service.sh restart api
+    restart: scripts/service.sh restart api
   # The two below live on the Scaleway host maurice-fleet (BASIC2-A2C-8G,
   # fr-par-1, since 2026-09-17) behind its one Caddy — one compose project each,
   # infra/container/MULTI-HOUSEHOLD.md. One deploy line serves every household
@@ -40,10 +47,12 @@ instances:
     owner: Aline
     since: 2026-09-01
     deploy: MAURICE_REGISTRY=rg.fr-par.scw.cloud/maurice scripts/deploy.sh maurice-fleet
+    restart: ops/household.sh restart maurice-fleet aline
     admin: ssh://maurice-fleet:3101
   - name: review
     url: https://review.chezmaurice.eu
     owner: Candide (App Review account)
     since: 2026-09-12
     deploy: MAURICE_REGISTRY=rg.fr-par.scw.cloud/maurice scripts/deploy.sh maurice-fleet
+    restart: ops/household.sh restart maurice-fleet review
     admin: ssh://maurice-fleet:3102

@@ -8,14 +8,17 @@
  *   ops/tower.ts --once       one frame to stdout, no keys (a pipe, a test)
  *
  *   ↑/↓ or j/k  select      r  probe now       d  deploy the selected one
- *   l           toggle log  q  quit            a  its admin console
- *                                              (a deploy asks y/n first)
+ *   l           toggle log  q  quit            R  restart it
+ *   a           its admin console              (both ask y/n first)
  *
- * Deploying runs the instance's `deploy:` command from fleet.yaml, from the
- * repo root, one at a time, its output in the log pane. No daemon, no port:
- * this runs where the operator is (a terminal on the Mac mini, or an ssh
- * session into it), which is the whole of its access control. Tokens are read
- * from ~/.maurice/ops/fleet-tokens, never shown.
+ * `d` and `R` each run one line of fleet.yaml from the repo root, one at a
+ * time, with the output in the log pane: `deploy:` puts the current checkout
+ * live there, `restart:` only bounces what already runs — the thing to reach
+ * for when an instance is wedged rather than out of date. Either way the tower
+ * then waits for that instance to answer again and says how long it took. No
+ * daemon, no port: this runs where the operator is (a terminal on the Mac
+ * mini, or an ssh session into it), which is the whole of its access control.
+ * Tokens are read from ~/.maurice/ops/fleet-tokens, never shown.
  *
  * `a` opens the selected instance's admin console. A console never answers a
  * public name, so for a hosted household that means holding an ssh forward
@@ -23,8 +26,8 @@
  * the browser at it. The forwards belong to this program and die with it.
  */
 import {
-  REPO_DIR, adminDoor, age, isBad, loopbackAnswers, noDoorReason, openInBrowser, probeAll,
-  readFleet, table, waitForLoopback, type Instance, type Row,
+  REPO_DIR, adminDoor, age, isBad, loopbackAnswers, noDoorReason, openInBrowser, probe, probeAll,
+  readFleet, readTokens, table, waitForLoopback, type Instance, type Row,
 } from "./fleet";
 
 const argv = process.argv.slice(2);
@@ -39,8 +42,11 @@ let rows: Row[] = [];
 const history = new Map<string, (number | null)[]>(); // errors_1h per poll, null = unreachable
 let selected = 0;
 let showLog = true;
-let confirming: Instance | null = null;
-let deploying: { name: string; startedAt: number } | null = null;
+/** The two things this program can do TO an instance, each a line in fleet.yaml. */
+type Action = "deploy" | "restart";
+const commandFor = (i: Instance, a: Action) => (a === "deploy" ? i.deploy : i.restart);
+let confirming: { instance: Instance; action: Action } | null = null;
+let running: { name: string; action: Action; startedAt: number } | null = null;
 let lastPoll = 0;
 let nextPoll = Date.now();
 let log: string[] = [];
@@ -77,16 +83,21 @@ async function poll() {
   render();
 }
 
-// ── Deploying ───────────────────────────────────────────────────
+// ── Deploying and restarting ────────────────────────────────────
+// Both are one line of fleet.yaml run from the repo root, one at a time, with
+// the output in the log pane. `deploy` puts the current checkout live there;
+// `restart` only bounces what is already running, which is the thing to reach
+// for when an instance is wedged rather than out of date.
 
-async function deploy(i: Instance) {
-  if (!i.deploy) { say(`${i.name}: no deploy command in fleet.yaml`); return; }
-  if (deploying) { say(`busy: ${deploying.name} is still deploying`); return; }
-  deploying = { name: i.name, startedAt: Date.now() };
+async function run(i: Instance, action: Action) {
+  const command = commandFor(i, action);
+  if (!command) { say(`${i.name}: no ${action} command in fleet.yaml`); return; }
+  if (running) { say(`busy: ${running.name} is still ${running.action}ing`); return; }
+  running = { name: i.name, action, startedAt: Date.now() };
   showLog = true;
-  say(`▶ ${i.name}: ${i.deploy}`);
+  say(`▶ ${i.name}: ${command}`);
   render();
-  const proc = Bun.spawn(["sh", "-c", i.deploy], { cwd: REPO_DIR, stdout: "pipe", stderr: "pipe" });
+  const proc = Bun.spawn(["sh", "-c", command], { cwd: REPO_DIR, stdout: "pipe", stderr: "pipe" });
   const pump = async (stream: ReadableStream<Uint8Array>, prefix: string) => {
     let rest = "";
     for await (const chunk of stream) {
@@ -100,10 +111,32 @@ async function deploy(i: Instance) {
   };
   await Promise.all([pump(proc.stdout, "  "), pump(proc.stderr, "  ! ")]);
   const code = await proc.exited;
-  const took = age(Math.floor((Date.now() - deploying.startedAt) / 1000)) || "<1m";
-  say(code === 0 ? `✓ ${i.name} deployed in ${took}` : `✗ ${i.name}: exit ${code} after ${took}`);
-  deploying = null;
+  const took = age(Math.floor((Date.now() - running.startedAt) / 1000)) || "<1m";
+  const done = action === "deploy" ? "deployed" : "restarted";
+  say(code === 0 ? `✓ ${i.name} ${done} in ${took}` : `✗ ${i.name}: exit ${code} after ${took}`);
+  running = null;
+  // A command that says it succeeded is not the same as an instance answering
+  // again, and after a restart that difference is the whole question.
+  if (code === 0) await waitBackUp(i);
   await poll();
+}
+
+/** Poll one instance until it answers again, so the log says what happened. */
+async function waitBackUp(i: Instance, timeoutMs = 90_000) {
+  const token = readTokens()[i.name];
+  const until = Date.now() + timeoutMs;
+  const startedAt = Date.now();
+  while (Date.now() < until) {
+    const r = await probe(i, token);
+    if (r.reach === "up") {
+      const secs = Math.round((Date.now() - startedAt) / 1000);
+      say(`  ${i.name} answers again after ${secs}s${r.status === "ok" ? "" : ` (${r.status})`}`);
+      return;
+    }
+    await new Promise((res) => setTimeout(res, 2000));
+    render();
+  }
+  say(`  ! ${i.name} still not answering after ${Math.round(timeoutMs / 1000)}s — read its logs`);
 }
 
 // ── The admin console ───────────────────────────────────────────
@@ -218,7 +251,7 @@ function render() {
     if (r.reach === "down") line = red(line);
     else if (r.status !== "ok") line = yellow(line);
     else if (r.probe === "public") line = dim(line);
-    const marker = deploying?.name === r.name ? yellow("⟳") : i === selected ? "▸" : " ";
+    const marker = running?.name === r.name ? yellow("⟳") : i === selected ? "▸" : " ";
     const text = ` ${marker} ${line}  ${spark(r.name)}`;
     out.push(i === selected ? inverse(fit(text, cols)) : text);
   });
@@ -228,6 +261,7 @@ function render() {
   if (sel) {
     out.push(`${dim("url")} ${sel.url}   ${dim("owner")} ${sel.owner ?? "—"}   ${dim("since")} ${sel.since ?? "—"}`);
     out.push(`${dim("deploy")} ${sel.deploy ? sel.deploy : dim("none — read-only")}`);
+    out.push(`${dim("restart")} ${sel.restart ? sel.restart : dim("none — read-only")}`);
     const door = adminDoor(sel);
     const held = tunnels.has(sel.name) ? green("  ⇄ forward open") : "";
     out.push(`${dim("admin")} ${
@@ -239,9 +273,10 @@ function render() {
   out.push("");
 
   if (confirming) {
-    out.push(yellow(bold(`Deploy ${confirming.name} with "${confirming.deploy}"?  y / n`)));
+    const verb = confirming.action === "deploy" ? "Deploy" : "Restart";
+    out.push(yellow(bold(`${verb} ${confirming.instance.name} with "${commandFor(confirming.instance, confirming.action)}"?  y / n`)));
   } else {
-    out.push(dim("↑/↓ select   r probe now   a admin   d deploy   l log   q quit"));
+    out.push(dim("↑/↓ select   r probe now   a admin   d deploy   R restart   l log   q quit"));
   }
 
   if (showLog) {
@@ -267,12 +302,21 @@ function render() {
 
 // ── Keys ────────────────────────────────────────────────────────
 
+/** Put an action to the operator as a y/n, or say why it cannot be offered. */
+function ask(action: Action) {
+  const i = fleet[selected];
+  if (!i) return;
+  if (!commandFor(i, action)) { say(`${i.name}: no ${action} command in fleet.yaml`); return; }
+  if (running) { say(`busy: ${running.name} is still ${running.action}ing`); return; }
+  confirming = { instance: i, action };
+}
+
 function onKey(key: string) {
   if (confirming) {
-    const target = confirming;
+    const { instance, action } = confirming;
     confirming = null;
-    if (key === "y" || key === "Y") void deploy(target);
-    else say(`${target.name}: deploy cancelled`);
+    if (key === "y" || key === "Y") void run(instance, action);
+    else say(`${instance.name}: ${action} cancelled`);
     render();
     return;
   }
@@ -289,14 +333,8 @@ function onKey(key: string) {
       void openAdmin(i);
       break;
     }
-    case "d": {
-      const i = fleet[selected];
-      if (!i) break;
-      if (!i.deploy) { say(`${i.name}: no deploy command in fleet.yaml`); break; }
-      if (deploying) { say(`busy: ${deploying.name} is still deploying`); break; }
-      confirming = i;
-      break;
-    }
+    case "d": ask("deploy"); break;
+    case "R": ask("restart"); break;
   }
   render();
 }

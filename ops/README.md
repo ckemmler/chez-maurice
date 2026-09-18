@@ -35,21 +35,24 @@ is outside the repo on purpose.
 Hand-kept. One entry per instance: `name`, `url`, `owner`, `since`,
 `insecure: true` for a self-signed local certificate, `deploy:` — the
 shell command, run from the repo root, that puts the current checkout live
-there — and `admin:`, the door to its admin console (below). Adding an
+there — `restart:`, the command that bounces it on the code it already has,
+and `admin:`, the door to its admin console (below). Adding an
 instance to the fleet is adding a line; handing it over is removing the line
 and revoking its health token in its admin. There is no discovery and there
 will not be.
 
-Three shapes of `deploy:` exist today, one per kind of instance:
+Three shapes exist today, one per kind of instance. `deploy:` moves an
+instance onto the current checkout; `restart:` only bounces it on the code it
+already has:
 
-| Instance runs as | `deploy:` |
-|---|---|
-| launchd from the checkout (home, review) | `scripts/service.sh restart api`, `launchctl kickstart -k gui/501/com.maurice.household.<name>` |
-| a local container started by hand (aline, `:13003`) | `ops/recreate-container.sh <container>` — builds the image, recreates the container with its own env, ports, volumes and log rotation, waits for `/healthz` (`--dry-run` shows the run line) |
-| a remote host (Scaleway, to come) | `scripts/deploy.sh <ssh-host>` |
+| Instance runs as | `deploy:` | `restart:` |
+|---|---|---|
+| launchd from the checkout (home) | `scripts/service.sh restart api` | the same line — deploying *is* restarting when launchd runs the checkout |
+| a household on a shared host (aline, review) | `MAURICE_REGISTRY=… scripts/deploy.sh <ssh-host>` — builds here, pushes to the registry, recreates every household there on the new image | `ops/household.sh restart <ssh-host> <name>` |
+| a local container started by hand | `ops/recreate-container.sh <container>` — builds the image, recreates the container with its own env, ports, volumes and log rotation, waits for `/healthz` (`--dry-run` shows the run line) | `docker restart <container>` |
 
-The end state is one shape — the container — which is when the tower's `d`
-means the same thing everywhere.
+The end state is one shape — the household on a shared host — which is when
+the tower's `d` and `R` mean the same thing everywhere.
 
 ## The one command: `fleet-status.ts`
 
@@ -81,10 +84,17 @@ ops/tower.ts --once         # one frame, no keys — for a pipe or a test
 
 The same table, refreshed every 30 s, an error sparkline per instance over
 the last 40 polls (a red dot is an unreachable poll), the selected instance's
-url / owner / deploy / admin lines, and a log pane. Keys: `↑/↓` select, `r`
-probe now, `a` open the selected instance's admin console (below), `d` deploy
-it (asks `y/n`, then streams the command's output into the log, one deploy at
-a time), `l` toggle the log, `q` quit.
+url / owner / deploy / restart / admin lines, and a log pane. Keys: `↑/↓`
+select, `r` probe now, `a` open the selected instance's admin console (below),
+`d` deploy it, `R` restart it, `l` toggle the log, `q` quit.
+
+`d` and `R` both ask `y/n`, run their line of `fleet.yaml` from the repo root
+one at a time, stream the output into the log, and then **wait for that
+instance to answer `/healthz` again**, saying how long it took — because a
+command that exits `0` and an instance that is back are not the same claim.
+Reach for `R` when an instance is wedged rather than out of date: it never
+touches the code it runs, so it cannot carry a half-finished checkout onto
+someone's household.
 
 It is a terminal program on purpose: no daemon, no port, no tunnel, no login
 page. Its access control is the shell it runs in — the Mac mini's, or an ssh

@@ -16,6 +16,8 @@ export type Instance = {
   name: string; url: string; owner?: string; since?: string; insecure?: boolean;
   /** Shell command, run from the repo root, that puts the current checkout live there. */
   deploy?: string;
+  /** Shell command, run from the repo root, that restarts it on the code it already has. */
+  restart?: string;
   /** Where that instance's admin console is: `ssh://<host>:<port>`, or an http(s) url. */
   admin?: string;
 };
