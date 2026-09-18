@@ -238,6 +238,7 @@
 "chat.switch_specialist" = "Switch specialist";
 "chat.stop" = "Stop";
 "chat.switch_model" = "Switch model";
+"chat.model_locked" = "Maurice Maurice always runs on this model.";
 
 /* Settings reorg + avatar */
 "settings.garden.title" = "Your garden";

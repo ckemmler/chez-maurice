@@ -238,6 +238,7 @@
 "chat.switch_specialist" = "Cambia specialista";
 "chat.stop" = "Ferma";
 "chat.switch_model" = "Cambia modello";
+"chat.model_locked" = "Maurice Maurice usa sempre questo modello.";
 
 /* Settings reorg + avatar */
 "settings.garden.title" = "Il tuo giardino";

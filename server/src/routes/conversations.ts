@@ -280,7 +280,9 @@ conversations.get("/:id/tool-families", async (c) => {
   if (!getConversation(id, userId)) return c.json({ error: "Not found" }, 404);
   // Determine the conversation's model tier so the "all"/none default matches.
   const maurice = getConversationMaurice(id);
-  const model = resolveUsableModel(userId, maurice?.model ?? null, householdDefaultModel());
+  const model = maurice?.builtin
+    ? maurice.model
+    : resolveUsableModel(userId, maurice?.model ?? null, householdDefaultModel());
   const isLocal = model ? getModel(model)?.tier === "local" : false;
   const resolved = resolveFamilies(id, isLocal, userId);
   const all = resolved === "all";

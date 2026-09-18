@@ -1,5 +1,6 @@
 import { Hono } from "hono";
 import { requireAuth } from "../middleware/auth";
+import { userLocale } from "../services/i18n";
 import {
   listMaurices,
   getMaurice,
@@ -7,6 +8,8 @@ import {
   createMaurice,
   updateMaurice,
   deleteMaurice,
+  builtinMaurice,
+  isBuiltinMaurice,
   type MauriceInput,
 } from "../services/maurices";
 
@@ -14,28 +17,34 @@ import {
 // edits, and deletes only the Maurices they made; nobody else in the household
 // sees them. Guests are the one exception: an admin can grant a guest access to
 // specific personas, surfaced through the persona's `users` access list.
+//
+// One persona is not stored at all: Maurice Maurice, the built-in specialist
+// of Maurice itself. He heads everyone's list (guests included), cannot be
+// edited or deleted, and his model is the server's choice (services/maurices.ts).
 
 const maurices = new Hono();
 
 maurices.use("/*", requireAuth);
 
-// GET /api/maurices — the caller's own Maurices (a guest sees instead the
-// personas an admin has explicitly granted them; the everyday Maurice, which is
-// not stored here, stays available to everyone).
+// GET /api/maurices — Maurice Maurice first, then the caller's own Maurices (a
+// guest sees instead the personas an admin has explicitly granted them; the
+// everyday Maurice, which is not stored here, stays available to everyone).
 maurices.get("/", (c) => {
   const uid = c.get("userId");
   const all = listMaurices();
-  if (c.get("userRole") === "guest") {
-    return c.json(all.filter((m) => m.users.includes(uid)));
-  }
-  return c.json(all.filter((m) => m.created_by === uid));
+  const own =
+    c.get("userRole") === "guest"
+      ? all.filter((m) => m.users.includes(uid))
+      : all.filter((m) => m.created_by === uid);
+  return c.json([builtinMaurice(userLocale(uid)), ...own]);
 });
 
 // GET /api/maurices/:id — only the creator (or a guest it's shared with).
 maurices.get("/:id", (c) => {
   const id = c.req.param("id");
-  const m = getMaurice(id);
-  if (!m || !canUseMaurice(id, c.get("userId"))) {
+  const uid = c.get("userId");
+  const m = getMaurice(id, userLocale(uid));
+  if (!m || !canUseMaurice(id, uid)) {
     return c.json({ error: "Not found" }, 404);
   }
   return c.json(m);
@@ -50,8 +59,12 @@ maurices.post("/", async (c) => {
   return c.json(res, 201);
 });
 
-// PATCH /api/maurices/:id — only the creator may edit.
+// PATCH /api/maurices/:id — only the creator may edit. Maurice Maurice has no
+// creator and no editable field, his model included.
 maurices.patch("/:id", async (c) => {
+  if (isBuiltinMaurice(c.req.param("id"))) {
+    return c.json({ error: "Maurice Maurice is built in and cannot be changed" }, 403);
+  }
   const existing = getMaurice(c.req.param("id"));
   if (!existing || existing.created_by !== c.get("userId")) {
     return c.json({ error: "Not found" }, 404);
@@ -68,6 +81,9 @@ maurices.patch("/:id", async (c) => {
 
 // DELETE /api/maurices/:id — only the creator may delete.
 maurices.delete("/:id", (c) => {
+  if (isBuiltinMaurice(c.req.param("id"))) {
+    return c.json({ error: "Maurice Maurice is built in and cannot be deleted" }, 403);
+  }
   const existing = getMaurice(c.req.param("id"));
   if (!existing || existing.created_by !== c.get("userId")) {
     return c.json({ error: "Not found" }, 404);

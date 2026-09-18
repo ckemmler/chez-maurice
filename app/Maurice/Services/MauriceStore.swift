@@ -26,9 +26,15 @@ struct Maurice: Identifiable, Equatable {
     var count: Int = 0
     /// allowed tool family ids; nil = inherit (all on cloud, none on-device)
     var toolFamilies: [String]? = nil
+    /// Maurice Maurice, the built-in specialist of Maurice: on everyone's list,
+    /// not editable, and his model is the server's choice — never switchable.
+    var builtin: Bool = false
 
     var id: String { rawId ?? "__everyday__" }
     var isEveryday: Bool { rawId == nil }
+    /// Whether the member may edit this Maurice at all (not the everyday one,
+    /// not the built-in one).
+    var isEditable: Bool { !isEveryday && !builtin }
     var paletteValue: HatPalette { HatPalette.by(palette) }
 
     /// The everyday Maurice — conversations with no chosen persona resolve to it.
@@ -61,7 +67,8 @@ struct Maurice: Identifiable, Equatable {
             contextItems: ctx,
             weight: d["weight"] as? Int ?? 0,
             count: d["count"] as? Int ?? 0,
-            toolFamilies: d["tool_families"] as? [String]
+            toolFamilies: d["tool_families"] as? [String],
+            builtin: d["builtin"] as? Bool ?? false
         )
     }
 }
@@ -168,6 +175,7 @@ final class MauriceStore {
     /// chats. The everyday Maurice stores it per-member; a persona stores it on
     /// the persona itself. No-op if the roster lacks the model.
     func setModel(_ modelId: String, for m: Maurice) async {
+        if m.builtin { return } // Maurice Maurice's model is the server's, locked.
         if m.isEveryday {
             guard let json = await request("PUT", "/api/models/everyday", body: ["id": modelId]) as? [String: Any]
             else { return }

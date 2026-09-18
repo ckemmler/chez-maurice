@@ -2301,7 +2301,24 @@ private struct ComposerBar: View {
     /// persona) and applies to this and subsequent chats. The leading dot is
     /// brand-tinted by provider.
     @ViewBuilder private var modelPill: some View {
-        if !maurices.models.isEmpty {
+        if currentMaurice.builtin {
+            // Maurice Maurice's model is the server's pick and cannot be
+            // switched: the pill names it, with a lock where the chevron goes.
+            let current = maurices.resolvedModel(for: currentMaurice)
+            HStack(spacing: 5) {
+                Circle().fill(ProviderStyle.fill(current?.provider ?? "anthropic")).frame(width: 7, height: 7)
+                Text(current?.name ?? "—")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(theme.ink)
+                    .lineLimit(1)
+                Image(systemName: "lock.fill")
+                    .font(.system(size: 8, weight: .semibold))
+                    .foregroundStyle(theme.inkMute)
+            }
+            .padding(.horizontal, 10).padding(.vertical, 6)
+            .glassControl(theme, in: Capsule(), fallbackFill: .clear)
+            .help(session.localized("chat.model_locked"))
+        } else if !maurices.models.isEmpty {
             let m = currentMaurice
             let current = maurices.resolvedModel(for: m)
             let provider = current?.provider ?? "anthropic"

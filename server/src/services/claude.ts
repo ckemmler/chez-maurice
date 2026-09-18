@@ -1027,14 +1027,18 @@ function trackedBooks(
   // else their best available. (No member → just persona/default.) For the
   // everyday Maurice (no persona) the "preference" is the member's own everyday
   // model — foyer-mates can each run a different LLM for it.
+  // Maurice Maurice's model is the server's pick (services/maurices.ts), not a
+  // preference: it is neither switchable nor subject to the member's allow-list.
   const preferred = maurice
     ? maurice.model
     : memberId
       ? getEverydayModel(memberId)
       : null;
-  const resolved = memberId
-    ? resolveUsableModel(memberId, preferred, config.defaultModel)
-    : resolveModelId(maurice?.model, config.defaultModel);
+  const resolved = maurice?.builtin
+    ? resolveModelId(maurice.model, config.defaultModel)
+    : memberId
+      ? resolveUsableModel(memberId, preferred, config.defaultModel)
+      : resolveModelId(maurice?.model, config.defaultModel);
   if (!resolved) {
     yield { type: "text_delta", text: t(userLang, "chat.no_model_access") };
     yield { type: "done", message_id: crypto.randomUUID() };

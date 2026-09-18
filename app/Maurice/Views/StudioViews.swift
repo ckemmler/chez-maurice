@@ -186,8 +186,8 @@ private struct PickerRow: View {
 
             Spacer(minLength: 6)
 
-            // The everyday Maurice can't be edited.
-            if !maurice.isEveryday {
+            // Neither the everyday Maurice nor Maurice Maurice can be edited.
+            if maurice.isEditable {
                 Button(action: onEdit) {
                     Image(systemName: "pencil").font(.system(size: 13))
                         .foregroundStyle(theme.inkMute)
@@ -254,17 +254,20 @@ struct StudioGreeting: View {
             }
             .fixedSize(horizontal: true, vertical: false)
 
-            Button { studio.openCreator(maurice, isEdit: true) } label: {
-                HStack(spacing: 6) {
-                    Image(systemName: "pencil").font(.system(size: 11))
-                    Text(L("studio.edit_maurice")).font(.system(size: 11, design: .monospaced))
+            // Maurice Maurice is built in: nothing to edit, the model included.
+            if maurice.isEditable {
+                Button { studio.openCreator(maurice, isEdit: true) } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "pencil").font(.system(size: 11))
+                        Text(L("studio.edit_maurice")).font(.system(size: 11, design: .monospaced))
+                    }
+                    .foregroundStyle(theme.inkMute)
+                    .padding(.horizontal, 12).padding(.vertical, 6)
+                    .overlay(Capsule().strokeBorder(theme.ruleHard, lineWidth: 0.5))
                 }
-                .foregroundStyle(theme.inkMute)
-                .padding(.horizontal, 12).padding(.vertical, 6)
-                .overlay(Capsule().strokeBorder(theme.ruleHard, lineWidth: 0.5))
+                .buttonStyle(.plain)
+                .padding(.top, 2)
             }
-            .buttonStyle(.plain)
-            .padding(.top, 2)
 
             Spacer()
         }
