@@ -13,7 +13,7 @@ import { resolveModelId, getModel } from "./models";
 import { resolveUsableModel, getEverydayModel } from "./modelAccess";
 import { ollamaTurn, OLLAMA_NUM_CTX, type OllamaToolCall } from "./ollama";
 import { openaiTurn, PROMPT_CACHE_KEY_PROVIDERS, type OpenAIToolCall } from "./openaiChat";
-import { resolveFamilies, toolInFamilies, canUseExperimental, isExperimentalTool } from "./toolFamilies";
+import { resolveFamilies, toolInFamilies, canUseExperimental, isExperimentalTool, familyTitles } from "./toolFamilies";
 import { t, userLocale } from "./i18n";
 import { newUsage, priceUsage, hasUsage, type TurnUsage } from "./pricing";
 import { verdict as budgetVerdict } from "./budget";
@@ -139,12 +139,11 @@ function timeReminder(): any {
   };
 }
 
-function buildSystemPrompt(userDisplayName: string, profileText?: string | null): string {
+function buildSystemPrompt(userDisplayName: string, images: boolean, profileText?: string | null): string {
   let prompt = `You are Maurice, a household AI assistant. You are talking to ${userDisplayName}.`;
   prompt += ` Be helpful, clear, and warm. Keep responses concise unless the user asks for depth.`;
   prompt += ` The user may share photos with you — describe what you see and answer any questions about them.`;
-  prompt += ` You have tools: a web_search tool for current information from the internet, and the household's personal tools (tasks, calendar, contacts, notes, health, books, and more). Use them when they help; prefer the personal tools for anything about ${userDisplayName}'s own data.`;
-  prompt += IMAGE_DIRECTIVES;
+  if (images) prompt += IMAGE_DIRECTIVES;
   prompt += TOOL_DATA_DIRECTIVE;
   if (profileText) {
     prompt += `\n\nAbout this user: ${profileText}`;
@@ -154,16 +153,29 @@ function buildSystemPrompt(userDisplayName: string, profileText?: string | null)
 
 // Shared-room prompt: Maurice is a summoned participant, not the medium. Human
 // turns arrive name-prefixed (see buildApiMessages), so he knows who said what.
-function buildRoomSystemPrompt(conversationId: string, summonerName: string): string {
+function buildRoomSystemPrompt(conversationId: string, summonerName: string, images: boolean): string {
   const names = getParticipants(conversationId).map((p) => p.display_name);
   let prompt = `You are Maurice, a household AI assistant, present in a shared room with: ${names.join(", ")}.`;
   prompt += ` Several people talk to each other here; each human message is prefixed with the speaker's name (e.g. "Alex: ..."). You are not the medium of their conversation — you are a participant they summon with @claude or @maurice.`;
   prompt += ` You were just summoned by ${summonerName}. Respond to the room. Address people by name when it helps; keep replies concise and warm.`;
   prompt += ` Anything loaded into this conversation's context — notes, books, past conversations, signals someone added — is shared with everyone in the room; treat it as common ground and discuss it openly with whoever asks, no matter who added it. Stay grounded in what was actually said and in that shared context, and don't invent things people didn't say.`;
-  prompt += ` You have a web_search tool and the household's personal tools (tasks, calendar, notes, health, books, and more); use them when they help the room.`;
-  prompt += IMAGE_DIRECTIVES;
+  if (images) prompt += IMAGE_DIRECTIVES;
   prompt += TOOL_DATA_DIRECTIVE;
   return prompt;
+}
+
+// What the model is actually holding this turn. The roster is only known once
+// the families are resolved and the MCP list filtered, so this is appended
+// there rather than written into the base prompt: a prompt that promises
+// "tasks, calendar, contacts, notes, health, books" to a member who was granted
+// none of them makes the model answer "I'll check your calendar" with nothing
+// to call — and, asked what tools it has, recite the promise instead of looking.
+function toolRosterNotice(toolNames: string[], web: boolean): string {
+  const names = [...(web ? ["Web search"] : []), ...familyTitles(toolNames)];
+  if (names.length === 0) {
+    return `\n\n## Your tools\nYou have no tools at all this turn: no web search, and none of the household's personal tools. Answer from what you know and from this conversation. Anything that would need a tool — the calendar, tasks, contacts, health data, the garden, the library — you cannot reach: say so plainly rather than guessing or describing a lookup you didn't make.`;
+  }
+  return `\n\n## Your tools\nThis turn you have exactly these, and nothing else: ${names.join(", ")}. Use them when they help, and prefer them over guessing for anything about the people here. Every other capability — whatever isn't in that list — is unavailable to you right now, whether or not it exists elsewhere in the household: if asked for it, say you don't have it here rather than pretending to look. When asked what you can do, answer from this list, not from what an assistant like you usually has.`;
 }
 
 // Anthropic tool definition for our self-hosted web search.
@@ -902,8 +914,8 @@ export async function* streamResponse(
   // In a room the summoner is whoever sent the @claude message (userDisplayName).
   let systemPrompt =
     countParticipants(conversationId) > 1
-      ? buildRoomSystemPrompt(conversationId, userDisplayName)
-      : buildSystemPrompt(userDisplayName, profileText);
+      ? buildRoomSystemPrompt(conversationId, userDisplayName, !!config.falApiKey)
+      : buildSystemPrompt(userDisplayName, !!config.falApiKey, profileText);
 
 /** One line per book loaded into the conversation, whatever its scope: the
  *  title and, above all, its calibre id — the loaded text carries no identity
@@ -1104,6 +1116,9 @@ function trackedBooks(
       mcpTools = [];
     }
   }
+
+  // Now that the roster is settled, tell the model what it really holds.
+  systemPrompt += toolRosterNotice(mcpTools.map((t) => t.name), wantsWeb && hasWebSearch());
 
   // Fit the conversation to the model's window. `ctx` is what the roster says
   // (k tokens, admin-editable); Ollama is additionally capped by what we ask

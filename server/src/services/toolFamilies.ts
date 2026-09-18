@@ -79,6 +79,14 @@ const META: Record<string, { title: string; icon: string; blurb: string }> = {
   corpus:   { title: "Corpus",     icon: "doc.text.magnifyingglass",       blurb: "Search your corpus." },
 };
 
+/** The human names of the families a concrete tool roster covers — what the
+ *  model is actually holding this turn, so the system prompt can say it instead
+ *  of promising a fixed list the member may never have been granted. */
+export function familyTitles(toolNames: string[]): string[] {
+  const ids = new Set(toolNames.map(familyOf));
+  return [...ids].map((id) => META[id]?.title ?? id).sort();
+}
+
 /** The raw MCP server prefix of a tool ("garden", "tasks", …) or "web". */
 function rawPrefix(toolName: string): string {
   const i = toolName.indexOf("__");
