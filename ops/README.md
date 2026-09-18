@@ -137,6 +137,15 @@ writes `server/build-info.json` (git-ignored) and `scripts/deploy.sh` and
 `scripts/container.sh build|up` call it, so an image always knows its commit.
 `MAURICE_VERSION`, `MAURICE_GIT_SHA`, `MAURICE_BUILT_AT` override everything.
 
+The trap that follows from that order, and it caught the home row on
+18 September 2026: `server/build-info.json` is written into the **checkout**,
+not into the image, and nothing removes it afterwards. A `scripts/deploy.sh`
+or `scripts/container.sh build` run on the mac leaves it behind, where it
+outranks git for every later launchd restart — so the table kept announcing
+the commit of the last image built here while the checkout had moved eleven
+commits on. When the home row looks stale after a restart, delete
+`server/build-info.json` and restart again; the next build writes it back.
+
 `schema_version` is the `PRAGMA user_version` stamped by `server/src/db.ts`
 (`SCHEMA_VERSION`). Bump it by hand with any migration that changes the
 schema; the fleet table then shows at a glance which instances still need to
