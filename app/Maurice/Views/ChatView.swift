@@ -2367,6 +2367,33 @@ private struct ComposerBar: View {
         .frame(width: 44, height: 44)
     }
 
+    /// What the Return key does. A room is a conversation between people first,
+    /// so Return posts to them — the gesture every chat app has taught — and
+    /// Maurice is summoned deliberately, with ⌘Return or the ➤ button. A 1:1 has
+    /// no-one else in it, so Return goes to Maurice as it always did.
+    private var returnAction: () -> Void {
+        chat.isRoom ? onPostBubble : onSend
+    }
+
+    /// 💬 — the room's default button. Filled with the member's accent and
+    /// haloed the way a default button is, so the eye lands on it before ➤;
+    /// an empty composer keeps it quiet rather than shouting at a blank field.
+    private var bubbleAvatar: some View {
+        let accent = session.activeDeviceUser?.color ?? .blue
+        return ZStack {
+            Circle().fill(canSend ? accent : Color.clear)
+            Image(systemName: canSend ? "bubble.left.fill" : "bubble.left")
+                .font(.system(size: 18, weight: .medium))
+                .foregroundStyle(canSend ? Color.white : theme.inkMute)
+        }
+        .frame(width: 44, height: 44)
+        .overlay {
+            Circle()
+                .strokeBorder(accent.opacity(canSend ? 0.30 : 0), lineWidth: 2)
+                .scaleEffect(1.16)
+        }
+    }
+
     /// While streaming, ➤ becomes a square ⏹ that cancels the generation.
     private var stopAvatar: some View {
         let accent = session.activeDeviceUser?.color ?? .blue
@@ -2423,7 +2450,7 @@ private struct ComposerBar: View {
                 // growing to ~10 lines before it scrolls.
                 TextField(session.localized("chat.composer.placeholder"),
                           text: $inputText, axis: .vertical)
-                    .onSubmit { submit(onSend) }
+                    .onSubmit { submit(returnAction) }
                     .textFieldStyle(.plain)
                 .font(.system(size: kBodyFont + 2))
                 .lineLimit(2...10)
@@ -2461,7 +2488,11 @@ private struct ComposerBar: View {
                         inputText.append("\n")
                         return .handled
                     }
-                    submit(onSend)
+                    // ⌘Return always summons Maurice: in a room it is the second
+                    // gesture, in a 1:1 it is what Return already does. Taking it
+                    // here rather than leaving it to the ➤ button's shortcut keeps
+                    // both keys decided in one place, while the field has focus.
+                    submit(press.modifiers.contains(.command) ? onSend : returnAction)
                     return .handled
                 }
                 #endif
@@ -2602,7 +2633,8 @@ private struct ComposerBar: View {
                     // Return sends, Shift-Return breaks the line — said once, in
                     // the row, while the field is still empty.
                     if inputText.isEmpty {
-                        Text(session.localized("chat.composer.hint"))
+                        Text(session.localized(chat.isRoom ? "chat.composer.hint_room"
+                                                           : "chat.composer.hint"))
                             .font(.system(size: 9.5, design: .monospaced))
                             .foregroundStyle(theme.inkMute)
                             .tracking(0.5)
@@ -2612,21 +2644,11 @@ private struct ComposerBar: View {
                     #endif
 
                     // The send row reads as a sentence:
-                    // 💬 no-one (group only) · 🎩 choose who · ➤ send to them.
+                    // 🎩 choose who · ➤ summon them · 💬 just say it to the room.
+                    // In a room 💬 is the default: it sits last, under the thumb
+                    // and at the end of the line, wears the accent, and is what
+                    // Return posts — ➤ keeps ⌘Return.
                     HStack(spacing: 8) {
-                        if chat.isRoom {
-                            Button { submit(onPostBubble) } label: {
-                                Image(systemName: "bubble.left")
-                                    .font(.system(size: 18, weight: .medium))
-                                    .foregroundStyle(canSend ? theme.inkSoft : theme.inkMute)
-                                    .frame(width: 44, height: 44)
-                            }
-                            .buttonStyle(.plain)
-                            .glassControl(theme, in: Circle(), fallbackFill: .clear)
-                            .disabled(!canSend)
-                            .help(session.localized("chat.post_humans"))
-                        }
-
                         if chat.isStreaming {
                             // ➤ has run into a square ⏹ — cancel the generation.
                             Button { chat.stop() } label: { stopAvatar }
@@ -2655,6 +2677,13 @@ private struct ComposerBar: View {
                             } label: { actionAvatar(sending: false) }
                             .buttonStyle(.plain)
                             .help(session.localized("chat.switch_specialist"))
+                        }
+
+                        if chat.isRoom {
+                            Button { submit(onPostBubble) } label: { bubbleAvatar }
+                            .buttonStyle(.plain)
+                            .disabled(!canSend)
+                            .help(session.localized("chat.post_humans"))
                         }
                     }
                 }

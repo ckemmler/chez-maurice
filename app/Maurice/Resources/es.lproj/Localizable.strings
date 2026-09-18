@@ -31,6 +31,7 @@
 "chat.new_conversation_hint" = "nueva conversación";
 "chat.composer.placeholder" = "Pregúntale algo a Maurice...";
 "chat.composer.hint" = "⏎ para enviar · ⇧⏎ para salto de línea";
+"chat.composer.hint_room" = "⏎ a la sala · ⌘⏎ para Maurice · ⇧⏎ salto de línea";
 "chat.fallback_name" = "Tú";
 "sidebar.settings" = "Ajustes";
 "settings.title" = "Ajustes";

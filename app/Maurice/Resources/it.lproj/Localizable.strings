@@ -31,6 +31,7 @@
 "chat.new_conversation_hint" = "nuova conversazione";
 "chat.composer.placeholder" = "Chiedi qualcosa a Maurice...";
 "chat.composer.hint" = "⏎ per inviare · ⇧⏎ per andare a capo";
+"chat.composer.hint_room" = "⏎ alla stanza · ⌘⏎ per Maurice · ⇧⏎ a capo";
 "chat.fallback_name" = "Tu";
 "sidebar.settings" = "Impostazioni";
 "settings.title" = "Impostazioni";

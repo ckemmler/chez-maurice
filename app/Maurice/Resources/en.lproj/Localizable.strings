@@ -31,6 +31,7 @@
 "chat.new_conversation_hint" = "new conversation";
 "chat.composer.placeholder" = "Ask Maurice something...";
 "chat.composer.hint" = "⏎ to send · ⇧⏎ for newline";
+"chat.composer.hint_room" = "⏎ to the room · ⌘⏎ for Maurice · ⇧⏎ for newline";
 "chat.fallback_name" = "You";
 "sidebar.settings" = "Settings";
 "settings.title" = "Settings";

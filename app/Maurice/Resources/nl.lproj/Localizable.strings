@@ -31,6 +31,7 @@
 "chat.new_conversation_hint" = "nieuw gesprek";
 "chat.composer.placeholder" = "Vraag Maurice iets...";
 "chat.composer.hint" = "⏎ om te versturen · ⇧⏎ voor nieuwe regel";
+"chat.composer.hint_room" = "⏎ naar de kamer · ⌘⏎ voor Maurice · ⇧⏎ nieuwe regel";
 "chat.fallback_name" = "Jij";
 "sidebar.settings" = "Instellingen";
 "settings.title" = "Instellingen";
