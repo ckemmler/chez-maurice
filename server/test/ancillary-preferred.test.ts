@@ -23,7 +23,12 @@ const NO_KEYS = {
 
 function household(defaultModel: string, keys: Record<string, string | null>) {
   db.run(`INSERT OR IGNORE INTO households (id, name) VALUES ('default', 'Home')`);
-  db.run(`UPDATE households SET default_model = ? WHERE id = 'default'`, [defaultModel]);
+  // The ancillary default too: another suite in this run may have moved it,
+  // and what an unpinned invocation falls back to is part of what is tested.
+  db.run(
+    `UPDATE households SET default_model = ?, ancillary_model = ? WHERE id = 'default'`,
+    [defaultModel, defaultModel],
+  );
   for (const [col, value] of Object.entries({ ...NO_KEYS, ...keys })) {
     db.run(`UPDATE households SET ${col} = ? WHERE id = 'default'`, [value]);
   }
@@ -71,13 +76,24 @@ test("every preferred model is really in the roster", () => {
   }
 });
 
-test("no flagship is preferred, and no Z.ai model is preferred at all", () => {
+test("neither Z.ai nor Anthropic is ever preferred", () => {
   const all = Object.values(PREFERRED).flat();
   // Z.ai ships only large models: GLM 5.3 and its Flash are both the size this
-  // is meant to avoid, so neither belongs in any tier.
+  // is meant to avoid.
   expect(all.filter((id) => id.startsWith("glm-"))).toEqual([]);
-  expect(all).not.toContain("claude-opus-4-8");
+  // Anthropic is out by decision, not by size: American and dear, for work
+  // that a small European model does as well.
+  expect(all.filter((id) => id.startsWith("claude-"))).toEqual([]);
   expect(PREFERRED.light[0]).toBe("mistral-small-3.2-24b-instruct-2506");
+});
+
+test("nothing is advised for a function that dispatches its own turn", () => {
+  household("glm-5.3-flash", { scaleway_api_key: "k-scw" });
+  const own = ANCILLARY_INVOCATIONS.filter((i) => i.ownDispatch);
+  expect(own.length).toBeGreaterThan(0);
+  for (const inv of own) expect(recommendedModel(inv.id)).toBe(null);
+  // …while the ones that ask the server for their turn are advised normally.
+  expect(recommendedModel("moc_evocations")).toBe("mistral-small-3.2-24b-instruct-2506");
 });
 
 test("Aline's shape: a GLM chat with a Scaleway key advises Scaleway", () => {
@@ -86,11 +102,12 @@ test("Aline's shape: a GLM chat with a Scaleway key advises Scaleway", () => {
   expect(recommendedModel(firstOfTier("light"))).toBe("mistral-small-3.2-24b-instruct-2506");
   expect(recommendedModel("conversation_summary")).toBe("gpt-oss-120b");
   expect(recommendedModel("flashcards")).toBe("qwen3.5-397b-a17b");
-  // The tools dispatch through Anthropic themselves and she has no key there.
-  expect(recommendedModel(firstOfTier("light", "tools"))).toBe(null);
+  // The garden tool asks the server for its turn, so it is advised too.
+  expect(recommendedModel("moc_evocations")).toBe("mistral-small-3.2-24b-instruct-2506");
 
   const seeded = seedAncillaryPinsOnce();
-  expect(seeded.sort()).toEqual(ANCILLARY_INVOCATIONS.filter((i) => i.side === "server").map((i) => i.id).sort());
+  const advisable = presentInvocations().filter((i) => !i.ownDispatch).map((i) => i.id);
+  expect(seeded.sort()).toEqual(advisable.sort());
   expect(ancillaryModel("conversation_summary")).toBe("gpt-oss-120b");
 });
 
@@ -104,24 +121,14 @@ test("a household with only Z.ai is advised nothing and keeps its own model", ()
   expect(ancillaryModel("conversation_summary")).toBe("glm-5.3-flash");
 });
 
-test("Anthropic alone covers the tools too, and leaves Opus to the chat", () => {
+test("an Anthropic-only household is advised nothing, and is told why", () => {
+  // Home's shape after 18 September: an Anthropic key and no small model
+  // anywhere. Nothing is advised rather than reaching for Claude, and the
+  // functions stay on the household model until a Scaleway key arrives.
   household("claude-opus-4-8", { api_key: "k-ant" });
-  // Every invocation this instance actually has — which is fewer than the
-  // catalogue wherever the private tools were not installed.
-  expect(seedAncillaryPinsOnce().length).toBe(presentInvocations().length);
-  expect(ancillaryModel(firstOfTier("light"))).toBe("claude-haiku-4-5-20251001");
-  const tool = toolsHere("light");
-  if (tool) expect(ancillaryModel(tool)).toBe("claude-haiku-4-5-20251001");
-  expect(ancillaryModel("flashcards")).toBe("claude-sonnet-4-6");
-});
-
-test("Scaleway wins over Anthropic for the server's own work", () => {
-  household("claude-opus-4-8", { api_key: "k-ant", scaleway_api_key: "k-scw" });
-  expect(recommendedModel("conversation_summary")).toBe("gpt-oss-120b");
-  // …while a tools invocation still takes the Anthropic entry, since that is
-  // the only one its dispatcher can reach.
-  const tool = toolsHere("light");
-  if (tool) expect(recommendedModel(tool)).toBe("claude-haiku-4-5-20251001");
+  expect(hasRecommendations()).toBe(false);
+  expect(recommendedModel("conversation_summary")).toBe(null);
+  expect(ancillaryModel("conversation_summary")).toBe("claude-opus-4-8");
 });
 
 test("a pin this file chose follows the advice; a pin a person chose does not", () => {

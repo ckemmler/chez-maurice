@@ -54,6 +54,16 @@ export interface AncillaryInvocation {
    * admin to choose a model for something that will never run.
    */
   needs?: string;
+  /**
+   * True while the tool still runs its own turn rather than asking the server
+   * for one. The research pipelines are the case: they choose a provider from
+   * their own settings (research_tracks/providers/base.py), so a model id from
+   * here is only half the story and advising one from another provider would
+   * have that id sent to whatever provider their config names. Nothing is
+   * advised for these; they stay on the household model until they are
+   * converted to the server's turn endpoint like the rest.
+   */
+  ownDispatch?: boolean;
 }
 
 export const ANCILLARY_INVOCATIONS: AncillaryInvocation[] = [
@@ -69,23 +79,20 @@ export const ANCILLARY_INVOCATIONS: AncillaryInvocation[] = [
   { id: "signal_nutrition", side: "server", tier: "standard", label: "Meal estimation",
     blurb: "A meal signal with its protein and calorie estimate." },
   // Python tools (models.yml's assignments, now settable here)
-  { id: "dossier_title", side: "tools", tier: "light", label: "Dossier title", blurb: "Naming a research dossier.", needs: "tools/pipelines/research_tracks" },
-  { id: "topic_tags", side: "tools", tier: "light", label: "Topic tags", blurb: "Tagging a topic or an entry.", needs: "tools/pipelines/research_tracks" },
-  { id: "search_queries", side: "tools", tier: "light", label: "Search queries", blurb: "Turning a question into web searches.", needs: "tools/tracks" },
+  { id: "dossier_title", side: "tools", tier: "light", label: "Dossier title", blurb: "Naming a research dossier.", needs: "tools/pipelines/research_tracks", ownDispatch: true },
+  { id: "topic_tags", side: "tools", tier: "light", label: "Topic tags", blurb: "Tagging a topic or an entry.", needs: "tools/pipelines/research_tracks", ownDispatch: true },
+  { id: "search_queries", side: "tools", tier: "light", label: "Search queries", blurb: "Turning a question into web searches.", needs: "tools/tracks", ownDispatch: true },
   { id: "git_descriptions", side: "tools", tier: "light", label: "Git descriptions", blurb: "Describing a repository's activity for the signals.", needs: "tools/signals" },
   { id: "moc_evocations", side: "tools", tier: "light", label: "MOC evocations", blurb: "The line a map-of-content says about each note.", needs: "tools/garden" },
-  { id: "translation", side: "tools", tier: "light", label: "Translation", blurb: "Translating a note or a fiche.", needs: "tools/garden" },
   { id: "dream_analysis", side: "tools", tier: "light", label: "Dream analysis", blurb: "Reading a dream written in the journal.", needs: "tools/garden" },
-  { id: "dossier_synthesis", side: "tools", tier: "standard", label: "Dossier synthesis", blurb: "Writing up a research dossier.", needs: "tools/pipelines/research_tracks" },
-  { id: "gap_analysis", side: "tools", tier: "standard", label: "Gap analysis", blurb: "What a dossier still lacks.", needs: "tools/pipelines/research_tracks" },
-  { id: "briefing_synthesis", side: "tools", tier: "standard", label: "Briefing synthesis", blurb: "The briefing's overview.", needs: "tools/pipelines/research_tracks" },
-  { id: "briefing_content", side: "tools", tier: "standard", label: "Briefing content", blurb: "The briefing's sections.", needs: "tools/pipelines/research_tracks" },
-  { id: "media_curation", side: "tools", tier: "standard", label: "Media curation", blurb: "Choosing and describing media for a dossier.", needs: "tools/pipelines/research_tracks" },
-  { id: "signal_report", side: "tools", tier: "standard", label: "Signal report", blurb: "The periodic report over the signals.", needs: "tools/pipelines/research_tracks" },
-  { id: "resonance_queries", side: "tools", tier: "standard", label: "Résonance queries", blurb: "What to look for when linking an entry to the garden.", needs: "tools/pipelines/research_tracks" },
-  { id: "resonance_filtering", side: "tools", tier: "standard", label: "Résonance filtering", blurb: "Keeping the links that resonate.", needs: "tools/pipelines/research_tracks" },
+  { id: "dossier_synthesis", side: "tools", tier: "standard", label: "Dossier synthesis", blurb: "Writing up a research dossier.", needs: "tools/pipelines/research_tracks", ownDispatch: true },
+  { id: "gap_analysis", side: "tools", tier: "standard", label: "Gap analysis", blurb: "What a dossier still lacks.", needs: "tools/pipelines/research_tracks", ownDispatch: true },
+  { id: "briefing_content", side: "tools", tier: "standard", label: "Briefing content", blurb: "The briefing's sections.", needs: "tools/pipelines/research_tracks", ownDispatch: true },
+  { id: "media_curation", side: "tools", tier: "standard", label: "Media curation", blurb: "Choosing and describing media for a dossier.", needs: "tools/pipelines/research_tracks", ownDispatch: true },
+  { id: "signal_report", side: "tools", tier: "standard", label: "Signal report", blurb: "The periodic report over the signals.", needs: "tools/pipelines/research_tracks", ownDispatch: true },
+  { id: "resonance_queries", side: "tools", tier: "standard", label: "Résonance queries", blurb: "What to look for when linking an entry to the garden.", needs: "tools/pipelines/research_tracks", ownDispatch: true },
+  { id: "resonance_filtering", side: "tools", tier: "standard", label: "Résonance filtering", blurb: "Keeping the links that resonate.", needs: "tools/pipelines/research_tracks", ownDispatch: true },
   { id: "book_classification", side: "tools", tier: "standard", label: "Book classification", blurb: "Front matter, body, back matter — which chapters count.", needs: "tools/calibre" },
-  { id: "research_orchestration", side: "tools", tier: "standard", label: "Research orchestration", blurb: "Driving a deep-research run.", needs: "tools/pipelines/research_tracks" },
 ];
 
 export function isAncillaryInvocation(id: string): boolean {
@@ -110,23 +117,27 @@ export function presentInvocations(): AncillaryInvocation[] {
   return presentCache;
 }
 
-// ── The range: which model each tier deserves, per provider ──────────────────
+// ── Preferred models: what each tier deserves ────────────────────────────────
 // Left alone, every one of the invocations above ran on the household's chat
 // model, because that is what the ancillary default was backfilled from. That
-// is the wrong economics: naming a dossier or tagging a topic on Opus, GLM 5.3
-// or Qwen 397B costs a flagship's price for a sentence, and is no better at it.
+// is the wrong economics: naming a dossier or tagging a topic on a flagship
+// costs a flagship's output price for one sentence and is no better at it.
 //
-// So each tier has a list of PREFERRED models, best first, and an invocation
+// So each tier has a list of preferred models, best first, and an invocation
 // takes the first one its household can actually call. A list rather than a
 // range per provider, because the question is "what should summarise a
-// conversation here", not "which provider does this household belong to": a
-// household with a Scaleway key gets Mistral Small 3.2 for its one-liners even
-// though its chat runs on GLM, which is the case this started from.
+// conversation here", not "which provider does this household belong to".
 //
-// Only providers that ship something genuinely small are listed. Z.ai is not:
-// GLM 5.3 and its Flash are both large, and a dossier title on either is the
-// thing being avoided — a household with only a Z.ai key gets no advice and
-// keeps its household model.
+// Who is in, and who is not:
+//  - **Scaleway** leads every tier. European, served from Paris, and cheap
+//    where it matters.
+//  - **Mistral** follows, for a household that has that key and not the other.
+//  - **Z.ai** is absent: GLM 5.3 and its Flash are both large models, and a
+//    dossier title on either is the thing being avoided.
+//  - **Anthropic and OpenAI are absent by decision, not by size** (18 September
+//    2026): American, and dear for work a small European model does as well.
+//    A household whose only keys are those is advised nothing and keeps its
+//    own model, and the admin screen says which key would change that.
 //
 // `applyRecommendedPins` writes the choices into the pins table, where the
 // admin sees and overrides every one of them. Written into the table rather
@@ -141,51 +152,39 @@ export const PREFERRED: Record<AncillaryTier, string[]> = {
   // A sentence, a title, three tags. The cheapest capable model wins.
   light: [
     "mistral-small-3.2-24b-instruct-2506", // scaleway, reads images too
-    "claude-haiku-4-5-20251001",           // anthropic
-    "gpt-4o-mini",                         // openai
     "mistral-small-latest",                // mistral
   ],
   // A paragraph of prose: summaries, syntheses, briefings. Output tokens are
   // what these spend, so the order follows the output price.
   standard: [
-    "gpt-oss-120b",                        // scaleway
-    "claude-sonnet-4-6",                   // anthropic
-    "gpt-4o",                              // openai
+    "gpt-oss-120b",                        // scaleway — OpenAI's weights, Paris
     "mistral-small-latest",                // mistral
   ],
   // The few that genuinely reason — flashcards today, and nothing else.
   heavy: [
     "qwen3.5-397b-a17b",                   // scaleway
-    "claude-sonnet-4-6",                   // anthropic; Opus stays for the chat
-    "gpt-4o",                              // openai
     "mistral-large-latest",                // mistral
   ],
 };
 
 /**
- * The providers the Python side can actually reach. An invocation that runs
- * `side: "tools"` is dispatched by the tools themselves, and every one of them
- * builds an `anthropic.Anthropic` client around the id this table hands it
- * (maurice-tools, ~15 files) — they read the model name from here but not the
- * provider. Advising such an invocation a Scaleway or GLM id would send that
- * id to api.anthropic.com and fail there, so for those only Anthropic models
- * are offered; a household without an Anthropic key keeps its household model
- * for them, until the tools learn to call the server for their turns.
+ * Since 18 September 2026 a `side: "tools"` invocation is no different: the
+ * tools ask the server for their turn (src/routes/ancillary.ts) rather than
+ * building an Anthropic client around the id they were given, so every
+ * provider the server can dispatch is available to them too. The list below is
+ * the household's whole answer, for both sides.
  */
-const TOOLS_CAN_CALL = new Set(["anthropic"]);
-
-function callableHere(inv: AncillaryInvocation, id: string): boolean {
+function callableHere(id: string): boolean {
   const m = getModel(id);
-  if (!m || !configuredProviders().has(m.provider)) return false;
-  return inv.side === "server" || TOOLS_CAN_CALL.has(m.provider);
+  return !!m && configuredProviders().has(m.provider);
 }
 
 /** What an invocation should run on, before any pin: the first preferred model
  *  of its tier this household can call. Null when it can call none of them. */
 export function recommendedModel(invocation: string): string | null {
   const inv = ANCILLARY_INVOCATIONS.find((i) => i.id === invocation);
-  if (!inv) return null;
-  return PREFERRED[inv.tier].find((id) => callableHere(inv, id)) ?? null;
+  if (!inv || inv.ownDispatch) return null;
+  return PREFERRED[inv.tier].find(callableHere) ?? null;
 }
 
 /** Does any function have advice to take? The admin screen asks before it

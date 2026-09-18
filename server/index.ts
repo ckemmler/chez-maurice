@@ -55,6 +55,7 @@ import models from "./src/routes/models";
 import toolFamilies from "./src/routes/toolFamilies";
 import { adminExists, getUser, getUserByUsername, householdName, householdInfo } from "./src/services/users";
 import { refreshAutoPins, seedAncillaryPinsOnce } from "./src/services/ancillary";
+import ancillaryRoute from "./src/routes/ancillary";
 import { dataDir } from "./src/db";
 import { imagesDir } from "./src/services/images";
 import { avatarsDir } from "./src/services/avatars";
@@ -291,6 +292,11 @@ app.route("/api/admin", admin);
 app.route("/admin", webAdmin);
 app.route("/login", webLogin);
 app.route("/api/v1/gardens", gardens);
+// Loopback-only: the turn endpoint the Python tools use instead of holding a
+// provider key of their own (src/routes/ancillary.ts). Mounted outside
+// /api/v1/* on purpose — that prefix requires an authenticated member, and a
+// tool beside the database is not one; its boundary is the machine.
+app.route("/api/ancillary", ancillaryRoute);
 app.route("/api/v1/garden-tools", gardenTools);
 
 // ── Shared garden on the web ─────────────────────────────────────

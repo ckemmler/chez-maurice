@@ -65,3 +65,108 @@ def _from_yaml(invocation: str) -> str | None:
 def resolve_model(invocation: str, fallback: str = "claude-sonnet-4-5-20250929") -> str:
     """Admin's choice first, then models.yml, then the caller's fallback."""
     return _from_admin(invocation) or _from_yaml(invocation) or fallback
+
+
+# ---------------------------------------------------------------------------
+# Running a turn
+# ---------------------------------------------------------------------------
+# Resolving a model was only half a promise. Every tool then built its own
+# `anthropic.Anthropic` client around the id it got back, so a household that
+# had chosen a Scaleway or Mistral model saw that id sent to api.anthropic.com
+# and refused there — and a household with no Anthropic key could not run these
+# functions at all, whatever the admin had chosen for them.
+#
+# `complete()` hands the turn to the server instead, which knows the provider,
+# the key and the base URL, and dispatches through the same backends the chat
+# uses (server/src/routes/ancillary.ts). The tools keep no key and no SDK. That
+# route answers loopback only, which is where these tools run: beside the
+# database they already read directly.
+
+
+class AncillaryUnavailable(RuntimeError):
+    """The server did not run the turn. The caller decides what to do."""
+
+
+def _server_bases() -> list[str]:
+    """Where this household's server might be listening, best first.
+
+    The scheme is not a constant: the Mac install serves TLS from its own
+    certificate, while a container is plain HTTP behind Caddy. Rather than ask
+    every caller to know which, try both on loopback and keep the one that
+    answers. `MAURICE_API_BASE` settles it for an unusual install.
+    """
+    base = os.environ.get("MAURICE_API_BASE")
+    if base:
+        return [base.rstrip("/")]
+    port = os.environ.get("PORT") or "3001"
+    return [f"https://127.0.0.1:{port}", f"http://127.0.0.1:{port}"]
+
+
+_server_base_cache: str | None = None
+
+
+def complete(
+    invocation: str,
+    prompt: str,
+    *,
+    system: str | None = None,
+    max_tokens: int = 1024,
+    temperature: float | None = None,
+    timeout: float = 120.0,
+) -> str:
+    """Run one ancillary turn on whatever model the admin chose for it.
+
+    Returns the text. Raises AncillaryUnavailable when the server is not there
+    or refuses — never falls back to a provider of its own, because a silent
+    fallback is how these tools ended up pinned to one vendor to begin with.
+    """
+    global _server_base_cache
+    import json
+    import ssl
+    import urllib.error
+    import urllib.request
+
+    payload: dict[str, object] = {
+        "invocation": invocation,
+        "prompt": prompt,
+        "max_tokens": max_tokens,
+    }
+    if system is not None:
+        payload["system"] = system
+    if temperature is not None:
+        payload["temperature"] = temperature
+
+    # Loopback to a server whose certificate is its own: verifying it would
+    # mean trusting a name we already know is this machine.
+    loopback_tls = ssl.create_default_context()
+    loopback_tls.check_hostname = False
+    loopback_tls.verify_mode = ssl.CERT_NONE
+
+    bases = [_server_base_cache] if _server_base_cache else _server_bases()
+    last: Exception | None = None
+    for base in bases:
+        req = urllib.request.Request(
+            f"{base}/api/ancillary",
+            data=json.dumps(payload).encode(),
+            # Host says loopback because that is what this is; the server
+            # refuses anything else on this route.
+            headers={"Content-Type": "application/json", "Host": "localhost"},
+            method="POST",
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=timeout, context=loopback_tls) as resp:
+                body = json.loads(resp.read().decode())
+            _server_base_cache = base
+            break
+        except urllib.error.HTTPError as exc:  # it answered, with a refusal
+            detail = exc.read().decode(errors="replace")[:200]
+            raise AncillaryUnavailable(f"{invocation}: server said {exc.code} — {detail}") from exc
+        except OSError as exc:  # not there, wrong scheme, socket gone
+            last = exc
+    else:
+        raise AncillaryUnavailable(f"{invocation}: no server on loopback ({last})")
+
+    text = (body or {}).get("text")
+    if not isinstance(text, str) or not text.strip():
+        raise AncillaryUnavailable(f"{invocation}: server returned no text")
+    return text.strip()

@@ -28,6 +28,7 @@ import db from "../db";
 import { getAppDir } from "../../lib/appDir";
 import { layout, escape } from "./web-admin-html";
 import { createApiToken, listApiTokens, revokeApiToken } from "../middleware/auth";
+import { isLoopbackRequest } from "../middleware/loopback";
 import {
   setDefaultLibrary,
   getDefaultLibrary,
@@ -257,14 +258,10 @@ const COLORS = [
 // So: require a local Host AND the absence of any Cloudflare edge header. Real
 // local admin use (Candide on the mac-mini) has neither problem; a tunneled
 // request is refused whatever Host it claims.
+// (The test itself now lives in middleware/loopback.ts, shared with the
+// ancillary turn endpoint, which needs exactly the same promise.)
 web.use("/*", async (c, next) => {
-  const hostname = (c.req.header("host") || "").split(":")[0];
-  const isLocal =
-    hostname === "localhost" || hostname === "127.0.0.1" ||
-    hostname === "::1" || hostname === "[::1]";
-  const viaCloudflare =
-    !!c.req.header("cf-ray") || !!c.req.header("cf-connecting-ip");
-  if (!isLocal || viaCloudflare) {
+  if (!isLoopbackRequest(c)) {
     return c.text("Admin is only accessible from localhost", 403);
   }
   // Persist a chosen language (?lang=xx) so it sticks across requests.
@@ -322,11 +319,10 @@ function ancillaryCard(lang: string): string {
           ? `<span class="hint">${escape(t(lang, "ancillary.advised_is", getModel(advised)?.name ?? advised))}</span>`
           : "")
       : `<span class="hint">${escape(t(lang, "ancillary.runs_on", effective))}</span>`;
-    // A tools invocation is dispatched by the tool, which builds its own
-    // Anthropic client around whatever id it is given. That is a fact about
-    // the function, not about this household's keys, so it is said on every
-    // such row rather than only where it currently bites.
-    const toolsWarning = r.side === "tools"
+    // The tools that ask the server for their turn take any provider. The
+    // research pipelines still choose one themselves, so nothing is advised
+    // for them and the row says why rather than leaving a silent gap.
+    const toolsWarning = r.ownDispatch
       ? `<span class="hint" style="color:var(--caution)">${escape(t(lang, "ancillary.tools_anthropic_only"))}</span>`
       : "";
     return `

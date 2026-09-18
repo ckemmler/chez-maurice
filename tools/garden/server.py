@@ -132,18 +132,8 @@ def _assert_within(path: Path, base: Path) -> Path:
     return rp
 
 sys.path.insert(0, str(REPO_ROOT / "tools"))
-from shared.model_config import resolve_model as _resolve_model  # noqa: E402
+from shared.model_config import complete as _complete  # noqa: E402
 from shared.config_loader import get_config, get_gardens_dir, get_secret  # noqa: E402
-
-
-def _anthropic_key() -> str:
-    key = get_secret("anthropic_api_key", env="ANTHROPIC_API_KEY")
-    if not key:
-        raise ValueError(
-            "ANTHROPIC_API_KEY is not set. Set the env var or add "
-            "[secrets] anthropic_api_key to ~/.maurice/config.toml."
-        )
-    return key
 
 
 # Tool profile. The public .pkg sets MAURICE_GARDEN_PROFILE=public, which exposes
@@ -2419,8 +2409,6 @@ def _extract_names_from_text(text: str) -> list[dict[str, str]]:
     Returns a list of {name, context} dicts — the name as it appears in the
     text and a short phrase describing their role in the dream.
     """
-    import anthropic
-
     prompt = f"""\
 Extract all people (characters) mentioned in this dream narrative.
 For each person, return their name exactly as written and a very short phrase
@@ -2437,13 +2425,7 @@ Respond with ONLY the JSON array, no preamble.
 Dream text:
 {text[:3000]}"""
 
-    client = anthropic.Anthropic(api_key=_anthropic_key())
-    response = client.messages.create(
-        model=_resolve_model("dream_analysis", fallback="claude-haiku-4-5-20251001"),
-        max_tokens=500,
-        messages=[{"role": "user", "content": prompt}],
-    )
-    raw = response.content[0].text.strip()
+    raw = _complete("dream_analysis", prompt, max_tokens=500)
     # Strip markdown code fences if present
     if raw.startswith("```"):
         raw = re.sub(r"^```(?:json)?\s*\n?", "", raw)
@@ -5632,9 +5614,7 @@ def _create_person_entry_sync(args: dict[str, Any]) -> dict[str, Any]:
 # ---------------------------------------------------------------------------
 
 def _generate_evocation(note_id: str, locale: str, fm: dict[str, Any], body: str) -> str:
-    """Call Claude Haiku to generate a visual evocation from note content."""
-    import anthropic
-
+    """Ask the household's own model for a visual evocation of a note."""
     title = fm.get("title", note_id)
     description = fm.get("description", "")
     tags = fm.get("tags", [])
@@ -5654,13 +5634,7 @@ Content preview:
 
 Respond with ONLY the evocation text, no preamble or quotes."""
 
-    client = anthropic.Anthropic(api_key=_anthropic_key())
-    response = client.messages.create(
-        model=_resolve_model("moc_evocations"),
-        max_tokens=300,
-        messages=[{"role": "user", "content": prompt}],
-    )
-    return response.content[0].text.strip()
+    return _complete("moc_evocations", prompt, max_tokens=300)
 
 
 def _handle_generate_evocation(args: dict[str, Any]) -> dict[str, Any]:
