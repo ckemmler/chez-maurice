@@ -36,8 +36,8 @@ import {
 } from "../services/calibreLibraries";
 import { listModels, getModel, addModel, removeModel, setModelCtx, configuredProviders, type Model } from "../services/models";
 import {
-  ANCILLARY_INVOCATIONS, ancillaryTable, applyRecommendedPins, householdAncillaryModel,
-  rangeProvider, recommendedModel, setHouseholdAncillaryModel, setPinnedModel,
+  ANCILLARY_INVOCATIONS, ancillaryTable, applyRecommendedPins, hasRecommendations,
+  householdAncillaryModel, recommendedModel, setHouseholdAncillaryModel, setPinnedModel,
 } from "../services/ancillary";
 import {
   accessMatrix,
@@ -310,7 +310,7 @@ function ancillaryCard(lang: string): string {
     (blank !== undefined ? `<option value="" ${!selected ? "selected" : ""}>${escape(blank)}</option>` : "") +
     models.map((m) =>
       `<option value="${escape(m.id)}" ${m.id === selected ? "selected" : ""}>${escape(m.name)}${m.tier === "local" ? " · " + escape(t(lang, "settings.on_device")) : ""}</option>`).join("");
-  const provider = rangeProvider();
+  const advisable = hasRecommendations();
   // Two lines per function rather than one: the tier says what the job asks of
   // a model, and when nothing is pinned the row still has to say what it will
   // actually run on, which is the household model and usually too big for it.
@@ -323,8 +323,9 @@ function ancillaryCard(lang: string): string {
           : "")
       : `<span class="hint">${escape(t(lang, "ancillary.runs_on", effective))}</span>`;
     // The tools dispatch their own turns through Anthropic, so a pin to any
-    // other provider fails there rather than here. Say it on the rows it bites.
-    const toolsWarning = r.side === "tools" && provider && provider !== "anthropic"
+    // other provider fails there rather than here. Say it on the rows it bites:
+    // the ones with no Anthropic model to advise.
+    const toolsWarning = r.side === "tools" && !advised
       ? `<span class="hint" style="color:var(--caution)">${escape(t(lang, "ancillary.tools_anthropic_only"))}</span>`
       : "";
     return `
@@ -335,10 +336,10 @@ function ancillaryCard(lang: string): string {
         ${state}${toolsWarning}
       </div>`;
   }).join("");
-  // The range button is only honest when there is a range to apply.
-  const rangeRow = provider
+  // The button is only honest when there is something to advise.
+  const rangeRow = advisable
     ? `<div class="grid-actions" style="justify-content:flex-start">
-         <button type="submit" form="ancillary-range-form" class="btn ghost sm">${escape(t(lang, "ancillary.apply_range", providerTitle(provider)))}</button>
+         <button type="submit" form="ancillary-range-form" class="btn ghost sm">${escape(t(lang, "ancillary.apply_range"))}</button>
        </div>`
     : `<div class="hint">${escape(t(lang, "ancillary.no_range"))}</div>`;
   return `

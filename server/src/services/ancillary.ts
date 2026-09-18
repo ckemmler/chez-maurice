@@ -83,96 +83,87 @@ export function isAncillaryInvocation(id: string): boolean {
 // Left alone, every one of the invocations above ran on the household's chat
 // model, because that is what the ancillary default was backfilled from. That
 // is the wrong economics: naming a dossier or tagging a topic on Opus, GLM 5.3
-// or Qwen 397B costs a flagship's price for a sentence, and is no better at
-// it. So each provider that ships a fixed roster gets a range — a small model
-// for the light work, a middling one for the writing, a strong one for the
-// few jobs that reason — and `applyRecommendedPins` writes those choices into
-// the pins table, where the admin can see and override every one of them.
+// or Qwen 397B costs a flagship's price for a sentence, and is no better at it.
 //
-// Written into the table rather than resolved on the fly on purpose: the
-// Python tools read `ancillary_models` straight from maurice.db
-// (tools/shared/model_config.py), so a rule that lived only in this file would
-// hold for the server and not for them.
+// So each tier has a list of PREFERRED models, best first, and an invocation
+// takes the first one its household can actually call. A list rather than a
+// range per provider, because the question is "what should summarise a
+// conversation here", not "which provider does this household belong to": a
+// household with a Scaleway key gets Mistral Small 3.2 for its one-liners even
+// though its chat runs on GLM, which is the case this started from.
 //
-// Ollama has no range: its roster is whatever the host has pulled, so there is
-// no id to name here. Those households keep the household-default behaviour.
-export const ANCILLARY_RANGE: Record<string, Record<AncillaryTier, string>> = {
-  anthropic: {
-    light: "claude-haiku-4-5-20251001",
-    standard: "claude-sonnet-4-6",
-    heavy: "claude-sonnet-4-6", // Opus stays for the chat: nothing here needs it
-  },
-  openai: { light: "gpt-4o-mini", standard: "gpt-4o", heavy: "gpt-4o" },
-  mistral: { light: "mistral-small-latest", standard: "mistral-small-latest", heavy: "mistral-large-latest" },
-  zai: { light: "glm-5.3-flash", standard: "glm-5.3-flash", heavy: "glm-5.3" },
-  // Scaleway, the fleet's own range and the reason this exists: Mistral Small
-  // 3.2 for the one-liners, GPT-OSS 120B for the prose — cheap per output
-  // token, which is what a summary spends — and Qwen 3.5 397B for flashcards,
-  // the one job here that genuinely reasons. All served from Paris.
-  scaleway: {
-    light: "mistral-small-3.2-24b-instruct-2506",
-    standard: "gpt-oss-120b",
-    heavy: "qwen3.5-397b-a17b",
-  },
+// Only providers that ship something genuinely small are listed. Z.ai is not:
+// GLM 5.3 and its Flash are both large, and a dossier title on either is the
+// thing being avoided — a household with only a Z.ai key gets no advice and
+// keeps its household model.
+//
+// `applyRecommendedPins` writes the choices into the pins table, where the
+// admin sees and overrides every one of them. Written into the table rather
+// than resolved on the fly on purpose: the Python tools read
+// `ancillary_models` straight from maurice.db (tools/shared/model_config.py),
+// so a rule that lived only in this file would hold for the server and not for
+// them.
+//
+// Ollama is absent for a different reason: its roster is whatever the host has
+// pulled, so there is no id to name here.
+export const PREFERRED: Record<AncillaryTier, string[]> = {
+  // A sentence, a title, three tags. The cheapest capable model wins.
+  light: [
+    "mistral-small-3.2-24b-instruct-2506", // scaleway, reads images too
+    "claude-haiku-4-5-20251001",           // anthropic
+    "gpt-4o-mini",                         // openai
+    "mistral-small-latest",                // mistral
+  ],
+  // A paragraph of prose: summaries, syntheses, briefings. Output tokens are
+  // what these spend, so the order follows the output price.
+  standard: [
+    "gpt-oss-120b",                        // scaleway
+    "claude-sonnet-4-6",                   // anthropic
+    "gpt-4o",                              // openai
+    "mistral-small-latest",                // mistral
+  ],
+  // The few that genuinely reason — flashcards today, and nothing else.
+  heavy: [
+    "qwen3.5-397b-a17b",                   // scaleway
+    "claude-sonnet-4-6",                   // anthropic; Opus stays for the chat
+    "gpt-4o",                              // openai
+    "mistral-large-latest",                // mistral
+  ],
 };
-
-/** A provider's range, but only when the household holds its key AND every
- *  model it names is really in the roster. A range pointing at models someone
- *  deleted is not a range: it would resolve to nothing and quietly leave each
- *  function on the chat model, which is the thing being fixed. */
-function rangeFor(provider: string | undefined | null): Record<AncillaryTier, string> | null {
-  if (!provider) return null;
-  const range = ANCILLARY_RANGE[provider];
-  if (!range || !configuredProviders().has(provider)) return null;
-  const complete = (["light", "standard", "heavy"] as AncillaryTier[]).every((t) => usable(range[t]));
-  return complete ? range : null;
-}
-
-/** Ordered fallbacks when the chat's own provider has no usable range.
- *  Anthropic first: it is the only one the Python tools can call, so it is the
- *  only range that can cover all the invocations rather than the server's. */
-const RANGE_PREFERENCE = ["anthropic", "scaleway", "mistral", "openai", "zai"];
-
-/**
- * Which range this household runs its ancillary work on. The provider its chat
- * model speaks comes first — a Scaleway household stays on Scaleway — and
- * anything else is a fallback for the households whose chat model was added by
- * hand or whose seeded roster was pruned. Null when none applies: Ollama only,
- * or no key at all, and those keep the household-model behaviour.
- */
-export function rangeProvider(): string | null {
-  const chat = getModel(householdDefaultModel())?.provider;
-  if (rangeFor(chat)) return chat!;
-  return RANGE_PREFERENCE.find((p) => rangeFor(p)) ?? null;
-}
 
 /**
  * The providers the Python side can actually reach. An invocation that runs
  * `side: "tools"` is dispatched by the tools themselves, and every one of them
  * builds an `anthropic.Anthropic` client around the id this table hands it
  * (maurice-tools, ~15 files) — they read the model name from here but not the
- * provider. Pinning such an invocation to a Scaleway or GLM id would send that
- * id to api.anthropic.com and fail there. So the range only advises those
- * invocations while the household's range IS Anthropic; the rest stay on the
- * household model until the tools learn to call the server for their turns.
+ * provider. Advising such an invocation a Scaleway or GLM id would send that
+ * id to api.anthropic.com and fail there, so for those only Anthropic models
+ * are offered; a household without an Anthropic key keeps its household model
+ * for them, until the tools learn to call the server for their turns.
  */
 const TOOLS_CAN_CALL = new Set(["anthropic"]);
 
-/** Whether the range may speak for an invocation at all — see TOOLS_CAN_CALL. */
-export function rangeCovers(inv: AncillaryInvocation, provider: string): boolean {
-  return inv.side === "server" || TOOLS_CAN_CALL.has(provider);
+function callableHere(inv: AncillaryInvocation, id: string): boolean {
+  const m = getModel(id);
+  if (!m || !configuredProviders().has(m.provider)) return false;
+  return inv.side === "server" || TOOLS_CAN_CALL.has(m.provider);
 }
 
-/** What an invocation should run on, before any pin: its tier's model in the
- *  household's range. Null when no range applies or the model is not seeded. */
+/** What an invocation should run on, before any pin: the first preferred model
+ *  of its tier this household can call. Null when it can call none of them. */
 export function recommendedModel(invocation: string): string | null {
   const inv = ANCILLARY_INVOCATIONS.find((i) => i.id === invocation);
-  const provider = rangeProvider();
-  if (!inv || !provider || !rangeCovers(inv, provider)) return null;
-  return usable(rangeFor(provider)![inv.tier]);
+  if (!inv) return null;
+  return PREFERRED[inv.tier].find((id) => callableHere(inv, id)) ?? null;
 }
 
-/** Pin every invocation the range covers. Returns the ids actually changed, so
+/** Does any function have advice to take? The admin screen asks before it
+ *  offers the button. */
+export function hasRecommendations(): boolean {
+  return ANCILLARY_INVOCATIONS.some((i) => recommendedModel(i.id) !== null);
+}
+
+/** Pin every invocation that has a preferred model. Returns the ids actually changed, so
  *  the admin is told what moved rather than just "saved". */
 export function applyRecommendedPins(): string[] {
   const changed: string[] = [];
