@@ -159,7 +159,8 @@ struct ChatView: View {
     private var isMulti: Bool { chat.participants.count > 1 }
 
     /// iPad only: the conversation header re-homed as toolbar items, so iPadOS 26
-    /// hosts the window controls + sidebar toggle inline in a real bar. Emits
+    /// hosts the window controls + sidebar toggle inline in a real bar; the trailing
+    /// group mirrors the iPhone capsule (avatars, add someone, "…"). Emits
     /// nothing on iPhone (which keeps its custom header row).
     @ToolbarContentBuilder
     private var chatToolbar: some ToolbarContent {
@@ -195,10 +196,10 @@ struct ChatView: View {
                     Image(systemName: "person.badge.plus")
                 }
                 .help(session.localized("chat.add_someone_help"))
-                if !activeMaurice.isEveryday {
-                    Button { studio.openCreator(activeMaurice, isEdit: true) } label: {
-                        Text(session.localized("chat.edit_maurice"))
-                    }
+                // Same "…" as the iPhone header: the details sheet carries the
+                // title, metadata and room actions (edit Maurice, reports, leave).
+                if let convo = chat.activeConversation {
+                    ConversationDetailsButton(conversation: convo, inToolbar: true)
                 }
             }
         }
@@ -502,7 +503,7 @@ private struct ConversationHeaderView: View {
 /// The "…" button and everything behind it: the details sheet, and the room
 /// actions it can trigger (edit Maurice, review reports, leave), which run once
 /// the sheet has dismissed — a sheet presented while another is going away is
-/// dropped. `inToolbar` draws a bare system toolbar button (macOS) instead of
+/// dropped. `inToolbar` draws a bare system toolbar button (macOS, iPad) instead of
 /// the 44pt glyph that sits inside the iPhone header's capsule.
 private struct ConversationDetailsButton: View {
     @Environment(ChatService.self) private var chat
