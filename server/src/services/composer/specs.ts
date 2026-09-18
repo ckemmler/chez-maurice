@@ -225,20 +225,28 @@ export function canCompose(memberId: string, conversationId: string): boolean {
 // the calibre tools use) and its title, under one header naming the book and
 // its calibre id. Deterministic, so the cached prefix stays byte-stable.
 
+/** A chapter's title as the book prints it: the ref (file stem) without its
+ *  NNNN- prefix. `ChapterInfo.name` is the classifier's lowercased form and
+ *  would title every chapter in lower case. */
+function chapterTitle(ref: string): string {
+  return ref.replace(/^\d+[-_]/, "").replace(/[_]+/g, " ").replace(/\s+/g, " ").trim();
+}
+
 /** Chapter headers for a book's loaded refs: `ref → header line`. Exported
  *  for tests. Front and back matter are labelled as such, unnumbered. */
 export function chapterHeaders(
-  chapters: { ref: string; name: string; section_type: string }[],
+  chapters: { ref: string; section_type: string }[],
 ): Map<string, string> {
   const out = new Map<string, string>();
   let n = 0;
   for (const c of chapters) {
+    const title = chapterTitle(c.ref);
     if (c.section_type === "body") {
       n += 1;
-      out.set(c.ref, `## Chapter ${n}: ${c.name}`);
+      out.set(c.ref, `## Chapter ${n}: ${title}`);
     } else {
       const kind = c.section_type === "front_matter" ? "Front matter" : "Back matter";
-      out.set(c.ref, `## ${kind}: ${c.name}`);
+      out.set(c.ref, `## ${kind}: ${title}`);
     }
   }
   return out;

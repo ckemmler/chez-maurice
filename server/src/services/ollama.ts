@@ -162,6 +162,7 @@ export async function* ollamaTurn(
   messages: any[],
   tools: any[],
   maxTokens: number,
+  signal?: AbortSignal,
 ): AsyncGenerator<OllamaTurnEvent> {
   const host = ollamaHost();
   // think:false — skip the (silent, very slow) reasoning phase of thinking
@@ -172,12 +173,16 @@ export async function* ollamaTurn(
 
   let response: Response;
   try {
+    // The member's Stop reaches Ollama itself: a generation nobody is waiting
+    // for otherwise keeps the GPU for as long as the model has left to say.
     response = await fetch(`${host}/api/chat`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
+      signal,
     });
   } catch (err: any) {
+    if (signal?.aborted) return;
     yield { type: "error", message: `Ollama unreachable at ${host}: ${err?.message || "error"}` };
     return;
   }
@@ -194,7 +199,15 @@ export async function* ollamaTurn(
   let content = "";
   const toolCalls: OllamaToolCall[] = [];
   while (true) {
-    const { done, value } = await reader.read();
+    let step: { done: boolean; value?: Uint8Array };
+    try {
+      step = await reader.read();
+    } catch (err: any) {
+      if (signal?.aborted) return;
+      yield { type: "error", message: `Ollama stream failed: ${err?.message || "error"}` };
+      return;
+    }
+    const { done, value } = step;
     if (done) break;
     buffer += decoder.decode(value, { stream: true });
     const lines = buffer.split("\n");

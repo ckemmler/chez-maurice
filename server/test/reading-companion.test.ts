@@ -59,15 +59,17 @@ test("an introduction after the body has begun is not front matter", () => {
 
 test("chapter headers number the body chapters and label the rest", () => {
   const h = chapterHeaders([
-    { ref: "0005-Abbreviations", name: "abbreviations", section_type: "front_matter" },
-    { ref: "0007-1. The divine root", name: "1. the divine root", section_type: "body" },
-    { ref: "0008-2. Fully awoke", name: "2. fully awoke", section_type: "body" },
-    { ref: "0032-Notes", name: "notes", section_type: "back_matter" },
+    { ref: "0005-Abbreviations", section_type: "front_matter" },
+    { ref: "0007-1. The divine root", section_type: "body" },
+    { ref: "0008-2. Fully awoke", section_type: "body" },
+    { ref: "0032-Notes", section_type: "back_matter" },
   ]);
-  expect(h.get("0005-Abbreviations")).toBe("## Front matter: abbreviations");
-  expect(h.get("0007-1. The divine root")).toBe("## Chapter 1: 1. the divine root");
-  expect(h.get("0008-2. Fully awoke")).toBe("## Chapter 2: 2. fully awoke");
-  expect(h.get("0032-Notes")).toBe("## Back matter: notes");
+  // Titles keep the book's own case: the classifier's lowercased name is
+  // for matching, not for reading.
+  expect(h.get("0005-Abbreviations")).toBe("## Front matter: Abbreviations");
+  expect(h.get("0007-1. The divine root")).toBe("## Chapter 1: 1. The divine root");
+  expect(h.get("0008-2. Fully awoke")).toBe("## Chapter 2: 2. Fully awoke");
+  expect(h.get("0032-Notes")).toBe("## Back matter: Notes");
 });
 
 // ── Tool trail ───────────────────────────────────────────────────

@@ -166,7 +166,10 @@ export async function* openaiTurn(
     }
     // 400/422 are the shapes a strict server uses to refuse an unknown field.
     if (response.ok || !withUsage || (response.status !== 400 && response.status !== 422)) break;
+    // Both optional fields go: a proxy in front of a provider that knows
+    // prompt_cache_key may not, and the retry is the one chance to find out.
     delete body.stream_options;
+    delete body.prompt_cache_key;
     withUsage = false;
   }
   if (!response.ok || !response.body) {

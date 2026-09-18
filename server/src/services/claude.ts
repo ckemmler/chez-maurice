@@ -451,7 +451,7 @@ async function* runOllamaAgentic(
     let toolCalls: OllamaToolCall[] = [];
     let unsupported = false;
     const started = performance.now();
-    for await (const ev of ollamaTurn(model, convo, useTools ? tools : [], maxTokens)) {
+    for await (const ev of ollamaTurn(model, convo, useTools ? tools : [], maxTokens, signal)) {
       if (ev.type === "text") {
         content += ev.text;
         yield { type: "text_delta", text: ev.text };
