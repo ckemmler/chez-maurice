@@ -54,6 +54,7 @@ import maurices from "./src/routes/maurices";
 import models from "./src/routes/models";
 import toolFamilies from "./src/routes/toolFamilies";
 import { adminExists, getUser, getUserByUsername, householdName, householdInfo } from "./src/services/users";
+import { seedAncillaryPinsOnce } from "./src/services/ancillary";
 import { dataDir } from "./src/db";
 import { imagesDir } from "./src/services/images";
 import { avatarsDir } from "./src/services/avatars";
@@ -705,6 +706,15 @@ const publicHost = process.env.MAURICE_PUBLIC_HOST || "localhost";
 const host = hasTls
   ? `https://${publicHost}:${port}`
   : `http://${publicHost}:${port}`;
+
+// Give the ancillary functions their own models the first time this code runs
+// on a household that has never pinned one: a dossier title has no business
+// on the chat's flagship (services/ancillary.ts). Pins, so the admin sees
+// them and the Python tools read the same table.
+const seededPins = seedAncillaryPinsOnce();
+if (seededPins.length) {
+  console.log(`[ancillary] pinned ${seededPins.length} function(s) to this household's model range`);
+}
 
 console.log(`
   Chez Maurice server v0.1.0

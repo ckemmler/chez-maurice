@@ -556,6 +556,11 @@ try { db.run(`ALTER TABLE households ADD COLUMN ancillary_model TEXT`); } catch 
 // Forced: an install that predates the column gets its chat default as its
 // ancillary default, so every function has a model from the first request.
 db.run(`UPDATE households SET ancillary_model = default_model WHERE ancillary_model IS NULL OR ancillary_model = ''`);
+// Guard for the one-off that pins each invocation to its tier's model in the
+// household's provider range (services/ancillary.ts). It is set only once a
+// range has actually applied, so an instance with no provider key yet still
+// gets its pins the day it has one.
+try { db.run(`ALTER TABLE households ADD COLUMN ancillary_pins_seeded INTEGER NOT NULL DEFAULT 0`); } catch {}
 
 // Non-model API keys, for the tools that enrich garden entries with metadata
 // and cover art. The Python MCP tools read these columns straight out of

@@ -35,7 +35,10 @@ import {
   validateLibraryRoot,
 } from "../services/calibreLibraries";
 import { listModels, getModel, addModel, removeModel, setModelCtx, configuredProviders, type Model } from "../services/models";
-import { ANCILLARY_INVOCATIONS, ancillaryTable, householdAncillaryModel, setHouseholdAncillaryModel, setPinnedModel } from "../services/ancillary";
+import {
+  ANCILLARY_INVOCATIONS, ancillaryTable, applyRecommendedPins, householdAncillaryModel,
+  rangeProvider, recommendedModel, setHouseholdAncillaryModel, setPinnedModel,
+} from "../services/ancillary";
 import {
   accessMatrix,
   accessCounts,
@@ -307,22 +310,52 @@ function ancillaryCard(lang: string): string {
     (blank !== undefined ? `<option value="" ${!selected ? "selected" : ""}>${escape(blank)}</option>` : "") +
     models.map((m) =>
       `<option value="${escape(m.id)}" ${m.id === selected ? "selected" : ""}>${escape(m.name)}${m.tier === "local" ? " · " + escape(t(lang, "settings.on_device")) : ""}</option>`).join("");
-  const rows = ancillaryTable().map((r) => `
+  const provider = rangeProvider();
+  // Two lines per function rather than one: the tier says what the job asks of
+  // a model, and when nothing is pinned the row still has to say what it will
+  // actually run on, which is the household model and usually too big for it.
+  const rows = ancillaryTable().map((r) => {
+    const effective = getModel(r.effective)?.name ?? r.effective;
+    const advised = recommendedModel(r.id);
+    const state = r.pinned
+      ? (advised && r.pinned !== advised
+          ? `<span class="hint">${escape(t(lang, "ancillary.advised_is", getModel(advised)?.name ?? advised))}</span>`
+          : "")
+      : `<span class="hint">${escape(t(lang, "ancillary.runs_on", effective))}</span>`;
+    // The tools dispatch their own turns through Anthropic, so a pin to any
+    // other provider fails there rather than here. Say it on the rows it bites.
+    const toolsWarning = r.side === "tools" && provider && provider !== "anthropic"
+      ? `<span class="hint" style="color:var(--caution)">${escape(t(lang, "ancillary.tools_anthropic_only"))}</span>`
+      : "";
+    return `
       <div class="field" style="margin-top:12px">
         <label class="label">${escape(r.label)} <span class="hint">· ${escape(t(lang, r.side === "server" ? "ancillary.side_server" : "ancillary.side_tools"))} · ${escape(t(lang, `ancillary.tier_${r.tier}`))}</span></label>
         <select name="pin:${escape(r.id)}">${options(r.pinned, t(lang, "ancillary.household_default_option"))}</select>
         <span class="hint">${escape(r.blurb)}</span>
-      </div>`).join("");
+        ${state}${toolsWarning}
+      </div>`;
+  }).join("");
+  // The range button is only honest when there is a range to apply.
+  const rangeRow = provider
+    ? `<div class="grid-actions" style="justify-content:flex-start">
+         <button type="submit" form="ancillary-range-form" class="btn ghost sm">${escape(t(lang, "ancillary.apply_range", providerTitle(provider)))}</button>
+       </div>`
+    : `<div class="hint">${escape(t(lang, "ancillary.no_range"))}</div>`;
   return `
-        <form method="POST" action="/admin/ancillary-models" class="card pad" style="margin-top:18px">
-          <div class="access-head"><span class="ttl2">${escape(t(lang, "ancillary.title"))}</span></div>
-          <div class="hint" style="margin:6px 0 12px">${escape(t(lang, "ancillary.desc"))}</div>
-          <div class="field"><label class="label">${escape(t(lang, "ancillary.household_default"))}</label>
-            <select name="ancillary_model">${options(householdAncillaryModel())}</select>
-            <span class="hint">${escape(t(lang, "ancillary.household_default_hint"))}</span></div>
-          ${rows}
-          <div class="grid-actions"><button type="submit" class="btn primary">${escape(t(lang, "settings.save"))}</button></div>
-        </form>`;
+        <details class="card pad" style="margin-top:18px">
+          <summary style="cursor:pointer"><span class="ttl2">${escape(t(lang, "ancillary.title"))}</span>
+            <span class="hint" style="display:inline;margin-left:8px">${escape(t(lang, "ancillary.advanced"))}</span></summary>
+          <div class="hint" style="margin:10px 0 12px">${escape(t(lang, "ancillary.desc"))}</div>
+          ${rangeRow}
+          <form method="POST" action="/admin/ancillary-models">
+            <div class="field" style="margin-top:12px"><label class="label">${escape(t(lang, "ancillary.household_default"))}</label>
+              <select name="ancillary_model">${options(householdAncillaryModel())}</select>
+              <span class="hint">${escape(t(lang, "ancillary.household_default_hint"))}</span></div>
+            ${rows}
+            <div class="grid-actions"><button type="submit" class="btn primary">${escape(t(lang, "settings.save"))}</button></div>
+          </form>
+        </details>
+        <form method="POST" action="/admin/ancillary-models/range" id="ancillary-range-form"></form>`;
 }
 
 function sectionHead(kicker: string, title: string, desc: string, action = ""): string {
@@ -742,7 +775,6 @@ web.get("/dashboard", async (c) => {
             <input type="number" name="max_tokens" value="${household.max_tokens}" min="256" max="200000" /></div>
           <div class="grid-actions"><button type="submit" class="btn primary">${escape(t(lang, "settings.save"))}</button></div>
         </form>
-        ${ancillaryCard(lang)}
       </section>
 
       <section id="sec-reading">
@@ -817,6 +849,11 @@ web.get("/dashboard", async (c) => {
           <div class="grid-actions"><button type="submit" class="btn primary">${escape(t(lang, "otherkeys.save"))}</button></div>
         </form>
       </section>
+
+      <section id="sec-ancillary">
+        ${sectionHead(t(lang, "dashboard.kicker_advanced"), t(lang, "ancillary.section_title"), t(lang, "ancillary.section_desc"))}
+        ${ancillaryCard(lang)}
+      </section>
     </div>`, true, adminName(c), lang));
 });
 
@@ -863,6 +900,16 @@ web.post("/ancillary-models", async (c) => {
     setPinnedModel(inv.id, v && callable(v) ? v : null);
   }
   return c.redirect("/admin/dashboard?msg=settings_saved#sec-settings");
+});
+
+// ── Ancillary models: back to the provider range (POST) ─────────
+// One button rather than twenty-two dropdowns, for the common case: put every
+// function back on its tier's model in the household's range.
+web.post("/ancillary-models/range", async (c) => {
+  const redir = requireWebAdmin(c);
+  if (redir) return redir;
+  const changed = applyRecommendedPins();
+  return c.redirect(`/admin/dashboard?msg=${changed.length ? "ancillary_range" : "settings_saved"}#sec-ancillary`);
 });
 
 // ── Other API keys (POST) ───────────────────────────────────────
