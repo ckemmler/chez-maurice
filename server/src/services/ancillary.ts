@@ -22,7 +22,7 @@
 
 import db from "../db";
 import { getModel, configuredProviders, householdDefaultModel } from "./models";
-import { getHouseholdConfig, OPENAI_STYLE_BASE_URL } from "./claude";
+import { getHouseholdConfig, isOpenAIStyle, openaiStyleBaseUrl, openaiStyleKey } from "./claude";
 import { openaiTurn } from "./openaiChat";
 import { ollamaTurn } from "./ollama";
 
@@ -220,12 +220,10 @@ export async function ancillaryComplete(req: AncillaryRequest): Promise<Ancillar
     return { text: text.trim(), model: modelId, provider, stop };
   }
 
-  if (provider === "openai" || provider === "mistral" || provider === "zai") {
-    const key = provider === "openai" ? config.openaiApiKey
-      : provider === "mistral" ? config.mistralApiKey
-      : config.zaiApiKey;
+  if (isOpenAIStyle(provider)) {
+    const key = openaiStyleKey(provider, config);
     if (!key) throw new AncillaryError(`no ${provider} API key configured for this household`, 422);
-    const baseUrl = OPENAI_STYLE_BASE_URL[provider]!;
+    const baseUrl = openaiStyleBaseUrl(provider, config);
     let text = "";
     let stop: AncillaryResult["stop"] = "end";
     for await (const ev of openaiTurn(baseUrl, key, modelId, messages, [], req.temperature)) {

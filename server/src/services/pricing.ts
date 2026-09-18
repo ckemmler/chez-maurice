@@ -23,6 +23,12 @@ export interface ModelPrice {
 // only has to be made in one place.
 const ANTHROPIC_CACHE = { cacheWrite: 1.25, cacheRead: 0.1 };
 
+// Scaleway publishes in euros and this meter counts in dollars. One fixed rate
+// — the ECB reference of 2026-09-16 — rather than a live one: a meter that
+// drifts with the exchange rate cannot be reconciled against any bill. Move it
+// when the sheet is re-read, not before.
+const EUR_USD = 1.1537;
+
 /** List prices per million tokens. Keys are bare model ids — a dated snapshot
  *  id (`...-20251001`) resolves to its base entry, see `priceFor`. */
 const PRICES: Record<string, ModelPrice> = {
@@ -59,6 +65,26 @@ const PRICES: Record<string, ModelPrice> = {
   // will be watching, and a meter that reads low is the one wrong answer. Until
   // then this overstates a Flash turn by half.
   "glm-5.3-flash": { input: 0.15, output: 0.5, cacheWrite: 1, cacheRead: 0.03 / 0.15 },
+
+  // Scaleway Generative APIs — https://www.scaleway.com/en/pricing/model-as-a-service/
+  // read 2026-09-17, converted at EUR_USD above. Only DeepSeek V4 Flash lists a
+  // cached-input price (€0.08 over €0.40); the others report no cached tokens,
+  // and cacheRead 1 says so honestly — a cached token, should one ever be
+  // reported, costs full price rather than an invented discount.
+  "mistral-small-3.2-24b-instruct-2506": { input: 0.15 * EUR_USD, output: 0.35 * EUR_USD, cacheWrite: 1, cacheRead: 1 },
+  "gpt-oss-120b":                        { input: 0.15 * EUR_USD, output: 0.60 * EUR_USD, cacheWrite: 1, cacheRead: 1 },
+  "gemma-4-26b-a4b-it":                  { input: 0.25 * EUR_USD, output: 0.50 * EUR_USD, cacheWrite: 1, cacheRead: 1 },
+  "qwen3.6-35b-a3b":                     { input: 0.25 * EUR_USD, output: 1.50 * EUR_USD, cacheWrite: 1, cacheRead: 1 },
+  "deepseek-v4-flash-0731":              { input: 0.40 * EUR_USD, output: 0.80 * EUR_USD, cacheWrite: 1, cacheRead: 0.08 / 0.40 },
+  "qwen3.5-397b-a17b":                   { input: 0.60 * EUR_USD, output: 3.60 * EUR_USD, cacheWrite: 1, cacheRead: 1 },
+  "qwen3-235b-a22b-instruct-2507":       { input: 0.75 * EUR_USD, output: 2.25 * EUR_USD, cacheWrite: 1, cacheRead: 1 },
+  "llama-3.3-70b-instruct":              { input: 0.90 * EUR_USD, output: 0.90 * EUR_USD, cacheWrite: 1, cacheRead: 1 },
+  "mistral-medium-3.5-128b":             { input: 1.50 * EUR_USD, output: 7.50 * EUR_USD, cacheWrite: 1, cacheRead: 1 },
+  "glm-5.2":                             { input: 1.80 * EUR_USD, output: 5.50 * EUR_USD, cacheWrite: 1, cacheRead: 1 },
+  // Deprecated on Scaleway, end of life 2026-10-01. Not seeded; priced so a
+  // hand-added entry still meters until then.
+  "pixtral-12b-2409":                    { input: 0.20 * EUR_USD, output: 0.20 * EUR_USD, cacheWrite: 1, cacheRead: 1 },
+  "qwen3-coder-30b-a3b-instruct":        { input: 0.20 * EUR_USD, output: 0.80 * EUR_USD, cacheWrite: 1, cacheRead: 1 },
 
   // OpenAI is deliberately absent until someone checks its current sheet — an
   // unpriced model shows token counts with no dollar figure, which is honest; a

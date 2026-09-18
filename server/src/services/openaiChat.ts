@@ -1,6 +1,7 @@
-// OpenAI-style Chat Completions client — shared by OpenAI and Mistral (Mistral's
-// API is OpenAI-compatible). Distinct from Anthropic's Messages API; this is the
-// `/chat/completions` SSE format where tool-call arguments stream in fragments.
+// OpenAI-style Chat Completions client — shared by OpenAI, Mistral, Z.ai and
+// Scaleway, all of which speak this API. Distinct from Anthropic's Messages API;
+// this is the `/chat/completions` SSE format where tool-call arguments stream
+// in fragments.
 
 export interface OpenAIToolCall {
   id: string;
@@ -44,7 +45,12 @@ export type BillingErrorKind = "out_of_credits" | "plan_or_credits";
  *  as "your credits ran out" would send the admin to recharge for nothing. Its
  *  own wording is checked first, precisely because it contains the unambiguous
  *  phrase as a substring. */
-function billingErrorKind(detail: string): BillingErrorKind | undefined {
+export function billingErrorKind(detail: string): BillingErrorKind | undefined {
+  // Scaleway's per-minute token quota answers 429 "INSUFFICIENT QUOTA — You
+  // exceeded your current quota of tokens per minute", which contains OpenAI's
+  // out-of-credits sentence word for word and means the opposite errand: wait
+  // a minute, not top up. Rate-limit wording is ruled out before anything else.
+  if (/per minute|rate.?limit|slow down/i.test(detail)) return undefined;
   if (/no resource package|insufficient balance or/i.test(detail)) return "plan_or_credits";
   if (/insufficient[ _]balance|insufficient_quota|exceeded your current quota/i.test(detail)) return "out_of_credits";
   return undefined;
@@ -158,9 +164,12 @@ export async function* openaiTurn(
       }
       const delta = chunk.choices?.[0]?.delta;
       if (!delta) continue;
-      // Thinking models stream their reasoning as `reasoning_content` before any
-      // `content`. That phase can run for minutes with nothing else on the wire.
-      if (typeof delta.reasoning_content === "string" && delta.reasoning_content) yield { type: "thinking" };
+      // Thinking models stream their reasoning before any `content` — as
+      // `reasoning_content` (GLM, DeepSeek's own API) or `reasoning` (Scaleway,
+      // and vLLM generally). That phase can run for minutes with nothing else
+      // on the wire.
+      const reasoning = delta.reasoning_content ?? delta.reasoning;
+      if (typeof reasoning === "string" && reasoning) yield { type: "thinking" };
       const text = deltaText(delta.content);
       if (text) { content += text; yield { type: "text", text }; }
       if (Array.isArray(delta.tool_calls)) {

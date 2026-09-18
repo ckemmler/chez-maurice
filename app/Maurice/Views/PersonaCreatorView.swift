@@ -256,7 +256,7 @@ struct PersonaCreator: View {
 
     // MARK: 2 · Model
 
-    private static let providerOrder = ["anthropic", "openai", "mistral", "zai", "ollama"]
+    private static let providerOrder = ["anthropic", "openai", "mistral", "zai", "scaleway", "ollama"]
 
     private var modelSection: some View {
         Section(number: 2, title: session.localized("persona.section.model"), theme: theme) {
@@ -437,6 +437,7 @@ enum ProviderStyle {
         case "openai":            return Color(hex: "202123") // near-black
         case "mistral":           return Color(hex: "fa500f") // orange
         case "zai":               return Color(hex: "2d2d2d") // charcoal — the GLM mark's own ground
+        case "scaleway":          return Color(hex: "4f0599") // Scaleway purple
         case "gemini", "google":  return Color(hex: "4d83ef") // blue
         case "ollama":            return Color(hex: "00ff00") // pure green — local/on-device
         default:                  return Color(hex: "6b6460")
@@ -456,6 +457,7 @@ enum ProviderStyle {
         case "openai":            return AnyShapeStyle(Color(hex: "202123"))
         case "mistral":           return grad("fcc73c", "fc6817")
         case "zai":               return AnyShapeStyle(Color(hex: "2d2d2d"))
+        case "scaleway":          return AnyShapeStyle(Color(hex: "4f0599"))
         case "gemini", "google":  return grad("4d83ef", "cd6983")
         default:                  return AnyShapeStyle(color(p))
         }
@@ -466,6 +468,7 @@ enum ProviderStyle {
         case "openai":            return "circle.hexagongrid.fill"
         case "mistral":           return "wind"
         case "zai":               return "z.square"
+        case "scaleway":          return "s.square"
         case "gemini", "google":  return "sparkle"
         case "ollama":            return "cpu"
         default:                  return "cube"
@@ -477,6 +480,7 @@ enum ProviderStyle {
         case "openai":            return "OPENAI"
         case "mistral":           return "MISTRAL"
         case "zai":               return "Z.AI"
+        case "scaleway":          return "SCALEWAY"
         case "gemini", "google":  return "GEMINI"
         case "ollama":            return L("persona.provider.ollama")
         default:                  return p.uppercased()

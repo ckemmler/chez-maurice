@@ -44,13 +44,15 @@ function getHouseholdConfig(): {
   openaiApiKey: string | null;
   mistralApiKey: string | null;
   zaiApiKey: string | null;
+  scalewayApiKey: string | null;
+  scalewayProjectId: string | null;
   falApiKey: string | null;
   defaultModel: string;
   maxTokens: number;
 } {
   const row = db
     .query(
-      `SELECT api_key, openai_api_key, mistral_api_key, zai_api_key, fal_api_key, default_model, max_tokens FROM households WHERE id = 'default'`
+      `SELECT api_key, openai_api_key, mistral_api_key, zai_api_key, scaleway_api_key, scaleway_project_id, fal_api_key, default_model, max_tokens FROM households WHERE id = 'default'`
     )
     .get() as any;
 
@@ -59,6 +61,8 @@ function getHouseholdConfig(): {
     openaiApiKey: row.openai_api_key,
     mistralApiKey: row.mistral_api_key,
     zaiApiKey: row.zai_api_key,
+    scalewayApiKey: row.scaleway_api_key,
+    scalewayProjectId: row.scaleway_project_id,
     falApiKey: row.fal_api_key,
     defaultModel: row.default_model,
     maxTokens: row.max_tokens,
@@ -457,19 +461,62 @@ async function* runOllamaAgentic(
 }
 
 /** Where each OpenAI-compatible provider's Chat Completions API lives, and the
- *  name to show when its key is missing. */
+ *  name to show when its key is missing. The client appends /chat/completions
+ *  to each; Z.ai's surface lives under its PaaS v4 path. */
 export const OPENAI_STYLE_BASE_URL: Record<string, string> = {
   openai: "https://api.openai.com/v1",
   mistral: "https://api.mistral.ai/v1",
   zai: "https://api.z.ai/api/paas/v4",
+  // Scaleway Generative APIs: OpenAI-shaped, served from Paris. The key is an
+  // IAM secret key with GenerativeApisModelAccess on the project it bills.
+  scaleway: "https://api.scaleway.ai/v1",
 };
 const OPENAI_STYLE_LABEL: Record<string, string> = {
   openai: "OpenAI",
   mistral: "Mistral",
   zai: "Z.ai",
+  scaleway: "Scaleway",
 };
 
-/** Agentic loop for an OpenAI-style provider (OpenAI, Mistral, Z.ai). Same shape as
+/** Whether a provider speaks Chat Completions — as opposed to Anthropic's
+ *  Messages API or Ollama's own. Own-property lookup on purpose: a provider
+ *  named after something on Object.prototype must not pass. */
+export function isOpenAIStyle(provider: string): boolean {
+  return Object.hasOwn(OPENAI_STYLE_BASE_URL, provider);
+}
+
+/** The Chat Completions root for a provider, for this household. Scaleway is
+ *  the one that varies: a key scoped to a project by its IAM policy is refused
+ *  on the plain /v1 root (403, "insufficient permissions") and must name the
+ *  project it bills — api.scaleway.ai/<project>/v1 — while an organization-wide
+ *  key must not. The admin stores the project id beside the key. */
+export function openaiStyleBaseUrl(
+  provider: string,
+  config: ReturnType<typeof getHouseholdConfig>,
+): string {
+  const root = OPENAI_STYLE_BASE_URL[provider]!;
+  if (provider === "scaleway" && config.scalewayProjectId) {
+    return `https://api.scaleway.ai/${config.scalewayProjectId}/v1`;
+  }
+  return root;
+}
+
+/** The household's key for an OpenAI-style provider — a column each, so any
+ *  one of them can be revoked on its own. Null when there is none. */
+export function openaiStyleKey(
+  provider: string,
+  config: ReturnType<typeof getHouseholdConfig>,
+): string | null {
+  switch (provider) {
+    case "openai": return config.openaiApiKey;
+    case "mistral": return config.mistralApiKey;
+    case "zai": return config.zaiApiKey;
+    case "scaleway": return config.scalewayApiKey;
+    default: return null;
+  }
+}
+
+/** Agentic loop for an OpenAI-style provider (OpenAI, Mistral, Z.ai, Scaleway). Same shape as
  *  the others, but the Chat Completions message format (assistant tool_calls +
  *  role:"tool" results keyed by tool_call_id). */
 async function* runOpenAIAgentic(
@@ -929,14 +976,10 @@ function trackedBooks(
     return;
   }
 
-  // OpenAI / Mistral / Z.ai — OpenAI-compatible Chat Completions.
-  if (provider === "openai" || provider === "mistral" || provider === "zai") {
-    // Z.ai's OpenAI-compatible surface lives under the PaaS v4 path; the client
-    // appends /chat/completions, as it does for the other two.
-    const baseUrl = OPENAI_STYLE_BASE_URL[provider]!;
-    const key = provider === "openai" ? config.openaiApiKey
-      : provider === "mistral" ? config.mistralApiKey
-      : config.zaiApiKey;
+  // OpenAI / Mistral / Z.ai / Scaleway — OpenAI-compatible Chat Completions.
+  if (isOpenAIStyle(provider)) {
+    const baseUrl = openaiStyleBaseUrl(provider, config);
+    const key = openaiStyleKey(provider, config);
     if (!key) {
       const label = OPENAI_STYLE_LABEL[provider]!;
       yield { type: "text_delta", text: t(userLang, "chat.no_provider_key", label) };

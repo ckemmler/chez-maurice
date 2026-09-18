@@ -618,6 +618,7 @@ web.get("/dashboard", async (c) => {
     ["OpenAI", "openai", !!household.openai_api_key, "api.openai.com"],
     ["Mistral", "mistral", !!household.mistral_api_key, "api.mistral.ai"],
     ["Z.ai", "zai", !!household.zai_api_key, "api.z.ai"],
+    ["Scaleway", "scaleway", !!household.scaleway_api_key, "api.scaleway.ai"],
   ];
   const cloudCards = CLOUD_PROVIDERS.map(([title, provider, keySet, host]) => {
     const list = cloud.filter((m) => m.provider === provider);
@@ -686,6 +687,14 @@ web.get("/dashboard", async (c) => {
             <div class="field"><label class="label">${escape(t(lang, "settings.zai_key"))}</label>
               <input type="password" name="zai_api_key" autocomplete="off" placeholder="${household.zai_api_key ? escape(t(lang, "settings.saved_placeholder")) : "…"}" />
               <span class="hint">${escape(t(lang, "settings.leave_blank"))}</span></div>
+            <div class="field"><label class="label">${escape(t(lang, "settings.scaleway_key"))}</label>
+              <input type="password" name="scaleway_api_key" autocomplete="off" placeholder="${household.scaleway_api_key ? escape(t(lang, "settings.saved_placeholder")) : "…"}" />
+              <span class="hint">${escape(t(lang, "settings.leave_blank"))}</span></div>
+          </div>
+          <div class="grid2" style="margin-top:16px">
+            <div class="field"><label class="label">${escape(t(lang, "settings.scaleway_project"))}</label>
+              <input type="text" name="scaleway_project_id" class="mono" value="${escape(household.scaleway_project_id || "")}" placeholder="00000000-0000-0000-0000-000000000000" />
+              <span class="hint">${escape(t(lang, "settings.scaleway_project_hint"))}</span></div>
           </div>
           <div class="grid2" style="margin-top:16px">
             <div class="field"><label class="label">${escape(t(lang, "settings.ollama_host"))}</label>
@@ -789,6 +798,12 @@ web.post("/settings", async (c) => {
   if (form.openai_api_key && (form.openai_api_key as string).trim()) put("openai_api_key", (form.openai_api_key as string).trim());
   if (form.mistral_api_key && (form.mistral_api_key as string).trim()) put("mistral_api_key", (form.mistral_api_key as string).trim());
   if (form.zai_api_key && (form.zai_api_key as string).trim()) put("zai_api_key", (form.zai_api_key as string).trim());
+  if (form.scaleway_api_key && (form.scaleway_api_key as string).trim()) put("scaleway_api_key", (form.scaleway_api_key as string).trim());
+  // Not a secret, so unlike the keys an emptied field means "organization-wide".
+  if (form.scaleway_project_id !== undefined) {
+    const pid = (form.scaleway_project_id as string).trim();
+    if (pid === "" || /^[0-9a-f-]{36}$/i.test(pid)) put("scaleway_project_id", pid || null);
+  }
   if (form.fal_api_key && (form.fal_api_key as string).trim()) put("fal_api_key", (form.fal_api_key as string).trim());
   if (form.ollama_host) put("ollama_host", (form.ollama_host as string).trim().replace(/\/+$/, ""));
   if (form.default_model && getModel((form.default_model as string).trim())) put("default_model", (form.default_model as string).trim());
@@ -850,8 +865,8 @@ web.post("/models/rescan", async (c) => {
   return c.redirect(res.connected ? `/admin/dashboard?msg=scanned_models&n=${res.count}` : "/admin/dashboard?msg=ollama_not_reachable");
 });
 
-const PROVIDER_LABEL: Record<string, string> = { ollama: "On-device", openai: "OpenAI", mistral: "Mistral", zai: "Z.ai", anthropic: "Anthropic" };
-const PROVIDER_VENDOR: Record<string, string> = { ollama: "Ollama", openai: "OpenAI", mistral: "Mistral", zai: "Z.ai", anthropic: "Anthropic" };
+const PROVIDER_LABEL: Record<string, string> = { ollama: "On-device", openai: "OpenAI", mistral: "Mistral", zai: "Z.ai", scaleway: "Scaleway", anthropic: "Anthropic" };
+const PROVIDER_VENDOR: Record<string, string> = { ollama: "Ollama", openai: "OpenAI", mistral: "Mistral", zai: "Z.ai", scaleway: "Scaleway", anthropic: "Anthropic" };
 
 web.get("/models/new", (c) => {
   const redir = requireWebAdmin(c);
@@ -861,7 +876,7 @@ web.get("/models/new", (c) => {
   const provider = c.req.query("provider") || "ollama";
   const isLocal = provider === "ollama";
   const label = isLocal ? t(lang, "models.provider_ondevice") : (PROVIDER_LABEL[provider] || provider);
-  const idPlaceholder = isLocal ? "phi4:14b" : provider === "openai" ? "gpt-4o" : provider === "mistral" ? "mistral-large-latest" : provider === "zai" ? "glm-5.3" : "claude-…";
+  const idPlaceholder = isLocal ? "phi4:14b" : provider === "openai" ? "gpt-4o" : provider === "mistral" ? "mistral-large-latest" : provider === "zai" ? "glm-5.3" : provider === "scaleway" ? "mistral-small-3.2-24b-instruct-2506" : "claude-…";
   return c.html(layout(t(lang, "models.new_title"), `
     <form method="POST" action="/admin/models/new">
       <input type="hidden" name="provider" value="${escape(provider)}" />

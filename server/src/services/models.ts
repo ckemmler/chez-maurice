@@ -10,7 +10,7 @@ export interface Model {
   name: string;
   tier: "cloud" | "local";
   vendor: string;
-  /** which API the model speaks: anthropic | openai | mistral | zai | ollama */
+  /** which API the model speaks: anthropic | openai | mistral | zai | scaleway | ollama */
   provider: string;
   ctx: number;
   ram: number | null;
@@ -25,7 +25,7 @@ export interface ModelInfo {
   id: string;
   name: string;
   tier: "cloud" | "local";
-  provider: string; // anthropic | openai | mistral | zai | ollama — for grouping/logos
+  provider: string; // anthropic | openai | mistral | zai | scaleway | ollama — for grouping/logos
   sub: string;      // vendor (+ size for local)
   desc: string;
   note: string;     // "metered" | "private"
@@ -81,13 +81,14 @@ export function toModelInfo(m: Model): ModelInfo {
  *  set. Keeps keyless providers out of the apps' model lists. */
 export function configuredProviders(): Set<string> {
   const row = db
-    .query(`SELECT api_key, openai_api_key, mistral_api_key, zai_api_key FROM households WHERE id = 'default'`)
+    .query(`SELECT api_key, openai_api_key, mistral_api_key, zai_api_key, scaleway_api_key FROM households WHERE id = 'default'`)
     .get() as any;
   const s = new Set<string>(["ollama"]);
   if (row?.api_key) s.add("anthropic");
   if (row?.openai_api_key) s.add("openai");
   if (row?.mistral_api_key) s.add("mistral");
   if (row?.zai_api_key) s.add("zai");
+  if (row?.scaleway_api_key) s.add("scaleway");
   return s;
 }
 

@@ -527,10 +527,16 @@ try { db.run(`ALTER TABLE households ADD COLUMN mistral_api_key TEXT`); } catch 
 // Z.ai (GLM). Its API is OpenAI-compatible, so it rides the Chat Completions
 // path — only the key and the base URL differ.
 try { db.run(`ALTER TABLE households ADD COLUMN zai_api_key TEXT`); } catch {}
+try { db.run(`ALTER TABLE households ADD COLUMN scaleway_api_key TEXT`); } catch {}
+// A Scaleway key whose IAM policy is scoped to one project must name that
+// project in the URL (api.scaleway.ai/<project>/v1); an organization-wide key
+// needs nothing. Empty = organization-wide.
+try { db.run(`ALTER TABLE households ADD COLUMN scaleway_project_id TEXT`); } catch {}
 try { db.run(`ALTER TABLE households ADD COLUMN providers_seeded INTEGER NOT NULL DEFAULT 0`); } catch {}
 // Separate guard from providers_seeded: that flag is already set on every
 // existing database, so the GLM rows would never appear if they rode on it.
 try { db.run(`ALTER TABLE households ADD COLUMN zai_seeded INTEGER NOT NULL DEFAULT 0`); } catch {}
+try { db.run(`ALTER TABLE households ADD COLUMN scaleway_seeded INTEGER NOT NULL DEFAULT 0`); } catch {}
 
 // ── Ancillary models ────────────────────────────────────────────
 // The models behind the functions that are not the chat: summaries, flashcards,
@@ -563,7 +569,7 @@ try { db.run(`ALTER TABLE households ADD COLUMN podcastindex_api_secret TEXT`); 
 try { db.run(`ALTER TABLE households ADD COLUMN igdb_client_id TEXT`); } catch {}
 try { db.run(`ALTER TABLE households ADD COLUMN igdb_client_secret TEXT`); } catch {}
 
-// Which API a model speaks: anthropic | openai | mistral | zai | ollama.
+// Which API a model speaks: anthropic | openai | mistral | zai | scaleway | ollama.
 try { db.run(`ALTER TABLE models ADD COLUMN provider TEXT`); } catch {}
 try { db.run(`UPDATE models SET provider = CASE WHEN tier = 'local' THEN 'ollama' ELSE 'anthropic' END WHERE provider IS NULL OR provider = ''`); } catch {}
 
@@ -660,6 +666,42 @@ try {
       );
     }
     db.run(`UPDATE households SET zai_seeded = 1 WHERE id = 'default'`);
+  }
+} catch {}
+
+// Seed the Scaleway roster once, on its own guard like Z.ai's. These are the
+// models Scaleway's Generative APIs serve in Serverless mode as of September
+// 2026 (docs: generative-apis/reference-content/supported-models), minus the
+// two already deprecated there (pixtral-12b, qwen3-coder: EOL 2026-10-01).
+// The vendor is the model's maker, not the host — that is what the sub-label
+// in the apps shows; the provider is what the request travels under. `ctx` is
+// the Serverless window in k tokens; glm-5.2 and deepseek-v4-flash are 1M
+// models capped at 256k during preview. `vision` is set here rather than by
+// the generation counter below, which only ever adds.
+try {
+  const hh = db.query(`SELECT scaleway_seeded FROM households WHERE id = 'default'`).get() as { scaleway_seeded: number } | undefined;
+  if (!hh?.scaleway_seeded) {
+    // id, name, vendor, ctx (k), vision, descr, sort
+    const SCW: Array<[string, string, string, number, number, string, number]> = [
+      ["mistral-small-3.2-24b-instruct-2506", "Mistral Small 3.2",  "Mistral",  128, 1, "Quick, cheap, reads images — the everyday default on Scaleway.",     40],
+      ["gemma-4-26b-a4b-it",                  "Gemma 4 26B",        "Google",   256, 1, "Google's small frontier model: agentic, multilingual, reads images.",  41],
+      ["qwen3.6-35b-a3b",                     "Qwen 3.6 35B",       "Qwen",     256, 1, "Small, fast reasoning model with tool use and vision.",               42],
+      ["gpt-oss-120b",                        "GPT-OSS 120B",       "OpenAI",   128, 0, "OpenAI's open-weight reasoning model. Text only.",                    43],
+      ["deepseek-v4-flash-0731",              "DeepSeek V4 Flash",  "DeepSeek", 256, 0, "Fast reasoning model with a cached-input price. Text only.",          44],
+      ["qwen3.5-397b-a17b",                   "Qwen 3.5 397B",      "Qwen",     250, 1, "Qwen's frontier reasoning model; reads images.",                      45],
+      ["qwen3-235b-a22b-instruct-2507",       "Qwen 3 235B",        "Qwen",     250, 0, "Large instruct model, no reasoning phase. Text only.",                46],
+      ["llama-3.3-70b-instruct",              "Llama 3.3 70B",      "Meta",     100, 0, "Meta's dependable generalist. Text only.",                            47],
+      ["mistral-medium-3.5-128b",             "Mistral Medium 3.5", "Mistral",  180, 1, "Mistral's strongest hosted model; reads images.",                     48],
+      ["glm-5.2",                             "GLM 5.2",            "Z.ai",     256, 0, "Z.ai's flagship, served from Paris. Text only.",                      49],
+    ];
+    for (const [id, name, vendor, ctx, vision, descr, sort] of SCW) {
+      db.run(
+        `INSERT OR IGNORE INTO models (id, name, tier, vendor, ctx, discovered, descr, sort, provider, vision)
+         VALUES (?, ?, 'cloud', ?, ?, 0, ?, ?, 'scaleway', ?)`,
+        [id, name, vendor, ctx, descr, sort, vision],
+      );
+    }
+    db.run(`UPDATE households SET scaleway_seeded = 1 WHERE id = 'default'`);
   }
 } catch {}
 
