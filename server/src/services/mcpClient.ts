@@ -175,8 +175,16 @@ export async function corpusCall(memberId: string, name: string, args: any): Pro
  * is enough. Never throws into the caller; the periodic backfill is the safety net.
  */
 export function indexConversationInBackground(memberId: string, conversationId: string): void {
-  McpSession.open(memberId)
-    .then((s) => s.callTool("index_conversation", { conversation_id: conversationId }))
+  // Through corpusCall so the name carries the gateway's `corpus__` prefix.
+  // Called bare, the gateway answered "Unknown tool" as ordinary text — not an
+  // error — and no live conversation reached the index for three months while
+  // this reported success.
+  corpusCall(memberId, "index_conversation", { conversation_id: conversationId })
+    .then((r) => {
+      if (r?.error || r?.raw) {
+        console.warn(`[corpus] index_conversation(${conversationId}) refused: ${r.error ?? r.raw}`);
+      }
+    })
     .catch((err) =>
       console.warn(`[corpus] index_conversation(${conversationId}) failed: ${err?.message || err}`)
     );
