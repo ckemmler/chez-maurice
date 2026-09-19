@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { requireAuth, requireAdmin } from "../middleware/auth";
 import { createPairingToken } from "../services/auth";
 import { usageFor } from "../services/budget";
+import { docsStatus } from "../services/mauriceDocsRefresh";
 import db from "../db";
 
 const admin = new Hono();
@@ -59,6 +60,8 @@ admin.get("/status", (c) => {
     users: userCount,
     conversations: convoCount,
     messages: messageCount,
+    // Maurice Maurice's documentation: which set he reads and how fresh it is.
+    docs: docsStatus(),
   });
 });
 

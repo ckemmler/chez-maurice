@@ -1,5 +1,6 @@
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
-import { join, resolve } from "node:path";
+import { join } from "node:path";
+import { pickDocsDir } from "./mauriceDocsRefresh";
 
 // The Maurice system documentation, as read by Maurice Maurice — the built-in
 // persona that answers questions about Maurice (services/maurices.ts). The
@@ -9,7 +10,9 @@ import { join, resolve } from "node:path";
 //
 // Where they are read from:
 //   1. MAURICE_DOCS_DIR env — a garden notes dir, to read the live notes
-//   2. <repo>/docs/maurice — the committed snapshot (what the image carries)
+//   2. <app dir>/docs/maurice — the set refreshed from the published repo
+//      (services/mauriceDocsRefresh.ts), once it is newer than the snapshot
+//   3. <repo>/docs/maurice — the committed snapshot (what the image carries)
 //
 // What goes into the persona's context: the DIGEST plus the DELTA. The digest
 // (a note with `digest: true`, maurice-digest.md) condenses the whole set to
@@ -36,11 +39,10 @@ export interface MauriceDoc {
 
 export const DOCS_INDEX_SLUG = "maurice-docs";
 
+/** The directory read right now. The load cache below keys on it, so a switch
+ *  from the bundle to a refreshed set is picked up like an edited note. */
 export function docsDir(): string {
-  const env = process.env.MAURICE_DOCS_DIR;
-  if (env) return env;
-  // server/src/services -> <repo>/docs/maurice
-  return resolve(import.meta.dir, "../../../docs/maurice");
+  return pickDocsDir().dir;
 }
 
 interface Frontmatter {

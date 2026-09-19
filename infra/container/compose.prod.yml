@@ -62,6 +62,10 @@ services:
       # (Scaleway Generative APIs, say) is a code change, not configuration.
       # Enables OAuth on the MCP gateway, for connecting Claude to this server.
       MAURICE_OAUTH_PASSWORD: ${MAURICE_OAUTH_PASSWORD:-}
+      # Where Maurice Maurice's documentation refreshes from (see README.md,
+      # "The documentation refreshes itself"). Unset is the public repo; `off`
+      # makes no outbound call.
+      MAURICE_DOCS_URL: ${MAURICE_DOCS_URL:-}
       # What embeds, for corpus search. There is no Ollama here, so it points at
       # an OpenAI-compatible endpoint. Changing the model or its dimension
       # invalidates the index — decide once, while it is still empty.
