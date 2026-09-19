@@ -30,6 +30,24 @@ const SKIP = /^\/(@|_astro\/|\.astro\/|src\/|node_modules\/|api\/|\.well-known\/
 // fresh gardens land on a real garden theme.
 const DEFAULT_THEME = process.env.THEME || "manuscript";
 
+/**
+ * The theme a reader's cookie remembers, unless the garden's owner picked a
+ * theme after the cookie was set. `since` is the owner's choice in unix seconds
+ * (the proxy's X-Maurice-Theme-Since); absent — a bare `astro dev` — the cookie
+ * always holds. A cookie without a date predates this rule and yields whenever
+ * the owner ever chose.
+ */
+export function rememberedTheme(cookie: string | undefined, since: string | null): string | undefined {
+  if (!cookie) return undefined;
+  const at = cookie.lastIndexOf(".");
+  const theme = at < 0 ? cookie : cookie.slice(0, at);
+  if (!theme || since === null) return theme || undefined;
+  const chosen = Number(since);
+  const set = at < 0 ? NaN : Number(cookie.slice(at + 1));
+  if (!Number.isFinite(chosen) || chosen <= 0) return theme;
+  return Number.isFinite(set) && set >= chosen ? theme : undefined;
+}
+
 export const onRequest = defineMiddleware(async (ctx, next) => {
   const req = ctx.request.headers;
   const member = req.get("x-maurice-garden") || process.env.GARDEN || "demo";
@@ -40,16 +58,30 @@ export const onRequest = defineMiddleware(async (ctx, next) => {
 
   // Which look to render, most specific first:
   //   1. ?theme=X — a reader trying one on, remembered in a cookie;
-  //   2. that cookie, for the rest of their visits;
+  //   2. that cookie, for the rest of their visits — but only while it is
+  //      newer than the owner's choice (below). The app itself opens a garden
+  //      through /login?…&theme=X, so the cookie is usually the owner's own
+  //      earlier pick, remembered for a year: without the date, picking a new
+  //      theme in Settings changed nothing on any device that had opened the
+  //      garden before. The cookie says when it was set (`name.seconds`); a
+  //      cookie from before the owner's choice, or one without a date, yields;
   //   3. X-Maurice-Theme — what the garden's OWNER chose in the app
   //      (garden_settings.web_theme, which the engine used to ignore entirely,
   //      so the Settings picker appeared to do nothing);
   //   4. the household default (THEME), then a real garden theme.
   // None of this rebuilds anything, which is the point.
   const q = new URL(ctx.request.url).searchParams.get("theme");
-  if (q) ctx.cookies.set("theme", q, { path: "/", maxAge: 60 * 60 * 24 * 365, sameSite: "lax" });
+  const now = Math.floor(Date.now() / 1000);
+  if (q) {
+    ctx.cookies.set("theme", `${q}.${now}`, {
+      path: "/",
+      maxAge: 60 * 60 * 24 * 365,
+      sameSite: "lax",
+    });
+  }
   ctx.locals.theme =
-    q || ctx.cookies.get("theme")?.value || req.get("x-maurice-theme") || DEFAULT_THEME;
+    q || rememberedTheme(ctx.cookies.get("theme")?.value, req.get("x-maurice-theme-since")) ||
+    req.get("x-maurice-theme") || DEFAULT_THEME;
 
   // Owner mode: the garden's owner is looking at their own garden — drafts,
   // private notes and the toolbar are theirs. The proxy decides (session user

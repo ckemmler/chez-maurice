@@ -115,12 +115,25 @@ export function removeSelf(ownerId: string, slug: string, memberId: string): boo
 // ── Garden settings (per-audience web theme) ────────────────────────────────
 
 export function gardenTheme(id: string): string {
-  const row = db.query(`SELECT web_theme FROM garden_settings WHERE id = ?`).get(id) as
-    | { web_theme: string }
-    | undefined;
+  return gardenLook(id).theme;
+}
+
+/**
+ * The theme a garden's gardeners picked, and when (unix seconds; 0 when nobody
+ * ever picked one). The engine needs the moment as much as the name: a reader
+ * who tried a theme on keeps it in a cookie, and that cookie should hold only
+ * until the garden's own look changes underneath it.
+ */
+export function gardenLook(id: string): { theme: string; since: number } {
+  const row = db
+    .query(`SELECT web_theme, updated_at FROM garden_settings WHERE id = ?`)
+    .get(id) as { web_theme: string; updated_at: string } | undefined;
   // "default" is the hidden internal base; a garden with no explicit choice
   // gets a real garden theme.
-  return row?.web_theme ?? "manuscript";
+  if (!row) return { theme: "manuscript", since: 0 };
+  // SQLite's datetime('now') is UTC without a zone marker.
+  const since = Math.floor(Date.parse(row.updated_at.replace(" ", "T") + "Z") / 1000);
+  return { theme: row.web_theme, since: Number.isFinite(since) ? since : 0 };
 }
 
 export function setGardenTheme(id: string, webTheme: string): void {

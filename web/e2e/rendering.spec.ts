@@ -3,7 +3,7 @@
  * Wikilinks resolve under the member's base; images load; the search index
  * knows the entry. This is the reference the server build must match.
  */
-import { test, expect, api, garden } from "./helpers";
+import { test, expect, api, garden, state } from "./helpers";
 import { join } from "node:path";
 import { readFileSync, writeFileSync, unlinkSync } from "node:fs";
 
@@ -177,7 +177,8 @@ test("a chosen theme sticks across pages, without the parameter", async ({ as })
   await page.goto(`${G}/?theme=newsprint`);
   await expect(page.locator("html")).toHaveAttribute("data-theme", "newsprint");
   const cookie = (await page.context().cookies()).find((c) => c.name === "theme");
-  expect(cookie?.value, "the theme cookie").toBe("newsprint");
+  // The name, dated to the second it was chosen (see the middleware).
+  expect(cookie?.value, "the theme cookie").toMatch(/^newsprint\.\d+$/);
 
   await page.goto(`${G}/notes/`);
   await expect(page.locator("html")).toHaveAttribute("data-theme", "newsprint");
@@ -187,6 +188,38 @@ test("a chosen theme sticks across pages, without the parameter", async ({ as })
   await page.goto(`${G}/notes/?theme=terminal`);
   await page.goto(`${G}/notes/nara-deer`);
   await expect(page.locator("html")).toHaveAttribute("data-theme", "terminal");
+});
+
+test("a theme the owner picks afterwards outranks the one a reader tried on", async ({ as }) => {
+  // The app opens a garden through /login?…&theme=X, which lands on ?theme=X
+  // and sets the year-long cookie — so the cookie is usually the owner's own
+  // earlier pick. Picking a new theme in Settings must still show on that
+  // device: the cookie holds only until the owner's choice is newer than it.
+  const page = await as("theo");
+  await page.goto(`${G}/notes/?theme=newsprint`);
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "newsprint");
+  // The choice is dated to the second; make sure it lands after the cookie.
+  await page.waitForTimeout(1100);
+  const picked = await api("theo", `/api/v1/gardens/${state.users.theo}`, {
+    method: "PATCH",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ web_theme: "terminal" }),
+  });
+  expect(picked.status).toBe(200);
+  try {
+    await page.goto(`${G}/notes/`);
+    await expect(page.locator("html")).toHaveAttribute("data-theme", "terminal");
+    // And the reader may try another on, again, after that.
+    await page.goto(`${G}/notes/?theme=manuscript`);
+    await page.goto(`${G}/notes/nara-deer`);
+    await expect(page.locator("html")).toHaveAttribute("data-theme", "manuscript");
+  } finally {
+    await api("theo", `/api/v1/gardens/${state.users.theo}`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ web_theme: "botanical" }),
+    });
+  }
 });
 
 test("every shipped theme renders the home and a note, and they differ", async ({ as }) => {

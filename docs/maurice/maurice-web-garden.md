@@ -1,6 +1,6 @@
 ---
 title: The web garden
-date: '2026-09-14'
+date: '2026-09-19'
 flags: []
 locale: en
 description: 'The Astro renderer: per-request theme engine, content collections, wiki-links,
@@ -23,7 +23,7 @@ The garden is Markdown on disk; `web/` is the **Astro** site that renders it as 
 
 A theme is a folder under `web/themes/<name>/` (a `theme.json`, a `global.css`, `layouts/Base.astro`, and `views/*.astro`). Themes are resolved per request, not baked in:
 
-- **Selection** (`web/src/middleware.ts`): `?theme=` query (wins, sets a year-long cookie) → cookie → `THEME` env → `DEFAULT_THEME` (`manuscript`). The choice rides on `Astro.locals.theme`.
+- **Selection** (`web/src/middleware.ts`): `?theme=` query (wins, sets a year-long cookie) → that cookie, *while it is newer than the owner's choice* → `X-Maurice-Theme` (the owner's pick in the app, from `garden_settings.web_theme`) → `THEME` env → `DEFAULT_THEME` (`manuscript`). The choice rides on `Astro.locals.theme`. The cookie is dated (`<name>.<unix seconds>`) and the proxy sends the choice's date as `X-Maurice-Theme-Since`: the app itself opens a garden through `/login?…&theme=X`, so the cookie is usually the owner's own earlier pick, and without the date a new pick in Settings showed on no device that had opened the garden before (the regression of 2026-09-19). An undated cookie, from before that rule, yields.
 - **View resolution** (`web/src/lib/theme-registry.ts`): `resolveView(theme, "NoteDetail")` / `resolveLayout(...)` dispatch to the active theme's component, falling back to the hidden `default` theme — so a theme only overrides what it wants to.
 - **Vite aliasing** (`web/astro.config.mjs`): a `themeResolver()` plugin maps `@theme/<path>` to the active theme with a `default` fallback; `@app` points at `src/`.
 
@@ -131,6 +131,6 @@ Since 2026-09-14 the garden has an end-to-end battery, `web/e2e/` (Playwright, c
 - **The chantier is finished** (phases 0–5, `docs/garden-server-mode.md` keeps the record): the e2e battery, owner mode, the toolbar API, disk readers, one built engine per household, and the cleanup. Nothing starts an `astro dev` per member any more; `start-garden.sh` and the `.garden-roots` shells are gone, and `gardens.json` no longer carries a port.
 
 - **The editing routes are dev-server middleware.** `/_dev/*` lives in an `astro:server:setup` hook, so the gardens must keep running under `astro dev` for the toolbar to work at all. Three layers stand in for authentication they don't have: loopback binding, the proxy's member check, and path confinement. A production-mode garden would need them rebuilt as real endpoints. (Closed in September 2026: the engines were bound to `0.0.0.0`, and a `fetch()` slipped past the proxy's navigation-only check.)
-- **Per-garden theme wiring is joined** (2026-09-14). The server's `garden_settings.web_theme` — what the app's picker writes — travels to the engine as `X-Maurice-Theme`, under a reader's own `?theme=` and cookie. Before that the engine chose from its environment and the picker did nothing at all.
+- **Per-garden theme wiring is joined** (2026-09-14, dated 2026-09-19). The server's `garden_settings.web_theme` — what the app's picker writes — travels to the engine as `X-Maurice-Theme`, with its date as `X-Maurice-Theme-Since`, under a reader's own `?theme=` and a cookie newer than the choice. Before that the engine chose from its environment and the picker did nothing at all; then the year-long cookie the app's own `/login?…&theme=` had set outranked every later pick.
 - **Live activity indicator is transient.** `web/src/pages/garden-activity.json.ts` reports notes edited in the last ~30s by reading a `/tmp` file the garden tool writes; there's no persistent history. (It is polled often enough to be the loudest line in the API log.)
 - **Search index is single-locale.** One `/search-index.json` (English); no per-locale or per-member variants.

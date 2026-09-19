@@ -49,7 +49,7 @@ import gardens from "./src/routes/gardens";
 import gardenTools from "./src/routes/gardenTools";
 import { maybeRegenerateAdherence } from "./src/services/gardenTools";
 import { localiseRemoteImages } from "./src/services/gardenImages";
-import { gardenTheme, isNoteSharedWith, gardenFor } from "./src/services/gardens";
+import { gardenLook, isNoteSharedWith, gardenFor } from "./src/services/gardens";
 import maurices from "./src/routes/maurices";
 import models from "./src/routes/models";
 import toolFamilies from "./src/routes/toolFamilies";
@@ -661,15 +661,22 @@ app.notFound(async (c) => {
   headers.delete("x-maurice-garden");
   headers.delete("x-maurice-base");
   headers.delete("x-maurice-theme");
+  headers.delete("x-maurice-theme-since");
   if (slug) {
     // Whose garden, and the prefix its links must carry.
     headers.set("x-maurice-garden", slug);
     headers.set("x-maurice-base", `/g/${slug}`);
-    // The look its owner picked in the app. `garden_settings.web_theme` was
-    // written by the app and read by nobody: the engine chose a theme from
-    // its own environment, so changing it in Settings did nothing at all.
+    // The look its owner picked in the app, and when. `garden_settings.web_theme`
+    // was written by the app and read by nobody: the engine chose a theme from
+    // its own environment, so changing it in Settings did nothing at all. The
+    // moment matters too: a reader's theme cookie yields to a choice made
+    // after it (web/src/middleware.ts).
     const owner = getUserByUsername(slug);
-    if (owner) headers.set("x-maurice-theme", gardenTheme(owner.id));
+    if (owner) {
+      const look = gardenLook(owner.id);
+      headers.set("x-maurice-theme", look.theme);
+      headers.set("x-maurice-theme-since", String(look.since));
+    }
   }
   if (slug && c.get("userId")) {
     const me = getUser(c.get("userId"));
