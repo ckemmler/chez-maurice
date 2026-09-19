@@ -51,9 +51,43 @@ export interface NightlyDeps {
   call: (memberId: string, tool: string, args: any) => Promise<any>;
   members: () => { id: string }[];
   now?: () => Date;
+  /** How often to ask the corpus whether the full pass is done. */
+  pollMs?: number;
+  /** Give up waiting after this long; the corpus keeps working regardless. */
+  maxWaitMs?: number;
 }
 
 const defaultDeps: NightlyDeps = { call: corpusCall, members: () => listUsers() };
+const POLL_MS = 15_000;
+const MAX_WAIT_MS = 3 * 60 * 60 * 1000;
+
+const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+
+/** Ask the corpus to reconcile every conversation and wait for it to finish.
+ *  The tool starts the pass in the background and returns at once — a first
+ *  pass on years of conversations outlives any request timeout, which is how
+ *  the first run by hand on 19 September 2026 ended — so the outcome is read
+ *  from `reconcile_status` until `running` goes false. A corpus older than
+ *  that answers the counts directly, and those are taken as they come. */
+async function reconcileAll(deps: NightlyDeps, memberId: string): Promise<{ conversations: number; chunks_written: number }> {
+  const r = await deps.call(memberId, "index_conversation", {});
+  if (r?.error || r?.raw) throw new Error(String(r.error ?? r.raw));
+  if (r?.status !== "started" && r?.status !== "running") {
+    return { conversations: Number(r?.conversations ?? 0), chunks_written: Number(r?.chunks_written ?? 0) };
+  }
+  const pollMs = deps.pollMs ?? POLL_MS;
+  const deadline = Date.now() + (deps.maxWaitMs ?? MAX_WAIT_MS);
+  for (;;) {
+    await sleep(pollMs);
+    const s = await deps.call(memberId, "reconcile_status", {});
+    if (s?.error || s?.raw) throw new Error(String(s.error ?? s.raw));
+    if (!s?.running) {
+      if (s?.error) throw new Error(String(s.error));
+      return { conversations: Number(s?.conversations ?? 0), chunks_written: Number(s?.chunks_written ?? 0) };
+    }
+    if (Date.now() > deadline) throw new Error("the corpus is still reconciling after the wait limit; it carries on without us");
+  }
+}
 
 let inflight: Promise<NightlyOutcome> | null = null;
 let state: NightlyState | null = null;
@@ -130,12 +164,11 @@ async function doRun(deps: NightlyDeps): Promise<NightlyOutcome> {
   }
   const stats: NightlyStats = { conversations: 0, chunks_written: 0, pruned: 0, members: members.length };
   try {
-    // One call reconciles every conversation for every participant; the member
+    // One pass reconciles every conversation for every participant; the member
     // it is scoped to only satisfies the gateway's auth.
-    const r = await deps.call(members[0].id, "index_conversation", {});
-    if (r?.error || r?.raw) throw new Error(String(r.error ?? r.raw));
-    stats.conversations = Number(r?.conversations ?? 0);
-    stats.chunks_written = Number(r?.chunks_written ?? 0);
+    const r = await reconcileAll(deps, members[0].id);
+    stats.conversations = r.conversations;
+    stats.chunks_written = r.chunks_written;
     // Prune is scoped to the caller's store, so once per member. A member
     // whose prune fails does not take the others down; the error is kept.
     let pruneError: string | null = null;

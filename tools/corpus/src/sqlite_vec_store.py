@@ -62,6 +62,15 @@ def _build_where(filters: Optional[Dict[str, Any]]) -> tuple[str, list]:
             placeholders = ",".join("?" * len(value))
             clauses.append(f"{col} IN ({placeholders})")
             params.extend(str(v) for v in value)
+        elif isinstance(value, str) and key.endswith("_id"):
+            # An id is exact, and exact is what the expression indexes below
+            # can serve. Reconciling a conversation looks up its chunks by
+            # conversation_id; as a substring match that was a full scan of
+            # the member's file with a JSON extraction per row — half a second
+            # on 90 000 chunks, times five thousand conversations: the nightly
+            # of 19 September 2026 timed out on a store with nothing to write.
+            clauses.append(f"{col} = ?")
+            params.append(value)
         elif isinstance(value, str):
             # substring match ≈ Qdrant MatchText (token/substring)
             clauses.append(f"LOWER({col}) LIKE '%' || LOWER(?) || '%'")
@@ -161,6 +170,12 @@ class SqliteVecStore:
         )
         conn.execute("CREATE INDEX IF NOT EXISTS idx_chunks_unit ON chunks(unit_key)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_chunks_hash ON chunks(unit_hash)")
+        # Expression indexes on the two ids the conversations path filters by.
+        # The expression text must be exactly what _build_where writes.
+        for key in ("conversation_id", "message_id"):
+            conn.execute(
+                f"CREATE INDEX IF NOT EXISTS idx_chunks_{key} ON chunks(json_extract(payload, '$.{key}'))"
+            )
         conn.execute("CREATE TABLE IF NOT EXISTS corpus_meta (key text primary key, value text)")
         conn.execute(
             f"CREATE VIRTUAL TABLE IF NOT EXISTS vec_chunks USING vec0("

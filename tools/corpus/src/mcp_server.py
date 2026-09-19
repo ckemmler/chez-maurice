@@ -251,7 +251,9 @@ class CorpusMCPServer:
                     description=(
                         "Index/refresh Maurice conversations into per-member search. "
                         "Pass a conversation_id to reconcile one room (call after a turn); "
-                        "omit it to backfill every conversation."
+                        "omit it to reconcile every conversation in the background — the call "
+                        "returns at once with { status: started | running }, and reconcile_status "
+                        "says when it is done and what it wrote."
                     ),
                     inputSchema={
                         "type": "object",
@@ -262,6 +264,15 @@ class CorpusMCPServer:
                             },
                         },
                     },
+                ),
+                Tool(
+                    name="reconcile_status",
+                    description=(
+                        "The full conversations reconciliation: { running, started_at, finished_at, "
+                        "conversations, chunks_written, error }. Poll it after index_conversation "
+                        "with no conversation_id."
+                    ),
+                    inputSchema={"type": "object", "properties": {}},
                 ),
                 Tool(
                     name="import_chat_export",
@@ -457,7 +468,11 @@ class CorpusMCPServer:
                 )
                 payload = {"status": "reindex started"}
             elif name == "index_conversation":
-                payload = await self.orchestrator.index_conversations(arguments.get("conversation_id"))
+                payload = await self.orchestrator.index_conversations(
+                    arguments.get("conversation_id"), background=True
+                )
+            elif name == "reconcile_status":
+                payload = self.orchestrator.reconcile_status()
             elif name == "import_chat_export":
                 payload = self.orchestrator.start_import(
                     arguments.get("path"),

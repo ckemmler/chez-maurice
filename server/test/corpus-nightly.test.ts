@@ -92,6 +92,49 @@ test("a run already going is shared, not doubled", async () => {
   expect(calls.filter((t) => t === "index_conversation").length).toBe(1);
 });
 
+test("a corpus that reconciles in the background is polled until it is done", async () => {
+  const calls: string[] = [];
+  let polls = 0;
+  const deps = {
+    members: () => [{ id: "m-anna" }],
+    pollMs: 5,
+    call: async (_m: string, tool: string) => {
+      calls.push(tool);
+      if (tool === "index_conversation") return { status: "started", running: true };
+      if (tool === "reconcile_status") {
+        polls++;
+        return polls < 3
+          ? { running: true, conversations: 0, chunks_written: 0 }
+          : { running: false, conversations: 5122, chunks_written: 3, error: null };
+      }
+      return { removed: 0 };
+    },
+  };
+  expect(await reconcileCorpus(deps)).toBe("reconciled");
+  expect(calls.filter((t) => t === "reconcile_status").length).toBe(3);
+  expect(calls[calls.length - 1]).toBe("prune"); // prune waits for the pass
+  expect(corpusNightlyStatus().last_stats?.conversations).toBe(5122);
+});
+
+test("a background pass that fails is reported, and one that outlasts the wait is said so", async () => {
+  const failing = {
+    members: () => [{ id: "m-anna" }],
+    pollMs: 5,
+    call: async (_m: string, tool: string) =>
+      tool === "index_conversation" ? { status: "started" } : { running: false, error: "maurice.db locked" },
+  };
+  expect(await reconcileCorpus(failing)).toBe("failed");
+  expect(corpusNightlyStatus().last_error).toBe("maurice.db locked");
+  const endless = {
+    members: () => [{ id: "m-anna" }],
+    pollMs: 5,
+    maxWaitMs: 20,
+    call: async (_m: string, tool: string) => (tool === "index_conversation" ? { status: "running" } : { running: true }),
+  };
+  expect(await reconcileCorpus(endless)).toBe("failed");
+  expect(corpusNightlyStatus().last_error).toContain("still reconciling");
+});
+
 test("a household with no members does nothing and says so", async () => {
   const { calls, deps } = fakeDeps();
   deps.members = () => [];

@@ -7,7 +7,7 @@ import os
 import fnmatch
 import logging
 from pathlib import Path
-from typing import Dict, Iterable, List, Optional
+from typing import Any, Dict, Iterable, List, Optional
 
 from .config import CorpusConfig, SourceConfig
 from .embedder import Embedder
@@ -55,6 +55,13 @@ class CorpusOrchestrator:
         self._member_uuid_cache: Dict[str, Optional[str]] = {}
         self.import_history = ImportHistoryStore(_data_dir() / "import_history.db")
         self.archive_importer = ChatArchiveImporter()  # writes maurice.db conversations
+        # The full conversations reconciliation runs as one background task at a
+        # time; this is what reconcile_status() reports.
+        self._reconcile_state: Dict[str, Any] = {
+            "running": False, "started_at": None, "finished_at": None,
+            "conversations": 0, "chunks_written": 0, "error": None,
+        }
+        self._reconcile_task: Optional[asyncio.Task] = None
 
     def start_import(
         self,
@@ -132,20 +139,57 @@ class CorpusOrchestrator:
             "history": self.import_history.history(mid, provider),
         }
 
-    async def index_conversations(self, conversation_id: Optional[str] = None) -> Dict[str, int]:
+    async def index_conversations(
+        self, conversation_id: Optional[str] = None, *, background: bool = False
+    ) -> Dict[str, Any]:
         """Reconcile Maurice conversations into the per-member vector DBs.
 
         With a conversation_id, reconciles just that room (the post-turn hot path);
-        otherwise reconciles every conversation (backfill)."""
+        otherwise reconciles every conversation (backfill). `background` starts
+        the full pass as a task and returns at once — the MCP path, since a
+        first pass on a household with years of conversations outlives any
+        request timeout; `reconcile_status()` says how it is going."""
         if not self.conversations.available():
             self.logger.warning("maurice.db not found at %s — skipping conversations", self.conversations.db_path)
             return {"conversations": 0, "chunks_written": 0}
+        if not conversation_id and background:
+            return self._start_reconcile_all()
         if conversation_id:
             written = await self.conversations.reconcile_conversation(
                 conversation_id, store=self.indexer, embedder=self.embedder
             )
             return {"conversations": 1, "chunks_written": written}
         return await self.conversations.reconcile_all(store=self.indexer, embedder=self.embedder)
+
+    # ── the full reconciliation as a background job ───────────────────────
+
+    def _start_reconcile_all(self) -> Dict[str, Any]:
+        state = self._reconcile_state
+        if state.get("running"):
+            return {"status": "running", **state}
+        started = datetime.now(timezone.utc).isoformat()
+        self._reconcile_state = state = {
+            "running": True, "started_at": started, "finished_at": None,
+            "conversations": 0, "chunks_written": 0, "error": None,
+        }
+
+        async def run() -> None:
+            try:
+                stats = await self.conversations.reconcile_all(store=self.indexer, embedder=self.embedder)
+                state.update(stats)
+            except Exception as exc:  # noqa: BLE001 — the status carries it
+                self.logger.exception("full conversations reconciliation failed")
+                state["error"] = str(exc)
+            finally:
+                state["running"] = False
+                state["finished_at"] = datetime.now(timezone.utc).isoformat()
+
+        self._reconcile_task = asyncio.create_task(run())
+        return {"status": "started", **state}
+
+    def reconcile_status(self) -> Dict[str, Any]:
+        """The last (or current) full reconciliation, for whoever started it to poll."""
+        return dict(self._reconcile_state)
 
     def _resolve_member_uuid(self, slug: str) -> Optional[str]:
         """Map a garden username to its maurice.db user UUID (the per-member DB key)."""
