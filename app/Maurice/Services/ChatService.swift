@@ -161,6 +161,9 @@ final class ChatService {
                 "/api/conversations?limit=\(conversationsPageSize)", token: token)
             conversations = page
             hasMoreConversations = page.count >= conversationsPageSize
+            // What the server says is unread (a conversation Maurice opened and
+            // you have not opened yet) shows its dot from a cold start too.
+            for c in page where c.unread == true { unread.insert(c.id) }
         } catch {
             self.error = error.localizedDescription
         }
@@ -185,6 +188,7 @@ final class ChatService {
             let known = Set(conversations.map(\.id))
             conversations.append(contentsOf: page.filter { !known.contains($0.id) })
             hasMoreConversations = page.count >= conversationsPageSize
+            for c in page where c.unread == true { unread.insert(c.id) }
         } catch {
             // Leave hasMore true so a later scroll retries; surface nothing intrusive.
         }
@@ -239,6 +243,17 @@ final class ChatService {
                 title: (event.title?.isEmpty == false ? event.title! : "New conversation"),
                 body: "\(event.by ?? "Someone") added you to a conversation",
                 conversationId: event.conversationId
+            )
+        case "conversation_opened":
+            // Maurice opened a conversation for you, with a first message of
+            // his: it joins the list unread, and you are told as for a room.
+            guard let id = event.conversationId else { return }
+            unread.insert(id)
+            Task { await loadConversations() }
+            NotificationManager.shared.notify(
+                title: (event.title?.isEmpty == false ? event.title! : "Maurice"),
+                body: "Maurice: \(event.preview ?? "")",
+                conversationId: id
             )
         case "activity":
             guard let id = event.conversationId else { return }
@@ -1459,9 +1474,10 @@ struct RoomEvent: Decodable {
 }
 
 /// Events on the global per-user channel (/api/me/ws): you were added to a
-/// conversation, or there's activity in a room you may not be viewing.
+/// conversation, Maurice opened one for you, or there's activity in a room
+/// you may not be viewing.
 struct UserEvent: Decodable {
-    let type: String          // "conversation_added" | "activity"
+    let type: String          // "conversation_added" | "conversation_opened" | "activity"
     let conversationId: String?
     let title: String?
     let author: String?       // activity: who spoke ("Maurice" for replies)

@@ -10,6 +10,7 @@ import { resolveBookItem } from "./composer/weights";
 import { type FileAttachment } from "./composer/files";
 import { getConversationMaurice, resolveMauriceContext, resolveMauriceAttachments } from "./maurices";
 import { briefsForPrompt } from "./domainBriefs";
+import { ensureUserFirst } from "./openedConversations";
 import { resolveModelId, getModel } from "./models";
 import { resolveUsableModel, getEverydayModel } from "./modelAccess";
 import { ollamaTurn, OLLAMA_NUM_CTX, type OllamaToolCall } from "./ollama";
@@ -1146,6 +1147,10 @@ function trackedBooks(
     messages = fitted.messages;
     if (fitted.windowed) systemPrompt += WINDOW_NOTICE;
   }
+  // A conversation Maurice opened starts with his own message; the providers
+  // want a user turn first. After the window, so the lead is never dropped
+  // while the opener stays.
+  messages = ensureUserFirst(messages);
 
   // Non-negotiable content-safety floor — appended LAST so no persona prompt or
   // loaded context above can strip or out-prioritize it (covers every provider).

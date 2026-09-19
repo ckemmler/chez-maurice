@@ -10,6 +10,10 @@ export interface Conversation {
   maurice_id: string | null;
   /** provenance; null = native, 'anthropic' = imported from a Claude.ai export */
   origin: string | null;
+  /** who opened it: the member, as always until 19 September 2026, or Maurice —
+   *  a conversation he opened on his own, with a first message of his
+   *  (services/openedConversations.ts) */
+  opened_by: "member" | "maurice";
   created_at: string;
   updated_at: string;
   message_count?: number;
@@ -20,6 +24,9 @@ export interface Conversation {
   maurice_ids?: string[];
   /** whether the everyday Maurice (no specialist) has answered here */
   has_everyday_maurice?: boolean;
+  /** list rows only: a conversation Maurice opened that the member has not
+   *  opened yet — the unread dot on a cold start, before any socket event */
+  unread?: boolean;
 }
 
 export interface Message {
@@ -95,9 +102,10 @@ export function listConversations(userId: string, opts: ListConversationsOptions
   }
   const rows = db
     .query(
-      `SELECT c.id, c.user_id, c.title, c.maurice_id, c.origin, c.created_at, c.updated_at,
+      `SELECT c.id, c.user_id, c.title, c.maurice_id, c.origin, c.opened_by, c.created_at, c.updated_at,
               COUNT(m.id) as message_count,
-              MAX(m.created_at) as last_message_at
+              MAX(m.created_at) as last_message_at,
+              CASE WHEN c.opened_by = 'maurice' AND p.last_read_at IS NULL THEN 1 ELSE 0 END AS unread
        FROM conversations c
        JOIN conversation_participants p
          ON p.conversation_id = c.id AND p.member_id = ?
@@ -111,6 +119,7 @@ export function listConversations(userId: string, opts: ListConversationsOptions
   // Attach each room's members + the Maurices that have participated so the
   // sidebar can render one avatar cluster (humans + hatted Maurices).
   for (const c of rows) {
+    c.unread = !!(c.unread as unknown as number);
     c.participants = getParticipants(c.id);
     const m = mauriceParticipation(c.id);
     c.maurice_ids = m.ids;
@@ -140,7 +149,7 @@ export function getConversation(
 ): Conversation | null {
   return db
     .query(
-      `SELECT c.id, c.user_id, c.title, c.maurice_id, c.origin, c.created_at, c.updated_at
+      `SELECT c.id, c.user_id, c.title, c.maurice_id, c.origin, c.opened_by, c.created_at, c.updated_at
        FROM conversations c
        JOIN conversation_participants p
          ON p.conversation_id = c.id AND p.member_id = ?
@@ -152,12 +161,14 @@ export function getConversation(
 export function createConversation(
   userId: string,
   mauriceId?: string | null,
+  opts: { openedBy?: "member" | "maurice" } = {},
 ): Conversation {
   const id = crypto.randomUUID();
-  db.run(`INSERT INTO conversations (id, user_id, maurice_id) VALUES (?, ?, ?)`, [
+  db.run(`INSERT INTO conversations (id, user_id, maurice_id, opened_by) VALUES (?, ?, ?, ?)`, [
     id,
     userId,
     mauriceId ?? null,
+    opts.openedBy ?? "member",
   ]);
   db.run(
     `INSERT OR IGNORE INTO conversation_participants (conversation_id, member_id, role)
@@ -201,17 +212,23 @@ export function markConversationRead(memberId: string, conversationId: string): 
 }
 
 /** Per-foyer unread roll-up: count rooms with a message from someone else
- *  (a human, not this member, not Maurice) newer than the member's last read. */
+ *  (a human, not this member, not Maurice) newer than the member's last read —
+ *  plus the conversations Maurice opened on his own that the member has not
+ *  opened yet (his reply in a thread the member started never counts). */
 export function unreadRoomCount(memberId: string): number {
   const row = db
     .query(
       `SELECT COUNT(*) AS n FROM conversation_participants cp
+       JOIN conversations c ON c.id = cp.conversation_id
        WHERE cp.member_id = ?
-         AND EXISTS (
-           SELECT 1 FROM messages m
-           WHERE m.conversation_id = cp.conversation_id
-             AND m.author_id IS NOT NULL AND m.author_id != ?
-             AND (cp.last_read_at IS NULL OR m.created_at > cp.last_read_at)
+         AND (
+           (c.opened_by = 'maurice' AND cp.last_read_at IS NULL)
+           OR EXISTS (
+             SELECT 1 FROM messages m
+             WHERE m.conversation_id = cp.conversation_id
+               AND m.author_id IS NOT NULL AND m.author_id != ?
+               AND (cp.last_read_at IS NULL OR m.created_at > cp.last_read_at)
+           )
          )`
     )
     .get(memberId, memberId) as { n: number } | undefined;

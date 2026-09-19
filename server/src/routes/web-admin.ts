@@ -10,8 +10,7 @@ import {
   getUserByUsername,
   setUserRole,
   getGuestContacts,
-  setGuestContacts,
-} from "../services/users";
+  setGuestContacts, setUserChild } from "../services/users";
 import { listMaurices, setAccess } from "../services/maurices";
 import { setExperimentalAccess, canUseExperimental } from "../services/toolFamilies";
 import {
@@ -25,6 +24,7 @@ import {
   formatInviteCode,
 } from "../services/auth";
 import db from "../db";
+import { DEFAULT_MIN_DAYS, setOpensMinDays } from "../services/openedConversations";
 import { getAppDir } from "../../lib/appDir";
 import { layout, escape } from "./web-admin-html";
 import { createApiToken, listApiTokens, revokeApiToken } from "../middleware/auth";
@@ -599,7 +599,7 @@ web.get("/dashboard", async (c) => {
     <div class="member">
       ${avatarHtml(u)}
       <div class="who"><div class="nm">${escape(u.display_name)}</div><div class="hd">@${escape(u.username)}${spentTag(u.id)}</div></div>
-      <span class="tag ${u.role}">${escape(t(lang, "members.role_" + u.role))}</span>
+      <span class="tag ${u.role}">${escape(t(lang, "members.role_" + u.role))}</span>${u.is_child ? ` <span class="tag" title="${escape(t(lang, "members.is_child_hint"))}">${escape(t(lang, "members.child_tag"))}</span>` : ""}
       <span class="pin">${u.has_pin ? "🔒 " + escape(t(lang, "members.pin_set")) : escape(t(lang, "members.no_pin"))}</span>
       <div class="member-actions">
         <a href="/admin/users/${u.id}/edit" class="btn ghost sm">${escape(t(lang, "common.edit"))}</a>
@@ -802,6 +802,11 @@ web.get("/dashboard", async (c) => {
             <div class="field" style="max-width:200px"><label class="label">${escape(t(lang, "settings.spend_cap_system"))}</label>
               <input type="number" name="spend_cap_system_daily_usd" min="0" step="0.01" value="${household.spend_cap_system_daily_usd ?? ""}" placeholder="—" />
               <span class="hint">${escape(t(lang, "settings.spend_cap_system_hint", spentTodayUsd(SYSTEM_SPENDER).toFixed(2), spentMonthUsd(SYSTEM_SPENDER).toFixed(2)))}</span></div>
+          </div>
+          <div class="grid2" style="margin-top:16px">
+            <div class="field" style="max-width:200px"><label class="label">${escape(t(lang, "settings.opens_min_days"))}</label>
+              <input type="number" name="maurice_opens_min_days" min="0" step="1" value="${household.maurice_opens_min_days ?? ""}" placeholder="${DEFAULT_MIN_DAYS}" />
+              <span class="hint">${escape(t(lang, "settings.opens_min_days_hint", String(DEFAULT_MIN_DAYS)))}</span></div>
           </div>
           <div class="grid-actions"><button type="submit" class="btn primary">${escape(t(lang, "settings.save"))}</button></div>
         </form>
@@ -1067,6 +1072,12 @@ web.post("/settings", async (c) => {
   if (form.spend_cap_system_daily_usd !== undefined) {
     const cap = parseCapUsd(form.spend_cap_system_daily_usd);
     if (cap !== undefined) setSystemDailyCap(cap);
+  }
+  // Days between two conversations Maurice opens for one member: "" = the default.
+  if (form.maurice_opens_min_days !== undefined) {
+    const raw = String(form.maurice_opens_min_days ?? "").trim();
+    if (raw === "") setOpensMinDays(null);
+    else if (/^\d+$/.test(raw)) setOpensMinDays(Number(raw));
   }
   return c.redirect("/admin/dashboard?msg=settings_saved#sec-settings");
 });
@@ -1397,6 +1408,11 @@ web.get("/users/:id/edit", (c) => {
             <div class="chips"><label class="chip"><input type="checkbox" name="experimental_tools" ${expOK ? "checked" : ""} ${admin ? "disabled" : ""} /><span class="cdot"><span class="chk">${admin ? "🔒" : "✓"}</span></span><span class="clab">${admin ? "Always on (admin)" : "Enable experimental tools"}</span></label></div>
           </div>
           ${!admin ? `
+          <div class="access-block">
+            <div class="access-head"><span class="ttl2">${escape(t(lang, "members.is_child"))}</span></div>
+            <div class="hint" style="margin-bottom:8px">${escape(t(lang, "members.is_child_hint"))}</div>
+            <div class="chips"><label class="chip"><input type="checkbox" name="is_child" ${user.is_child ? "checked" : ""} /><span class="cdot"><span class="chk">✓</span></span><span class="clab">${escape(t(lang, "members.is_child_label"))}</span></label></div>
+          </div>
           <div class="field"><label class="label">${escape(t(lang, "members.role_label"))}</label>
             <select name="role" onchange="document.getElementById('guestblock').style.display=this.value==='guest'?'block':'none'">
               <option value="standard" ${!isGuestUser ? "selected" : ""}>${escape(t(lang, "members.role_standard"))}</option>
@@ -1505,6 +1521,7 @@ web.post("/users/:id/edit", async (c) => {
     const shown = new Set(listModels().filter((m) => ok.has(m.provider)).map((m) => m.id));
     replaceAccess(id, [...fd.getAll("access").map(String), ...accessOutside(id, shown)]);
     setExperimentalAccess(id, fd.get("experimental_tools") != null);
+    setUserChild(id, fd.get("is_child") != null);
     const newRole = String(fd.get("role") || "standard") === "guest" ? "guest" : "standard";
     setUserRole(id, newRole);
     if (newRole === "guest") {

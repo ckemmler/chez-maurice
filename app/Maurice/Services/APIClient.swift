@@ -669,12 +669,20 @@ struct ServerConversation: Decodable, Identifiable {
     let maurice_id: String?
     /// Provenance; nil = native, "anthropic" = imported from a Claude.ai export.
     let origin: String?
+    /// Who opened it: "member" (the default), or "maurice" — a conversation
+    /// Maurice opened on his own, with a first message of his.
+    let opened_by: String?
+    /// List rows only: a conversation Maurice opened that you have not opened
+    /// yet — the unread dot on a cold start, before any socket event.
+    let unread: Bool?
     let created_at: String
     let updated_at: String
     let message_count: Int?
     let last_message_at: String?
     /// The room's members — drives the sidebar avatar stack (multi-user only).
     let participants: [ServerParticipant]?
+
+    var openedByMaurice: Bool { opened_by == "maurice" }
 }
 
 /// What PATCH /api/conversations/:id answers — only the fields a rename needs.

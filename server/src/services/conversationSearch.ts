@@ -97,7 +97,7 @@ export function searchConversations(
   for (const id of ids.slice(0, limit)) {
     const c = db
       .query(
-        `SELECT c.id, c.user_id, c.title, c.maurice_id, c.origin, c.created_at, c.updated_at,
+        `SELECT c.id, c.user_id, c.title, c.maurice_id, c.origin, c.opened_by, c.created_at, c.updated_at,
                 (SELECT COUNT(*) FROM messages m WHERE m.conversation_id = c.id) AS message_count,
                 (SELECT MAX(m.created_at) FROM messages m WHERE m.conversation_id = c.id) AS last_message_at
          FROM conversations c WHERE c.id = ?`,

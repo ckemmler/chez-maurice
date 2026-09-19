@@ -322,6 +322,12 @@ export const STRINGS: Record<string, Record<string, string>> = {
     "briefs.run_now": "Rewrite now",
     "settings.spend_cap_system": "Night's daily allowance (USD)",
     "settings.spend_cap_system_hint": "What Maurice may spend on nobody's turn — the domain briefs — over a rolling 24 hours. Spent: $%@ today, $%@ this month. Empty = no cap of its own; the household's still applies.",
+    "settings.opens_min_days": "Days between two conversations Maurice opens",
+    "settings.opens_min_days_hint": "Maurice may open a conversation of his own for a member — to propose domains — never twice within this many days, never for a child, never for a guest. Empty = %@ days.",
+    "members.is_child": "Child",
+    "members.is_child_label": "This member is a child",
+    "members.is_child_hint": "Maurice never opens a conversation on his own for a child, and the night proposes nothing to them.",
+    "members.child_tag": "child",
     "flash.corpus_reconcile_running": "A reconciliation is already running"
   },
   "fr": {
@@ -618,6 +624,12 @@ export const STRINGS: Record<string, Record<string, string>> = {
     "briefs.run_now": "Réécrire maintenant",
     "settings.spend_cap_system": "Allocation quotidienne de la nuit (USD)",
     "settings.spend_cap_system_hint": "Ce que Maurice peut dépenser sans que personne ne tape — les cahiers des domaines — sur 24 heures glissantes. Dépensé : %@ $ aujourd'hui, %@ $ ce mois-ci. Vide = pas de plafond propre ; celui du foyer s'applique toujours.",
+    "settings.opens_min_days": "Jours entre deux conversations ouvertes par Maurice",
+    "settings.opens_min_days_hint": "Maurice peut ouvrir de lui-même une conversation pour un membre — pour proposer des domaines — jamais deux fois en moins de ce nombre de jours, jamais pour un enfant, jamais pour un invité. Vide = %@ jours.",
+    "members.is_child": "Enfant",
+    "members.is_child_label": "Ce membre est un enfant",
+    "members.is_child_hint": "Maurice n'ouvre jamais de conversation de lui-même pour un enfant, et la nuit ne lui propose rien.",
+    "members.child_tag": "enfant",
     "flash.corpus_reconcile_running": "Un rattrapage est déjà en cours"
   },
   "it": {

@@ -825,6 +825,13 @@ try { db.run(`ALTER TABLE conversations ADD COLUMN opened_by TEXT NOT NULL DEFAU
 // and later the mapping — counted under the ledger's "system" spender
 // (services/budget.ts). Null = no cap of its own; the household's still applies.
 try { db.run(`ALTER TABLE households ADD COLUMN spend_cap_system_daily_usd REAL`); } catch {}
+// A conversation Maurice opens on his own (P2-A, 19 September 2026): who may
+// receive one. `users.is_child` — a child never gets one, and the night
+// proposes nothing to them (design, section 7); set in the console. The
+// household's guard between two openings for one member, in days (null = the
+// default, fifteen; services/openedConversations.ts).
+try { db.run(`ALTER TABLE users ADD COLUMN is_child INTEGER NOT NULL DEFAULT 0`); } catch {}
+try { db.run(`ALTER TABLE households ADD COLUMN maurice_opens_min_days INTEGER`); } catch {}
 
 // Migration: an earlier seed minted fabricated ids (opus/haiku at the sonnet
 // version), which 404 at Anthropic. Remap to the real ids and make sure the

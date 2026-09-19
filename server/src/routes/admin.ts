@@ -4,6 +4,9 @@ import { createPairingToken } from "../services/auth";
 import { SYSTEM_SPENDER, usageFor } from "../services/budget";
 import { docsStatus } from "../services/mauriceDocsRefresh";
 import { ArchiveError, exportResponse } from "../services/archive";
+import { openConversation, openingGuard } from "../services/openedConversations";
+import { canUseMaurice } from "../services/maurices";
+import { getUser, getUserByUsername } from "../services/users";
 import db from "../db";
 
 const admin = new Hono();
@@ -140,6 +143,41 @@ admin.get("/export", (c) => {
     console.error(`[archive] export refused: ${e?.message ?? e}`);
     return c.json({ error: e instanceof ArchiveError ? e.message : "Export failed" }, 500);
   }
+});
+
+// ── POST /api/admin/conversations/open ──────────────────────────
+// Open a conversation for a member, in Maurice's voice — the operator's hand
+// on the brick the night will use (services/openedConversations.ts). Body:
+// { member_id | username, text, title?, maurice_id?, force?, dry_run? }.
+// `dry_run` only answers the guard. Refused by the guard → 409 with the
+// reason (child, guest, too_soon) and, when it is a matter of time, `next_at`.
+
+admin.post("/conversations/open", async (c) => {
+  const body = await c.req.json().catch(() => ({}));
+  const member = body.member_id
+    ? getUser(String(body.member_id))
+    : body.username
+      ? (() => { const u = getUserByUsername(String(body.username)); return u ? getUser(u.id) : null; })()
+      : null;
+  if (!member) return c.json({ error: "Unknown member" }, 404);
+  const text = typeof body.text === "string" ? body.text.trim() : "";
+  if (body.dry_run) return c.json({ member_id: member.id, guard: openingGuard(member.id) });
+  if (!text) return c.json({ error: "text required" }, 400);
+  const mauriceId = body.maurice_id ? String(body.maurice_id) : null;
+  if (mauriceId && !canUseMaurice(mauriceId, member.id)) return c.json({ error: "Unknown domain for this member" }, 404);
+  const result = await openConversation({
+    memberId: member.id,
+    text,
+    title: typeof body.title === "string" ? body.title : null,
+    mauriceId,
+    force: body.force === true,
+  });
+  if (!result.ok) {
+    if (result.reason === "empty") return c.json({ error: "text required" }, 400);
+    if (result.reason === "unknown") return c.json({ error: "Unknown member" }, 404);
+    return c.json({ error: "Refused by the guard", reason: result.reason, last_opened_at: result.last_opened_at ?? null, next_at: result.next_at ?? null }, 409);
+  }
+  return c.json({ conversation: result.conversation, message: result.message }, 201);
 });
 
 export default admin;

@@ -10,6 +10,9 @@ export interface User {
   avatar_url: string | null;
   profile_text: string | null;
   has_pin: boolean;
+  /** A child: Maurice never opens a conversation for them on his own, and
+   *  the night proposes nothing to them. Set by the admin in the console. */
+  is_child: boolean;
   created_at: string;
   last_active_at: string | null;
 }
@@ -31,12 +34,12 @@ export function listUsers(): User[] {
     .query(
       `SELECT id, username, display_name, role, avatar_color, avatar_url, profile_text,
               CASE WHEN pin_hash IS NOT NULL THEN 1 ELSE 0 END as has_pin,
-              created_at, last_active_at
+              is_child, created_at, last_active_at
        FROM users ORDER BY created_at`
     )
     .all() as any[];
 
-  return rows.map((r) => ({ ...r, has_pin: !!r.has_pin }));
+  return rows.map((r) => ({ ...r, has_pin: !!r.has_pin, is_child: !!r.is_child }));
 }
 
 export function getUser(id: string): User | null {
@@ -44,13 +47,13 @@ export function getUser(id: string): User | null {
     .query(
       `SELECT id, username, display_name, role, avatar_color, avatar_url, profile_text,
               CASE WHEN pin_hash IS NOT NULL THEN 1 ELSE 0 END as has_pin,
-              created_at, last_active_at
+              is_child, created_at, last_active_at
        FROM users WHERE id = ?`
     )
     .get(id) as any;
 
   if (!row) return null;
-  return { ...row, has_pin: !!row.has_pin };
+  return { ...row, has_pin: !!row.has_pin, is_child: !!row.is_child };
 }
 
 export function getUserByUsername(username: string): {
@@ -293,6 +296,12 @@ export function guestCanReach(actorId: string, targetId: string): boolean {
 
 export function setUserRole(id: string, role: "admin" | "standard" | "guest"): void {
   db.run(`UPDATE users SET role = ? WHERE id = ?`, [role, id]);
+}
+
+/** Mark a member as a child (or not): Maurice never opens a conversation for
+ *  a child on his own, and the night proposes nothing to them. */
+export function setUserChild(id: string, child: boolean): void {
+  db.run(`UPDATE users SET is_child = ? WHERE id = ?`, [child ? 1 : 0, id]);
 }
 
 /** Set (or change) a member's own PIN — used by self-service PIN setup. */

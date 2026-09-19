@@ -467,6 +467,8 @@
 "chat.review_reports" = "Revisar denuncias";
 "chat.leave_room" = "Salir de la sala";
 "sidebar.search" = "Buscar";
+// A conversation Maurice opened on his own (ScopePickerView.swift)
+"sidebar.opened_by_maurice" = "Abierta por Maurice";
 
 // Domain briefs (DomainBriefView.swift)
 "brief.title" = "Cuaderno";

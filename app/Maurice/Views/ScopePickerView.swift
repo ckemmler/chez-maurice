@@ -583,12 +583,22 @@ private struct ConversationRow: View {
                 ProviderBadge(provider: badge, size: 30)
                     .padding(.trailing, -2.75)
             }
-            Text(conversation.title ?? session.localized("chat.new_conversation"))
-                .font(.system(size: 16))
-                .foregroundStyle(theme.ink)
-                .lineLimit(1)
-                .truncationMode(.tail)
-                .frame(maxWidth: .infinity, alignment: .leading)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(conversation.title ?? session.localized("chat.new_conversation"))
+                    .font(.system(size: 16))
+                    .foregroundStyle(theme.ink)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                // A conversation Maurice opened on his own is told apart by
+                // its first author, not by a colour: one quiet caption.
+                if conversation.openedByMaurice {
+                    Text(session.localized("sidebar.opened_by_maurice"))
+                        .font(.system(size: 12))
+                        .foregroundStyle(theme.inkMute)
+                        .lineLimit(1)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
 
             if multi {
                 AvatarStack(participants: participants, serverBase: session.serverURL,
