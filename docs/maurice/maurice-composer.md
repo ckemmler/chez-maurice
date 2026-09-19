@@ -1,6 +1,6 @@
 ---
 title: The context composer
-date: '2026-09-18'
+date: '2026-09-19'
 flags: []
 locale: en
 description: Loading notes, books, files, and past conversations into a chat under
@@ -105,6 +105,8 @@ Two layers stack:
 
 - **Baked-in (locked)** — a [[maurice-personas-hats|persona's]] own `context_json`, frozen onto the conversation. It shows with a lock icon ("baked-in to {name}"), is always included, and can't be removed — only the persona's editor changes it.
 - **Added** — whatever you attach for this conversation via the omnibox; removable with a tap.
+
+A third layer rides beside them since 19 September 2026, invisible in the tray: the member's [[maurice-domains|domain briefs]], placed after the loaded context in the prompt (3 000 tokens at most, private conversations only). They are not context the member loads; they are what Maurice remembers, and the domain page is where they are edited.
 
 ## The omnibox
 

@@ -68,6 +68,10 @@ Hats are defined in `app/Maurice/Hats.swift`, with the brand boater logomark dra
 
 The armed persona persists per conversation; switching personas is done from the picker on the composer's send button.
 
+## A Maurice of your own is a domain
+
+Since 19 September 2026 a persona the member made is, seen from the other side, a **domain** of their life — and Maurice keeps a **brief** on it, written at night from the conversations that touched it and read in every private conversation. The Studio row of such a Maurice carries a book icon, and the greeting a **Brief** button beside *Edit Maurice*: both open the domain page, where the brief is read, corrected, erased or rewritten now. Neither appears on the everyday Maurice, on Maurice Maurice, or on a persona another member shared. The whole of it — data, night, prompt, routes, page, and the design it comes from — is in [[maurice-domains]].
+
 ## Access & guests
 
 Personas are owned by their creator. Guests (a restricted role — see [[maurice-households-rooms]]) don't create their own; an admin grants them access to specific personas, which is how a guest gets a curated, bounded Maurice rather than the full system.
