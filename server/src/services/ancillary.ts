@@ -349,6 +349,39 @@ export function refreshAutoPins(): string[] {
   return repin((inv) => pinSource(inv.id) === "auto");
 }
 
+/** Which invocations have ever been offered their advice here. */
+function advised(): Set<string> {
+  return new Set(
+    (db.query(`SELECT invocation FROM ancillary_advised`).all() as Array<{ invocation: string }>).map((r) => r.invocation),
+  );
+}
+
+function markAdvised(ids: string[]): void {
+  for (const id of ids) db.run(`INSERT OR IGNORE INTO ancillary_advised (invocation) VALUES (?)`, [id]);
+}
+
+/**
+ * Pin the invocations this household has never been offered a pin for — the
+ * ones added to the catalogue after its seed ran. The seed is once per
+ * household and the refresh revises only pins that exist, so without this a
+ * new function ran on the household's ancillary model, whatever the advice:
+ * the domains' night functions would have written briefs on Mistral Medium.
+ *
+ * An invocation that already has a pin is marked as advised and left alone
+ * (a person may have set it before this existed). One that has no pin and no
+ * advice — no callable model — is left unmarked, so it gets its pin the day a
+ * key arrives, exactly like the seed. Once marked, an invocation is never
+ * pinned by this again: a pin the admin deletes stays deleted.
+ */
+export function pinNewInvocations(): string[] {
+  const seen = advised();
+  const fresh = presentInvocations().filter((i) => !seen.has(i.id));
+  if (!fresh.length) return [];
+  const changed = repin((inv) => !seen.has(inv.id) && pinnedModel(inv.id) === null);
+  markAdvised(fresh.filter((i) => pinnedModel(i.id) !== null).map((i) => i.id));
+  return changed;
+}
+
 export function setHouseholdAncillaryModel(modelId: string): void {
   db.run(`UPDATE households SET ancillary_model = ? WHERE id = 'default'`, [modelId]);
 }

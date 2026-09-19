@@ -59,7 +59,7 @@ import maurices from "./src/routes/maurices";
 import models from "./src/routes/models";
 import toolFamilies from "./src/routes/toolFamilies";
 import { adminExists, getUser, getUserByUsername, householdName, householdInfo } from "./src/services/users";
-import { refreshAutoPins, seedAncillaryPinsOnce } from "./src/services/ancillary";
+import { pinNewInvocations, refreshAutoPins, seedAncillaryPinsOnce } from "./src/services/ancillary";
 import ancillaryRoute from "./src/routes/ancillary";
 import { dataDir } from "./src/db";
 import { imagesDir } from "./src/services/images";
@@ -754,6 +754,12 @@ if (seededPins.length) {
 const movedPins = refreshAutoPins();
 if (movedPins.length) {
   console.log(`[ancillary] moved ${movedPins.length} unchosen pin(s) onto what is advised now`);
+}
+// And a function added to the catalogue since this household was seeded gets
+// its pin now rather than never.
+const newPins = pinNewInvocations();
+if (newPins.length) {
+  console.log(`[ancillary] pinned ${newPins.length} new function(s): ${newPins.join(", ")}`);
 }
 
 console.log(`

@@ -565,6 +565,19 @@ db.run(`
     updated_at TEXT NOT NULL DEFAULT (datetime('now'))
   )
 `);
+// Which invocations have had their advice at least once. The seed above runs
+// once per household, and the refresh only revises pins that exist, so an
+// invocation added to the catalogue after a household was seeded had no pin
+// at all — the domains' two night functions (19 September 2026) would have
+// run on the household's flagship. A row here says "this one was offered its
+// pin"; an invocation without a row is new and gets one at the next start,
+// while a pin the admin deleted keeps its row and is never re-created.
+db.run(`
+  CREATE TABLE IF NOT EXISTS ancillary_advised (
+    invocation TEXT PRIMARY KEY,
+    at         TEXT NOT NULL DEFAULT (datetime('now'))
+  )
+`);
 try { db.run(`ALTER TABLE households ADD COLUMN ancillary_model TEXT`); } catch {}
 // Forced: an install that predates the column gets its chat default as its
 // ancillary default, so every function has a model from the first request.

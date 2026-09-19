@@ -13,8 +13,8 @@ import { join } from "path";
 const { default: db, migrateAncillaryPinSource } = await import("../src/db");
 const {
   ANCILLARY_INVOCATIONS, PREFERRED, ancillaryModel, applyRecommendedPins, hasRecommendations,
-  pinSource, presentInvocations, recommendedModel, refreshAutoPins, seedAncillaryPinsOnce,
-  setPinnedModel,
+  pinNewInvocations, pinSource, presentInvocations, recommendedModel, refreshAutoPins,
+  seedAncillaryPinsOnce, setPinnedModel,
 } = await import("../src/services/ancillary");
 
 const NO_KEYS = {
@@ -46,6 +46,52 @@ beforeEach(() => {
   db.run(`DELETE FROM ancillary_models`);
   db.run(`UPDATE households SET ancillary_pins_seeded = 0 WHERE id = 'default'`);
 });
+
+test("the night's functions prefer DeepSeek before their tier's list, and fall back to Mistral Small", () => {
+  household("glm-5.3-flash", { scaleway_api_key: "k-scw" });
+  expect(recommendedModel("domain_brief")).toBe("deepseek-v4-flash-0731");
+  expect(recommendedModel("domain_mapping")).toBe("deepseek-v4-flash-0731");
+  expect(recommendedModel("conversation_summary")).toBe("gpt-oss-120b"); // the tier's list, untouched
+  household("mistral-small-latest", { mistral_api_key: "k-mis" });
+  expect(recommendedModel("domain_brief")).toBe("mistral-small-latest");
+});
+
+test("a function added after the household was seeded gets its pin at the next start, once", () => {
+  household("glm-5.3-flash", { scaleway_api_key: "k-scw" });
+  db.run(`DELETE FROM ancillary_advised`);
+  seedAncillaryPinsOnce();
+  expect(pinnedOf("domain_brief")).toBe("deepseek-v4-flash-0731");
+  // Pretend the seed ran before the night's functions existed.
+  setPinnedModel("domain_brief", null);
+  setPinnedModel("domain_mapping", null);
+  db.run(`DELETE FROM ancillary_advised WHERE invocation IN ('domain_brief', 'domain_mapping')`);
+  // The refresh revises pins that exist; these have none.
+  expect(refreshAutoPins()).toEqual([]);
+  expect(pinNewInvocations().sort()).toEqual(["domain_brief", "domain_mapping"]);
+  expect(pinnedOf("domain_brief")).toBe("deepseek-v4-flash-0731");
+  expect(pinSource("domain_brief")).toBe("auto");
+  // Deleted by the admin: stays deleted.
+  setPinnedModel("domain_brief", null);
+  expect(pinNewInvocations()).toEqual([]);
+  expect(pinnedOf("domain_brief")).toBe(null);
+  // A pin a person set before the table existed is theirs, and marked as seen.
+  db.run(`DELETE FROM ancillary_advised WHERE invocation = 'domain_mapping'`);
+  setPinnedModel("domain_mapping", "mistral-small-3.2-24b-instruct-2506", "admin");
+  expect(pinNewInvocations()).toEqual([]);
+  expect(pinnedOf("domain_mapping")).toBe("mistral-small-3.2-24b-instruct-2506");
+  expect(db.query(`SELECT 1 FROM ancillary_advised WHERE invocation = 'domain_mapping'`).get()).toBeTruthy();
+  // No key at all: nothing pinned, nothing marked, so it happens the day a key arrives.
+  db.run(`DELETE FROM ancillary_advised`);
+  db.run(`DELETE FROM ancillary_models`);
+  household("glm-5.3-flash", { zai_api_key: "k-zai" });
+  expect(pinNewInvocations()).toEqual([]);
+  expect((db.query(`SELECT COUNT(*) AS n FROM ancillary_advised`).get() as any).n).toBe(0);
+});
+
+function pinnedOf(id: string): string | null {
+  const row = db.query(`SELECT model_id FROM ancillary_models WHERE invocation = ?`).get(id) as { model_id: string } | null;
+  return row?.model_id ?? null;
+}
 
 test("only the functions whose code is installed are offered", () => {
   const present = presentInvocations();
