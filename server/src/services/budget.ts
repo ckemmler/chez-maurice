@@ -15,6 +15,9 @@
 //   the household's — households.spend_cap_daily_usd, its own choice, counted
 //     over the whole household
 //   the member's — users.spend_cap_daily_usd, counted over that member alone
+//   the night's — households.spend_cap_system_daily_usd, counted over what
+//     Maurice spends on nobody's turn (the domain briefs, later the mapping),
+//     recorded under the "system" spender below
 //
 // With none set the instance is uncapped and every function here is a no-op,
 // which is what a household paying its own provider wants. The ledger names
@@ -84,6 +87,33 @@ export function memberDailyCap(userId: string): number | null {
   return stored(row?.cap);
 }
 
+// ── The "system" spender ────────────────────────────────────────────────────
+//
+// Since 19 September 2026 Maurice spends money on nobody's turn: the domain
+// briefs are rewritten at night, and the mapping will follow. Those rows carry
+// this id in `spend_ledger.user_id` instead of a member's — they are the
+// household's cost, not anyone's — and are capped by the night's own daily
+// allowance, so a runaway night cannot eat the household's day. Not a row in
+// `users`: the ledger's user_id has no foreign key, on purpose.
+
+export const SYSTEM_SPENDER = "system";
+
+export function isSystemSpender(id: string | null | undefined): boolean {
+  return id === SYSTEM_SPENDER;
+}
+
+export function systemDailyCap(): number | null {
+  const row = db
+    .query<{ cap: number | null }, []>(`SELECT spend_cap_system_daily_usd AS cap FROM households WHERE id = 'default'`)
+    .get();
+  return stored(row?.cap);
+}
+
+/** Set (or clear with null) the night's own daily cap. */
+export function setSystemDailyCap(usd: number | null): void {
+  db.run(`UPDATE households SET spend_cap_system_daily_usd = ? WHERE id = 'default'`, [stored(usd)]);
+}
+
 /** Set (or clear with null) the household's own daily cap. */
 export function setHouseholdDailyCap(usd: number | null): void {
   db.run(`UPDATE households SET spend_cap_daily_usd = ? WHERE id = 'default'`, [stored(usd)]);
@@ -104,7 +134,7 @@ export function capsFor(userId?: string | null): AppliedCaps {
   return {
     ...caps(),
     householdDailyUsd: householdDailyCap(),
-    memberDailyUsd: userId ? memberDailyCap(userId) : null,
+    memberDailyUsd: isSystemSpender(userId) ? systemDailyCap() : userId ? memberDailyCap(userId) : null,
   };
 }
 
@@ -211,9 +241,11 @@ function layers(userId?: string | null): Layer[] {
     out.push({
       capUsd: c.memberDailyUsd,
       spentUsd: spentTodayUsd(userId),
-      reason:
-        `You have reached your daily limit of ${usd(c.memberDailyUsd)}. ` +
-        `It resets as the day rolls forward; nothing here is lost in the meantime.`,
+      reason: isSystemSpender(userId)
+        ? `The night's work has reached its daily allowance of ${usd(c.memberDailyUsd)}; ` +
+          `what is left waits for the next night.`
+        : `You have reached your daily limit of ${usd(c.memberDailyUsd)}. ` +
+          `It resets as the day rolls forward; nothing here is lost in the meantime.`,
     });
   }
   if (c.householdDailyUsd != null) {

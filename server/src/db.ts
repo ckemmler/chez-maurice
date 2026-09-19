@@ -783,6 +783,36 @@ try {
 // from one turn to the next, which is what the cache is keyed on.
 try { db.run(`ALTER TABLE conversations ADD COLUMN context_from TEXT`); } catch {}
 
+// ── Domains (19 September 2026) ─────────────────────────────────
+// `maurices` is the table of domains — it always was, without knowing it: a
+// name, a prompt, a bound context. What a domain adds is its *brief*: the short
+// text Maurice keeps on that part of a member's life, rewritten at night from
+// the previous brief and the conversations that touched it since, and read,
+// corrected or erased by the member (services/domainBriefs.ts). One row per
+// domain and member. `sources_json` names the conversations the last rewrite
+// read; `read_until` is the timestamp of the newest message it saw, which is
+// what makes the next night incremental — only what came after is read again.
+db.run(`
+  CREATE TABLE IF NOT EXISTS domain_briefs (
+    maurice_id   TEXT NOT NULL REFERENCES maurices(id) ON DELETE CASCADE,
+    member_id    TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    text         TEXT NOT NULL DEFAULT '',
+    updated_at   TEXT NOT NULL DEFAULT (datetime('now')),
+    sources_json TEXT NOT NULL DEFAULT '[]',
+    read_until   TEXT,
+    model        TEXT,
+    PRIMARY KEY (maurice_id, member_id)
+  )
+`);
+// Who opened a conversation: a member, as always until now, or Maurice — the
+// conversation the night creates to propose domains (the design's 4b). Read by
+// nothing yet; the column exists so the proposal path has a place to land.
+try { db.run(`ALTER TABLE conversations ADD COLUMN opened_by TEXT NOT NULL DEFAULT 'member'`); } catch {}
+// The night's own daily cap: what Maurice may spend on nobody's turn — briefs,
+// and later the mapping — counted under the ledger's "system" spender
+// (services/budget.ts). Null = no cap of its own; the household's still applies.
+try { db.run(`ALTER TABLE households ADD COLUMN spend_cap_system_daily_usd REAL`); } catch {}
+
 // Migration: an earlier seed minted fabricated ids (opus/haiku at the sonnet
 // version), which 404 at Anthropic. Remap to the real ids and make sure the
 // household default points at a model that actually exists.

@@ -137,8 +137,8 @@ function localDay(d: Date): string {
 
 /** Due once per local day, from HOUR onwards. A server that was down at HOUR
  *  runs it when it comes back rather than skipping the day. */
-export function isDue(now: Date, lastRunAt: string | null): boolean {
-  if (now.getHours() < HOUR) return false;
+export function isDue(now: Date, lastRunAt: string | null, hour = HOUR): boolean {
+  if (now.getHours() < hour) return false;
   if (!lastRunAt) return true;
   const last = new Date(lastRunAt);
   return Number.isNaN(last.getTime()) || localDay(last) !== localDay(now);
@@ -166,15 +166,19 @@ async function doRun(deps: NightlyDeps): Promise<NightlyOutcome> {
   try {
     // One pass reconciles every conversation for every participant; the member
     // it is scoped to only satisfies the gateway's auth.
-    const r = await reconcileAll(deps, members[0].id);
+    const r = await reconcileAll(deps, members[0]!.id);
     stats.conversations = r.conversations;
     stats.chunks_written = r.chunks_written;
-    // Prune is scoped to the caller's store, so once per member. A member
-    // whose prune fails does not take the others down; the error is kept.
+    // Prune is scoped to the caller's store, so once per member. The first
+    // member's call also sweeps the shared pool (`_default.db`, the books),
+    // which no member-scoped session reaches otherwise: a book removed from
+    // Calibre kept its chunks until someone ran prune from the corpus's CLI.
+    // A member whose prune fails does not take the others down; the error
+    // is kept.
     let pruneError: string | null = null;
-    for (const m of members) {
+    for (const [i, m] of members.entries()) {
       try {
-        const p = await deps.call(m.id, "prune", {});
+        const p = await deps.call(m.id, "prune", i === 0 ? { shared: true } : {});
         if (p?.error || p?.raw) throw new Error(String(p.error ?? p.raw));
         stats.pruned += Number(p?.removed ?? 0);
       } catch (err) {

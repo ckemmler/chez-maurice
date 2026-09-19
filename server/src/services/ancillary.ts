@@ -65,7 +65,23 @@ export interface AncillaryInvocation {
    * converted to the server's turn endpoint like the rest.
    */
   ownDispatch?: boolean;
+  /**
+   * A preference of its own, best first, tried before the tier's list. For
+   * the night's functions: P0 bis (19 September 2026) had two candidates
+   * write the same briefs, and DeepSeek V4 Flash keeps a brief where Mistral
+   * Small summarises one — it dates, closes and opens threads, and really
+   * rewrites at the incremental pass — for a third of a euro cent per domain
+   * per night. The tier's list would have advised GPT-OSS, which nobody read.
+   */
+  prefer?: string[];
 }
+
+/** The night model P0 bis chose, and its fallback — see `prefer` above. */
+const NIGHT_MODELS = [
+  "deepseek-v4-flash-0731",              // scaleway — the brief that reads like one
+  "mistral-small-3.2-24b-instruct-2506", // scaleway — five times cheaper, summarises
+  "mistral-small-latest",                // mistral
+];
 
 export const ANCILLARY_INVOCATIONS: AncillaryInvocation[] = [
   // Server
@@ -79,6 +95,14 @@ export const ANCILLARY_INVOCATIONS: AncillaryInvocation[] = [
     blurb: "A free-text signal (sleep, mood, sport…) turned into a structured entry." },
   { id: "signal_nutrition", side: "server", tier: "standard", label: "Meal estimation",
     blurb: "A meal signal with its protein and calorie estimate." },
+  // The night (services/domainBriefs.ts): what Maurice writes on nobody's turn,
+  // charged to the ledger's "system" spender and capped by the night's allowance.
+  { id: "domain_brief", side: "server", tier: "standard", label: "Domain brief",
+    blurb: "A domain's brief, rewritten at night from the previous one and the conversations that touched it since.",
+    prefer: NIGHT_MODELS },
+  { id: "domain_mapping", side: "server", tier: "standard", label: "Domain mapping",
+    blurb: "Naming and describing the groups of conversations the night finds, to propose them as domains.",
+    prefer: NIGHT_MODELS },
   // Python tools (models.yml's assignments, now settable here)
   { id: "dossier_title", side: "tools", tier: "light", label: "Dossier title", blurb: "Naming a research dossier.", needs: "tools/pipelines/research_tracks", ownDispatch: true },
   { id: "topic_tags", side: "tools", tier: "light", label: "Topic tags", blurb: "Tagging a topic or an entry.", needs: "tools/pipelines/research_tracks", ownDispatch: true },
@@ -185,7 +209,7 @@ function callableHere(id: string): boolean {
 export function recommendedModel(invocation: string): string | null {
   const inv = ANCILLARY_INVOCATIONS.find((i) => i.id === invocation);
   if (!inv || inv.ownDispatch) return null;
-  return PREFERRED[inv.tier].find(callableHere) ?? null;
+  return [...(inv.prefer ?? []), ...PREFERRED[inv.tier]].find(callableHere) ?? null;
 }
 
 /** Does any function have advice to take? The admin screen asks before it

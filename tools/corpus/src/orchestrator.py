@@ -27,6 +27,9 @@ if _repo_root not in _sys.path:
     _sys.path.insert(0, _repo_root)
 from tools.shared.context import member_id_var
 
+# The store's shared pool: the file every member's search unions with its own.
+_SHARED_POOL = "_default"
+
 
 def _data_dir() -> Path:
     """Where index state and import history live. MAURICE_CORPUS_DATA_DIR wins."""
@@ -282,7 +285,7 @@ class CorpusOrchestrator:
             for path in files:
                 await self.index_file(path, name, source, force=force)
 
-    def prune_missing(self, sources: Optional[List[str]] = None) -> dict:
+    def prune_missing(self, sources: Optional[List[str]] = None, *, shared: bool = False) -> dict:
         """Drop index entries whose file is gone from disk.
 
         Nothing did this. The watcher removes a file it sees deleted, but a
@@ -294,21 +297,30 @@ class CorpusOrchestrator:
 
         Only filesystem-backed units are considered: a conversation's unit key
         is `msg:<uuid>`, not a path, and must never be treated as missing.
+
+        The store is one file per member plus a shared pool (`_default`), and
+        a session is scoped to one member, so a prune reaches that member's
+        file alone. `shared` sweeps the pool as well — the books — which the
+        server's nightly asks for once (19 September 2026).
         """
         wanted = set(sources or [])
-        units: dict[str, str] = {}
-        for payload in self.indexer.iter_chunks(limit=1_000_000):
-            key = payload.get("file_path")
-            if not isinstance(key, str) or not key.startswith("/"):
-                continue
-            source = str(payload.get("source", ""))
-            if wanted and source not in wanted:
-                continue
-            units[key] = source
+        scopes: list[Optional[str]] = [None]
+        if shared:
+            scopes.append(_SHARED_POOL)
+        units: dict[tuple[Optional[str], str], str] = {}
+        for scope in scopes:
+            for payload in self.indexer.iter_chunks(limit=1_000_000, member_id=scope):
+                key = payload.get("file_path")
+                if not isinstance(key, str) or not key.startswith("/"):
+                    continue
+                source = str(payload.get("source", ""))
+                if wanted and source not in wanted:
+                    continue
+                units[(scope, key)] = source
 
-        removed = [k for k in units if not Path(k).exists()]
-        for key in removed:
-            self.indexer.delete_unit(unit_key=key)
+        removed = [k for k in units if not Path(k[1]).exists()]
+        for scope, key in removed:
+            self.indexer.delete_unit(unit_key=key, member_id=scope)
             try:
                 self.hash_store.delete(Path(key))
             except Exception:  # noqa: BLE001 — a stale hash row is not worth failing over

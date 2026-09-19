@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { requireAuth, requireAdmin } from "../middleware/auth";
 import { createPairingToken } from "../services/auth";
-import { usageFor } from "../services/budget";
+import { SYSTEM_SPENDER, usageFor } from "../services/budget";
 import { docsStatus } from "../services/mauriceDocsRefresh";
 import { ArchiveError, exportResponse } from "../services/archive";
 import db from "../db";
@@ -12,7 +12,9 @@ admin.use("/*", requireAuth);
 admin.use("/*", requireAdmin);
 
 // ── GET /api/admin/usage ────────────────────────────────────────
-// Every member's spend, and the tightest daily cap that applies to each.
+// Every member's spend, and the tightest daily cap that applies to each. Last,
+// the "system" spender: what Maurice spent on nobody's turn (the night's
+// briefs), under the night's own cap.
 
 admin.get("/usage", (c) => {
   const rows = db
@@ -20,6 +22,7 @@ admin.get("/usage", (c) => {
       `SELECT id, username, display_name FROM users ORDER BY created_at`,
     )
     .all();
+  rows.push({ id: SYSTEM_SPENDER, username: SYSTEM_SPENDER, display_name: "Maurice, at night" });
   return c.json(
     rows.map((u) => {
       const usage = usageFor(u.id);

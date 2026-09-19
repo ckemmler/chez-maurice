@@ -52,6 +52,8 @@ import { maybeRegenerateAdherence } from "./src/services/gardenTools";
 import { localiseRemoteImages } from "./src/services/gardenImages";
 import { scheduleDocsRefresh } from "./src/services/mauriceDocsRefresh";
 import { scheduleCorpusNightly } from "./src/services/corpusNightly";
+import { scheduleDomainBriefsNightly } from "./src/services/domainBriefs";
+import domains from "./src/routes/domains";
 import { gardenLook, isNoteSharedWith, gardenFor } from "./src/services/gardens";
 import maurices from "./src/routes/maurices";
 import models from "./src/routes/models";
@@ -202,6 +204,9 @@ scheduleDocsRefresh();
 // entries once a night, the safety net under the per-turn push (see
 // services/corpusNightly.ts).
 scheduleCorpusNightly();
+// The domain briefs: an hour after the corpus, rewrite each member's briefs
+// from what touched their domains since (see services/domainBriefs.ts).
+scheduleDomainBriefsNightly();
 
 /** Is this a member whose garden the household serves? */
 function gardenExists(member: string): boolean {
@@ -300,6 +305,7 @@ app.route("/api/files", files);
 app.route("/api/conversations", conversations);
 app.route("/api/reports", reports);
 app.route("/api/maurices", maurices);
+app.route("/api/domains", domains);
 app.route("/api/models", models);
 app.route("/api/tool-families", toolFamilies);
 app.route("/api/admin", admin);

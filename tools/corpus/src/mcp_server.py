@@ -219,6 +219,14 @@ class CorpusMCPServer:
                                 "items": {"type": "string"},
                                 "description": "Limit to these sources; omit to scan all file-backed ones",
                             },
+                            "shared": {
+                                "type": "boolean",
+                                "description": (
+                                    "Also sweep the shared pool (_default.db: the books and everything "
+                                    "indexed for nobody in particular), which a member-scoped session "
+                                    "never reaches otherwise. The server's nightly asks once."
+                                ),
+                            },
                         },
                     },
                 ),
@@ -461,7 +469,9 @@ class CorpusMCPServer:
                     await self.orchestrator.index_single(source, target)
                 payload = {"source": source, "path": str(target)}
             elif name == "prune":
-                payload = self.orchestrator.prune_missing(arguments.get("sources"))
+                payload = self.orchestrator.prune_missing(
+                    arguments.get("sources"), shared=bool(arguments.get("shared"))
+                )
             elif name == "reindex":
                 await self.orchestrator.initial_index(
                     arguments.get("sources"), force=bool(arguments.get("force"))

@@ -51,9 +51,10 @@ import {
 import { ping, discover, totalRamGB } from "../services/ollama";
 import { docsStatus, docsUrl, refreshDocs } from "../services/mauriceDocsRefresh";
 import { corpusNightlyStatus, reconcileCorpus } from "../services/corpusNightly";
+import { briefsNightlyStatus, runDomainBriefs } from "../services/domainBriefs";
 import { ArchiveError, exportResponse } from "../services/archive";
 import { t, langOf, SUPPORTED } from "../services/i18n";
-import { spentTodayUsd, spentMonthUsd, memberDailyCap, setMemberDailyCap, setHouseholdDailyCap } from "../services/budget";
+import { SYSTEM_SPENDER, spentTodayUsd, spentMonthUsd, memberDailyCap, setMemberDailyCap, setHouseholdDailyCap, setSystemDailyCap } from "../services/budget";
 import { corpusCall } from "../services/mcpClient";
 import { mkdirSync, readFileSync, existsSync } from "fs";
 import { join, resolve, extname } from "path";
@@ -798,6 +799,9 @@ web.get("/dashboard", async (c) => {
             <div class="field" style="max-width:200px"><label class="label">${escape(t(lang, "settings.spend_cap_daily"))}</label>
               <input type="number" name="spend_cap_daily_usd" min="0" step="0.01" value="${household.spend_cap_daily_usd ?? ""}" placeholder="—" />
               <span class="hint">${escape(t(lang, "settings.spend_cap_daily_hint"))}</span></div>
+            <div class="field" style="max-width:200px"><label class="label">${escape(t(lang, "settings.spend_cap_system"))}</label>
+              <input type="number" name="spend_cap_system_daily_usd" min="0" step="0.01" value="${household.spend_cap_system_daily_usd ?? ""}" placeholder="—" />
+              <span class="hint">${escape(t(lang, "settings.spend_cap_system_hint", spentTodayUsd(SYSTEM_SPENDER).toFixed(2), spentMonthUsd(SYSTEM_SPENDER).toFixed(2)))}</span></div>
           </div>
           <div class="grid-actions"><button type="submit" class="btn primary">${escape(t(lang, "settings.save"))}</button></div>
         </form>
@@ -891,6 +895,11 @@ web.get("/dashboard", async (c) => {
         ${corpusCard(lang)}
       </section>
 
+      <section id="sec-briefs">
+        ${sectionHead(t(lang, "dashboard.kicker_advanced"), t(lang, "briefs.title"), t(lang, "briefs.desc"))}
+        ${briefsCard(lang)}
+      </section>
+
       <section id="sec-archive">
         ${sectionHead(t(lang, "dashboard.kicker_archive"), t(lang, "archive.title"), t(lang, "archive.desc"))}
         <div class="card pad">
@@ -973,6 +982,39 @@ web.post("/corpus/reconcile", (c) => {
   return c.redirect(`/admin/dashboard?msg=${already ? "corpus_reconcile_running" : "corpus_reconcile_started"}#sec-corpus`);
 });
 
+// ── The domain briefs ───────────────────────────────────────────
+// The night's other job (services/domainBriefs.ts): when the briefs were last
+// rewritten, what it did and cost, and a button to run it now. Not awaited —
+// one model call per domain with something new.
+function briefsCard(lang: string): string {
+  const s = briefsNightlyStatus();
+  const when = s.last_run_at
+    ? t(lang, "briefs.last_run", s.last_run_at.slice(0, 16).replace("T", " "))
+    : t(lang, "briefs.never_run");
+  const outcome = s.last_outcome ? t(lang, "briefs.outcome_" + s.last_outcome) : "";
+  const stats = s.last_stats
+    ? t(lang, "briefs.stats", String(s.last_stats.written), String(s.last_stats.unchanged), String(s.last_stats.failed), String(s.last_stats.domains), s.last_stats.cost_usd.toFixed(4))
+    : "";
+  return `
+        <div class="card pad">
+          <div class="field">
+            <label class="label">${escape(s.running ? t(lang, "briefs.running") : s.on ? t(lang, "briefs.nightly_on") : t(lang, "briefs.off"))}</label>
+            <span class="hint">${escape(when)}${outcome ? ` · ${escape(outcome)}` : ""}${stats ? ` · ${escape(stats)}` : ""}</span>
+            ${s.last_error ? `<span class="hint" style="color:var(--caution)">${escape(t(lang, "briefs.last_error", s.last_error))}</span>` : ""}
+            <span class="hint">${escape(t(lang, "briefs.spent", spentTodayUsd(SYSTEM_SPENDER).toFixed(2), spentMonthUsd(SYSTEM_SPENDER).toFixed(2)))}</span>
+          </div>
+          <div class="grid-actions"><form method="POST" action="/admin/briefs/run" class="inline"><button type="submit" class="btn default sm"${s.running ? " disabled" : ""}>↻ ${escape(t(lang, "briefs.run_now"))}</button></form></div>
+        </div>`;
+}
+
+web.post("/briefs/run", (c) => {
+  const redir = requireWebAdmin(c);
+  if (redir) return redir;
+  const already = briefsNightlyStatus().running;
+  runDomainBriefs().catch(() => {});
+  return c.redirect(`/admin/dashboard?msg=${already ? "briefs_running" : "briefs_started"}#sec-briefs`);
+});
+
 // ── Export (GET) ────────────────────────────────────────────────
 // The household archive from the console — the same stream as
 // GET /api/admin/export, behind the admin cookie instead of a bearer token.
@@ -1021,6 +1063,10 @@ web.post("/settings", async (c) => {
   if (form.spend_cap_daily_usd !== undefined) {
     const cap = parseCapUsd(form.spend_cap_daily_usd);
     if (cap !== undefined) setHouseholdDailyCap(cap);
+  }
+  if (form.spend_cap_system_daily_usd !== undefined) {
+    const cap = parseCapUsd(form.spend_cap_system_daily_usd);
+    if (cap !== undefined) setSystemDailyCap(cap);
   }
   return c.redirect("/admin/dashboard?msg=settings_saved#sec-settings");
 });
