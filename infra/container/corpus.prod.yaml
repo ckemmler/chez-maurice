@@ -23,13 +23,21 @@ embedding:
   # EU, which is the point of the exercise.
   #
   # CHANGING THE MODEL OR ITS DIMENSION INVALIDATES THE INDEX. Vectors from two
-  # models are not comparable; a change means a full reindex. Decide once, at
-  # install, while the index is still empty.
+  # models are not comparable; the store pins the model that wrote it and
+  # refuses to open under another, so a change means a full reindex into a
+  # fresh store. Decide once, at install, while the index is still empty.
+  #
+  # The default since 19 September 2026 is Qwen3-Embedding 8B at 1024
+  # dimensions (matryoshka: the leading 1024 of its 4096 are an embedding on
+  # their own, and the same shape of store as a Mac running the 0.6B through
+  # Ollama). Households installed before that run bge-multilingual-gemma2 at
+  # its native 3584 — multilingual too, and set explicitly in their env — and
+  # keep it: a working index is not worth a re-index for the family's sake.
   provider: openai
-  model: ${CORPUS_EMBEDDING_MODEL:-bge-multilingual-gemma2}
+  model: ${CORPUS_EMBEDDING_MODEL:-qwen3-embedding-8b}
   base_url: ${CORPUS_EMBEDDING_BASE_URL:-https://api.scaleway.ai/v1}
   api_key: ${CORPUS_EMBEDDING_API_KEY:-}
-  vector_size: ${CORPUS_EMBEDDING_DIM:-3584}
+  vector_size: ${CORPUS_EMBEDDING_DIM:-1024}
   batch_size: 50
 
 watcher:

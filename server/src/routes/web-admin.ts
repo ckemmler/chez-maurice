@@ -50,6 +50,7 @@ import {
 } from "../services/modelAccess";
 import { ping, discover, totalRamGB } from "../services/ollama";
 import { docsStatus, docsUrl, refreshDocs } from "../services/mauriceDocsRefresh";
+import { corpusNightlyStatus, reconcileCorpus } from "../services/corpusNightly";
 import { ArchiveError, exportResponse } from "../services/archive";
 import { t, langOf, SUPPORTED } from "../services/i18n";
 import { spentTodayUsd, spentMonthUsd, memberDailyCap, setMemberDailyCap, setHouseholdDailyCap } from "../services/budget";
@@ -885,6 +886,11 @@ web.get("/dashboard", async (c) => {
         ${docsCard(lang)}
       </section>
 
+      <section id="sec-corpus">
+        ${sectionHead(t(lang, "dashboard.kicker_advanced"), t(lang, "corpus.title"), t(lang, "corpus.desc"))}
+        ${corpusCard(lang)}
+      </section>
+
       <section id="sec-archive">
         ${sectionHead(t(lang, "dashboard.kicker_archive"), t(lang, "archive.title"), t(lang, "archive.desc"))}
         <div class="card pad">
@@ -932,6 +938,39 @@ web.post("/docs/refresh", async (c) => {
   const outcome = await refreshDocs();
   const msg = { refreshed: "docs_refreshed", unchanged: "docs_up_to_date", failed: "docs_refresh_failed", off: "docs_refresh_off" }[outcome];
   return c.redirect(`/admin/dashboard?msg=${msg}#sec-docs`);
+});
+
+// ── The search corpus ───────────────────────────────────────────
+// The nightly reconciliation (services/corpusNightly.ts): when it last ran,
+// what it did, and a button to run it now. The run is not awaited — on a
+// household with years of conversations it takes minutes — the card says
+// "running" until it is done.
+function corpusCard(lang: string): string {
+  const s = corpusNightlyStatus();
+  const when = s.last_run_at
+    ? t(lang, "corpus.last_run", s.last_run_at.slice(0, 16).replace("T", " "))
+    : t(lang, "corpus.never_run");
+  const outcome = s.last_outcome ? t(lang, "corpus.outcome_" + s.last_outcome) : "";
+  const stats = s.last_stats
+    ? t(lang, "corpus.stats", String(s.last_stats.conversations), String(s.last_stats.chunks_written), String(s.last_stats.pruned))
+    : "";
+  return `
+        <div class="card pad">
+          <div class="field">
+            <label class="label">${escape(s.running ? t(lang, "corpus.running") : s.on ? t(lang, "corpus.nightly_on") : t(lang, "corpus.off"))}</label>
+            <span class="hint">${escape(when)}${outcome ? ` · ${escape(outcome)}` : ""}${stats ? ` · ${escape(stats)}` : ""}</span>
+            ${s.last_error ? `<span class="hint" style="color:var(--caution)">${escape(t(lang, "corpus.last_error", s.last_error))}</span>` : ""}
+          </div>
+          <div class="grid-actions"><form method="POST" action="/admin/corpus/reconcile" class="inline"><button type="submit" class="btn default sm"${s.running ? " disabled" : ""}>↻ ${escape(t(lang, "corpus.reconcile_now"))}</button></form></div>
+        </div>`;
+}
+
+web.post("/corpus/reconcile", (c) => {
+  const redir = requireWebAdmin(c);
+  if (redir) return redir;
+  const already = corpusNightlyStatus().running;
+  reconcileCorpus().catch(() => {});
+  return c.redirect(`/admin/dashboard?msg=${already ? "corpus_reconcile_running" : "corpus_reconcile_started"}#sec-corpus`);
 });
 
 // ── Export (GET) ────────────────────────────────────────────────

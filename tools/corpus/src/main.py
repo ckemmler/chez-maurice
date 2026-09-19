@@ -25,6 +25,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--config", default=Path("config/corpus.yaml"), type=Path)
     parser.add_argument("--source", action="append", help="Specific source(s) to target for indexing")
     parser.add_argument("--limit", type=int, default=10, help="Result limit for search command")
+    parser.add_argument(
+        "--force",
+        action="store_true",
+        help="index: re-embed files whose bytes have not changed (a model change, a new preamble)",
+    )
     return parser
 
 
@@ -42,7 +47,7 @@ async def serve(config_path: Path) -> None:
         orchestrator.stop_watching()
 
 
-async def run_index(config_path: Path, sources: List[str] | None = None) -> None:
+async def run_index(config_path: Path, sources: List[str] | None = None, *, force: bool = False) -> None:
     config = load_config(config_path)
     orchestrator = CorpusOrchestrator(config, vector_size=config.embedding.vector_size)
     # `conversations` is a DB-backed pseudo-source reconciled from maurice.db, not a
@@ -52,7 +57,7 @@ async def run_index(config_path: Path, sources: List[str] | None = None) -> None
         stats = await orchestrator.index_conversations()
         logging.info("Conversations reconciled: %s", stats)
     if sources is None or sources:
-        await orchestrator.initial_index(sources)
+        await orchestrator.initial_index(sources, force=force)
 
 
 async def run_search(config_path: Path, query: str, limit: int) -> None:
@@ -96,7 +101,7 @@ def main() -> None:
         if args.command == "serve":
             loop.run_until_complete(serve(args.config))
         elif args.command == "index":
-            loop.run_until_complete(run_index(args.config, args.source))
+            loop.run_until_complete(run_index(args.config, args.source, force=args.force))
         elif args.command == "search":
             loop.run_until_complete(run_search(args.config, args.query, args.limit))
         elif args.command == "stats":

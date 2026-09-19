@@ -18,10 +18,11 @@ async def semantic_search(
     filters: Dict[str, Any] | None = None,
     member_id: Optional[str] = None,
 ) -> List[Dict[str, Any]]:
-    vector_result = await embedder.embed_batch([query])
-    if not vector_result.vectors:
+    # As a query, not a document: retrieval models are asymmetric, and the
+    # embedder knows which prefix this model wants on each side.
+    vector = await embedder.embed_query(query)
+    if vector is None:
         return []
-    vector = vector_result.vectors[0]
 
     # member_id scoping + backend-specific filtering live in the store.
     return await asyncio.to_thread(

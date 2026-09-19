@@ -56,6 +56,35 @@ class EmbeddingConfig(BaseModel):
     batch_size: int = 100
     max_retries: int = 3
     vector_size: int = 1536
+    # Ask the provider for this many dimensions (the OpenAI `dimensions`
+    # parameter). Only a matryoshka-trained model — Qwen3-Embedding, whose
+    # leading dimensions are an embedding on their own — can honour it, and
+    # for those families the embedder already asks for vector_size without
+    # being told; this is the explicit override, and it must equal vector_size
+    # since one number sizes the store and the request alike. Unset (or empty
+    # from the environment) means "let the embedder decide".
+    dimensions: Optional[int] = None
+    # What goes in front of a query, and in front of a document, before the
+    # model sees it. None (the default) takes the model family's own convention
+    # from embedder.py; an explicit string — including "" — overrides it.
+    query_prefix: Optional[str] = None
+    document_prefix: Optional[str] = None
+
+    @field_validator("dimensions", mode="before")
+    @classmethod
+    def _blank_is_none(cls, value: Any) -> Any:
+        return None if value in ("", None) else value
+
+    @field_validator("dimensions")
+    @classmethod
+    def _dimensions_match(cls, value: Optional[int], info: Any) -> Optional[int]:
+        size = info.data.get("vector_size")
+        if value is not None and size is not None and value != size:
+            raise ValueError(
+                f"embedding.dimensions ({value}) must equal embedding.vector_size ({size}): "
+                "the store is sized by vector_size, the request by dimensions, and they cannot differ"
+            )
+        return value
 
 
 class ChunkingConfig(BaseModel):

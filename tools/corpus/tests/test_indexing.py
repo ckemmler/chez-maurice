@@ -98,13 +98,17 @@ class FakeEmbedder:
     def __init__(self) -> None:
         self.seen: list[str] = []
 
-    async def embed_batch(self, texts: Iterable[str]) -> EmbeddingResult:
+    async def embed_batch(self, texts: Iterable[str], *, kind: str = "document") -> EmbeddingResult:
         cleaned = [t.strip() for t in texts if t.strip()]
         self.seen.extend(cleaned)
         return EmbeddingResult(
             vectors=[[float(len(t) % 7) + i / 100 for i in range(VECTOR_SIZE)] for t in cleaned],
             model="fake",
         )
+
+    async def embed_query(self, text: str) -> list[float] | None:
+        result = await self.embed_batch([text], kind="query")
+        return result.vectors[0] if result.vectors else None
 
 
 def write(rel: str, text: str) -> Path:
@@ -338,6 +342,50 @@ async def main() -> int:
             break
     else:
         check("no blank chunk was stored", True)
+
+    print("\n── a store another model wrote is refused at open ──")
+    # Until September 2026 the pin was checked on the next write only, so a
+    # config pointed at a new model would search an index built by the old one
+    # and return confident nonsense until something wrote.
+    from src.chunker import Chunk
+    from src.sqlite_vec_store import SqliteVecStore
+
+    pinned_dir = TMP / "pinned"
+    writer = SqliteVecStore(vectors_dir=pinned_dir, vector_size=VECTOR_SIZE, embedding_model="fake")
+    writer.upsert(unit_key="u", unit_hash="h", chunks=[Chunk(text="x", index=0)],
+                  vectors=[[0.0] * VECTOR_SIZE], base_metadata={"source_type": "note"},
+                  embedding_model="fake", member_id="m")
+    writer.close()
+    for label, model, size in [("another model", "other", VECTOR_SIZE), ("another width", "fake", VECTOR_SIZE + 1)]:
+        reader = SqliteVecStore(vectors_dir=pinned_dir, vector_size=size, embedding_model=model)
+        try:
+            reader.total_count(member_id="m")
+            check(f"{label}: refused", False, "opened without complaint")
+        except RuntimeError as exc:
+            check(f"{label}: refused", "fake" in str(exc) and model in str(exc) or "another width" == label, str(exc)[:90])
+        reader.close()
+    same = SqliteVecStore(vectors_dir=pinned_dir, vector_size=VECTOR_SIZE, embedding_model="fake")
+    eq("the same model still opens it", same.total_count(member_id="m"), 1)
+    fresh = SqliteVecStore(vectors_dir=pinned_dir, vector_size=VECTOR_SIZE, embedding_model="other")
+    eq("a member file that does not exist yet is open to any model", fresh.total_count(member_id="new"), 0)
+    same.close(); fresh.close()
+
+    print("\n── the embedder knows what each family wants in front of the text ──")
+    from src.embedder import family_prefixes, family_matryoshka
+    q, d = family_prefixes("qwen3-embedding:0.6b")
+    check("qwen: an instruction on the query, nothing on the document", q.startswith("Instruct:") and q.endswith("Query: ") and d == "")
+    check("qwen (Scaleway name) is the same family", family_prefixes("qwen3-embedding-8b") == (q, d))
+    eq("nomic: search_query / search_document", family_prefixes("nomic-embed-text"), ("search_query: ", "search_document: "))
+    eq("an unknown model gets no prefix", family_prefixes("text-embedding-3-small"), ("", ""))
+    check("qwen is matryoshka, nomic v1 is not", family_matryoshka("qwen3-embedding:4b") and not family_matryoshka("nomic-embed-text"))
+    from src.config import EmbeddingConfig
+    eq("dimensions blank from the environment means unset",
+       EmbeddingConfig(provider="ollama", model="m", vector_size=8, dimensions="").dimensions, None)
+    try:
+        EmbeddingConfig(provider="ollama", model="m", vector_size=8, dimensions=4)
+        check("dimensions must equal vector_size", False)
+    except ValueError as exc:
+        check("dimensions must equal vector_size", "vector_size" in str(exc))
 
     print(f"\n{_count} checks · " + ("ALL PASS" if not _failures else f"{len(_failures)} FAILURE(S)"))
     for f in _failures:

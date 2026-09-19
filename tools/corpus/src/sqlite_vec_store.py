@@ -113,9 +113,37 @@ class SqliteVecStore:
             conn.enable_load_extension(False)
             conn.execute("PRAGMA journal_mode=WAL;")
             conn.execute("PRAGMA synchronous=NORMAL;")
-            self._ensure_schema(conn)
+            try:
+                self._ensure_schema(conn)
+                self._check_pin(conn, path)
+            except Exception:
+                conn.close()
+                raise
             self._conns[key] = conn
             return conn
+
+    def _check_pin(self, conn: sqlite3.Connection, path: Path) -> None:
+        """Refuse a store another model wrote — at open, not only at the next
+        write. Until September 2026 the pin was checked on upsert alone, so a
+        config pointed at a new embedding model would happily *search* an index
+        built by the old one: the query vector and the stored ones lived in
+        unrelated spaces, every search returned confident nonsense, and nothing
+        said why until the first write hit the mismatch. A store with no pin
+        yet (a new file) is open to whatever writes it first."""
+        stored_model = self._meta_get(conn, "embedding_model")
+        if stored_model is None:
+            return
+        stored_size = self._meta_get(conn, "vector_size")
+        model_ok = not self.embedding_model or stored_model == self.embedding_model
+        size_ok = not stored_size or int(stored_size) == self.vector_size
+        if model_ok and size_ok:
+            return
+        raise RuntimeError(
+            f"{path.name}: index built with {stored_model!r} ({stored_size or '?'} dims), "
+            f"but the corpus is configured for {self.embedding_model!r} ({self.vector_size} dims). "
+            "Vectors from two models are not comparable: re-index into a fresh store "
+            "after a model change (the old one can stay beside it until then)."
+        )
 
     def _conn(self, member_id: Optional[str]) -> sqlite3.Connection:
         return self._conn_for_key(self._resolve(member_id))

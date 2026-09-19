@@ -20,12 +20,29 @@ qdrant:
   port: 6333
   collection: akita-corpus
 
+# The embedding model. Decided on 19 September 2026: the Qwen3-Embedding family,
+# at 1024 dimensions everywhere — 0.6B through Ollama on a Mac (4B is three
+# times slower for a gain the domains map does not show; 8B needs a GPU), and
+# `qwen3-embedding-8b` on Scaleway for an instance without Ollama
+# (infra/container/corpus.prod.yaml). The family is matryoshka-trained, so
+# every size is asked for the same 1024 dimensions and a store has one shape
+# whichever size wrote it — though never two models in the same store: the
+# store pins the model that wrote it and refuses another at open.
+#
+# nomic-embed-text, the model before, does not separate French: every French
+# conversation of a member landed in one block. A model change is a full
+# re-index into a fresh store (`python -m src.main index --force`, and
+# `--source conversations`), the old one kept beside it until checked.
+#
+# The embedder knows what each family expects in front of a query and a
+# document (Qwen's instruction line, nomic's `search_query:`); `query_prefix`
+# and `document_prefix` here override that when a model needs something else.
 embedding:
   provider: ollama
-  model: nomic-embed-text
+  model: qwen3-embedding:0.6b
   base_url: http://localhost:11434/v1
-  vector_size: 768
-  batch_size: 50
+  vector_size: 1024
+  batch_size: 32
 
 watcher:
   debounce_seconds: 2

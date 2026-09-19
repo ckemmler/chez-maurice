@@ -51,6 +51,7 @@ import gardenTools from "./src/routes/gardenTools";
 import { maybeRegenerateAdherence } from "./src/services/gardenTools";
 import { localiseRemoteImages } from "./src/services/gardenImages";
 import { scheduleDocsRefresh } from "./src/services/mauriceDocsRefresh";
+import { scheduleCorpusNightly } from "./src/services/corpusNightly";
 import { gardenLook, isNoteSharedWith, gardenFor } from "./src/services/gardens";
 import maurices from "./src/routes/maurices";
 import models from "./src/routes/models";
@@ -197,6 +198,10 @@ setTimeout(() => {
 // up, then daily, so a hosted instance stops answering from the notes its
 // image was built with (see services/mauriceDocsRefresh.ts).
 scheduleDocsRefresh();
+// The search corpus: reconcile every conversation and prune stale file
+// entries once a night, the safety net under the per-turn push (see
+// services/corpusNightly.ts).
+scheduleCorpusNightly();
 
 /** Is this a member whose garden the household serves? */
 function gardenExists(member: string): boolean {
