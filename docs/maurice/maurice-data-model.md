@@ -1,6 +1,6 @@
 ---
 title: The data model
-date: '2026-09-18'
+date: '2026-09-19'
 flags: []
 locale: en
 description: 'The SQLite schema behind the chat engine: identity, conversations, files,
@@ -128,6 +128,7 @@ Identity, auth, conversations, messages, files, gardens, personas, reports, and 
 
 - **Single household per server.** "Multiple households" is multiple servers (foyer switcher; one launchd agent per household at home), not multiple `households` rows. There is no cross-server schema; coordination is the app's job.
 - **Room context is shared, not per-participant.** `composer_specs` is keyed per account, anticipating private per-participant room context (the shared-rooms idea), but today everyone in a room shares the loaded context as common ground.
+- **The ledger knows the member (19 September 2026).** `spend_ledger` carries `user_id` (indexed with `at`), written by `recordSpend` with the member whose turn it was — in a room, the sender of the message Maurice answered; rows from before stay null and count only in household sums. Two new columns hold the caps: `households.spend_cap_daily_usd REAL` and `users.spend_cap_daily_usd REAL` (null = no cap of its own); the latter is added before the guest-role rebuild of `users` and listed in both of its column lists — which is how it came out that `everyday_model` and `experimental_tools` had been left out of those lists and were dropped on any database old enough to be rebuilt; both are carried across now, and a test boots the schema over a hand-made pre-guest database to prove it. Precedence: instance (env) ≥ household ≥ member, the tightest wins; the first two are summed over the household, the third over the member. Routes: `GET /api/me/usage`, `GET /api/admin/usage`.
 - **The ledger counts money, not tokens.** A turn whose model has no price on file records nothing at all, because `pricing.ts` prices an unknown model at `null` rather than zero. That is right for a meter and a hole in a fuse, which is why the fuse refuses such a model outright instead of trusting the ledger — see [[maurice-server]]. It does mean the ledger under-reports on any instance that has used an unpriced model.
 - **Migrations are hand-rolled.** `db.ts` is append-only guarded `ALTER`s and idempotent backfills (the guest-role table rebuild, the model-id remap, the `garden` tool-family sub-split, the GLM window correction). Robust, but there's no schema-version table — correctness rests on each block being idempotent.
 - **Test isolation is by environment.** The data-api services bind their database path at import time; the test suites set `MAURICE_DATA_DIR` for exactly that moment. A module that imports one of them eagerly can bind the real database first — it happened once, and the fix was a lazy import.

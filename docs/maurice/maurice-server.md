@@ -1,6 +1,6 @@
 ---
 title: The server
-date: '2026-09-18'
+date: '2026-09-19'
 flags: []
 locale: en
 description: 'The Hono/Bun engine: API surface, the streaming agentic loop, prompt
@@ -42,7 +42,9 @@ Route groups mounted from `server/src/routes` (chat engine):
 | `/api/models` | `models.ts` | Available models per member; everyday-model preference |
 | `/api/tool-families` | `toolFamilies.ts` | Tool groupings the conversation/persona may use |
 | `/api/reports` | `reports.ts` | Operator-only moderation of reports filed in shared rooms |
-| `/admin`, `/login` | `admin.ts`, `web-admin.ts`, `web-login.ts` | Household admin web UI: members, models and their context windows, provider keys, Calibre library, access matrix |
+| `/admin`, `/login` | `admin.ts`, `web-admin.ts`, `web-login.ts` | Household admin web UI: members, models and their context windows, provider keys, Calibre library, access matrix, spending caps, the docs refresh, the household export |
+| `/api/admin/export` | `admin.ts` | The household archive (`maurice-archive` v1, `services/archive.ts`), `application/gzip`, streamed; admin token. `GET /admin/export` is the same behind the console cookie — see [[maurice-households-rooms]] |
+| `/api/me/usage`, `/api/admin/usage` | `me.ts`, `admin.ts` | What a member spent today and this month against the tightest cap that applies to them; the admin's view of everyone — see *The spending fuse* |
 
 The **data-api** mounts under `/api/v1/*`:
 
@@ -138,6 +140,28 @@ household's env file went nowhere), and the fleet host's `defaults.env` sets
 instances think on Candide's keys. Raise or drop it per household in its own
 env file.
 
+**Since 19 September the fuse has three layers, and the tightest wins.** The
+instance's env caps stay the operator's fuse, summed over the whole household.
+Below them the household carries its own daily cap
+(`households.spend_cap_daily_usd`, the "Daily spending cap" field on the
+console's settings card), also summed over everyone; and each member can carry
+theirs (`users.spend_cap_daily_usd`, on the member's edit page), summed over
+that member's turns alone. The verdict weighs them most-specific first, so a
+refusal names the cap closest to the person reading it — "You have reached
+your daily limit…", "This household…", "This instance…" — and `remainingUsd`
+is the tightest headroom. Ollama stays exempt; an unpriced model under any cap
+is still refused. `spend_ledger` now records `user_id` — the member whose turn
+it was, in a room whoever sent the message Maurice answered — and both agentic
+loops hand that id to the verdict every round. A member reads their own
+situation on `GET /api/me/usage` (`today_usd` over 24 rolling hours,
+`month_usd` over the calendar month at the server's clock, `cap_daily_usd` =
+the tightest daily cap that applies to them or null, `remaining_usd` or null);
+the admin reads everyone's on `GET /api/admin/usage`, and the console shows
+each member's spend today in the members list, with today and this month on
+their page. What is still missing is above the fuse: a balance, a statement a
+customer can read, and a quota that is money someone paid rather than a limit
+someone set — §4 of [[maurice-commercialisation]].
+
 ## Prompt caching
 
 Anthropic caches by prefix, at explicit breakpoints, and bills a cached read at a tenth of a fresh token. The loop is what makes this worth doing: every round re-sends the system prompt, the tool roster and the whole history. Three breakpoints, inside the cap of four: on the last system block (which covers the tools, rendered ahead of it), on the end of the conversation history (carries from one turn to the next), and on the growing tool-result trail (moved along each round). Placement only lands on blocks the server builds itself, never on a history message, so the cache key is computed from bytes that don't change. The cost meter shows what caching saved next to what the turn cost.
@@ -219,9 +243,13 @@ The operator side lives in `ops/` in the repo, outside the application: a hand-k
 
 **The first rented host, since 17 September 2026: `maurice-fleet`.** A Scaleway BASIC2-A2C-8G — 2 ARM vCPU, 8 GB, 40 GB of block storage, Ubuntu 26.04, fr-par-1, 51.15.217.40 — prepared by `infra/cloud-init/maurice.yaml` exactly as written, carrying Aline's household and the App Review one as two compose projects behind one Caddy (`infra/container/MULTI-HOUSEHOLD.md`), each restored from a `VACUUM INTO` snapshot of its Mac-era data. The image reaches it through a private Scaleway registry, `rg.fr-par.scw.cloud/maurice`, and **`MAURICE_REGISTRY=rg.fr-par.scw.cloud/maurice scripts/deploy.sh maurice-fleet` is the whole update**: build here, push, recreate every household on the new image; `/opt/maurice/image.env` records what was shipped and `ops/household.sh` reads it on every `up`, `restart` and `add`, so a restart later lands on the deployed image rather than on whatever the household's env file remembered. An already-built tag is shipped as it is, which is also the rollback. On the Scaleway side everything sits in a project `maurice` of its own: an IAM application `maurice-fleet` whose one key can call Generative APIs and pull the registry and nothing else (project-scoped, hence the project id in every URL it uses — embeddings in `defaults.env`, chat in each household's admin), the registry namespace, the ssh key, the instance. The key lives in `~/.maurice/ops/scaleway-fleet.env` on the Mac and nowhere in the repo. Two things the first real host taught: `compose.caddy.yml` mounted the single-household Caddyfile and never passed Let's Encrypt a contact address — the multi-household edge had never been run against a real machine, and both are fixed; and a fresh public IPv4 is hammered on :22 within minutes of boot, enough to starve sshd's unauthenticated slots and drop the deploy's own connection (`Maxstartups` in the log) — `MaxStartups` raised and `LoginGraceTime` shortened in a `sshd_config.d` drop-in, and ssh multiplexed from the Mac so a deploy counts as one connection. And one on the Mac, found while taking the two names out of the tunnel: `brew services restart cloudflared` regenerates the launchd plist from the formula, whose service runs bare `cloudflared` — which, with a `config.yml` that names a tunnel, prints "Use `cloudflared tunnel run`" and exits — so `magik` went dark for a few minutes until `tunnel run` was put back in the plist by hand. The next restart through `brew services` will do it again.
 
+**Documentation refresh, since 19 September 2026** (`services/mauriceDocsRefresh.ts`). `MAURICE_DOCS_URL` names where Maurice Maurice's notes are published — default `https://raw.githubusercontent.com/ckemmler/chez-maurice/main/docs/maurice`, i.e. the `docs/maurice/` directory of the repo as it stands on `main`; `off` makes no outbound call at all (also the default under `NODE_ENV=test`). Twenty seconds after boot, then every 24 h, the server GETs `manifest.json` (15 s timeout, 64 KB cap) through the same SSRF guard as article extraction; if its `generated_at` is newer than the manifest already in `<app dir>/docs/maurice` (or the bundled `docs/maurice/manifest.json` when there is none), it downloads each note whose sha256 differs (2 MB cap, hash verified), reuses the rest from the current set or the bundle, stages the whole set beside the target and swaps it in — a failure of any kind leaves the previous set as it was. `MAURICE_DOCS_ALLOW_LOCAL=1` lifts the guard for a mirror on a private address (the tests use it). The log says `[docs] refreshed to …`, `[docs] up to date (…)` or `[docs] refresh failed: …`. `docsDir()` then chooses `MAURICE_DOCS_DIR` if set, else the refreshed set when its manifest is at least as new as the bundle's, else the bundle. `GET /api/admin/status` carries `docs: { source, generated_at, last_check_at, last_error }`; the admin dashboard's last card shows the set's date and source with a "Check now" button (`POST /admin/docs/refresh`). Both production compose files pass `MAURICE_DOCS_URL` through from the household's `.env`.
+
 ## Backups
 
-`com.maurice.backup` snapshots `maurice.db` and `life.db` nightly into `~/.maurice/backups/db` (`scripts/backup-db.sh`), each under its own name, `VACUUM INTO` then an integrity check before the copy is kept. `life.db` — health, tasks, reading positions, highlights, dossiers — was only added on 2026-09-13; until then it was not backed up at all. The gardens rely on git — each member's garden is a repository, committed on every write and pushed when a remote exists. Still *not* covered: `compte.db` and `recommendations.db` under `~/.maurice/data/`, and the git-ignored flashcard files (see [[maurice-knowledge]]).
+**Hosted households, since 19 September 2026.** Every household on a shared host is sent nightly to Object Storage with restic — `ops/backup.sh` and `infra/host/backup.sh`, described under *Gaps* below and in `ops/README.md`; `ops/backup.sh restore-test` is the rehearsal, and it has been run.
+
+**The Mac.** `com.maurice.backup` snapshots `maurice.db` and `life.db` nightly into `~/.maurice/backups/db` (`scripts/backup-db.sh`), each under its own name, `VACUUM INTO` then an integrity check before the copy is kept. `life.db` — health, tasks, reading positions, highlights, dossiers — was only added on 2026-09-13; until then it was not backed up at all. The gardens rely on git — each member's garden is a repository, committed on every write and pushed when a remote exists. Still *not* covered: `compte.db` and `recommendations.db` under `~/.maurice/data/`, and the git-ignored flashcard files (see [[maurice-knowledge]]).
 
 ## Ships vs. exists
 
@@ -230,15 +258,15 @@ The **chat engine** (`server/src`) is core and ships with the server app, as do 
 ## Gaps & open questions
 
 - **Git runtime.** The server performs git operations on the gardens, but whether git is bundled or assumed present on the host is unresolved — see [[maurice-architecture]].
-- **The fuse is per instance, not per member.** One cap for the whole household: nothing here knows who spent what. Per-member usage, a quota, a balance and a statement are all still missing — see §4 of [[maurice-commercialisation]].
+- **The fuse knows the member since 19 September 2026** — per-member and per-household daily caps, and a usage view for each member and for the admin (see *The spending fuse*). A balance, a quota that is prepaid money, and a statement are still missing — see §4 of [[maurice-commercialisation]].
 - **Scaleway's cache is invisible on nine models out of ten.** Measured 18 September 2026: only DeepSeek V4 Flash reports cached tokens, and only a hot, shared prefix hits; the other models' usage carries no cache detail, so their meter figure is the uncached one whatever Scaleway bills. Cockpit is the only place to see it.
 - **The tool trail is text in the history.** A small model could imitate the bracketed block in its own reply; nothing strips it. Watch for it on Flash and local models.
 - **No automatic provider failover.** Provider is selected by the resolved model; there is no resilient "try Anthropic, fall back to OpenAI on error" path beyond the no-key echo mode.
-- **A hosted household's volume is not backed up.** `com.maurice.backup` covers the Mac; the two households on `maurice-fleet` have no snapshot yet — a nightly tar of each volume to Object Storage is the obvious next line, and restore has never been rehearsed.
+- **A hosted household's volume is backed up nightly** (closed 19 September 2026). `infra/host/backup.sh` runs from the host's crontab at 03:30 UTC: the running container writes a consistent copy of every SQLite database (`VACUUM INTO` through bun:sqlite; the image has no `sqlite3`), then restic — its own container, the volume read-only — sends the volume minus the live databases to one repository per host on Scaleway Object Storage (`maurice-fleet-backups`, project `maurice`), 14 daily / 8 weekly / 12 monthly kept, encrypted with a password only the Mac holds (`~/.maurice/ops/fleet-backup.env`). `ops/backup.sh restore-test <host> <name>` restores the latest snapshot into a throwaway household, boots it, prints what it holds and tears it down — rehearsed on both households the day it was written; `ops/backup.sh restore` does it for real. The Mac's own backup (`com.maurice.backup`) is still the partial one below.
 - **A moved household keeps its local models.** The App Review roster still lists the Mac's Ollama model, which no longer exists where it runs; nothing prunes a provider that stopped being reachable. Its default was switched to Mistral Small 3.2 by hand.
 - **Context estimation is by characters**, not counted tokens; the margin covers the difference, and the estimate ignores tool results appended during a turn. The cut never moves back when a bigger model is chosen later.
 - **TLS / remote access** is operator-chosen plumbing (Tailscale or Cloudflare Tunnel), not managed by the server — see [[maurice-architecture]].
 - **Backups are partial** — `maurice.db` and `life.db` only.
 - **The `mcp` token scope is not enforced** (see Auth); only `health` is.
-- **Hand-over of a hosted instance is a procedure, not a script** (`ops/README.md`); an error collector is a decision still open.
+- **Hand-over of a hosted instance has its script since 19 September 2026**: the owner exports the archive from their own console, the new place imports it (`ops/household.sh add … --from`, `scripts/import-household.sh`, `scripts/container.sh import`) — the operator never opens the data. `resolveBuildInfo` moved to `services/buildInfo.ts` (no database import) so the archive's manifest can name the server version; `health.ts` re-exports it. An error collector is a decision still open.
 - **data-api hardening (September 2026).** The `/reports/img` proxy now goes through the same SSRF guard as article extraction (DNS-resolved, private/loopback refused, timeout + size cap); the `uploads` and `bank-transactions` routes reject a filename that isn't a bare basename; and a `noPathTraversal` guard fronts the tracks/reports routers, whose `:planId`/`:trackId` params were concatenated into filesystem paths (Hono decodes `%2F`). Still open: those tracks routes carry **no member check** — they are Candide's own research pipeline today, but that's an assumption, not an enforced boundary.

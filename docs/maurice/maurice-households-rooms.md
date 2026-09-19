@@ -1,6 +1,6 @@
 ---
 title: Households, rooms & devices
-date: '2026-09-18'
+date: '2026-09-19'
 flags: []
 locale: en
 description: Members and roles, guests, multi-person rooms, device pairing and PINs,
@@ -57,9 +57,15 @@ In a shared room, the long-press menu on a message offers **Report** and **Block
 
 When an event can't reach a live socket, it becomes an APNs push (`server/src/services/push.ts` + `apns.ts`, token-based ES256 over HTTP/2). Device tokens carry a `platform` and a `household_tag`; dead tokens are pruned on Apple's say-so. This is what notifies you across households when you're a guest elsewhere.
 
+## The household archive
+
+Since 19 September 2026 a household knows how to export itself. The **household archive** is a versioned `.maurice.tar.gz` (`maurice-archive` v1, `server/src/services/archive.ts`, format documented in `docs/household-archive.md`) holding everything the household *is*: `maurice.db` and the data-api databases as consistent `VACUUM INTO` snapshots checked by `integrity_check`, the gardens with each member's git history and `gardens.json`, images, files, uploads, avatars, `config.toml`, and a `manifest.json` (household, members, schema version, server version, contents). Left out: backups, logs, the dead Qdrant directory, the corpus vector index (regenerable), `.env` and the Mac's `ops/` secrets, and the bare git remotes under `~/.maurice/git`. It contains the provider keys: **it is a secret.**
+
+The admin gets it from the console's section 07, "Export this household" (`GET /admin/export`), or with a bearer token on `GET /api/admin/export` — streamed as `tar` reads, so the first byte leaves before the uploads are read. A fresh Maurice imports it into an empty data directory (refused if a `maurice.db` is already there; the server's own migrations bring the schema forward on first boot): `scripts/import-household.sh <archive> [dir]` on a Mac, `scripts/container.sh import <archive>` for a local container, `ops/household.sh add <host> <name> <domain> --from <archive>` for a household on a shared host — the archive travels over ssh's stdin and no copy stays on the host. Still by hand after an import: rebuilding the corpus index, and the gardens' `origin` remotes, which point at the old machine.
+
 ## Ships vs. exists
 
-All of this — members, roles, guests, rooms, device enrollment, PINs, foyer switching, push — is **core chat-engine functionality and ships**. None of it needs the experimental [[maurice-tools|tools]].
+All of this — members, roles, guests, rooms, device enrollment, PINs, foyer switching, push, the archive — is **core chat-engine functionality and ships**. None of it needs the experimental [[maurice-tools|tools]].
 
 ## Gaps & notes
 

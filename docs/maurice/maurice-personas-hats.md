@@ -1,6 +1,6 @@
 ---
 title: Specialized Maurices & hats
-date: '2026-09-18'
+date: '2026-09-19'
 flags: []
 locale: en
 description: Named personas with their own prompt, model, creativity, bound context,
@@ -80,7 +80,7 @@ A persona can be limited to specific **tool families** (`tool_families`), so e.g
 
 - **Emergent hats.** The vision has the hat *emerge* from whichever note subtree is active ("Maurice is in scientist mode because you opened the dinosaur folder"). Today the hat is a property the member sets on a persona. Closing this means deriving a hat/scope from the loaded composer context automatically.
 - **Consent-driven creation.** The vision's Layer 2 ("You've been curious about black holes — want me to start remembering this?") would create a persona/note pair on consent. Persona creation is currently fully manual.
-- **Maurice Maurice reads a snapshot, in English.** A hosted household gets the docs as they were when its image was built; nothing pulls a newer set. And the notes are English only — he translates as he answers, which is fine for the answer and less so for a quoted heading. Both are acceptable while the docs live in one garden; a docs bundle published from the garden (a versioned tarball the server fetches) would close the first.
+- **Maurice Maurice refreshes his own reading (closed 19 September 2026) — but still in English.** He no longer answers only from the snapshot his image was built with. `scripts/sync-docs.sh` writes a `manifest.json` beside the notes (date, size and sha256 per note, digest included), committed and pushed with them; every instance fetches that manifest from the public repo's `main` branch 20 s after boot and then daily, and when it is newer than the one on hand pulls the notes that changed into `~/.maurice/docs/maurice`, verified against the manifest, staged and swapped in whole (see [[maurice-server]]). He reads that set once it is at least as new as the bundle; a live `MAURICE_DOCS_DIR` still wins, and his `updated_at` follows the set actually read. What remains true: the notes are written in this garden and reach other households only through a push of the repo — the refresh closes the gap between a push and an image rebuild, not the one between the garden and a push. And the notes are English only — he translates as he answers, which is fine for the answer and less so for a quoted heading.
 - **The everyday Maurice's settings are the household's, not the member's.** The conversation with no persona has no editor in the apps, so its reasoning choice is a factory setting on the household (`everyday_thinking`, seeded to "answer directly": reasoning is something a persona asks for), corrected in the admin console and nowhere else. A per-member or per-conversation choice would need a column beside the everyday model.
 - **Fine detail lives in the delta or nowhere.** Between condensations, a question about an old note's fine print — why the Scaleway key names its project, say — gets the digest's one line. If that bites, the next step is a read-on-demand tool for one full note, not a bigger digest.
 
