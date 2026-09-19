@@ -49,6 +49,7 @@ import {
   allowedModelIds,
 } from "../services/modelAccess";
 import { ping, discover, totalRamGB } from "../services/ollama";
+import { ArchiveError, exportResponse } from "../services/archive";
 import { t, langOf, SUPPORTED } from "../services/i18n";
 import { corpusCall } from "../services/mcpClient";
 import { mkdirSync, readFileSync, existsSync } from "fs";
@@ -865,7 +866,30 @@ web.get("/dashboard", async (c) => {
         ${sectionHead(t(lang, "dashboard.kicker_advanced"), t(lang, "ancillary.section_title"), t(lang, "ancillary.section_desc"))}
         ${ancillaryCard(lang)}
       </section>
+
+      <section id="sec-archive">
+        ${sectionHead(t(lang, "dashboard.kicker_archive"), t(lang, "archive.title"), t(lang, "archive.desc"))}
+        <div class="card pad">
+          <a href="/admin/export" class="btn primary">${escape(t(lang, "archive.export"))}</a>
+          <span class="hint">${escape(t(lang, "archive.hint"))}</span>
+        </div>
+      </section>
     </div>`, true, adminName(c), lang));
+});
+
+// ── Export (GET) ────────────────────────────────────────────────
+// The household archive from the console — the same stream as
+// GET /api/admin/export, behind the admin cookie instead of a bearer token.
+// See docs/household-archive.md.
+web.get("/export", (c) => {
+  const redir = requireWebAdmin(c);
+  if (redir) return redir;
+  try {
+    return exportResponse();
+  } catch (e: any) {
+    console.error(`[archive] export refused: ${e?.message ?? e}`);
+    return c.text(t(langOf(c), "archive.failed", e instanceof ArchiveError ? e.message : ""), 500);
+  }
 });
 
 // ── Settings (POST) ─────────────────────────────────────────────

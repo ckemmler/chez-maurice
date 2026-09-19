@@ -8,6 +8,7 @@
 #
 #   scripts/container.sh build            build the image
 #   scripts/container.sh seed [--force]   copy the Mac's data into the volume
+#   scripts/container.sh import <archive> populate the volume from a household archive
 #   scripts/container.sh up               start (builds if needed)
 #   scripts/container.sh down             stop, keeping the volumes
 #   scripts/container.sh restart [svc]    restart a supervised process
@@ -169,6 +170,39 @@ cmd_seed() {
   echo "✓ seeded $HOME_VOLUME from a copy of $src (which was not modified)"
 }
 
+# ── import ───────────────────────────────────────────────────────────────────
+
+# Populate the volume from a household archive (docs/household-archive.md)
+# rather than from the Mac's ~/.maurice — how a household from elsewhere, or
+# an earlier export of this one, gets a container here. The archive already
+# holds snapshotted databases and the manifest, so it pours straight in; the
+# entrypoint then repoints config.toml's data_dir if it names a /Users path.
+#
+# `seed` refuses a volume with anything in it. Here the rule is the one the
+# server's importer applies: a volume holding maurice.db is a household, and
+# it is never written over — `nuke` first, on purpose.
+cmd_import() {
+  local archive="${1:?usage: container.sh import <archive>}"
+  [[ -f "$archive" ]] || { echo "✗ no such archive: $archive"; exit 1; }
+  local manifest
+  manifest="$(tar -xzOf "$archive" manifest.json 2>/dev/null || true)"
+  grep -q '"format": "maurice-archive"' <<<"$manifest" \
+    || { echo "✗ $archive is not a Maurice archive (no manifest.json)"; exit 1; }
+  grep -q '"version": 1,' <<<"$manifest" \
+    || { echo "✗ $archive is not a version-1 archive; this script reads version 1"; exit 1; }
+
+  dc up --no-start >/dev/null 2>&1 || true
+  if docker run --rm -v "$HOME_VOLUME:/v" busybox test -e /v/maurice.db 2>/dev/null; then
+    echo "• $HOME_VOLUME already holds a household — refusing to overwrite it."
+    echo "  'nuke' first to start clean."
+    exit 1
+  fi
+
+  echo "→ pouring $(basename "$archive") ($(du -h "$archive" | cut -f1)) into $HOME_VOLUME"
+  docker run --rm -i -v "$HOME_VOLUME:/dest" busybox tar -xzf - -C /dest < "$archive"
+  echo "✓ $HOME_VOLUME holds $(sed -n 's/^ *"name": "\(.*\)",$/\1/p' <<<"$manifest" | head -1). Now: scripts/container.sh up"
+}
+
 # ── the rest ─────────────────────────────────────────────────────────────────
 
 cmd_status() {
@@ -188,6 +222,7 @@ cmd_status() {
 case "${1:-}" in
   build)   shift; "$REPO/scripts/build-info.sh" >/dev/null; dc build "$@" ;;
   seed)    shift; cmd_seed "$@" ;;
+  import)  shift; cmd_import "$@" ;;
   up)      shift; "$REPO/scripts/build-info.sh" >/dev/null; dc up -d --build "$@"; echo; echo "→ API on http://localhost:13001" ;;
   down)    shift; dc down "$@" ;;
   restart) shift; if [[ -n "${1:-}" ]]; then sup restart "$1"; else dc restart; fi ;;

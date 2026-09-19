@@ -17,6 +17,7 @@ the launchd side is what eventually goes away.
 
 ```
 scripts/container.sh seed      # copy the Mac's data into the volume (once)
+scripts/container.sh import <archive>   # …or fill it from a household archive (docs/household-archive.md)
 scripts/container.sh up        # build + start
 scripts/container.sh status    # both installs, side by side
 ```

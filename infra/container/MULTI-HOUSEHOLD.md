@@ -56,6 +56,9 @@ three times that — see `docs/garden-server-mode.md`.)
 4. **The door**: `ops/household.sh edge <ssh-host>`.
 5. **A household**: `ops/household.sh add <ssh-host> aline aline.chezmaurice.eu`,
    then point that name at the machine with a plain A record — **unproxied**.
+   Add `--from <archive>` to start it from a household archive instead of
+   empty (`docs/household-archive.md`): a demo becoming someone's own, or a
+   household moving host.
    Whoever proxies the traffic terminates the TLS and reads the clear text,
    which is the line this arrangement exists to stay on the right side of.
 6. **Finish the setup** through the tunnel the command prints:
