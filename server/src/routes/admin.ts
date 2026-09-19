@@ -6,6 +6,7 @@ import { docsStatus } from "../services/mauriceDocsRefresh";
 import { ArchiveError, exportResponse } from "../services/archive";
 import { openConversation, openingGuard } from "../services/openedConversations";
 import { mapMember, mappingNightlyStatus, runDomainMapping } from "../services/domainMapping";
+import { corpusNightlyStatus, reconcileCorpus } from "../services/corpusNightly";
 import { listProposals, proposalCard, type ProposalState } from "../services/domainProposals";
 import { canUseMaurice } from "../services/maurices";
 import { getUser, getUserByUsername } from "../services/users";
@@ -189,6 +190,15 @@ admin.post("/conversations/open", async (c) => {
 // the opening guard the way the admin's hand may. Without a member, the
 // whole night runs (every member), not awaited. GET /api/admin/domains/proposals
 // lists a member's proposals (`?username=…&state=proposed`).
+
+// POST /api/admin/corpus/reconcile — reconcile every conversation into the
+// corpus now and answer when it is done (the console's button does the same
+// without waiting). What a seeded or freshly imported household needs before
+// a mapping can read it — the night does it on its own at 03:00.
+admin.post("/corpus/reconcile", async (c) => {
+  const outcome = await reconcileCorpus();
+  return c.json({ outcome, ...corpusNightlyStatus() }, outcome === "failed" ? 500 : 200);
+});
 
 admin.post("/domains/map", async (c) => {
   const body = await c.req.json().catch(() => ({}));

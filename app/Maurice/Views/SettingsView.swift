@@ -13,7 +13,7 @@ struct SettingsView: View {
     @Environment(\.mauriceTheme) private var theme
     @Environment(\.dismiss) private var dismiss
 
-    enum Pane: Hashable { case appearance, language, garden, token, files }
+    enum Pane: Hashable { case appearance, language, garden, token, files, importChats }
     @State private var pane: Pane? = nil
 
     // MCP token (loaded once; the root row copies, the token pane manages).
@@ -41,6 +41,8 @@ struct SettingsView: View {
     // default is shown until the list loads / if offline.
     @State private var webThemes: [(id: String, label: String)] = [("default", "Default")]
     @State private var filesLibrary: LibraryResponse?
+    /// The chat-history import (ImportConversationsView): what the index row says.
+    @State private var importSummary = ImportSummary()
 
     private var locales: [(id: String?, label: String)] {
         [(nil, session.localized("settings.locale.system")),
@@ -65,6 +67,7 @@ struct SettingsView: View {
         .task { await loadToken() }
         .task { await loadWebThemes() }
         .task { await loadFiles() }
+        .task { if !session.activeIsGuest { importSummary = await ImportSummary.load(session: session) } }
         .onChange(of: avatarItem) { _, item in prepareCrop(item) }
         .confirmationDialog(session.localized("settings.avatar.hint"), isPresented: $showSourceDialog, titleVisibility: .hidden) {
             Button(session.localized("settings.avatar.take_photo")) { showCamera = true }
@@ -113,6 +116,17 @@ struct SettingsView: View {
                                 IndexRow(icon: "folder", label: session.localized("settings.files.title"),
                                          value: filesValue, accent: accent) { pane = .files }
                             }
+                        }
+
+                        // Their history from other assistants — a setting, not a step
+                        // of the onboarding (domains design, 4f). Guests have no history here.
+                        SetGroup(session.localized("settings.import.group")) {
+                            SetCard {
+                                IndexRow(icon: "square.and.arrow.down", label: session.localized("settings.import.title"),
+                                         value: session.localized(importSummary.synced ? "settings.import.value.synced" : "settings.import.value.none"),
+                                         accent: accent) { pane = .importChats }
+                            }
+                            SetCaption(session.localized("settings.import.caption"))
                         }
                     }
 
@@ -246,6 +260,7 @@ struct SettingsView: View {
                     case .garden:     gardenPane
                     case .token:      tokenPane
                     case .files:      FilesLibraryView(accent: accent, library: $filesLibrary)
+                    case .importChats: ImportConversationsView(accent: accent, summary: $importSummary)
                     }
                 }
                 .padding(.horizontal, 18).padding(.top, 14).padding(.bottom, 18)
@@ -261,6 +276,7 @@ struct SettingsView: View {
         case .garden:     return session.localized("settings.garden.title")
         case .token:      return session.localized("settings.mcp.title")
         case .files:      return session.localized("settings.files.title")
+        case .importChats: return session.localized("settings.import.title")
         }
     }
 

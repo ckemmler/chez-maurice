@@ -10,6 +10,7 @@ import { resolveBookItem } from "./composer/weights";
 import { type FileAttachment } from "./composer/files";
 import { getConversationMaurice, resolveMauriceContext, resolveMauriceAttachments } from "./maurices";
 import { briefsForPrompt, memberLocale } from "./domainBriefs";
+import { importHintSection } from "./chatImport";
 import { MAURICE_DOCS_TOOL_NAME, askMauriceDocs, mauriceDocsTool } from "./mauriceDocsTool";
 import { domainToolsFor, isDomainTool, proposalPromptSection, runDomainTool } from "./domainProposals";
 import { ensureUserFirst } from "./openedConversations";
@@ -1065,6 +1066,9 @@ function trackedBooks(
       // participant would read them.
       if (countParticipants(conversationId) === 1) {
         systemPrompt += briefsForPrompt(memberId, userDisplayName);
+        // A member who never imported a history may hear of the import once,
+        // when it is relevant (design 4f; services/chatImport.ts). "" after.
+        systemPrompt += importHintSection(memberId, userDisplayName);
       }
       // The conversation Maurice opened to propose domains (P2-B): the
       // proposals it carries and the rules of the three tools. Empty

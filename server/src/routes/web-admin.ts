@@ -56,7 +56,7 @@ import { mappingNightlyStatus, runDomainMapping } from "../services/domainMappin
 import { ArchiveError, exportResponse } from "../services/archive";
 import { t, langOf, SUPPORTED } from "../services/i18n";
 import { SYSTEM_SPENDER, spentTodayUsd, spentMonthUsd, memberDailyCap, setMemberDailyCap, setHouseholdDailyCap, setSystemDailyCap } from "../services/budget";
-import { corpusCall } from "../services/mcpClient";
+import { ImportError, importHistory, importStatus, isImportProvider, startImport } from "../services/chatImport";
 import { mkdirSync, readFileSync, existsSync } from "fs";
 import { join, resolve, extname } from "path";
 
@@ -116,11 +116,6 @@ function headIcon(provider: string, fallback: string): string {
     : `<span class="head-icon">${fallback}</span>`;
 }
 
-function uploadsDir(): string {
-  const dir = join(getAppDir(), "uploads");
-  mkdirSync(dir, { recursive: true });
-  return dir;
-}
 
 // ── Chat data-export import: one card per provider in the member fiche (below the
 // edit form). History/watermark + upload + live progress are driven client-side off
@@ -1485,8 +1480,11 @@ web.get("/users/:id/edit", (c) => {
     ${renderImportSection(user, lang)}`, true, adminName(c), lang));
 });
 
-// ── Chat data-export import (proxied to the corpus tools) ────────────────────
-const IMPORT_PROVIDER_KEYS = new Set(["anthropic", "chatgpt"]);
+// ── Chat data-export import (services/chatImport.ts; the app's own is /api/import) ──
+function importFailed(c: any, e: unknown) {
+  if (e instanceof ImportError) return c.json({ error: e.code, detail: e.message }, e.code === "not_zip" ? 400 : 502);
+  throw e;
+}
 
 web.post("/users/:id/import", async (c) => {
   const redir = requireWebAdmin(c);
@@ -1494,7 +1492,7 @@ web.post("/users/:id/import", async (c) => {
   const id = c.req.param("id");
   if (!getUser(id)) return c.json({ error: "not_found" }, 404);
   const provider = c.req.query("provider") || "anthropic";
-  if (!IMPORT_PROVIDER_KEYS.has(provider)) return c.json({ error: "bad_provider" }, 400);
+  if (!isImportProvider(provider)) return c.json({ error: "bad_provider" }, 400);
   let body: Record<string, any>;
   try {
     body = await c.req.parseBody();
@@ -1503,14 +1501,10 @@ web.post("/users/:id/import", async (c) => {
   }
   const file = body["file"];
   if (!(file instanceof File)) return c.json({ error: "no_file" }, 400);
-  if (!file.name.toLowerCase().endsWith(".zip")) return c.json({ error: "not_zip" }, 400);
-  const dest = join(uploadsDir(), `${provider}-${id}-${Date.now()}.zip`);
-  await Bun.write(dest, file);
   try {
-    const res = await corpusCall(id, "import_chat_export", { path: dest, provider, member_id: id });
-    return c.json(res);
-  } catch (e: any) {
-    return c.json({ error: e?.message || "corpus_unreachable" }, 502);
+    return c.json(await startImport(id, provider, file));
+  } catch (e) {
+    return importFailed(c, e);
   }
 });
 web.get("/users/:id/import/status", async (c) => {
@@ -1519,9 +1513,9 @@ web.get("/users/:id/import/status", async (c) => {
   const jobId = c.req.query("job");
   if (!jobId) return c.json({ error: "no_job" }, 400);
   try {
-    return c.json(await corpusCall(c.req.param("id"), "import_status", { job_id: jobId }));
-  } catch (e: any) {
-    return c.json({ error: e?.message || "corpus_unreachable" }, 502);
+    return c.json(await importStatus(c.req.param("id"), jobId));
+  } catch (e) {
+    return importFailed(c, e);
   }
 });
 web.get("/users/:id/import/history", async (c) => {
@@ -1529,10 +1523,11 @@ web.get("/users/:id/import/history", async (c) => {
   if (redir) return redir;
   const id = c.req.param("id");
   const provider = c.req.query("provider") || "anthropic";
+  if (!isImportProvider(provider)) return c.json({ error: "bad_provider" }, 400);
   try {
-    return c.json(await corpusCall(id, "import_history", { member_id: id, provider }));
-  } catch (e: any) {
-    return c.json({ error: e?.message || "corpus_unreachable" }, 502);
+    return c.json(await importHistory(id, provider));
+  } catch (e) {
+    return importFailed(c, e);
   }
 });
 

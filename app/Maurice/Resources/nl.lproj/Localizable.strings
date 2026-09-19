@@ -514,3 +514,26 @@
 "brief.notes.unreviewed_one" = "%d na te lezen";
 "brief.notes.unreviewed_other" = "%d na te lezen";
 "brief.notes.open" = "Openen";
+
+/* Settings — Import my conversations (P4, 19 September 2026) */
+"settings.import.group" = "Je geschiedenis";
+"settings.import.title" = "Mijn gesprekken importeren";
+"settings.import.value.none" = "Nog niet";
+"settings.import.value.synced" = "Gesynchroniseerd";
+"settings.import.caption" = "Breng je ChatGPT- of Claude-gesprekken mee: ze worden hier gesprekken, doorzoekbaar, en Maurice leest ze om je domeinen voor te stellen.";
+"settings.import.intro" = "Vraag bij %@ je gegevensexport aan (%@) en kies hier de .zip. Incrementeel: een tweede import voegt alleen het nieuwere toe.";
+"settings.import.source.anthropic" = "Claude.ai → Instellingen → Privacy → Gegevens exporteren";
+"settings.import.source.chatgpt" = "ChatGPT → Instellingen → Gegevensbeheer → Exporteren";
+"settings.import.choose" = "Kies de .zip…";
+"settings.import.choose_more" = "Nieuwere gesprekken importeren…";
+"settings.import.uploading" = "Uploaden…";
+"settings.import.parsing" = "Export wordt gelezen…";
+"settings.import.indexing" = "Indexeren: %d van %d gesprekken…";
+"settings.import.done" = "%d gesprekken, %d berichten geïmporteerd.";
+"settings.import.done_none" = "Niets nieuwer dan de vorige import.";
+"settings.import.failed" = "Import mislukt: %@";
+"settings.import.not_zip" = "dat bestand is geen .zip-export";
+"settings.import.synced_through" = "gesynchroniseerd tot %@";
+"settings.import.never" = "nog geen import";
+"settings.import.run" = "%d gesprekken · %d berichten";
+"settings.import.night" = "Geïmporteerde gesprekken verschijnen in je lijst met hun herkomst. De nacht erna leest Maurice ze: je domeinen kunnen je 's ochtends worden voorgesteld.";

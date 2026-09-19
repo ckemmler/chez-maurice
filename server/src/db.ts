@@ -878,6 +878,13 @@ try { db.run(`ALTER TABLE households ADD COLUMN spend_cap_system_daily_usd REAL`
 // household's guard between two openings for one member, in days (null = the
 // default, fifteen; services/openedConversations.ts).
 try { db.run(`ALTER TABLE users ADD COLUMN is_child INTEGER NOT NULL DEFAULT 0`); } catch {}
+// When a conversation arrived by import (P4, 19 September 2026): the wall-clock
+// of the import, set by the corpus importer (tools/corpus/src/chat_import.py),
+// null for a conversation lived here. Its messages keep the dates of the
+// export, so the briefs' `read_until` (a message timestamp) would never see
+// them; the night compares this column with the brief's `updated_at` instead
+// and reads an imported conversation whole, once (services/domainBriefs.ts).
+try { db.run(`ALTER TABLE conversations ADD COLUMN imported_at TEXT`); } catch {}
 try { db.run(`ALTER TABLE households ADD COLUMN maurice_opens_min_days INTEGER`); } catch {}
 
 // The domain proposals (P2-B, 19 September 2026): what the night's mapping

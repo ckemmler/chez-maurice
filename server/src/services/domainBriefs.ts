@@ -25,7 +25,11 @@ import { listUsers } from "./users";
 // conversations that belong to the domain; every later one is a rewrite of
 // the previous brief from the conversations that touched the domain *since*
 // (`domain_briefs.read_until` is the newest message the last rewrite saw). A
-// night with nothing new writes nothing and calls no model.
+// night with nothing new writes nothing and calls no model. One exception to
+// the timestamp: a conversation *imported* since the last brief carries the
+// dates of its export, older than `read_until`, so `conversations.imported_at`
+// is compared with the brief's `updated_at` instead and the conversation is
+// read whole, once (P4, 19 September 2026).
 //
 // What belongs to a domain is found three ways, strongest first: the
 // conversations bound to it (`conversations.maurice_id`), the corpus's
@@ -346,12 +350,16 @@ export function setBriefDeps(d: Partial<BriefDeps> | null): void {
 }
 
 /** The conversations of a domain with something new since `since`, ranked,
- *  capped, then in chronological order for the prompt. */
+ *  capped, then in chronological order for the prompt. `importedAfter` is the
+ *  wall-clock of the previous brief (`updated_at`): a conversation imported
+ *  after it carries the dates of its export, older than `since`, and is read
+ *  whole this once — the next rewrite's `updated_at` will be past its import. */
 export async function findMaterial(
   memberId: string,
   domain: Maurice,
   since: string | null,
   who: string,
+  importedAfter: string | null = null,
 ): Promise<Material[]> {
   type Cand = { how: Material["how"]; score: number };
   const cands = new Map<string, Cand>();
@@ -393,14 +401,16 @@ export async function findMaterial(
   for (const [id, c] of cands) {
     const convo = db
       .query(
-        `SELECT c.title, c.maurice_id FROM conversations c
+        `SELECT c.title, c.maurice_id, c.imported_at FROM conversations c
          JOIN conversation_participants p ON p.conversation_id = c.id AND p.member_id = ?
          WHERE c.id = ?`,
       )
-      .get(memberId, id) as { title: string | null; maurice_id: string | null } | null;
+      .get(memberId, id) as { title: string | null; maurice_id: string | null; imported_at: string | null } | null;
     if (!convo) continue; // not the member's: the corpus said so, the database decides
     if (convo.maurice_id && convo.maurice_id !== domain.id) continue; // another domain's
-    const turns = turnsOf(id, since);
+    // Imported since the last brief: its messages predate `since`, read it whole.
+    const fresh = !!(since && importedAfter && convo.imported_at && convo.imported_at > importedAfter);
+    const turns = turnsOf(id, fresh ? null : since);
     // Nothing the member said since: Maurice's own reply is not new matter.
     if (!turns.some((t) => t.role === "user")) continue;
     const title = convo.title ?? "";
@@ -566,7 +576,7 @@ async function doRefresh(domain: Maurice, memberId: string): Promise<RefreshResu
 
   let material: Material[];
   try {
-    material = await findMaterial(memberId, domain, since, name);
+    material = await findMaterial(memberId, domain, since, name, previous?.updated_at ?? null);
   } catch (err) {
     const error = (err as Error).message;
     console.warn(`[briefs] "${domain.name}": could not gather material: ${error}`);

@@ -514,3 +514,26 @@
 "brief.notes.unreviewed_one" = "%d à relire";
 "brief.notes.unreviewed_other" = "%d à relire";
 "brief.notes.open" = "Ouvrir";
+
+/* Settings — Import my conversations (P4, 19 September 2026) */
+"settings.import.group" = "Votre historique";
+"settings.import.title" = "Importer mes conversations";
+"settings.import.value.none" = "Pas encore";
+"settings.import.value.synced" = "Synchronisé";
+"settings.import.caption" = "Apportez vos conversations ChatGPT ou Claude : elles deviennent des conversations ici, cherchables, et Maurice les lit pour proposer vos domaines.";
+"settings.import.intro" = "Demandez à %@ l'export de vos données (%@), puis choisissez le .zip ici. Incrémental : un second import n'ajoute que le plus récent.";
+"settings.import.source.anthropic" = "Claude.ai → Réglages → Confidentialité → Exporter les données";
+"settings.import.source.chatgpt" = "ChatGPT → Réglages → Contrôle des données → Exporter";
+"settings.import.choose" = "Choisir le .zip…";
+"settings.import.choose_more" = "Importer les conversations plus récentes…";
+"settings.import.uploading" = "Envoi…";
+"settings.import.parsing" = "Lecture de l'export…";
+"settings.import.indexing" = "Indexation : %d conversations sur %d…";
+"settings.import.done" = "%d conversations, %d messages importés.";
+"settings.import.done_none" = "Rien de plus récent que le dernier import.";
+"settings.import.failed" = "Import échoué : %@";
+"settings.import.not_zip" = "ce fichier n'est pas un export .zip";
+"settings.import.synced_through" = "synchronisé jusqu'au %@";
+"settings.import.never" = "aucun import";
+"settings.import.run" = "%d conversations · %d messages";
+"settings.import.night" = "Les conversations importées apparaissent dans votre liste avec leur origine. La nuit suivante, Maurice les lit : vos domaines peuvent vous être proposés au matin.";

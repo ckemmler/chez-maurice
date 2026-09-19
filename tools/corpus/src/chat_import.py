@@ -375,15 +375,32 @@ class ChatArchiveImporter:
             range_from=since, range_to=(range_to_dt.isoformat() if range_to_dt else since),
         )
 
+    @staticmethod
+    def _has_imported_at(conn: sqlite3.Connection) -> bool:
+        """The server adds `conversations.imported_at` (P4, 19 September 2026);
+        a database older than that column is written without it."""
+        cols = {r[1] for r in conn.execute("PRAGMA table_info(conversations)").fetchall()}
+        return "imported_at" in cols
+
     def _insert_conversation(self, conn: sqlite3.Connection, member_id: str,
                              c: _ParsedConvo, provider: Provider) -> int:
         created_ts = _server_ts(c.created) or _server_ts(c.updated)
         updated_ts = _server_ts(c.updated) or created_ts
-        conn.execute(
-            "INSERT INTO conversations (id, user_id, title, created_at, updated_at, origin) "
-            "VALUES (?, ?, ?, ?, ?, ?)",
-            (c.id, member_id, c.title or None, created_ts, updated_ts, provider.key),
-        )
+        if self._has_imported_at(conn):
+            # The moment of the import, in the server's clock format: what the
+            # domains' night compares with a brief's `updated_at` so that a
+            # conversation carrying old dates is still read once after it arrives.
+            conn.execute(
+                "INSERT INTO conversations (id, user_id, title, created_at, updated_at, origin, imported_at) "
+                "VALUES (?, ?, ?, ?, ?, ?, datetime('now'))",
+                (c.id, member_id, c.title or None, created_ts, updated_ts, provider.key),
+            )
+        else:
+            conn.execute(
+                "INSERT INTO conversations (id, user_id, title, created_at, updated_at, origin) "
+                "VALUES (?, ?, ?, ?, ?, ?)",
+                (c.id, member_id, c.title or None, created_ts, updated_ts, provider.key),
+            )
         conn.execute(
             "INSERT OR IGNORE INTO conversation_participants (conversation_id, member_id, role) "
             "VALUES (?, ?, 'owner')",

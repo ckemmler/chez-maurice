@@ -9,6 +9,18 @@
 // garden notes (a "Japan 2023" journal MOC + Mei's allergies), a Kansai guide
 // file, a past "budget" chat, and the Trip Planner hero conversation with its
 // loaded composer context — so all four screenshot screens render from real data.
+//
+// Since 19 September 2026 (P4 of the domains' roadmap) it also writes Théo's
+// conversation history — scripts/demo-conversations.ts, CC0, mostly marked as
+// imported from ChatGPT — so that the household shows "the morning of the
+// proposal": the night after the seed (corpus reconcile at 03:00, briefs at
+// 04:00, mapping at 05:00), Maurice opens a conversation for Théo proposing
+// three domains. To see it at once instead: in the console, "Reconcile now"
+// on the corpus card, then "Map now" on the domains card — or
+// `POST /api/admin/corpus/reconcile` then `POST /api/admin/domains/map
+// { "username": "theo" }` — with a Scaleway (or other) key on the household,
+// since the night's model is DeepSeek V4 Flash. scripts/seed-demo-household.sh
+// --morning does the whole thing on a Mac.
 // ============================================================================
 import { resolve, join } from "path";
 import { readFileSync, mkdirSync, writeFileSync } from "fs";
@@ -42,6 +54,7 @@ import { saveFile } from "../src/services/files";
 import { createConversation } from "../src/services/conversations";
 import { saveSpec } from "../src/services/composer/specs";
 import { gardensRoot } from "../src/services/gardensRoot";
+import { seedDemoConversations, DEMO_CONVERSATIONS } from "./demo-conversations";
 
 // Refuse to run twice into the same dir (avoid UNIQUE-username crashes mid-way).
 const existing = (db.query(`SELECT COUNT(*) c FROM users`).get() as any).c as number;
@@ -280,10 +293,18 @@ const spec = saveSpec(theo.id, hero.id, [
 if ("errors" in spec) { console.error("✗ spec:", spec.errors); process.exit(1); }
 console.log(`✓ hero conversation + loaded context (${(spec as any).total} tok loaded)`);
 
+// ── Théo's history: the matter of the first proposal (P4) ───────────────────
+// Bread, the balcony garden, Japanese — three groups that recur and live —
+// the bike that stopped a year ago, two one-offs. Dated relative to today.
+const history = seedDemoConversations(theo.id);
+console.log(`✓ ${history.ids.length} conversations of Théo's history (${history.imported} marked imported from ChatGPT; ${DEMO_CONVERSATIONS.length} in the set)`);
+
 // ── Summary ─────────────────────────────────────────────────────────────────
 console.log("\n────────────────────────────────────────────");
 console.log("Demo household seeded:", DATA);
 console.log("Members (PIN 1234):", everyone.length, "· admin pw: demo-admin");
 console.log("Hero chat:", hero.id, "(log in as Théo)");
 console.log("Personas:", db.query(`SELECT COUNT(*) c FROM maurices`).get());
+console.log("Théo's history:", history.ids.length, "conversations — the night after (or Reconcile now → Map now)");
+console.log("  Maurice opens a conversation for Théo proposing his domains.");
 console.log("────────────────────────────────────────────");
