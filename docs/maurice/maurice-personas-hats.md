@@ -59,7 +59,7 @@ What went with him: `builtinMaurice()`, `builtinMauriceModel()` (its model choic
 
 ## Ships vs. exists
 
-All of it — the column, the sort, the routes, the list, the editor, the documentation tool — is in the server and the Maurice app and ships. On the hosted households the same image runs the same sort at first start, without intervention, and Maurice Maurice vanishes from their app's list the moment the server is redeployed (the list is what the server returns), before the app is even updated; the app update removes the code that would have shown him. **Carnet** does not read `/api/maurices` and shows no hat: nothing changes there until P3-C brings the domain page — and Carnet has no chat, so the documentation tool does not reach it either.
+All of it — the column, the sort, the routes, the list, the editor, the documentation tool — is in the server and the Maurice app and ships. On the hosted households the same image runs the same sort at first start, without intervention, and Maurice Maurice vanishes from their app's list the moment the server is redeployed (the list is what the server returns), before the app is even updated; the app update removes the code that would have shown him. **Carnet** never showed a hat; since the evening of the 19th it reads `/api/domains` (a Domains shelf, the domain page with the brief, the companion on the book's page — see [[maurice-carnet]]) and writes `/api/maurices` only to follow a book (`kind: companion`). Carnet has no chat, so the documentation tool does not reach it.
 
 ## Gaps
 
