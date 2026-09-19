@@ -880,6 +880,38 @@ try { db.run(`ALTER TABLE households ADD COLUMN spend_cap_system_daily_usd REAL`
 try { db.run(`ALTER TABLE users ADD COLUMN is_child INTEGER NOT NULL DEFAULT 0`); } catch {}
 try { db.run(`ALTER TABLE households ADD COLUMN maurice_opens_min_days INTEGER`); } catch {}
 
+// The domain proposals (P2-B, 19 September 2026): what the night's mapping
+// found in a member's unattached conversations and offers them in a
+// conversation Maurice opens (services/domainMapping.ts, domainProposals.ts).
+// One row per proposed domain: its name and paragraph as the night model
+// wrote them, the conversations that justify it, and its state — `proposed`
+// while the member has not said, `adopted` once a domain was created from it
+// (`maurice_id`), `dismissed` when refused (its conversations never come up
+// again), `expired` when a proposal waited too long unanswered. `presented`
+// marks the three the opening message shows; `conversation_id` is the
+// conversation carrying the proposal, and the only one where the
+// `domains__propose|adjust|adopt` tools exist. `stats_json` keeps the
+// numbers behind the verdict (size, months, recency, cohesion, the model's
+// split hint).
+db.run(`
+  CREATE TABLE IF NOT EXISTS domain_proposals (
+    id                    TEXT PRIMARY KEY,
+    member_id             TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    name                  TEXT NOT NULL,
+    summary               TEXT NOT NULL DEFAULT '',
+    conversation_ids_json TEXT NOT NULL DEFAULT '[]',
+    state                 TEXT NOT NULL DEFAULT 'proposed'
+                          CHECK (state IN ('proposed', 'adopted', 'dismissed', 'expired', 'superseded')),
+    presented             INTEGER NOT NULL DEFAULT 0,
+    conversation_id       TEXT REFERENCES conversations(id) ON DELETE SET NULL,
+    maurice_id            TEXT REFERENCES maurices(id) ON DELETE SET NULL,
+    stats_json            TEXT NOT NULL DEFAULT '{}',
+    created_at            TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at            TEXT NOT NULL DEFAULT (datetime('now'))
+  )
+`);
+db.run(`CREATE INDEX IF NOT EXISTS idx_domain_proposals_member ON domain_proposals(member_id, state)`);
+
 // Migration: an earlier seed minted fabricated ids (opus/haiku at the sonnet
 // version), which 404 at Anthropic. Remap to the real ids and make sure the
 // household default points at a model that actually exists.

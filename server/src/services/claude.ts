@@ -9,8 +9,9 @@ import { resolveToText, resolveAttachments, getSpec } from "./composer/specs";
 import { resolveBookItem } from "./composer/weights";
 import { type FileAttachment } from "./composer/files";
 import { getConversationMaurice, resolveMauriceContext, resolveMauriceAttachments } from "./maurices";
-import { briefsForPrompt } from "./domainBriefs";
+import { briefsForPrompt, memberLocale } from "./domainBriefs";
 import { MAURICE_DOCS_TOOL_NAME, askMauriceDocs, mauriceDocsTool } from "./mauriceDocsTool";
+import { domainToolsFor, isDomainTool, proposalPromptSection, runDomainTool } from "./domainProposals";
 import { ensureUserFirst } from "./openedConversations";
 import { resolveModelId, getModel } from "./models";
 import { resolveUsableModel, getEverydayModel } from "./modelAccess";
@@ -448,6 +449,12 @@ async function executeTool(
         // prose back, no data card.
         const a = await askMauriceDocs(input || {}, ctx.memberId);
         return { text: a.text, isError: a.isError };
+      }
+      // The domain proposal tools (services/domainProposals.ts) are native:
+      // they exist only in the conversation Maurice opened to propose, and
+      // that check is made again inside, on the conversation itself.
+      if (isDomainTool(name)) {
+        return await runDomainTool(name, input || {}, ctx.conversationId);
       }
       if (mcp) {
         const r = await mcp.callTool(name, input || {});
@@ -1059,6 +1066,10 @@ function trackedBooks(
       if (countParticipants(conversationId) === 1) {
         systemPrompt += briefsForPrompt(memberId, userDisplayName);
       }
+      // The conversation Maurice opened to propose domains (P2-B): the
+      // proposals it carries and the rules of the three tools. Empty
+      // everywhere else.
+      systemPrompt += proposalPromptSection(conversationId, userDisplayName, memberLocale(memberId));
 
       // Library binaries (img/pdf) → real content blocks on the latest user turn.
       const attSeen = new Set<string>();
@@ -1142,6 +1153,13 @@ function trackedBooks(
       mcpTools = [];
     }
   }
+
+  // The native tools of a proposal conversation (services/domainProposals.ts):
+  // three, in that one conversation, whoever's families say what; none
+  // anywhere else. Appended after the MCP roster so the cached prefix of an
+  // ordinary conversation does not move.
+  const domainTools: McpTool[] = memberId ? domainToolsFor(conversationId, memberId) : [];
+  mcpTools = [...mcpTools, ...domainTools];
 
   // Now that the roster is settled, tell the model what it really holds.
   systemPrompt += toolRosterNotice(mcpTools.map((t) => t.name), wantsWeb && hasWebSearch());

@@ -5,6 +5,8 @@ import { SYSTEM_SPENDER, usageFor } from "../services/budget";
 import { docsStatus } from "../services/mauriceDocsRefresh";
 import { ArchiveError, exportResponse } from "../services/archive";
 import { openConversation, openingGuard } from "../services/openedConversations";
+import { mapMember, mappingNightlyStatus, runDomainMapping } from "../services/domainMapping";
+import { listProposals, proposalCard, type ProposalState } from "../services/domainProposals";
 import { canUseMaurice } from "../services/maurices";
 import { getUser, getUserByUsername } from "../services/users";
 import db from "../db";
@@ -178,6 +180,41 @@ admin.post("/conversations/open", async (c) => {
     return c.json({ error: "Refused by the guard", reason: result.reason, last_opened_at: result.last_opened_at ?? null, next_at: result.next_at ?? null }, 409);
   }
   return c.json({ conversation: result.conversation, message: result.message }, 201);
+});
+
+// ── The domain mapping (P2-B) ───────────────────────────────────
+// POST /api/admin/domains/map — map one member now: { member_id | username,
+// dry_run?, force? }. `dry_run` groups and names (the model calls are made
+// and charged) but writes no proposal and opens nothing; `force` walks past
+// the opening guard the way the admin's hand may. Without a member, the
+// whole night runs (every member), not awaited. GET /api/admin/domains/proposals
+// lists a member's proposals (`?username=…&state=proposed`).
+
+admin.post("/domains/map", async (c) => {
+  const body = await c.req.json().catch(() => ({}));
+  const member = body.member_id
+    ? getUser(String(body.member_id))
+    : body.username
+      ? (() => { const u = getUserByUsername(String(body.username)); return u ? getUser(u.id) : null; })()
+      : null;
+  if (!member) {
+    if (body.member_id || body.username) return c.json({ error: "Unknown member" }, 404);
+    const already = mappingNightlyStatus().running;
+    runDomainMapping().catch(() => {});
+    return c.json({ started: !already, running: true }, 202);
+  }
+  const r = await mapMember(member.id, { dryRun: body.dry_run === true, force: body.force === true });
+  return c.json(r, r.outcome === "failed" ? 500 : 200);
+});
+
+admin.get("/domains/proposals", (c) => {
+  const username = c.req.query("username");
+  const memberId = c.req.query("member_id");
+  const member = memberId ? getUser(memberId) : username ? (() => { const u = getUserByUsername(username); return u ? getUser(u.id) : null; })() : null;
+  if (!member) return c.json({ error: "Unknown member" }, 404);
+  const state = c.req.query("state") as ProposalState | undefined;
+  const rows = listProposals(member.id, state ? [state] : undefined);
+  return c.json({ member_id: member.id, proposals: rows.map((p) => ({ ...proposalCard(p, { ids: c.req.query("ids") === "1" }), conversation_id: p.conversation_id, created_at: p.created_at })) });
 });
 
 export default admin;

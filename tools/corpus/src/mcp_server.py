@@ -274,6 +274,36 @@ class CorpusMCPServer:
                     },
                 ),
                 Tool(
+                    name="map_conversations",
+                    description=(
+                        "Group the caller's conversations by their vectors — the arithmetic "
+                        "of the domains' nightly mapping. One centroid per conversation on the "
+                        "roles given (the member's own turns by default), spherical k-means, "
+                        "a merge of the centroids that came out too close, and a second level "
+                        "on any group above `split_above`. Returns groups of conversation ids "
+                        "ordered by closeness to their centre, with their cohesion; no names, "
+                        "no dates — the server adds those. Reads only, the member's file only."
+                    ),
+                    inputSchema={
+                        "type": "object",
+                        "properties": {
+                            "conversation_ids": {
+                                "type": "array",
+                                "items": {"type": "string"},
+                                "description": "Restrict to these conversations (omit for all indexed ones)",
+                            },
+                            "roles": {
+                                "type": "array",
+                                "items": {"type": "string"},
+                                "description": "Turns that enter the centroid; default [\"user\"]",
+                            },
+                            "k": {"type": "integer", "description": "Groups at the first level (default n/80 in [4, 60])"},
+                            "merge": {"type": "number", "description": "Merge centroids above this cosine (default 0.90)"},
+                            "split_above": {"type": "integer", "description": "Cluster again any group larger than this (default 200; 0 = never)"},
+                        },
+                    },
+                ),
+                Tool(
                     name="reconcile_status",
                     description=(
                         "The full conversations reconciliation: { running, started_at, finished_at, "
@@ -481,6 +511,8 @@ class CorpusMCPServer:
                 payload = await self.orchestrator.index_conversations(
                     arguments.get("conversation_id"), background=True
                 )
+            elif name == "map_conversations":
+                payload = self._map_conversations(arguments or {})
             elif name == "reconcile_status":
                 payload = self.orchestrator.reconcile_status()
             elif name == "import_chat_export":
@@ -518,6 +550,37 @@ class CorpusMCPServer:
             else:
                 return [TextContent(type="text", text=f"Unknown tool: {name}")]
             return [TextContent(type="text", text=json.dumps(payload, ensure_ascii=False, indent=2))]
+
+    def _map_conversations(self, args: dict[str, Any]) -> dict[str, Any]:
+        """The domains' mapping: centroids from the member's store, grouped by
+        src/domain_map.py. Only the sqlite-vec store can hand out its vectors;
+        another backend answers with an error rather than a guess."""
+        store = self.orchestrator.indexer
+        if not hasattr(store, "conversation_centroids"):
+            return {"error": "this store cannot map conversations"}
+        try:
+            from .domain_map import cluster, groups_payload
+        except ImportError:  # pragma: no cover - script fallback
+            from src.domain_map import cluster, groups_payload
+        roles = args.get("roles") or ["user"]
+        ids = args.get("conversation_ids")
+        vectors = store.conversation_centroids(
+            roles=[str(r) for r in roles],
+            conversation_ids=[str(i) for i in ids] if isinstance(ids, list) else None,
+        )
+        split_above = args.get("split_above", 200)
+        groups = cluster(
+            vectors,
+            k=int(args["k"]) if args.get("k") else None,
+            merge=float(args.get("merge", 0.90)),
+            split_above=int(split_above) if split_above else None,
+        )
+        return {
+            "conversations": len(vectors),
+            "requested": len(ids) if isinstance(ids, list) else None,
+            "roles": roles,
+            "groups": groups_payload(groups),
+        }
 
     async def run(self) -> None:
         async with stdio_server() as (read_stream, write_stream):

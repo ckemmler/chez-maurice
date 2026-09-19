@@ -26,6 +26,9 @@ export const ALWAYS_ON = ["web", "signals"];
 // hidden unless a member has been granted access in the admin page.
 function groupOf(id: string): "core" | "garden" | "experimental" {
   if (ALWAYS_ON.includes(id)) return "core";
+  // The domain proposal tools are native and granted by the conversation
+  // alone (services/domainProposals.ts), never by a family or the flag.
+  if (id === "domains") return "core";
   if (id === "garden-notes" || id === "garden-journal") return "garden";
   return "experimental";
 }
@@ -77,6 +80,7 @@ const META: Record<string, { title: string; icon: string; blurb: string }> = {
   layouts:  { title: "Layouts",    icon: "rectangle.3.group",              blurb: "Saved layouts." },
   calibre:  { title: "Books",      icon: "books.vertical",                 blurb: "Your Calibre library." },
   corpus:   { title: "Corpus",     icon: "doc.text.magnifyingglass",       blurb: "Search your corpus." },
+  domains:  { title: "Domain proposals", icon: "book.closed",              blurb: "Propose, adjust and adopt domains — in the conversation Maurice opened for it." },
 };
 
 /** The human names of the families a concrete tool roster covers — what the

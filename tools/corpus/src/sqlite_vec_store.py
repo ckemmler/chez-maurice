@@ -394,6 +394,46 @@ class SqliteVecStore:
             results = results[:limit]
         return results
 
+    def conversation_centroids(
+        self,
+        *,
+        roles: Iterable[str] = ("user",),
+        conversation_ids: Optional[Iterable[str]] = None,
+        member_id: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """One unit vector per conversation, from the chunks of the roles asked
+        for — the material of the domains' mapping (src/domain_map.py). Reads
+        the member's file only, never the shared pool; a conversation with no
+        chunk on those roles is absent. `conversation_ids` restricts to those
+        (the server passes the ones not yet attached to a domain)."""
+        from .domain_map import centroids as _centroids  # numpy only
+
+        conn = self._conn(member_id)
+        role_list = [r for r in roles if r]
+        if not role_list:
+            return {}
+        wanted = set(conversation_ids) if conversation_ids is not None else None
+        sql = (
+            "SELECT json_extract(c.payload, '$.conversation_id') AS cid, v.embedding "
+            "FROM chunks c JOIN vec_chunks v ON v.rowid = c.id "
+            "WHERE c.source_type = 'conversation' "
+            f"AND json_extract(c.payload, '$.role') IN ({','.join('?' * len(role_list))})"
+        )
+        with self._lock:
+            rows = conn.execute(sql, role_list).fetchall()
+        import numpy as np
+
+        def pairs():
+            for cid, blob in rows:
+                if not cid or (wanted is not None and cid not in wanted):
+                    continue
+                vec = np.frombuffer(blob, dtype=np.float32)
+                if vec.shape[0] != self.vector_size:
+                    continue
+                yield cid, vec
+
+        return _centroids(pairs())
+
     def close(self) -> None:
         with self._lock:
             for conn in self._conns.values():

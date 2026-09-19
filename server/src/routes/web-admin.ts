@@ -52,6 +52,7 @@ import { ping, discover, totalRamGB } from "../services/ollama";
 import { docsStatus, docsUrl, refreshDocs } from "../services/mauriceDocsRefresh";
 import { corpusNightlyStatus, reconcileCorpus } from "../services/corpusNightly";
 import { briefsNightlyStatus, runDomainBriefs } from "../services/domainBriefs";
+import { mappingNightlyStatus, runDomainMapping } from "../services/domainMapping";
 import { ArchiveError, exportResponse } from "../services/archive";
 import { t, langOf, SUPPORTED } from "../services/i18n";
 import { SYSTEM_SPENDER, spentTodayUsd, spentMonthUsd, memberDailyCap, setMemberDailyCap, setHouseholdDailyCap, setSystemDailyCap } from "../services/budget";
@@ -905,6 +906,11 @@ web.get("/dashboard", async (c) => {
         ${briefsCard(lang)}
       </section>
 
+      <section id="sec-mapping">
+        ${sectionHead(t(lang, "dashboard.kicker_advanced"), t(lang, "mapping.title"), t(lang, "mapping.desc"))}
+        ${mappingCard(lang)}
+      </section>
+
       <section id="sec-archive">
         ${sectionHead(t(lang, "dashboard.kicker_archive"), t(lang, "archive.title"), t(lang, "archive.desc"))}
         <div class="card pad">
@@ -1011,6 +1017,43 @@ function briefsCard(lang: string): string {
           <div class="grid-actions"><form method="POST" action="/admin/briefs/run" class="inline"><button type="submit" class="btn default sm"${s.running ? " disabled" : ""}>↻ ${escape(t(lang, "briefs.run_now"))}</button></form></div>
         </div>`;
 }
+
+// ── The domain mapping ─────────────────────────────────────────
+// The night's third job (services/domainMapping.ts): when the members'
+// conversations were last mapped, what it proposed, opened and cost, and a
+// button to run it now (not awaited: a first night on years of conversations
+// makes a dozen model calls).
+function mappingCard(lang: string): string {
+  const s = mappingNightlyStatus();
+  const when = s.last_run_at
+    ? t(lang, "mapping.last_run", s.last_run_at.slice(0, 16).replace("T", " "))
+    : t(lang, "mapping.never_run");
+  const outcome = s.last_outcome ? t(lang, "mapping.outcome_" + s.last_outcome) : "";
+  const stats = s.last_stats
+    ? t(lang, "mapping.stats", String(s.last_stats.opened), String(s.last_stats.proposals), String(s.last_stats.waiting), String(s.last_stats.skipped), String(s.last_stats.members), s.last_stats.cost_usd.toFixed(4))
+    : "";
+  const perMember = s.last_stats?.results?.length
+    ? `<ul class="hint" style="margin:6px 0 0 16px">${s.last_stats.results.map((r) => `<li>${escape(r.member_id)}: ${escape(r.outcome)}${r.reason ? ` — ${escape(r.reason)}` : ""}${r.presented?.length ? ` — ${escape(r.presented.join(", "))}` : ""}</li>`).join("")}</ul>`
+    : "";
+  return `
+        <div class="card pad">
+          <div class="field">
+            <label class="label">${escape(s.running ? t(lang, "mapping.running") : s.on ? t(lang, "mapping.nightly_on") : t(lang, "mapping.off"))}</label>
+            <span class="hint">${escape(when)}${outcome ? ` · ${escape(outcome)}` : ""}${stats ? ` · ${escape(stats)}` : ""}</span>
+            ${s.last_error ? `<span class="hint" style="color:var(--caution)">${escape(t(lang, "mapping.last_error", s.last_error))}</span>` : ""}
+            ${perMember}
+          </div>
+          <div class="grid-actions"><form method="POST" action="/admin/mapping/run" class="inline"><button type="submit" class="btn default sm"${s.running ? " disabled" : ""}>↻ ${escape(t(lang, "mapping.run_now"))}</button></form></div>
+        </div>`;
+}
+
+web.post("/mapping/run", (c) => {
+  const redir = requireWebAdmin(c);
+  if (redir) return redir;
+  const already = mappingNightlyStatus().running;
+  runDomainMapping().catch(() => {});
+  return c.redirect(`/admin/dashboard?msg=${already ? "mapping_running" : "mapping_started"}#sec-mapping`);
+});
 
 web.post("/briefs/run", (c) => {
   const redir = requireWebAdmin(c);

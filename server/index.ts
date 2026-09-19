@@ -53,6 +53,7 @@ import { localiseRemoteImages } from "./src/services/gardenImages";
 import { scheduleDocsRefresh } from "./src/services/mauriceDocsRefresh";
 import { scheduleCorpusNightly } from "./src/services/corpusNightly";
 import { scheduleDomainBriefsNightly } from "./src/services/domainBriefs";
+import { scheduleDomainMappingNightly } from "./src/services/domainMapping";
 import domains from "./src/routes/domains";
 import { gardenLook, isNoteSharedWith, gardenFor } from "./src/services/gardens";
 import maurices from "./src/routes/maurices";
@@ -207,6 +208,10 @@ scheduleCorpusNightly();
 // The domain briefs: an hour after the corpus, rewrite each member's briefs
 // from what touched their domains since (see services/domainBriefs.ts).
 scheduleDomainBriefsNightly();
+// The domain mapping: an hour after the briefs, group each member's
+// unattached conversations and, when domains emerge, open the conversation
+// that proposes them (see services/domainMapping.ts).
+scheduleDomainMappingNightly();
 
 /** Is this a member whose garden the household serves? */
 function gardenExists(member: string): boolean {

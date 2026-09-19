@@ -39,6 +39,9 @@ _HERE = Path(__file__).resolve()
 _REPO_ROOT = _HERE.parents[3]
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
+_CORPUS = _HERE.parents[1]
+if str(_CORPUS) not in sys.path:
+    sys.path.insert(0, str(_CORPUS))
 
 # ── Entrées ──────────────────────────────────────────────────────────────────
 
@@ -189,78 +192,11 @@ def load_vectors(vectors_db: Path, convos: dict[str, Convo], roles: tuple[str, .
 
 
 # ── Regroupement ─────────────────────────────────────────────────────────────
+# The arithmetic lives in src/domain_map.py since P2-B (shared with the
+# corpus's `map_conversations` tool, which is what the night calls): k-means on
+# the sphere, the merge of close centroids, and a second level on big groups.
 
-
-def spherical_kmeans(X: np.ndarray, k: int, *, iters: int = 40, restarts: int = 4, seed: int = 7) -> np.ndarray:
-    """k-means sur la sphère (vecteurs unitaires, similarité cosinus). Rend les
-    étiquettes du meilleur des `restarts` essais (k-means++ pour les germes)."""
-    rng = np.random.default_rng(seed)
-    n = X.shape[0]
-    best_labels, best_score = None, -np.inf
-    for _ in range(restarts):
-        # k-means++
-        centers = [X[rng.integers(n)]]
-        d2 = np.full(n, np.inf)
-        for _ in range(1, k):
-            d2 = np.minimum(d2, 1.0 - X @ centers[-1])
-            p = np.clip(d2, 0, None) ** 2
-            p = p / p.sum() if p.sum() > 0 else np.full(n, 1.0 / n)
-            centers.append(X[rng.choice(n, p=p)])
-        C = np.stack(centers)
-        labels = np.zeros(n, dtype=int)
-        for _ in range(iters):
-            sims = X @ C.T
-            new = sims.argmax(axis=1)
-            if np.array_equal(new, labels) and _ > 0:
-                break
-            labels = new
-            for j in range(k):
-                m = labels == j
-                if m.any():
-                    c = X[m].sum(axis=0)
-                    C[j] = c / (np.linalg.norm(c) or 1.0)
-                else:  # groupe vide : réamorcer sur le point le moins bien servi
-                    worst = (X @ C.T).max(axis=1).argmin()
-                    C[j] = X[worst]
-        score = (X @ C.T).max(axis=1).sum()
-        if score > best_score:
-            best_score, best_labels = score, labels.copy()
-    assert best_labels is not None
-    return best_labels
-
-
-def merge_close(X: np.ndarray, labels: np.ndarray, threshold: float) -> np.ndarray:
-    """Fusionne les groupes dont les centroïdes sont plus proches que
-    `threshold` (cosinus), en union-find, jusqu'à stabilité."""
-    first = True
-    while True:
-        ids = sorted(set(labels.tolist()))
-        C = np.stack([_centroid(X[labels == j]) for j in ids])
-        S = C @ C.T
-        np.fill_diagonal(S, -1)
-        if first and len(ids) > 1:
-            up = S[np.triu_indices(len(ids), 1)]
-            q = np.quantile(up, [0.1, 0.5, 0.9, 0.99, 1.0])
-            print(
-                "[merge] similarité entre centroïdes — déciles 10/50/90/99/max : "
-                + " ".join(f"{v:.3f}" for v in q),
-                file=sys.stderr,
-            )
-            first = False
-        i, j = np.unravel_index(S.argmax(), S.shape)
-        if S[i, j] < threshold:
-            return _relabel(labels)
-        labels = np.where(labels == ids[j], ids[i], labels)
-
-
-def _centroid(M: np.ndarray) -> np.ndarray:
-    c = M.sum(axis=0)
-    return c / (np.linalg.norm(c) or 1.0)
-
-
-def _relabel(labels: np.ndarray) -> np.ndarray:
-    ids = {j: i for i, j in enumerate(sorted(set(labels.tolist())))}
-    return np.array([ids[j] for j in labels])
+from src.domain_map import _centroid, cluster  # noqa: E402
 
 
 # ── Lecture des groupes ──────────────────────────────────────────────────────
@@ -490,6 +426,7 @@ def main() -> None:
     ap.add_argument("--json", type=Path, default=None, help="dump JSON des groupes")
     ap.add_argument("--k", type=int, default=0, help="nombre de groupes k-means (défaut : n/80 borné à [4, 60])")
     ap.add_argument("--merge", type=float, default=0.90, help="fusionner les groupes dont les centroïdes dépassent ce cosinus")
+    ap.add_argument("--split-above", type=int, default=200, help="recouper tout groupe plus grand que ça (0 = jamais) ; le second niveau de P2-B")
     ap.add_argument("--min-size", type=int, default=8)
     ap.add_argument("--min-months", type=int, default=4)
     ap.add_argument("--alive-days", type=int, default=180)
@@ -516,15 +453,20 @@ def main() -> None:
         groups: list[Group] = []
         k = 0
     else:
-        X = np.stack([c.vector for c in with_vec])
         k = args.k or max(4, min(60, len(with_vec) // 80))
         k = min(k, len(with_vec))
-        labels = spherical_kmeans(X, k)
-        labels = merge_close(X, labels, args.merge)
-        print(f"[cluster] k={k} → {len(set(labels.tolist()))} groupes après fusion à {args.merge}", file=sys.stderr)
+        found = cluster({c.id: c.vector for c in with_vec}, k=k, merge=args.merge, split_above=args.split_above or None)
+        index = {c.id: c for c in with_vec}
+        labels = np.zeros(len(with_vec), dtype=int)
+        pos = {c.id: i for i, c in enumerate(with_vec)}
+        for j, g in enumerate(found):
+            for cid in g.conversation_ids:
+                labels[pos[cid]] = j
+        n_split = sum(1 for g in found if g.depth > 0)
+        print(f"[cluster] k={k} → {len(found)} groupes après fusion à {args.merge}" + (f", dont {n_split} coupés d'un gros bloc (> {args.split_above})" if n_split else ""), file=sys.stderr)
         groups = describe_groups(with_vec, labels, args.today, min_size=args.min_size, min_months=args.min_months, alive_days=args.alive_days)
 
-    params = {"k": k, "merge": args.merge, "min_size": args.min_size, "min_months": args.min_months, "alive_days": args.alive_days, "roles": ",".join(roles)}
+    params = {"k": k, "merge": args.merge, "split_above": args.split_above, "min_size": args.min_size, "min_months": args.min_months, "alive_days": args.alive_days, "roles": ",".join(roles)}
     invocation = None if args.no_llm else args.invocation
     for g in groups:
         tag = f"[{g.verdict:7}] n={g.n:4} mois={g.months_active:2} 90j={g.recent_90:3} coh={g.cohesion:.2f}"

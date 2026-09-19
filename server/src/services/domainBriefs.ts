@@ -427,9 +427,30 @@ export async function findMaterial(
 
 // ── The prompt ───────────────────────────────────────────────────────────────
 
-const LANGUAGE: Record<string, string> = {
+export const LANGUAGE: Record<string, string> = {
   en: "English", fr: "French", it: "Italian", de: "German", es: "Spanish", pt: "Portuguese", nl: "Dutch",
 };
+
+/** The language the night writes to a member in: their own locale when the
+ *  app has set one, else the household's — the first admin's locale — else
+ *  English. A member who never opened the settings (Paola, on the first
+ *  mapping of 19 September 2026) would otherwise be written to in English in
+ *  a French household. */
+export function memberLanguage(memberId: string): string {
+  return LANGUAGE[memberLocale(memberId)] ?? "English";
+}
+
+/** The locale code behind `memberLanguage`: the member's own when set, else
+ *  the household's (the first admin's), else `en`. */
+export function memberLocale(memberId: string): string {
+  const own = userLocale(memberId);
+  const ownRow = db.query(`SELECT locale FROM user_preferences WHERE user_id = ?`).get(memberId) as { locale: string | null } | null;
+  if (ownRow?.locale?.trim() && LANGUAGE[own]) return own;
+  const admin = db
+    .query(`SELECT p.locale FROM users u JOIN user_preferences p ON p.user_id = u.id WHERE u.role = 'admin' AND p.locale IS NOT NULL AND p.locale != '' ORDER BY u.created_at LIMIT 1`)
+    .get() as { locale: string } | null;
+  return LANGUAGE[admin?.locale ?? ""] ? admin!.locale : LANGUAGE[own] ? own : "en";
+}
 
 export function systemPrompt(name: string, language: string, words: number): string {
   return [
@@ -541,7 +562,7 @@ async function doRefresh(domain: Maurice, memberId: string): Promise<RefreshResu
   const since = previous?.read_until ?? null;
   const member = db.query(`SELECT display_name FROM users WHERE id = ?`).get(memberId) as { display_name: string } | null;
   const name = member?.display_name || "the member";
-  const language = LANGUAGE[userLocale(memberId)] ?? "English";
+  const language = memberLanguage(memberId);
 
   let material: Material[];
   try {
