@@ -24,13 +24,13 @@ export async function pushToUser(
   userId: string,
   payload: { title: string; body: string; conversationId?: string },
 ): Promise<void> {
-  const rows = db.query(`SELECT token, household_tag FROM device_tokens WHERE user_id = ?`)
-    .all(userId) as { token: string; household_tag: string | null }[];
+  const rows = db.query(`SELECT token, household_tag, platform FROM device_tokens WHERE user_id = ?`)
+    .all(userId) as { token: string; household_tag: string | null; platform: string | null }[];
   console.log(`[push] pushToUser ${userId}: ${rows.length} token(s)`);
-  for (const { token, household_tag } of rows) {
+  for (const { token, household_tag, platform } of rows) {
     try {
-      const r = await sendApns(token, { ...payload, householdTag: household_tag ?? undefined });
-      console.log(`[push]   token=${token.slice(0, 10)}… tag=${household_tag} → status=${r.status} reason=${r.reason ?? "ok"}`);
+      const r = await sendApns(token, { ...payload, householdTag: household_tag ?? undefined, platform: platform ?? undefined });
+      console.log(`[push]   token=${token.slice(0, 10)}… tag=${household_tag} platform=${platform} → status=${r.status} reason=${r.reason ?? "ok"}`);
       if (r.reason === "BadDeviceToken" || r.reason === "Unregistered" || r.status === 410) {
         db.run(`DELETE FROM device_tokens WHERE token = ?`, [token]);
       }

@@ -10,6 +10,15 @@ const SECRETS_DIR = join(import.meta.dir, "../../.secrets");
 const KEY_ID = process.env.APNS_KEY_ID || "64JJ6Y74J7";
 const TEAM_ID = process.env.APNS_TEAM_ID || "33DB976938";
 const TOPIC = process.env.APNS_TOPIC || "eu.chezmaurice.app";
+// Carnet is a second app under the same team: its tokens belong to its own
+// bundle id, and APNs answers DeviceTokenNotForTopic when the topic is wrong.
+const CARNET_TOPIC = process.env.APNS_CARNET_TOPIC || "eu.chezmaurice.carnet";
+
+/** The APNs topic for a device token, from the platform the client registered
+ *  it with (`carnet-ios` → Carnet's bundle id; anything else → the Maurice app). */
+export function apnsTopicFor(platform: string | null | undefined): string {
+  return (platform ?? "").startsWith("carnet") ? CARNET_TOPIC : TOPIC;
+}
 // Dev/sandbox by default (matches the app's `aps-environment: development`).
 // Set APNS_PRODUCTION=1 for App Store / TestFlight builds.
 const HOST = process.env.APNS_PRODUCTION === "1"
@@ -79,7 +88,7 @@ export interface ApnsResult {
  *  (e.g. "BadDeviceToken", "Unregistered") so the caller can prune dead tokens. */
 export async function sendApns(
   deviceToken: string,
-  payload: { title: string; body: string; conversationId?: string; householdTag?: string },
+  payload: { title: string; body: string; conversationId?: string; householdTag?: string; platform?: string },
 ): Promise<ApnsResult> {
   const jwt = await providerToken();
   if (!jwt) return { ok: false, status: 0, reason: "NoProviderKey" };
@@ -99,7 +108,7 @@ export async function sendApns(
       ":method": "POST",
       ":path": `/3/device/${deviceToken}`,
       authorization: `bearer ${jwt}`,
-      "apns-topic": TOPIC,
+      "apns-topic": apnsTopicFor(payload.platform),
       "apns-push-type": "alert",
       "apns-priority": "10",
     });
