@@ -1,6 +1,6 @@
 ---
 title: Carnet — the pocket companion
-date: '2026-09-13'
+date: '2026-09-19'
 flags: []
 locale: en
 description: 'The iOS/iPadOS companion to Maurice: log what happened, read books and
@@ -69,6 +69,7 @@ Carnet is in daily use at home; the minimal scope is on its way to TestFlight (f
 
 ## Gaps & notes
 
+- **No conversations, no push.** Carnet lists no conversations and registers no APNs token: a conversation [[maurice-chat|Maurice opens on his own]] (19 September 2026) reaches the Maurice app only. The domains tranche for iOS (P3-C in the domains plan) brings the domain page, the list and the notification here.
 - **Flashcards** are server-side only so far; the Flashcards line on each media and the review section are the next tranche.
 - **Unified navigation** across the three roles, and a refreshed design pass covering the expanded scope, are on the roadmap (`design/`).
 - **Reading is iOS-only**; the Mac reads the garden on the web.

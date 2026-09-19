@@ -47,6 +47,14 @@ also carries the conversation's totals (see below).
 
 In a conversation you have alone with him, Maurice reads the briefs of your [[maurice-domains|domains]] — the short texts he keeps on the parts of your life he follows — under one budget, after the persona and whatever the [[maurice-composer|composer]] loaded. Never in a room. What he read is what the domain page shows, so a correction there is what he reads from the next turn on.
 
+## A conversation Maurice opens
+
+Since 19 September 2026 a conversation can begin with Maurice. The server creates it for one member with a first message in his voice (`conversations.opened_by = 'maurice'`, `server/src/services/openedConversations.ts`), gives it a title (the one asked for, else the first line of the message), and leaves it unread: the member's global socket receives a `conversation_opened` event, and a member with no socket live gets an APNs push ("Maurice: …"), the way a room notifies its members. In the sidebar the row carries one quiet caption under its title, "Opened by Maurice" — the first author tells it apart, not a colour — and the unread dot until it is opened; the list rows carry `unread` so a cold start shows the dot too, and the foyer badge counts it. Opening it marks it read; replying is an ordinary turn, charged to the member.
+
+What the model sees: the history would start with an assistant turn, which the Messages API refuses, so one constant user lead (`[Maurice opened this conversation on his own. His first message follows.]`) is placed before it, after the context window is cut, for every provider.
+
+Who may receive one: never a child (`users.is_child`, a box in the console's member page), never a guest (their life is in another household), and never twice within the household's number of days (fifteen by default; "Days between two conversations Maurice opens" in the console's settings). Today only the operator opens one — `POST /api/admin/conversations/open` with `{username | member_id, text, title?, maurice_id?, force?, dry_run?}`, or `scripts/open-conversation.sh <username> "<text>"` — and no model is called; the night that proposes [[maurice-domains|domains]] will be the first caller.
+
 ## Streaming
 
 The client reads the newline-delimited `StreamEvent`s and reacts per type: `text_delta` appends to the live text, `thinking` raises a "Thinking" activity label until the first visible word (reasoning models such as GLM go quiet for a while before answering — minutes on GLM-5.3-Flash, unless the persona turned the phase off, see [[maurice-personas-hats]]), `ping` is a server keepalive and shows nothing, `tool_call` raises a transient activity label ("Searching the web…"), `tool_data` appends a structured result, `usage` is kept for the cost meter, `done` captures the `message_id`, `error` surfaces a banner. Image generation shows a spinner while it runs, then drops the image inline.
@@ -105,3 +113,4 @@ The chat surface — streaming, data cards, math, markdown, images, dictation, m
 - **Regenerate is single-step** — it re-runs the last turn; there's no branch/alternatives history.
 - **No web chat client.** The only conversational surface is the native app; the web is the garden.
 - **No cross-conversation cost view** — the summary is per thread; there is no household or monthly total anywhere in the app yet.
+- **The details sheet does not say who opened a conversation** — only the sidebar caption does; and the user lead placed before Maurice's opener is one English sentence the model reads as the member's turn, to be watched on the first real exchanges.

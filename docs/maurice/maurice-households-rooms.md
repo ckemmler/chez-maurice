@@ -35,7 +35,7 @@ Invite codes (`server/src/services/auth.ts`) are 8 characters from an unambiguou
 
 ## Members, roles & guests
 
-Three roles (`server/src/services/users.ts`): **admin** (manages members and household identity), **standard** (full member, PIN-protected), and **guest** (full capabilities but a *limited reach*). A guest's reach is an explicit allow-list — `guest_contacts`, checked **both directions** by `guestCanReach()` — so a guest sees only themselves plus their contacts in the roster, and can only share rooms with them. Guests get curated [[maurice-personas-hats|Maurices]] through each persona's own access list. This is how you safely **host a guest, or be a guest** in another household.
+Three roles (`server/src/services/users.ts`): **admin** (manages members and household identity), **standard** (full member, PIN-protected), and **guest** (full capabilities but a *limited reach*). Orthogonal to the role, a member can be marked a **child** (`users.is_child`, a box on the console's member page, 19 September 2026): Maurice never opens a conversation on his own for a child, and the night proposes nothing to them — a flag the admin sets, not an age the server knows. A guest's reach is an explicit allow-list — `guest_contacts`, checked **both directions** by `guestCanReach()` — so a guest sees only themselves plus their contacts in the roster, and can only share rooms with them. Guests get curated [[maurice-personas-hats|Maurices]] through each persona's own access list. This is how you safely **host a guest, or be a guest** in another household.
 
 ## Foyer switching (multiple households)
 
@@ -45,9 +45,11 @@ Three roles (`server/src/services/users.ts`): **admin** (manages members and hou
 
 A conversation is a **room**; a 1:1 chat is just a room with one human. Membership is `conversation_participants`, and access is participant-based — `listConversations()` joins on membership, so you only see rooms you're in. `addParticipant()` enforces guest reach, fans the event to the room, and notifies the newcomer.
 
-Maurice's role shifts with the room: in a 1:1 every message summons him; in a multi-human room he answers **only when mentioned** — `mentionsMaurice()` matches `@claude` / `@maurice` (the ➤ button posts a summon, 💬 posts a human-only message). The composer follows that: in a room 💬 is the **default button** — last in the row, at the far right, filled with the member's accent, and what Return posts; ➤ sits to its left and keeps ⌘Return. A 1:1 has no 💬 at all, so Return still goes to Maurice. Read state (`last_read_at` per participant) drives the per-foyer unread roll-up.
+Maurice's role shifts with the room: in a 1:1 every message summons him; in a multi-human room he answers **only when mentioned** — `mentionsMaurice()` matches `@claude` / `@maurice` (the ➤ button posts a summon, 💬 posts a human-only message). The composer follows that: in a room 💬 is the **default button** — last in the row, at the far right, filled with the member's accent, and what Return posts; ➤ sits to its left and keeps ⌘Return. A 1:1 has no 💬 at all, so Return still goes to Maurice. Read state (`last_read_at` per participant) drives the per-foyer unread roll-up, which counts rooms where someone else wrote since you last read — and, since 19 September 2026, the conversations [[maurice-chat|Maurice opened on his own]] that you have not opened yet (his replies in a thread you started never count).
 
-Liveness uses two WebSocket channels off `roomBus` (`server/src/services/roomBus.ts`): a per-room channel for live messages, and a **per-user channel** (`/api/me/ws`) for activity — "someone is chatting with you" — even when you're not in that room. See [[maurice-server]].
+Liveness uses two WebSocket channels off `roomBus` (`server/src/services/roomBus.ts`): a per-room channel for live messages, and a **per-user channel** (`/api/me/ws`) for activity — "someone is chatting with you" — even when you're not in that room. Its events: `activity` (a message in a room you are in), `conversation_added` (someone added you), and `conversation_opened` (Maurice opened a conversation for you, with his first message). See [[maurice-server]].
+
+The household guards how often Maurice may open one: "Days between two conversations Maurice opens" in the console's settings (`households.maurice_opens_min_days`, fifteen by default), never for a child, never for a guest; the operator's route (`POST /api/admin/conversations/open`) can pass `force` to step over it, the night never will.
 
 ## Moderation
 
@@ -55,7 +57,7 @@ In a shared room, the long-press menu on a message offers **Report** and **Block
 
 ## Push
 
-When an event can't reach a live socket, it becomes an APNs push (`server/src/services/push.ts` + `apns.ts`, token-based ES256 over HTTP/2). Device tokens carry a `platform` and a `household_tag`; dead tokens are pruned on Apple's say-so. This is what notifies you across households when you're a guest elsewhere.
+When an event can't reach a live socket, it becomes an APNs push (`server/src/services/push.ts` + `apns.ts`, token-based ES256 over HTTP/2) — a room's activity, an invitation to a room, or a conversation Maurice opened ("Maurice: …", opening on the conversation when tapped). Device tokens carry a `platform` and a `household_tag`; dead tokens are pruned on Apple's say-so. This is what notifies you across households when you're a guest elsewhere.
 
 ## The household archive
 
@@ -73,3 +75,4 @@ All of this — members, roles, guests, rooms, device enrollment, PINs, foyer sw
 - **A device-pairing ceremony exists but is unused.** `/api/auth/pair` + the `devices` table (one-time pairing tokens) are implemented, yet the app pairs via the unauthenticated `/api/health` — the token flow is currently orphaned.
 - **Sessions don't expire** in this version.
 - **Guest persona access has no override** — it reuses each persona's `maurice_access` list rather than a guest-specific grant.
+- **"Child" is a box, not a birth date** — the server knows nothing of ages; the admin ticks it, and only what Maurice does on his own reads it (opening a conversation, the night's proposals). It does not change a child's model access or content rules, which are their own settings.
