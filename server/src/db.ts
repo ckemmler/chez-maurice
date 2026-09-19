@@ -286,7 +286,8 @@ db.run(`
 // Add 'guest' to the role enum. SQLite can't alter a CHECK in place, so recreate
 // the users table (idempotent: only when 'guest' isn't already allowed). FK
 // references are by table name, so they survive drop+rename with FKs off. Runs
-// AFTER the column ALTERs above so the recreated table carries all 15 columns.
+// AFTER the column ALTERs above so the recreated table carries every column
+// they added — a column left out of the two lists below is silently dropped.
 try {
   const cur = db.query(`SELECT sql FROM sqlite_master WHERE type='table' AND name='users'`).get() as { sql: string } | undefined;
   if (cur && !cur.sql.includes("'guest'")) {
@@ -310,6 +311,8 @@ try {
           avatar_url    TEXT,
           cloudflare_account TEXT,
           cloudflare_token   TEXT,
+          everyday_model     TEXT,
+          experimental_tools INTEGER NOT NULL DEFAULT 0,
           spend_cap_daily_usd REAL
         )
       `);
@@ -317,11 +320,13 @@ try {
         INSERT INTO users_new
           (id, household_id, username, display_name, role, password_hash, pin_hash,
            avatar_color, profile_text, created_at, last_active_at, notes_domain,
-           avatar_url, cloudflare_account, cloudflare_token, spend_cap_daily_usd)
+           avatar_url, cloudflare_account, cloudflare_token, everyday_model,
+           experimental_tools, spend_cap_daily_usd)
         SELECT
            id, household_id, username, display_name, role, password_hash, pin_hash,
            avatar_color, profile_text, created_at, last_active_at, notes_domain,
-           avatar_url, cloudflare_account, cloudflare_token, spend_cap_daily_usd
+           avatar_url, cloudflare_account, cloudflare_token, everyday_model,
+           experimental_tools, spend_cap_daily_usd
         FROM users
       `);
       const after = (db.query(`SELECT COUNT(*) AS n FROM users_new`).get() as { n: number }).n;
