@@ -24,7 +24,7 @@ One distinction runs throughout: *what ships* versus *what exists*. The public r
 
 The system is five cooperating parts: the native **Maurice app** (conversation), **Carnet** (the pocket companion for capturing and reading), a **server** (chat engine + data API), a fleet of MCP **tools**, and a **web** garden renderer.
 
-[[maurice-digest|The digest]] is the whole set condensed to its facts — the names, what ships, the gaps — rewritten every so often; it is what Maurice Maurice, the built-in persona, reads, with any note updated since loaded whole beside it.
+[[maurice-digest|The digest]] is the whole set condensed to its facts — the names, what ships, the gaps — rewritten every so often; it is what Maurice reads when asked about himself — through his **documentation tool** (`maurice_docs`, see [[maurice-tools]]) since the evening of 19 September 2026, through the built-in persona Maurice Maurice for the day before that — with any note updated since loaded whole beside it.
 
 ## Concept — the *why*
 
@@ -67,7 +67,7 @@ provider in the server — the friends first, the demos next.
 
 [[maurice-domains|Domains and their briefs]] — one Maurice, and the domains of a member's life he follows: the brief he keeps on each, written at night, read in every private conversation, corrected or erased in the app; the reading companions beside them; the list and the editor; what is built of the domains design.
 
-[[maurice-personas-hats|From specialized Maurices to domains]] — what became of the personas and their hats on 19 September 2026: every row of `maurices` is a domain or a reading companion, the Studio and the summon picker are gone, and Maurice Maurice — the built-in specialist who answers questions about Maurice from these very notes — stays until the documentation tool replaces him.
+[[maurice-personas-hats|From specialized Maurices to domains]] — what became of the personas and their hats on 19 September 2026: every row of `maurices` is a domain or a reading companion, the Studio and the summon picker are gone, and Maurice Maurice — the built-in specialist who answered questions about Maurice from these very notes — went the same evening, replaced by the documentation tool the everyday Maurice calls.
 
 [[maurice-chat|The chat experience]] — streaming, model switching, tool-result data cards, math rendering, image input and generation, dictation, the cost meter.
 

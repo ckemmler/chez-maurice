@@ -1,7 +1,7 @@
 {
   "format": "maurice-docs",
   "version": 1,
-  "generated_at": "2026-09-19T18:23:22Z",
+  "generated_at": "2026-09-19T18:47:08Z",
   "notes": [
     { "file": "maurice-applications.md", "slug": "maurice-applications", "date": "2026-09-17", "bytes": 12225, "sha256": "e609d4b5b8bb41d86c78537cc17203dbdff0f74a6a75ad69a6980aa9aabde161" },
     { "file": "maurice-architecture.md", "slug": "maurice-architecture", "date": "2026-09-19", "bytes": 25804, "sha256": "421ef574d230062e058fdfe2364ff13d36601096740cea4338e82ec2b8e99537" },
@@ -10,16 +10,16 @@
     { "file": "maurice-composer.md", "slug": "maurice-composer", "date": "2026-09-19", "bytes": 10067, "sha256": "cbafb278d5daf830aec82d0df51da92a09ce2020af42e48a4856bacb521f897f" },
     { "file": "maurice-data-model.md", "slug": "maurice-data-model", "date": "2026-09-19", "bytes": 18167, "sha256": "2e1bf37dbfd3c7bd988dbf654c9c169df5070a09c3461dad793acf2635897250" },
     { "file": "maurice-digest.md", "slug": "maurice-digest", "date": "2026-09-19", "bytes": 66399, "sha256": "3cfbe82ed7350d44f323524a158ff67677cbd5228c16266034d095366084a17d" },
-    { "file": "maurice-docs.md", "slug": "maurice-docs", "date": "2026-09-19", "bytes": 7291, "sha256": "2781ff550e7725aa40c6257436571592852944e79e516158ffb4866325f02256" },
-    { "file": "maurice-domains.md", "slug": "maurice-domains", "date": "2026-09-19", "bytes": 8959, "sha256": "53e40ea0e32351f461f5dfe23a20b617eecfd0203360c913d5eb17b461c7d17e" },
+    { "file": "maurice-docs.md", "slug": "maurice-docs", "date": "2026-09-19", "bytes": 7514, "sha256": "3b27a4ec6e56bebfd989b0b8694d490cff572ec3fb4d832f91233a9e51ff13e5" },
+    { "file": "maurice-domains.md", "slug": "maurice-domains", "date": "2026-09-19", "bytes": 8917, "sha256": "fa05a3c867464458d53a4522562bc35d75e788aed6dd26c3601a985dc92d9660" },
     { "file": "maurice-files.md", "slug": "maurice-files", "date": "2026-06-19", "bytes": 2618, "sha256": "efcfdcde55ae0036dede5249af40155debc54b2711290f1d9fae22fde7660c82" },
     { "file": "maurice-households-rooms.md", "slug": "maurice-households-rooms", "date": "2026-09-19", "bytes": 9208, "sha256": "b3a15b890a7d4c17f5994c83a138a796879d44839fbcc9f956fc83f1b20969dd" },
     { "file": "maurice-knowledge.md", "slug": "maurice-knowledge", "date": "2026-09-19", "bytes": 14767, "sha256": "0309fef341e74f0757c4aab38f1db33ac3651252ba247eea59f3d4f775287ca5" },
     { "file": "maurice-life.md", "slug": "maurice-life", "date": "2026-09-18", "bytes": 4931, "sha256": "72ebe7abeb73fb963ed74a90c19598e1a4c10ae83c8b612752e0127c09fc2cf9" },
-    { "file": "maurice-personas-hats.md", "slug": "maurice-personas-hats", "date": "2026-09-19", "bytes": 8814, "sha256": "df81d82f8e9512cba3b9d628572b5432d89d33389c09fd7648f58fd998cfa9c9" },
-    { "file": "maurice-server.md", "slug": "maurice-server", "date": "2026-09-19", "bytes": 62997, "sha256": "f1c485067ff38e8e2feccfeb1039b4c4203b80a53bb006c00868a9ee7779b43d" },
+    { "file": "maurice-personas-hats.md", "slug": "maurice-personas-hats", "date": "2026-09-19", "bytes": 10231, "sha256": "3cf9fa1ebe5f8e77ceb25548571171e696274974a9bfd569b67317e3a11bd2f4" },
+    { "file": "maurice-server.md", "slug": "maurice-server", "date": "2026-09-19", "bytes": 64559, "sha256": "37dcae7dfb784c74e3e8c550477055c2cc66f6ec7cbf778264573a765dcaca7b" },
     { "file": "maurice-shared-gardens.md", "slug": "maurice-shared-gardens", "date": "2026-09-07", "bytes": 3592, "sha256": "a4f74c962316f7733fec96bb831339377235a2d11a934a7fe914f275dc8d1596" },
-    { "file": "maurice-tools.md", "slug": "maurice-tools", "date": "2026-09-18", "bytes": 19580, "sha256": "2e89e280336b53ff7432e16ef1b99b53d323e85d002fa619d14490e751fee9fc" },
+    { "file": "maurice-tools.md", "slug": "maurice-tools", "date": "2026-09-19", "bytes": 24000, "sha256": "dcc07f89fc48e417edd85540cf905a0949863b7cdd093750ba625a6a020584a2" },
     { "file": "maurice-web-garden.md", "slug": "maurice-web-garden", "date": "2026-09-19", "bytes": 17488, "sha256": "ed4ab786ba0e150eb0324708344879871570c57db4ce8726f4a04f01207fbf3e" }
   ]
 }

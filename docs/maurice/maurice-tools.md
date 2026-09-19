@@ -1,6 +1,6 @@
 ---
 title: The MCP tool ecosystem
-date: '2026-09-18'
+date: '2026-09-19'
 flags: []
 locale: en
 description: 'The gateway that gives Maurice his capabilities: discovery, per-member
@@ -49,6 +49,27 @@ The [[maurice-server|chat engine]] holds a minimal MCP client (`server/src/servi
 Two gates sit on top of the families, both in `toolFamilies.ts`. Everything that isn't `web`, `signals`, `garden-notes` or `garden-journal` is **experimental**, and a member only sees it once an admin ticks *experimental tools* on their admin page (`users.experimental_tools`; admins always have it). The filter is applied twice — when listing families for the picker, and tool by tool just before the roster is handed to the model (`claude.ts`), so an ungated member can never be passed an experimental tool even through a stale conversation override.
 
 **The prompt says what it holds** (September 2026). The system prompt used to promise "tasks, calendar, contacts, notes, health, books, and more" in a hard-coded sentence, written before the families were resolved — so a member granted none of them was told they had all of them, and, asked what tools he had, Maurice recited the promise instead of his actual roster. The sentence is gone: `toolRosterNotice()` now names the families actually present in the turn's filtered roster (plus web search only when Tavily is configured), and says plainly that nothing else is reachable. The image-generation directives are likewise appended only when a fal key exists, instead of teaching the model a `[IMAGE: …]` protocol that nothing downstream would honour.
+
+## The documentation tool — `maurice_docs`
+
+Since the evening of 19 September 2026 (roadmap P3-A, [[maurice-domaines]] 4e) a question about Maurice himself is answered by a **tool**, not by a persona. `maurice_docs` is built into the chat engine beside `web_search` (`server/src/services/mauriceDocsTool.ts`, wired in `claude.ts`): it is in **every roster**, for every member, guests included, in every conversation, whatever the tool families say — a member may always ask Maurice about Maurice — and the *Your tools* section of the system prompt names it and says that such questions go to it, never to memory. The loop calls it on the strength of its description alone: what he can do, how a feature works, how to set something up, what is built and what is not, why it was designed so.
+
+**What it does.** Given a `question`, it runs a **sub-turn**: one ancillary completion (`ancillaryComplete`, invocation `maurice_docs`) whose system prompt is the head that used to be Maurice Maurice's — ground everything in the notes, name the note, say what is experimental or not built, answer in the question's language — followed by the **digest** and the notes newer than its `covers` (`docsForContext()`, `internal: true` notes never; the reader and its daily refresh are in [[maurice-server]]), and whose prompt is the question as the everyday Maurice phrased it. The answer comes back as the tool result, prose, no data card, and Maurice relays it in his own voice. Given a `note` (a slug, listed in the description: `server`, `domains`, `carnet`…), it returns that note **in full**, no model call, for the detail an answer left out. The system prompt is byte-stable between two questions on the same set, and the sub-turn asks the provider to cache it (`cacheSystem`: Anthropic's breakpoint, the prompt-cache key where a provider takes one), so the second question within the cache's life reads the ~22 000 tokens of documentation at a tenth of the price.
+
+**The model** is what Maurice Maurice's was: a strong cloud model of the household's own provider first, never a local one (`docsModel()`), applied as the invocation's computed default and shown in the admin's ancillary card as its effective model; a pin overrides it, and the seed advises nothing for it (see [[maurice-server]], *Ancillary models*). **The ledger** knows it: the sub-turn is a call the member's turn provoked, so the fuse is consulted for that member before it runs — their own cap, the household's, the instance's — and what it cost is recorded under their id; it is the first ancillary call charged to a member.
+
+**What a question costs, measured on the evening of the 19th** on a copy of home (documentation on Sonnet 4.6, the everyday Maurice on GLM 5.3 Flash), *Comment Maurice sauvegarde-t-il ?*:
+
+| | Before — a turn of Maurice Maurice | After — the everyday Maurice + the tool |
+|---|---|---|
+| First question | 22 655 tokens written to cache + 577 out on Sonnet: **9.4 ¢** (7.7 ¢ uncached) | chat turn 0.09 ¢ + sub-turn 8.0 ¢ (the same 22 000 tokens, cache written): **8.1 ¢** |
+| A question answered by a note in full (*Et Carnet ?*) | a Sonnet turn again, ~3 ¢ | **0.13 ¢** — no sub-turn, the Carnet note in the chat model's context |
+| Next questions within the cache's life | ~2.3 ¢ of cache read + the answer | 1.6 ¢ and 2.5 ¢ per sub-turn (0.7 ¢ of cache read + the answer) + a tenth of a cent of chat |
+| A conversation that never asks about Maurice | — (one had to open Maurice Maurice to ask) | **0**: the documentation is loaded only when asked |
+
+Per question the first is barely cheaper — at Sonnet's prices the answer's output is what costs — but the structure is: nothing is paid until a question is asked, the answer arrives in an ordinary conversation, the note-in-full path is free of the sub-turn, and the sub-turn's model is a pin the admin can move (Mistral Medium 3.5 on Scaleway would bring a fresh question to ~2 ¢). The GLM turn asked good questions of it, twice in one round when the member asked two things at once.
+
+**What a small model sees.** Every roster now holds one tool, so an Ollama turn always offers tools; a local model that cannot take them pays one refused request before the loop retries without (the path that existed). The tool's description names the notes of the set actually read, so it moves only when the documentation set does — daily at most.
 
 ## Ships vs. exists — and it's enforced in code
 
