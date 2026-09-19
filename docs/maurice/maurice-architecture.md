@@ -1,6 +1,6 @@
 ---
 title: Maurice — architecture overview
-date: '2026-09-17'
+date: '2026-09-19'
 flags: []
 locale: en
 description: The five cooperating parts of Maurice, how a message flows end-to-end,
@@ -21,7 +21,7 @@ Maurice is five cooperating parts. Two native clients are pure clients — the *
 ┌─────────────────┐ ┌──────────────┐  HTTPS/WS   ┌──────────────────────────────┐
 │  Maurice app    │ │  Carnet      │ ──────────> │  Server (Hono / Bun)         │
 │  iPhone/iPad/Mac│ │  iPhone/iPad │ <────────── │                              │
-│  chat · hats    │ │  log · read  │  streaming  │  src/      → chat engine      │
+│  chat · domains │ │  log · read  │  streaming  │  src/      → chat engine      │
 │  composer       │ │  garden      │             │  data-api/ → personal data    │
 │  dictation      │ │  share sheet │             └──────┬─────────┬─────────────┘
 └─────────────────┘ └──────────────┘                    │         │
@@ -47,12 +47,12 @@ Maurice is five cooperating parts. Two native clients are pure clients — the *
 
 ## The five parts
 
-**Maurice app** (`app/Maurice`) — Native SwiftUI, one multiplatform target for iPhone, iPad, and Mac. It renders the chat experience and never holds authoritative state: it pairs to a server, authenticates a member, and talks HTTPS + WebSocket. Since August it also dictates (on-device speech, with the iPhone's Action Button as a shortcut) and shows what each turn cost. See [[maurice-chat]], [[maurice-personas-hats]], [[maurice-composer]].
+**Maurice app** (`app/Maurice`) — Native SwiftUI, one multiplatform target for iPhone, iPad, and Mac. It renders the chat experience and never holds authoritative state: it pairs to a server, authenticates a member, and talks HTTPS + WebSocket. Since August it also dictates (on-device speech, with the iPhone's Action Button as a shortcut) and shows what each turn cost; since 19 September 2026 it shows **one Maurice** and, beside the conversations, the member's **domains** — the parts of their life he follows, each with the brief he keeps on it — where it used to offer a roster of specialized Maurices to summon. See [[maurice-chat]], [[maurice-domains]], [[maurice-personas-hats]] (what became of the personas), [[maurice-composer]].
 
 **Carnet** (separate repo, `carnet/`) — The iOS/iPadOS companion, sharing the design system and the household identity with the Maurice app. Where Maurice is the conversational front door, Carnet is the pocket client for *capturing and consuming*: log signals, read books and articles, browse the garden, and save what you read into it through a share sheet. See [[maurice-carnet]].
 
 **Server** (`server/`) — A single Bun process on Hono, split in two:
-- `server/src` — the **chat engine**: auth, users, conversations, personas (`maurices`), files, gardens, the context composer, models, moderation reports, and the streaming agentic loop that calls the LLM and executes tools.
+- `server/src` — the **chat engine**: auth, users, conversations, domains and reading companions (`maurices`) with their briefs, files, gardens, the context composer, models, moderation reports, and the streaming agentic loop that calls the LLM and executes tools.
 - `server/data-api` — the **personal-data layer** mounted at `/api/v1/*`: health, tasks, signals, tracks/dossiers, coaching, Calibre, bank, layouts, places, uploads — and, since August, the **garden's media**: article saving, entries, résonances, flashcards. Same process, different concern.
 
 See [[maurice-server]] and [[maurice-data-model]].
@@ -69,8 +69,8 @@ There is also a small **browser clipper** (`clients/web-clipper`) that saves the
 
 1. The app POSTs a user message (optionally with an image) to `POST /api/conversations/:id/messages`.
 2. The server stores it; in a multi-person room it fans the message to participants over WebSocket. Maurice only *replies* when summoned (`@claude`/`@maurice`); a plain "bubble" message is human-only.
-3. The engine assembles a system prompt (household context, the member's profile, the bound persona if any, the [[maurice-composer|composer context]]) and the conversation history. The history is **bounded by the model's context window**: when it outgrows what the roster says the model takes, the oldest turns are left out, the cut is remembered on the conversation so the next turn sends the same prefix, and the model is told the beginning is missing.
-4. It resolves the usable model: persona preference → household default → the member's best available, across Anthropic / Ollama / OpenAI / Mistral / Z.ai.
+3. The engine assembles a system prompt (household context, the member's profile, the bound domain or companion if any, the [[maurice-composer|composer context]], then — in a private conversation — the briefs of the member's [[maurice-domains|domains]]) and the conversation history. The history is **bounded by the model's context window**: when it outgrows what the roster says the model takes, the oldest turns are left out, the cut is remembered on the conversation so the next turn sends the same prefix, and the model is told the beginning is missing.
+4. It resolves the usable model: the bound row's preference → household default → the member's best available, across Anthropic / Ollama / OpenAI / Mistral / Z.ai / Scaleway.
 5. It discovers all MCP tools the conversation is allowed (filtered by *tool families*, sorted for a stable prefix), and streams a request to the model. On Anthropic the request carries **prompt-cache breakpoints** — on the system prompt and tool roster, on the end of the history, and on the growing tool-result trail — so each agentic round and each next turn re-read the prefix at a tenth of the price instead of re-paying for it. The clock rides at the tail of the messages, not in the system prompt, for the same reason.
 6. As the model streams, the server emits newline-delimited `StreamEvent` objects: `text_delta`, `thinking` (a reasoning model at work, nothing visible yet), `ping` (keepalive after 15s of silence), `tool_call` (start/end), `tool_data` (structured rows), `usage` (what the turn cost, once, before `done`), `done`, `error`. Tool-use blocks are executed (web search or an MCP `callTool`) and fed back; the loop runs up to 6 rounds.
 7. The app renders text live, shows tool activity, draws structured results as [[maurice-chat|data cards]] beside the prose — a deterministic channel that puts a floor under tool-result hallucination — and, if the member asked for it, the turn's cost under the reply.
@@ -79,7 +79,7 @@ There is also a small **browser clipper** (`clients/web-clipper`) that saves the
 
 | Concern | Home |
 |---|---|
-| Chat, personas, composer, gardens, files, reports | `server/src/routes` + `server/src/services` |
+| Chat, domains, composer, gardens, files, reports | `server/src/routes` + `server/src/services` |
 | Health, tasks, signals, tracks, coaching, calibre, places, uploads | `server/data-api/routes` |
 | Garden media: articles, entries, résonances, flashcards | `server/data-api/routes/garden-*` + `services/garden*.ts`, `flashcards.ts` |
 | LLM call + agentic loop + cache + context window | `server/src/services/claude.ts` (+ `ollama.ts`, `openaiChat.ts`, `contextWindow.ts`, `pricing.ts`) |
@@ -212,6 +212,6 @@ The gardens are git-backed, one repository per member, and the server performs g
 
 - The vision's **temporal mirror** (Maurice generating daily/weekly/monthly reviews of what you've been investigating) is **not built** — it was wishful thinking and has no code behind it.
 - The vision's idea of Maurice **noticing patterns** and proposing notes is **not built and not intended** — note-taking is a deliberate act; nothing enters the garden without an explicit human request. The one automatic write, the article fiche a share creates, is deliberately marked *unopened* until the reader writes on it (see [[maurice-knowledge]]).
-- Hats are implemented as a **persona roster** the user creates, not yet as scopes that *emerge* automatically from the active note subtree.
+- The vision's **hats** — scopes that *emerge* from the active note subtree — are closed by another route since 19 September 2026: the persona roster is gone, a **domain** is the scope, and the roadmap has it proposed from the conversations at night rather than derived from a folder. Until that night runs (P2-B), a domain is still made by hand.
 
 These are good feature-discussion starting points — see the individual feature notes.

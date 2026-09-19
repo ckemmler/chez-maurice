@@ -65,9 +65,9 @@ provider in the server — the friends first, the demos next.
 
 ## Features — the *what*
 
-[[maurice-personas-hats|Specialized Maurices & hats]] — named personas with their own prompt, model, creativity, bound context, and visual hat identity; and Maurice Maurice, the built-in specialist who answers questions about Maurice from these very notes.
+[[maurice-domains|Domains and their briefs]] — one Maurice, and the domains of a member's life he follows: the brief he keeps on each, written at night, read in every private conversation, corrected or erased in the app; the reading companions beside them; the list and the editor; what is built of the domains design.
 
-[[maurice-domains|Domains and their briefs]] — a Maurice of your own seen as a part of your life: the brief Maurice keeps on it, written at night, read in every private conversation, corrected or erased in the app; what is built of the domains design.
+[[maurice-personas-hats|From specialized Maurices to domains]] — what became of the personas and their hats on 19 September 2026: every row of `maurices` is a domain or a reading companion, the Studio and the summon picker are gone, and Maurice Maurice — the built-in specialist who answers questions about Maurice from these very notes — stays until the documentation tool replaces him.
 
 [[maurice-chat|The chat experience]] — streaming, model switching, tool-result data cards, math rendering, image input and generation, dictation, the cost meter.
 
