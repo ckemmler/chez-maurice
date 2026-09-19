@@ -176,6 +176,46 @@ be restarted onto the new code.
   `server_name` only.
 - **Logs: Dozzle** for the containers; `scripts/service.sh logs` for launchd.
 
+## Backups of the hosted households: `backup.sh`
+
+A household on a shared host lives in one docker volume, and until
+19 September 2026 nothing copied it anywhere. Now every host runs
+`infra/host/backup.sh` nightly (03:30, host time — UTC on the Scaleway
+instances) from the `maurice` user's crontab: for each household it asks the
+running container for a consistent copy of every SQLite database (`VACUUM
+INTO`, into `<volume>/backup/`, integrity-checked), then `restic` — in its own
+container, the volume mounted read-only — sends the volume minus the live
+databases, logs and the dead Qdrant directory to one repository per host, a
+bucket on Scaleway Object Storage (`maurice-fleet-backups`, project
+`maurice`), encrypted with a password only the Mac holds. 14 daily, 8 weekly,
+12 monthly snapshots are kept; a `prune` follows every run and a `check` on
+Sundays.
+
+```
+ops/backup.sh install      maurice-fleet          script, credentials, cron line
+ops/backup.sh run          maurice-fleet [aline]  now, all or one
+ops/backup.sh status       maurice-fleet          last success per household
+ops/backup.sh snapshots    maurice-fleet [aline]
+ops/backup.sh restore-test maurice-fleet aline    the rehearsal (below)
+ops/backup.sh restore      maurice-fleet aline    into the real volume; asks first
+```
+
+The credentials are `~/.maurice/ops/fleet-backup.env` on the Mac
+(`RESTIC_REPOSITORY`, `RESTIC_PASSWORD`, and an S3 key from the IAM
+application `maurice-backup`, allowed to read, write and delete objects in
+that project and nothing else); `install` copies it to
+`/opt/maurice/backup.env`. **Losing the password loses every backup**; the
+host can be rebuilt, the password cannot be recovered.
+
+`restore-test` is the point of the whole thing: it restores the latest
+snapshot into a throwaway volume, copies the database snapshots back over
+the tree (the step a real restore must not skip — the live databases were
+excluded), boots a household on it (`<name>-restoretest`, admin on loopback
+`:3199`, no public name), waits for `/healthz`, prints how many members,
+conversations, messages and personas it holds and what each garden looks
+like, and tears it down. Run it after any change to the script, and once in a
+while for no reason. Rehearsed on aline and review the day it was written.
+
 ## Handing an instance over
 
 The point of running someone's Maurice for a while is to hand it to them. The
