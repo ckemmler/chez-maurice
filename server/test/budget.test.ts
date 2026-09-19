@@ -21,7 +21,7 @@ beforeEach(async () => {
   db.run("DELETE FROM spend_ledger");
   // The stored caps outlive a test as surely as the ledger does.
   db.run("UPDATE households SET spend_cap_daily_usd = NULL WHERE id = 'default'");
-  for (const [id, name] of [[ANNA, "Anna"], [BEN, "Ben"]]) {
+  for (const [id, name] of [[ANNA, "Anna"], [BEN, "Ben"]] as const) {
     db.run(
       `INSERT OR IGNORE INTO users (id, username, display_name, role) VALUES (?, ?, ?, 'standard')`,
       [id, id, name],
