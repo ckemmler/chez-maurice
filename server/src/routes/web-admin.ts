@@ -50,6 +50,7 @@ import {
 } from "../services/modelAccess";
 import { ping, discover, totalRamGB } from "../services/ollama";
 import { t, langOf, SUPPORTED } from "../services/i18n";
+import { spentTodayUsd, spentMonthUsd, memberDailyCap, setMemberDailyCap, setHouseholdDailyCap } from "../services/budget";
 import { corpusCall } from "../services/mcpClient";
 import { mkdirSync, readFileSync, existsSync } from "fs";
 import { join, resolve, extname } from "path";
@@ -584,10 +585,16 @@ web.get("/dashboard", async (c) => {
   const maxRam = local.length ? Math.max(...local.map((m) => m.ram || 0)) : 0;
 
   // ── 01 members ──
+  // Today's spend beside the handle, only once the ledger has something for
+  // them: a household on its own key, or on Ollama, never sees a figure.
+  const spentTag = (id: string) => {
+    const today = spentTodayUsd(id);
+    return today > 0 ? ` · <span title="${escape(t(lang, "members.spent_today_title"))}">${escape(t(lang, "members.spent_today", today.toFixed(2)))}</span>` : "";
+  };
   const memberRows = users.map((u) => `
     <div class="member">
       ${avatarHtml(u)}
-      <div class="who"><div class="nm">${escape(u.display_name)}</div><div class="hd">@${escape(u.username)}</div></div>
+      <div class="who"><div class="nm">${escape(u.display_name)}</div><div class="hd">@${escape(u.username)}${spentTag(u.id)}</div></div>
       <span class="tag ${u.role}">${escape(t(lang, "members.role_" + u.role))}</span>
       <span class="pin">${u.has_pin ? "🔒 " + escape(t(lang, "members.pin_set")) : escape(t(lang, "members.no_pin"))}</span>
       <div class="member-actions">
@@ -784,6 +791,11 @@ web.get("/dashboard", async (c) => {
               </select>
               <span class="hint">${escape(t(lang, "settings.everyday_thinking_hint"))}</span></div>
           </div>
+          <div class="grid2" style="margin-top:16px">
+            <div class="field" style="max-width:200px"><label class="label">${escape(t(lang, "settings.spend_cap_daily"))}</label>
+              <input type="number" name="spend_cap_daily_usd" min="0" step="0.01" value="${household.spend_cap_daily_usd ?? ""}" placeholder="—" />
+              <span class="hint">${escape(t(lang, "settings.spend_cap_daily_hint"))}</span></div>
+          </div>
           <div class="grid-actions"><button type="submit" class="btn primary">${escape(t(lang, "settings.save"))}</button></div>
         </form>
       </section>
@@ -868,6 +880,15 @@ web.get("/dashboard", async (c) => {
     </div>`, true, adminName(c), lang));
 });
 
+/** A posted spending cap: "" → null (no cap), a non-negative number → itself,
+ *  anything else → undefined (leave the stored value alone). */
+function parseCapUsd(raw: unknown): number | null | undefined {
+  const s = String(raw ?? "").trim();
+  if (s === "") return null;
+  const n = Number(s);
+  return Number.isFinite(n) && n >= 0 ? n : undefined;
+}
+
 // ── Settings (POST) ─────────────────────────────────────────────
 web.post("/settings", async (c) => {
   const redir = requireWebAdmin(c);
@@ -897,6 +918,11 @@ web.post("/settings", async (c) => {
     if (v === "" || v === "0" || v === "1") put("everyday_thinking", v === "" ? null : Number(v));
   }
   if (sets.length) db.run(`UPDATE households SET ${sets.join(", ")} WHERE id = 'default'`, params);
+  // A number input always posts: "" clears the household's own cap.
+  if (form.spend_cap_daily_usd !== undefined) {
+    const cap = parseCapUsd(form.spend_cap_daily_usd);
+    if (cap !== undefined) setHouseholdDailyCap(cap);
+  }
   return c.redirect("/admin/dashboard?msg=settings_saved#sec-settings");
 });
 
@@ -1213,6 +1239,13 @@ web.get("/users/:id/edit", (c) => {
             ${cloud.length ? `<div class="chips-lab cloud">${escape(t(lang, "access.cloud"))}</div><div class="chips" style="margin-bottom:12px">${cloud.map(chip).join("")}</div>` : ""}
             ${local.length ? `<div class="chips-lab local">${escape(t(lang, "settings.on_device"))}</div><div class="chips">${local.map(chip).join("")}</div>` : `<div class="hint">${escape(t(lang, "members.no_local_rescan"))}</div>`}
           </div>
+          <div class="grid2" style="margin-top:16px">
+            <div class="field" style="max-width:200px"><label class="label">${escape(t(lang, "members.spend_cap_daily"))}</label>
+              <input type="number" name="spend_cap_daily_usd" min="0" step="0.01" value="${memberDailyCap(user.id) ?? ""}" placeholder="—" />
+              <span class="hint">${escape(t(lang, "members.spend_cap_daily_hint"))}</span></div>
+            <div class="field"><label class="label">${escape(t(lang, "members.spent"))}</label>
+              <div class="mono" style="padding:9px 0">${escape(t(lang, "members.spent_figures", spentTodayUsd(user.id).toFixed(2), spentMonthUsd(user.id).toFixed(2)))}</div></div>
+          </div>
           <div class="access-block">
             <div class="access-head"><span class="ttl2">Experimental tools</span></div>
             <div class="hint" style="margin-bottom:8px">Unlocks the experimental tool families (calendar, health, research, the rest of the garden…) in this member's chats. Off by default.</div>
@@ -1316,6 +1349,11 @@ web.post("/users/:id/edit", async (c) => {
   if (pinVal === "clear") updates.pin = null;
   else if (/^\d{4,6}$/.test(pinVal)) updates.pin = pinVal;
   await updateUser(id, updates);
+  // Every member, admins included: a cap is a choice about money, not access.
+  if (fd.has("spend_cap_daily_usd")) {
+    const cap = parseCapUsd(fd.get("spend_cap_daily_usd"));
+    if (cap !== undefined) setMemberDailyCap(id, cap);
+  }
   if (user.role !== "admin") {
     // Only callable models were offered, so keep the rest of this member's rows.
     const ok = configuredProviders();

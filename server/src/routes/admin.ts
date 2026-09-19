@@ -1,12 +1,37 @@
 import { Hono } from "hono";
 import { requireAuth, requireAdmin } from "../middleware/auth";
 import { createPairingToken } from "../services/auth";
+import { usageFor } from "../services/budget";
 import db from "../db";
 
 const admin = new Hono();
 
 admin.use("/*", requireAuth);
 admin.use("/*", requireAdmin);
+
+// ── GET /api/admin/usage ────────────────────────────────────────
+// Every member's spend, and the tightest daily cap that applies to each.
+
+admin.get("/usage", (c) => {
+  const rows = db
+    .query<{ id: string; username: string; display_name: string }, []>(
+      `SELECT id, username, display_name FROM users ORDER BY created_at`,
+    )
+    .all();
+  return c.json(
+    rows.map((u) => {
+      const usage = usageFor(u.id);
+      return {
+        id: u.id,
+        username: u.username,
+        display_name: u.display_name,
+        today_usd: usage.today_usd,
+        month_usd: usage.month_usd,
+        cap_daily_usd: usage.cap_daily_usd,
+      };
+    }),
+  );
+});
 
 // ── GET /api/admin/status ───────────────────────────────────────
 

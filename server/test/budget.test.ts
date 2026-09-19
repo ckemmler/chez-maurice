@@ -6,6 +6,10 @@ import { test, expect, beforeEach, afterEach } from "bun:test";
 const ENV = ["MAURICE_SPEND_CAP_USD", "MAURICE_SPEND_CAP_DAILY_USD"] as const;
 const saved: Record<string, string | undefined> = {};
 
+// Two members, so a cap on one can be shown not to touch the other.
+const ANNA = "budget-anna";
+const BEN = "budget-ben";
+
 beforeEach(async () => {
   for (const k of ENV) {
     saved[k] = process.env[k];
@@ -15,6 +19,15 @@ beforeEach(async () => {
   await import("../src/services/budget");
   const db = (await import("../src/db")).default;
   db.run("DELETE FROM spend_ledger");
+  // The stored caps outlive a test as surely as the ledger does.
+  db.run("UPDATE households SET spend_cap_daily_usd = NULL WHERE id = 'default'");
+  for (const [id, name] of [[ANNA, "Anna"], [BEN, "Ben"]]) {
+    db.run(
+      `INSERT OR IGNORE INTO users (id, username, display_name, role) VALUES (?, ?, ?, 'standard')`,
+      [id, id, name],
+    );
+  }
+  db.run("UPDATE users SET spend_cap_daily_usd = NULL WHERE id IN (?, ?)", [ANNA, BEN]);
 });
 
 afterEach(() => {
@@ -126,4 +139,96 @@ test("a nonsense cap is ignored rather than obeyed", async () => {
   process.env.MAURICE_SPEND_CAP_USD = "not-a-number";
   expect(b.caps().totalUsd).toBe(null);
   expect(b.verdict("anthropic", "claude-sonnet-5").ok).toBe(true);
+});
+
+// ── Per-member and per-household layers ─────────────────────────────────────
+
+test("a member's cap trips for that member and nobody else", async () => {
+  const b = await budget();
+  b.setMemberDailyCap(ANNA, 1.0);
+  b.recordSpend(turn(0.7), ANNA);
+  b.recordSpend(turn(0.7), ANNA);
+  const anna = b.verdict("anthropic", "claude-sonnet-5", 0, ANNA);
+  expect(anna.ok).toBe(false);
+  expect(anna.reason).toContain("your daily limit");
+  // Ben has no cap of his own and no household cap stands over him.
+  expect(b.verdict("anthropic", "claude-sonnet-5", 0, BEN).ok).toBe(true);
+  // A turn with nobody named cannot be checked against a member's cap.
+  expect(b.verdict("anthropic", "claude-sonnet-5").ok).toBe(true);
+});
+
+test("a member's cap counts only that member's turns", async () => {
+  const b = await budget();
+  b.setMemberDailyCap(ANNA, 1.0);
+  b.recordSpend(turn(5.0), BEN);
+  b.recordSpend(turn(0.25), ANNA);
+  const v = b.verdict("anthropic", "claude-sonnet-5", 0, ANNA);
+  expect(v.ok).toBe(true);
+  expect(v.remainingUsd).toBeCloseTo(0.75, 5);
+  expect(b.spentTodayUsd(ANNA)).toBeCloseTo(0.25, 5);
+  expect(b.spentTodayUsd()).toBeCloseTo(5.25, 5);
+});
+
+test("the household's cap trips for everyone, on the household's sum", async () => {
+  const b = await budget();
+  b.setHouseholdDailyCap(1.0);
+  b.recordSpend(turn(0.6), ANNA);
+  b.recordSpend(turn(0.6), BEN);
+  for (const who of [ANNA, BEN, null]) {
+    const v = b.verdict("anthropic", "claude-sonnet-5", 0, who);
+    expect(v.ok).toBe(false);
+    expect(v.reason).toContain("This household has reached its daily limit");
+  }
+});
+
+test("the tightest of the three layers is what is left", async () => {
+  const b = await budget();
+  process.env.MAURICE_SPEND_CAP_DAILY_USD = "10.00";
+  b.setHouseholdDailyCap(5.0);
+  b.setMemberDailyCap(ANNA, 1.0);
+  b.recordSpend(turn(0.4), ANNA);
+  b.recordSpend(turn(2.0), BEN);
+  // Anna: her own 1.00 - 0.40 = 0.60 is tighter than the household's 5 - 2.4.
+  expect(b.verdict("anthropic", "claude-sonnet-5", 0, ANNA).remainingUsd).toBeCloseTo(0.6, 5);
+  // Ben: no cap of his own; the household's 5.00 - 2.40 beats the instance's.
+  expect(b.verdict("anthropic", "claude-sonnet-5", 0, BEN).remainingUsd).toBeCloseTo(2.6, 5);
+});
+
+test("the refusal names the cap that was reached", async () => {
+  const b = await budget();
+  process.env.MAURICE_SPEND_CAP_DAILY_USD = "0.50";
+  b.setHouseholdDailyCap(5.0);
+  b.setMemberDailyCap(ANNA, 5.0);
+  b.recordSpend(turn(0.6), BEN);
+  const v = b.verdict("anthropic", "claude-sonnet-5", 0, ANNA);
+  expect(v.ok).toBe(false);
+  expect(v.reason).toContain("This instance has reached its daily limit of $0.50");
+  expect(v.reason).not.toContain("household");
+  expect(v.reason).not.toContain("your daily limit");
+});
+
+test("a stored cap of nonsense is ignored, like an env one", async () => {
+  const b = await budget();
+  const db = (await import("../src/db")).default;
+  db.run("UPDATE users SET spend_cap_daily_usd = -3 WHERE id = ?", [ANNA]);
+  expect(b.memberDailyCap(ANNA)).toBe(null);
+  expect(b.capped(ANNA)).toBe(false);
+});
+
+test("a member's own view: spent, tightest daily cap, headroom", async () => {
+  const b = await budget();
+  expect(b.usageFor(ANNA)).toEqual({ today_usd: 0, month_usd: 0, cap_daily_usd: null, remaining_usd: null });
+
+  process.env.MAURICE_SPEND_CAP_USD = "100.00";
+  b.setHouseholdDailyCap(3.0);
+  b.setMemberDailyCap(ANNA, 2.0);
+  b.recordSpend(turn(0.5), ANNA);
+  b.recordSpend(turn(2.0), BEN);
+  const u = b.usageFor(ANNA);
+  expect(u.today_usd).toBeCloseTo(0.5, 5);
+  expect(u.month_usd).toBeCloseTo(0.5, 5);
+  // The tightest *daily* cap is her own 2.00 ...
+  expect(u.cap_daily_usd).toBe(2.0);
+  // ... but the household's 3.00 - 2.50 is the tighter headroom.
+  expect(u.remaining_usd).toBeCloseTo(0.5, 5);
 });

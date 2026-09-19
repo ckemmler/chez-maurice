@@ -424,6 +424,9 @@ conversations.post("/:id/messages", async (c) => {
             mauriceId: summonedMaurice,
             data: dataBlocks.length ? dataBlocks : null,
             usage: turnUsage,
+            // The ledger charges the turn to whoever summoned the reply —
+            // in a room, the member who sent this message.
+            spenderId: userId,
           });
           // Refresh the semantic index (fire-and-forget) and fan the reply out to
           // the other participants' sockets + activity notifications.
