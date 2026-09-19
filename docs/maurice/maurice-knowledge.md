@@ -1,6 +1,6 @@
 ---
 title: Knowledge capabilities
-date: '2026-09-06'
+date: '2026-09-19'
 flags: []
 locale: en
 description: 'What Maurice can do with knowledge: the garden (notes, media, journal),
@@ -70,7 +70,9 @@ Language is French by default, the fiche's `cards_lang` over that, the call's `l
 
 ## Corpus — search across everything *(ships)*
 
-`tools/corpus` is RAG over the household's reading and conversations: `search` (plus `search_by_tags`, `search_by_author`, `search_in_book`, `search_book_summaries`), `get_chunk_context`, and `index_conversation`. It moved into the main repo in September 2026 with a test suite, indexes the garden's **notes, fiches, fragments and cards** as they change (the server pushes each write; a watcher inside the gateway catches the rest, and prunes entries whose file is gone), and re-embeds only what changed. The vector store is **Qdrant** by default with a **sqlite-vec** backend available; the migration is specced (`specs/corpus-sqlite-vec-migration.md`).
+`tools/corpus` is RAG over the household's reading and conversations: `search` (plus `search_by_tags`, `search_by_author`, `search_in_book`, `search_book_summaries`), `get_chunk_context`, and `index_conversation`. It moved into the main repo in September 2026 with a test suite, indexes the garden's **notes, fiches, fragments and cards** as they change (the server pushes each write; a watcher inside the gateway catches the rest, and prunes entries whose file is gone), and re-embeds only what changed. The vector store is **sqlite-vec**, one file per member under `tools/corpus/data/vectors/` (`<member>.db`, plus `_default.db` for shared content); the Qdrant block in the config is kept only as a migration reference (`specs/corpus-sqlite-vec-migration.md`).
+
+**Live conversations, 19 September 2026.** After every reply the server asks the corpus to reconcile the conversation (`indexConversationInBackground`, fire-and-forget). It called the tool by its bare name, `index_conversation`, while the gateway only knows `corpus__index_conversation`; the gateway answered "Unknown tool" as ordinary text, not as an error, so the call reported success and **no conversation lived after a turn had entered the index since the June import** — three months of Candide's and Paola's talks were invisible to `search` and to anything built on the corpus. The call now goes through `corpusCall`, which carries the prefix and logs a refusal. The backlog was reconciled by hand (`python -m src.main index --source conversations` from `tools/corpus`); nothing runs that reconciliation on a schedule, see the gaps.
 
 It is also the engine behind the **"bring your history"** [[maurice|differentiator]]: `import_chat_export` ingests the official **Claude and ChatGPT** data-export `.zip`s, so your past threads become searchable memory.
 
@@ -86,5 +88,4 @@ It is also the engine behind the **"bring your history"** [[maurice|differentiat
 
 - **No automatic "temporal mirror."** Daily notes are a real, deliberate garden artifact, but Maurice does **not** generate weekly/monthly reviews of your thinking — that idea has no code (see [[maurice|the vision's]] corrected scope).
 - **Flashcards have no backup.** The gardens rely on git, which ignores the cards; the nightly backup covers `maurice.db` only. Either the backup grows to cover `~/.maurice/gardens`, or the cards are accepted as regenerable.
-- **Corpus backend is still dual** (Qdrant default, sqlite-vec available).
-- **Tracks' "deep research" depth** is the least battle-tested of the three; treat it as experimental.
+- **No periodic reconciliation of conversations into the corpus.** The server's post-turn push is the only path; a comment in `mcpClient.ts` used to call "the periodic backfill" the safety net, and there is none — the bug above went unnoticed for three months because of it. The nightly task of the domains design ([[maurice-domaines]]) is the natural place for a `reconcile_all`.- **Tracks' "deep research" depth** is the least battle-tested of the three; treat it as experimental.
