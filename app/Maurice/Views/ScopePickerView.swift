@@ -584,8 +584,8 @@ private struct ConversationRow: View {
         let accentColor = session.activeDeviceUser?.color ?? .blue
 
         HStack(spacing: 11) {
-            // The mark says the conversation is bound to a domain, a reading
-            // companion or Maurice Maurice; the everyday one shows nothing
+            // The mark says the conversation is bound to a domain or a reading
+            // companion; the everyday one shows nothing
             // (ragged-left). It's a flex-shrink:0 sibling — it must not change
             // the row height, which stays uniform via minHeight below.
             if !maurice.isEveryday {

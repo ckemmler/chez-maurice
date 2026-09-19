@@ -196,9 +196,9 @@ setTimeout(() => {
       .catch((err) => console.error(`[gardens] image sweep failed for ${member}:`, (err as Error).message));
   }
 }, 5000).unref?.();
-// Maurice Maurice's documentation: fetch the published set once the server is
-// up, then daily, so a hosted instance stops answering from the notes its
-// image was built with (see services/mauriceDocsRefresh.ts).
+// Maurice's documentation (the maurice_docs tool): fetch the published set
+// once the server is up, then daily, so a hosted instance stops answering
+// from the notes its image was built with (see services/mauriceDocsRefresh.ts).
 scheduleDocsRefresh();
 // The search corpus: reconcile every conversation and prune stale file
 // entries once a night, the safety net under the per-turn push (see

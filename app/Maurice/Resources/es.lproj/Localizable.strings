@@ -231,7 +231,6 @@
 "chat.post_humans" = "Publicar (sin Maurice)";
 "chat.stop" = "Detener";
 "chat.switch_model" = "Cambiar de modelo";
-"chat.model_locked" = "Maurice Maurice usa siempre este modelo.";
 
 /* Settings reorg + avatar */
 "settings.garden.title" = "Tu jardín";
@@ -495,7 +494,6 @@
 "domains.open.help" = "Tus dominios y compañeros de lectura";
 "domains.section.domains" = "Tus dominios";
 "domains.section.companions" = "Compañeros de lectura";
-"domains.section.about" = "Sobre Maurice";
 "domains.empty" = "Aún no hay dominios. Un dominio es una parte de tu vida que Maurice sigue de cerca, con un cuaderno que lleva sobre ella y lee en cada conversación que tienes a solas con él.";
 "domains.explainer" = "Un solo Maurice, que sabe dónde está: abre un dominio para leer lo que guarda de él, o para hablar con su contexto precargado. Un compañero de lectura retoma su propia conversación, libro en mano. Nada de esto se lee en una sala.";
 "domains.new" = "Nuevo dominio";

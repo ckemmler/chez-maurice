@@ -3,7 +3,7 @@
 // the section stays under its budget and says which briefs it left out; a
 // member's section holds their own domains' briefs and nobody else's; the
 // routes are the creator's alone; a correction is what the next turn reads,
-// marked as the member's; an empty correction erases; Maurice Maurice has
+// marked as the member's; an empty correction erases; an unknown id has
 // no brief. The room rule (no briefs with more than one participant) lives
 // in services/claude.ts beside the composer context and is read there.
 
@@ -116,14 +116,15 @@ test("GET answers the domain with a null brief before the night wrote one", asyn
   expect(j.brief).toBeNull();
 });
 
-test("the brief is the creator's alone, and Maurice Maurice has none", async () => {
+test("the brief is the creator's alone, and the old built-in id is just an unknown row", async () => {
   expect((await req(benAuth, "/bp-health/brief")).status).toBe(404);
   expect((await req(benAuth, "/bp-health/brief", { method: "PUT", body: JSON.stringify({ text: "Mine now" }) })).status).toBe(404);
   expect((await req(benAuth, "/bp-health/brief", { method: "DELETE" })).status).toBe(404);
   expect(briefs.getBrief("bp-health", ANNA)).toBeNull();
+  // Maurice Maurice (gone since P3-A) is nobody's domain: a plain 404.
   const mm = await req(annaAuth, "/maurice-maurice/brief");
   expect(mm.status).toBe(404);
-  expect((await mm.json()).error).toContain("Maurice Maurice");
+  expect((await mm.json()).error).toBe("Not found");
   expect((await req("", "/bp-health/brief")).status).toBe(401);
 });
 

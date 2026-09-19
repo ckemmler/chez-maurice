@@ -924,8 +924,8 @@ function parseCapUsd(raw: unknown): number | null | undefined {
   return Number.isFinite(n) && n >= 0 ? n : undefined;
 }
 
-// ── Maurice Maurice's documentation ─────────────────────────────
-// Which set the built-in persona reads and how fresh it is; the button asks
+// ── Maurice's documentation ─────────────────────────────────────
+// Which set the `maurice_docs` tool reads and how fresh it is; the button asks
 // the published repo now rather than waiting for the daily check.
 function docsCard(lang: string): string {
   const docs = docsStatus();

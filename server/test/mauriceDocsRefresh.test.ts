@@ -1,5 +1,5 @@
 /**
- * Maurice Maurice's documentation refreshes itself from the published set
+ * Maurice's documentation (the maurice_docs tool) refreshes itself from the published set
  * (services/mauriceDocsRefresh.ts). A local Bun.serve stands in for the repo:
  * the first check brings the set down, a manifest already seen writes
  * nothing, a note whose hash does not match leaves the previous set intact,
@@ -12,7 +12,7 @@ import { createHash } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 
-// Every suite shares one process: maurice-maurice.test.ts pins MAURICE_DOCS_DIR,
+// Every suite shares one process: maurice-docs-tool.test.ts pins MAURICE_DOCS_DIR,
 // which would win over any refreshed set. Step out of it for this suite only.
 const savedDocsDir = process.env.MAURICE_DOCS_DIR;
 delete process.env.MAURICE_DOCS_DIR;
@@ -21,8 +21,7 @@ process.env.MAURICE_DOCS_ALLOW_LOCAL = "1";
 
 const { refreshDocs, refreshedDocsDir, bundledDocsDir, docsStatus, docsUrl, readManifest } =
   await import("../src/services/mauriceDocsRefresh");
-const { docsDir, loadMauriceDocs } = await import("../src/services/mauriceDocs");
-const { builtinMaurice } = await import("../src/services/maurices");
+const { docsDir, loadMauriceDocs, docsUpdatedAt } = await import("../src/services/mauriceDocs");
 
 // ── A fake publication channel ──────────────────────────────────
 
@@ -151,13 +150,13 @@ test("a note that left the manifest goes; an unchanged one is not downloaded", a
   expect(docsStatus().last_error).toBeNull();
 });
 
-test("docsDir() reads the refreshed set once it is newer than the bundle, and the persona reflects it", () => {
+test("docsDir() reads the refreshed set once it is newer than the bundle, and the tool reflects it", () => {
   expect(docsDir()).toBe(target);
   const docs = loadMauriceDocs();
   expect(docs.map((d) => d.slug)).toEqual(["maurice-docs", "maurice-chat"]);
   expect(docs.find((d) => d.slug === "maurice-chat")?.body).toContain("for real");
-  // updated_at is the newest note date of the set actually read.
-  expect(builtinMaurice().updated_at).toBe("2027-02-01");
+  // The set's date is the newest note date of the set actually read.
+  expect(docsUpdatedAt()).toBe("2027-02-01");
 });
 
 test("a refreshed set older than the bundle yields to it", () => {

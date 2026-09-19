@@ -1,11 +1,15 @@
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { pickDocsDir } from "./mauriceDocsRefresh";
+import { configuredProviders, getModel, householdDefaultModel } from "./models";
 
-// The Maurice system documentation, as read by Maurice Maurice — the built-in
-// persona that answers questions about Maurice (services/maurices.ts). The
-// notes are written in the owner's garden (maurice-docs.md and the maurice-*.md
-// notes beside it) and copied into the repo by scripts/sync-docs.sh, so the
+// The Maurice system documentation, as read by the documentation tool
+// (services/mauriceDocsTool.ts) — the `maurice_docs` tool the everyday Maurice
+// calls when a question is about Maurice himself. Until 19 September 2026 the
+// same set was the baked-in context of Maurice Maurice, a built-in persona;
+// the persona is gone (roadmap P3-A), the reader is unchanged. The notes are
+// written in the owner's garden (maurice-docs.md and the maurice-*.md notes
+// beside it) and copied into the repo by scripts/sync-docs.sh, so the
 // container image ships a snapshot of them.
 //
 // Where they are read from:
@@ -14,14 +18,14 @@ import { pickDocsDir } from "./mauriceDocsRefresh";
 //      (services/mauriceDocsRefresh.ts), once it is newer than the snapshot
 //   3. <repo>/docs/maurice — the committed snapshot (what the image carries)
 //
-// What goes into the persona's context: the DIGEST plus the DELTA. The digest
+// What goes into the tool's sub-turn: the DIGEST plus the DELTA. The digest
 // (a note with `digest: true`, maurice-digest.md) condenses the whole set to
 // its facts and names, in its `covers` frontmatter map, the date of each note
 // it reflects. A note updated since — or one the digest never saw — is loaded
 // in full beside it, so the docs stay current between two condensations
-// without every turn paying for the full ~60k tokens. With no digest present
-// the full set is loaded. Reads are cached on the files' mtimes, so an edited
-// note is picked up without a restart.
+// without every question paying for the full ~85k tokens. With no digest
+// present the full set is loaded. Reads are cached on the files' mtimes, so an
+// edited note is picked up without a restart.
 
 export interface MauriceDoc {
   /** the note's slug — its filename without .md */
@@ -82,7 +86,7 @@ function parseFrontmatter(raw: string): Frontmatter {
 let cache: { key: string; docs: MauriceDoc[] } | null = null;
 
 /** Every documentation note — the index first, then the others by slug. Empty
- *  when the directory is missing — the persona then says so rather than
+ *  when the directory is missing — the tool then says so rather than
  *  inventing a system. */
 export function loadMauriceDocs(): MauriceDoc[] {
   const dir = docsDir();
@@ -121,7 +125,7 @@ export function loadMauriceDocs(): MauriceDoc[] {
     // live garden dir (MAURICE_DOCS_DIR) holds other maurice-* notes too.
     if (slug !== DOCS_INDEX_SLUG && meta.parent !== DOCS_INDEX_SLUG) continue;
     // `internal: true` keeps a note under the index out of every household's
-    // Maurice Maurice (the sync script drops it from the snapshot as well).
+    // documentation tool (the sync script drops it from the snapshot as well).
     if (meta.internal === "true") continue;
     docs.push({
       slug,
@@ -139,7 +143,7 @@ export function loadMauriceDocs(): MauriceDoc[] {
   return docs;
 }
 
-/** What Maurice Maurice actually reads: the digest, then every note it does
+/** What a question is answered from: the digest, then every note it does
  *  not cover or that moved on since — full notes when there is no digest. The
  *  index is left out when a digest stands in for it. */
 export function docsForContext(): MauriceDoc[] {
@@ -154,7 +158,7 @@ export function docsForContext(): MauriceDoc[] {
   return [digest, ...delta];
 }
 
-/** One doc as a context block: a header naming the note (so the persona can
+/** One doc as a context block: a header naming the note (so the answer can
  *  cite it and follow [[wiki-links]] between notes), then its body. `delta`
  *  marks a full note riding beside a digest, and says so. */
 export function docContextText(d: MauriceDoc, delta = false): string {
@@ -170,8 +174,68 @@ export function isDelta(d: MauriceDoc, set: MauriceDoc[]): boolean {
   return !d.digest && set.some((x) => x.digest);
 }
 
-/** Rough token weight of a set of docs — the persona's "baked-in" figure for
- *  the apps' pills; same 3-chars-per-token estimate as the context window. */
+/** Rough token weight of a set of docs — what a question costs in input
+ *  before the question itself; same 3-chars-per-token estimate as the context
+ *  window. */
 export function docsWeight(docs: MauriceDoc[]): number {
   return docs.reduce((s, d) => s + Math.ceil(docContextText(d, isDelta(d, docs)).length / 3), 0);
+}
+
+/** One note by slug (`maurice-` prefix optional), or null. The digest is not
+ *  a note anyone asks for by name: it is the condensation the tool reads. */
+export function findDoc(slug: string): MauriceDoc | null {
+  const s = slug.trim().replace(/\.md$/, "");
+  const full = s.startsWith("maurice-") ? s : `maurice-${s}`;
+  return loadMauriceDocs().find((d) => d.slug === full && !d.digest) ?? null;
+}
+
+/** The notes a caller may ask for in full — every note but the digest, with
+ *  the title that says what it covers. */
+export function docCatalogue(): Array<{ slug: string; title: string }> {
+  return loadMauriceDocs().filter((d) => !d.digest).map((d) => ({ slug: d.slug, title: d.title }));
+}
+
+/** The newest note date of the set actually read — what "documentation
+ *  dated …" means for the admin. */
+export function docsUpdatedAt(): string | null {
+  return loadMauriceDocs().reduce<string | null>((m, d) => (d.date && (!m || d.date > m) ? d.date : m), null);
+}
+
+// ── The model a question is answered on ─────────────────────────────────────
+// Until 19 September 2026 this was Maurice Maurice's locked model: a strong
+// cloud model from a provider the household has a key for, the household's
+// own provider first — the docs alone outgrow the 32k asked of Ollama, so no
+// local model. It is now the default the `maurice_docs` ancillary invocation
+// is pinned to (services/ancillary.ts), where the admin can see and change it.
+
+/** Candidate models per provider, strongest-but-reasonable first. Only ids
+ *  that exist in the roster count, so an older household's Anthropic seed
+ *  (Sonnet 4.5) is found by the later entries. */
+const DOCS_MODEL_CANDIDATES: Record<string, string[]> = {
+  anthropic: ["claude-sonnet-4-6", "claude-sonnet-4-5-20250929", "claude-opus-4-8", "claude-opus-4-6"],
+  scaleway: ["mistral-medium-3.5-128b", "qwen3.5-397b-a17b", "glm-5.2", "gpt-oss-120b"],
+  mistral: ["mistral-large-latest"],
+  openai: ["gpt-4o"],
+  zai: ["glm-5.3"],
+};
+
+/** The model the documentation is read on for this household: the first
+ *  candidate whose provider has a key, trying the household default's
+ *  provider first. Null when no cloud provider is configured — the tool then
+ *  runs on whatever the invocation resolves to, and says so if that fails. */
+export function docsModel(): string | null {
+  const ok = configuredProviders();
+  const def = householdDefaultModel();
+  const defProvider = getModel(def)?.provider;
+  const order = [
+    ...(defProvider ? [defProvider] : []),
+    ...Object.keys(DOCS_MODEL_CANDIDATES),
+  ];
+  for (const provider of order) {
+    if (!ok.has(provider)) continue;
+    for (const id of DOCS_MODEL_CANDIDATES[provider] ?? []) {
+      if (getModel(id)) return id;
+    }
+  }
+  return null;
 }

@@ -7,7 +7,7 @@ import { safeFetch } from "../../data-api/services/articleExtract";
 // The Maurice system documentation refreshes itself. The image ships a
 // snapshot of the notes (docs/maurice/, copied there by scripts/sync-docs.sh),
 // but a hosted household only gets a newer one when its image is rebuilt and
-// recreated — so Maurice Maurice would answer from whatever the container was
+// recreated — so the documentation tool would answer from whatever the container was
 // built with. The notes are committed and pushed with the code, which makes
 // the public repo the publication channel: every instance fetches the
 // manifest sync-docs.sh writes beside them, and when it is newer than what it
@@ -127,7 +127,7 @@ function isNewer(a: string, b: string): boolean {
   return Number.isNaN(ta) || Number.isNaN(tb) ? a > b : ta > tb;
 }
 
-/** The set Maurice Maurice reads: MAURICE_DOCS_DIR when set (live garden
+/** The set the documentation tool reads: MAURICE_DOCS_DIR when set (live garden
  *  notes), else the refreshed set when it is at least as new as the bundled
  *  one, else the bundle. */
 export function pickDocsDir(): { source: DocsSource; dir: string; manifest: DocsManifest | null } {

@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Copy the Maurice system documentation from the owner's garden into the repo,
 # so the server — and the container image built from it — ships a current
-# snapshot for Maurice Maurice, the built-in persona that answers questions
-# about Maurice (server/src/services/mauriceDocs.ts).
+# snapshot for the documentation tool, through which Maurice answers questions
+# about Maurice (server/src/services/mauriceDocs.ts, mauriceDocsTool.ts).
 #
 #   scripts/sync-docs.sh [garden-notes-dir]
 #
@@ -72,7 +72,7 @@ write_manifest "$generated" > "$MANIFEST"
 echo "manifest: ${#entries[@]} notes, generated $generated"
 
 # The delta: notes newer than what the digest's `covers` map records for them,
-# or absent from it. Maurice Maurice loads these in full beside the digest;
+# or absent from it. The documentation tool loads these in full beside the digest;
 # three or four of them is the cue to rewrite the digest (see the workspace
 # CLAUDE.md).
 DIGEST="$DEST/maurice-digest.md"
@@ -94,5 +94,5 @@ if [[ -f "$DIGEST" ]]; then
     (( ${#delta[@]} >= 3 )) && echo "digest: time to rewrite maurice-digest.md and refresh its covers dates"
   fi
 else
-  echo "digest: none — Maurice Maurice loads every note in full"
+  echo "digest: none — the documentation tool loads every note in full"
 fi

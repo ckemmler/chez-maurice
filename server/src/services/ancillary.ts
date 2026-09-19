@@ -28,9 +28,10 @@ import { join } from "path";
 import db from "../db";
 import { getModel, configuredProviders, householdDefaultModel } from "./models";
 import { getHouseholdConfig, isOpenAIStyle, openaiStyleBaseUrl, openaiStyleKey } from "./claude";
-import { openaiTurn } from "./openaiChat";
+import { openaiTurn, PROMPT_CACHE_KEY_PROVIDERS } from "./openaiChat";
 import { ollamaTurn } from "./ollama";
 import { newUsage, priceUsage, type TurnUsage } from "./pricing";
+import { docsModel } from "./mauriceDocs";
 
 // ── The invocations ──────────────────────────────────────────────────────────
 
@@ -74,6 +75,18 @@ export interface AncillaryInvocation {
    * per night. The tier's list would have advised GPT-OSS, which nobody read.
    */
   prefer?: string[];
+  /**
+   * What the invocation runs on with no pin, computed because the answer
+   * depends on the household — in place of the household's ancillary model,
+   * not of the tier's advice. The documentation tool is the case: it wants a
+   * strong cloud model of the household's own provider first (the docs
+   * outgrow a local model's window), which no fixed list says, and which is
+   * not advice in the sense of `prefer`: the seed and the refresh leave it
+   * alone (advising Sonnet to an Anthropic-only household would mark it
+   * seeded before a European key arrives). The admin sees it as the
+   * effective model and may pin over it like any other.
+   */
+  defaultModel?: () => string | null;
 }
 
 /** The night model P0 bis chose, and its fallback — see `prefer` above. */
@@ -103,6 +116,13 @@ export const ANCILLARY_INVOCATIONS: AncillaryInvocation[] = [
   { id: "domain_mapping", side: "server", tier: "standard", label: "Domain mapping",
     blurb: "Naming and describing the groups of conversations the night finds, to propose them as domains.",
     prefer: NIGHT_MODELS },
+  // The documentation tool (services/mauriceDocsTool.ts): a question about
+  // Maurice himself, answered from the system documentation in a sub-turn of
+  // the member's own turn, charged to that member. The model was Maurice
+  // Maurice's locked one until 19 September 2026; the same choice, now a pin.
+  { id: "maurice_docs", side: "server", tier: "standard", label: "Maurice's documentation",
+    blurb: "A question about Maurice himself, answered from the system documentation when the everyday Maurice asks for it.",
+    defaultModel: docsModel },
   // Python tools (models.yml's assignments, now settable here)
   { id: "dossier_title", side: "tools", tier: "light", label: "Dossier title", blurb: "Naming a research dossier.", needs: "tools/pipelines/research_tracks", ownDispatch: true },
   { id: "topic_tags", side: "tools", tier: "light", label: "Topic tags", blurb: "Tagging a topic or an entry.", needs: "tools/pipelines/research_tracks", ownDispatch: true },
@@ -209,6 +229,10 @@ function callableHere(id: string): boolean {
 export function recommendedModel(invocation: string): string | null {
   const inv = ANCILLARY_INVOCATIONS.find((i) => i.id === invocation);
   if (!inv || inv.ownDispatch) return null;
+  // An invocation with a computed default is advised nothing: the default
+  // applies at resolution, and the tier's list would pin the documentation
+  // tool to a small model it was never meant for.
+  if (inv.defaultModel) return null;
   return [...(inv.prefer ?? []), ...PREFERRED[inv.tier]].find(callableHere) ?? null;
 }
 
@@ -291,15 +315,17 @@ export function pinnedModel(invocation: string): string | null {
 }
 
 /**
- * The model an invocation runs on. Pin → household ancillary model → chat
- * default, skipping anything that is not in the roster or whose provider has
- * no key — a pin to a model whose key was since removed must not take the
- * function down with it. Never null: the chat default is NOT NULL in the
- * schema, and householdDefaultModel() has a last-resort literal of its own.
+ * The model an invocation runs on. Pin → the invocation's own computed
+ * default, when it has one → household ancillary model → chat default,
+ * skipping anything that is not in the roster or whose provider has no key —
+ * a pin to a model whose key was since removed must not take the function
+ * down with it. Never null: the chat default is NOT NULL in the schema, and
+ * householdDefaultModel() has a last-resort literal of its own.
  */
 export function ancillaryModel(invocation: string): string {
   return (
     usable(pinnedModel(invocation)) ??
+    usable(ANCILLARY_INVOCATIONS.find((i) => i.id === invocation)?.defaultModel?.()) ??
     usable(householdAncillaryModel()) ??
     usable(householdDefaultModel()) ??
     householdDefaultModel()
@@ -410,6 +436,14 @@ export interface AncillaryRequest {
    * provider must have a key, exactly as a pin must.
    */
   model?: string;
+  /**
+   * Mark the system prompt as cacheable where the provider caches by request
+   * (Anthropic's breakpoint; the prompt-cache key of the providers that take
+   * one). For a large, stable system prompt asked many questions — the
+   * documentation tool's — the second question then reads the docs at the
+   * cached price. Nothing for the others.
+   */
+  cacheSystem?: boolean;
 }
 
 export interface AncillaryResult {
@@ -424,12 +458,13 @@ export interface AncillaryResult {
   usage: TurnUsage | null;
 }
 
-function usageOf(provider: string, model: string, input: number, output: number, cached = 0): TurnUsage {
+function usageOf(provider: string, model: string, input: number, output: number, cached = 0, written = 0): TurnUsage {
   const u = newUsage(provider, model);
   u.rounds = 1;
   u.input = Math.max(0, input - cached);
   u.output = output;
   u.cache_read = cached;
+  u.cache_write = written;
   return priceUsage(u);
 }
 
@@ -469,7 +504,11 @@ export async function ancillaryComplete(req: AncillaryRequest): Promise<Ancillar
       max_tokens: req.maxTokens,
       messages: [{ role: "user", content: req.prompt }],
     };
-    if (req.system) body.system = req.system;
+    if (req.system) {
+      body.system = req.cacheSystem
+        ? [{ type: "text", text: req.system, cache_control: { type: "ephemeral" } }]
+        : req.system;
+    }
     if (req.temperature !== undefined) body.temperature = req.temperature;
     if (req.effort) body.output_config = { effort: req.effort };
     const response = await fetch("https://api.anthropic.com/v1/messages", {
@@ -481,7 +520,7 @@ export async function ancillaryComplete(req: AncillaryRequest): Promise<Ancillar
     const result = (await response.json()) as {
       stop_reason?: string;
       content: Array<{ type: string; text?: string }>;
-      usage?: { input_tokens?: number; output_tokens?: number; cache_read_input_tokens?: number };
+      usage?: { input_tokens?: number; output_tokens?: number; cache_read_input_tokens?: number; cache_creation_input_tokens?: number };
     };
     const text = result.content.filter((b) => b.type === "text").map((b) => b.text ?? "").join("").trim();
     const stop: AncillaryResult["stop"] =
@@ -491,7 +530,7 @@ export async function ancillaryComplete(req: AncillaryRequest): Promise<Ancillar
       : "other";
     const u = result.usage;
     const usage = u
-      ? usageOf(provider, modelId, (u.input_tokens ?? 0) + (u.cache_read_input_tokens ?? 0), u.output_tokens ?? 0, u.cache_read_input_tokens ?? 0)
+      ? usageOf(provider, modelId, (u.input_tokens ?? 0) + (u.cache_read_input_tokens ?? 0), u.output_tokens ?? 0, u.cache_read_input_tokens ?? 0, u.cache_creation_input_tokens ?? 0)
       : null;
     return { text, model: modelId, provider, stop, usage };
   }
@@ -520,7 +559,8 @@ export async function ancillaryComplete(req: AncillaryRequest): Promise<Ancillar
     let text = "";
     let stop: AncillaryResult["stop"] = "end";
     let usage: TurnUsage | null = null;
-    for await (const ev of openaiTurn(baseUrl, key, modelId, messages, [], req.temperature)) {
+    const opts = req.cacheSystem && PROMPT_CACHE_KEY_PROVIDERS.has(provider) ? { cacheKey: `ancillary:${req.invocation}` } : {};
+    for await (const ev of openaiTurn(baseUrl, key, modelId, messages, [], req.temperature, opts)) {
       if (ev.type === "text") text += ev.text;
       else if (ev.type === "turn_end") {
         text = ev.content || text;

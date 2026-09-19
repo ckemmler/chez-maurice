@@ -62,7 +62,7 @@ services:
       # (Scaleway Generative APIs, say) is a code change, not configuration.
       # Enables OAuth on the MCP gateway, for connecting Claude to this server.
       MAURICE_OAUTH_PASSWORD: ${MAURICE_OAUTH_PASSWORD:-}
-      # Where Maurice Maurice's documentation refreshes from (see README.md,
+      # Where Maurice's documentation (the maurice_docs tool) refreshes from (see README.md,
       # "The documentation refreshes itself"). Unset is the public repo; `off`
       # makes no outbound call.
       MAURICE_DOCS_URL: ${MAURICE_DOCS_URL:-}

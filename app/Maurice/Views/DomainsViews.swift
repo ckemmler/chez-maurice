@@ -101,8 +101,8 @@ struct InfoPill: View {
 // MARK: - The mark
 
 /// What stands where a hat used to: a glyph on the member's accent — a closed
-/// book for a domain, open pages for a reading companion, the boater for
-/// Maurice Maurice. Nothing for the everyday Maurice (he needs no badge).
+/// book for a domain, open pages for a reading companion. Nothing for the
+/// everyday Maurice (he needs no badge).
 struct DomainMark: View {
     @Environment(SessionStore.self) private var session
     @Environment(\.mauriceTheme) private var theme
@@ -117,13 +117,9 @@ struct DomainMark: View {
             .fill(accent.opacity(0.14))
             .frame(width: size, height: size)
             .overlay {
-                if maurice.builtin {
-                    BoaterHat(size: size * 0.55, color: ink)
-                } else {
-                    Image(systemName: maurice.symbol)
-                        .font(.system(size: size * 0.42, weight: .medium))
-                        .foregroundStyle(ink)
-                }
+                Image(systemName: maurice.symbol)
+                    .font(.system(size: size * 0.42, weight: .medium))
+                    .foregroundStyle(ink)
             }
             .overlay(
                 RoundedRectangle(cornerRadius: radius ?? (size * 0.28), style: .continuous)
@@ -134,9 +130,10 @@ struct DomainMark: View {
 
 // MARK: - The list
 
-/// The member's domains, reading companions, and Maurice Maurice. A domain of
-/// the member's own opens its page; a domain shared with a guest, a companion
-/// or Maurice Maurice opens a conversation bound to it.
+/// The member's domains and reading companions. A domain of the member's own
+/// opens its page; a domain shared with a guest or a companion opens a
+/// conversation bound to it. Questions about Maurice himself need no entry
+/// here: the everyday Maurice answers them from his documentation tool.
 struct DomainsListSheet: View {
     @Environment(MauriceStore.self) private var store
     @Environment(DomainsState.self) private var domains
@@ -174,11 +171,6 @@ struct DomainsListSheet: View {
                         ForEach(store.companions) { c in
                             DomainListRow(maurice: c, subtitle: session.localized("domains.companion.hint")) { open(c) }
                         }
-                    }
-
-                    if let mm = store.builtin {
-                        sectionHead(session.localized("domains.section.about")).padding(.top, 8)
-                        DomainListRow(maurice: mm, subtitle: mm.tagline) { open(mm) }
                     }
 
                     // Until Maurice proposes domains from the conversations
@@ -245,7 +237,7 @@ struct DomainsListSheet: View {
             return
         }
         // A companion resumes its pinned conversation; anything else without
-        // a page (a shared domain, Maurice Maurice) starts one bound to it.
+        // a page (a shared domain) starts one bound to it.
         Task {
             if m.isCompanion, let cid = store.overview[m.id]?.conversationId {
                 await chat.selectConversation(cid)
@@ -289,9 +281,9 @@ private struct DomainListRow: View {
 
 // MARK: - Conversation greeting for a bound domain
 
-/// The empty-state greeting shown when a conversation is bound to a domain, a
-/// reading companion or Maurice Maurice: the mark, the name and tagline, the
-/// model / context / creativity pills, and the way to the page and the editor.
+/// The empty-state greeting shown when a conversation is bound to a domain or
+/// a reading companion: the mark, the name and tagline, the model / context /
+/// creativity pills, and the way to the page and the editor.
 struct DomainGreeting: View {
     @Environment(MauriceStore.self) private var store
     @Environment(DomainsState.self) private var domains
@@ -306,11 +298,9 @@ struct DomainGreeting: View {
             DomainMark(maurice: maurice, size: 72)
 
             VStack(spacing: 6) {
-                if !maurice.builtin {
-                    Text(session.localized(maurice.isCompanion ? "domains.kicker.companion" : "domains.kicker.domain"))
-                        .font(.system(size: 9, design: .monospaced)).tracking(0.8)
-                        .foregroundStyle(theme.inkMute)
-                }
+                Text(session.localized(maurice.isCompanion ? "domains.kicker.companion" : "domains.kicker.domain"))
+                    .font(.system(size: 9, design: .monospaced)).tracking(0.8)
+                    .foregroundStyle(theme.inkMute)
                 Text(maurice.name)
                     .font(.system(size: 30, design: .serif))
                     .foregroundStyle(theme.ink)
@@ -340,7 +330,6 @@ struct DomainGreeting: View {
             }
             .fixedSize(horizontal: true, vertical: false)
 
-            // Maurice Maurice is built in: nothing to edit, the model included.
             if maurice.isEditable {
                 HStack(spacing: 8) {
                     if maurice.isDomain(of: session.activeUserId) {

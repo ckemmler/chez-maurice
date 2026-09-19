@@ -6,7 +6,6 @@ import {
   companionsFor,
   domainsFor,
   getMaurice,
-  isBuiltinMaurice,
   isDomain,
   type Maurice,
 } from "../services/maurices";
@@ -31,7 +30,6 @@ domains.use("/*", requireAuth);
 function ownDomain(c: any): Maurice | null {
   const id = c.req.param("id");
   const uid = c.get("userId");
-  if (isBuiltinMaurice(id)) return null;
   const domain = getMaurice(id);
   if (!domain || domain.created_by !== uid || !isDomain(domain)) return null;
   return domain;
@@ -39,7 +37,6 @@ function ownDomain(c: any): Maurice | null {
 
 function notFound(c: any) {
   const id = c.req.param("id");
-  if (isBuiltinMaurice(id)) return c.json({ error: "Maurice Maurice has no brief" }, 404);
   const row = getMaurice(id);
   if (row && row.created_by === c.get("userId") && row.kind === "companion") {
     return c.json({ error: "A reading companion has no brief" }, 404);

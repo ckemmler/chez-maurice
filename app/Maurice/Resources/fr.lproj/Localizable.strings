@@ -231,7 +231,6 @@
 "chat.post_humans" = "Publier (entre nous)";
 "chat.stop" = "Arrêter";
 "chat.switch_model" = "Changer de modèle";
-"chat.model_locked" = "Maurice Maurice utilise toujours ce modèle.";
 
 /* Settings reorg + avatar */
 "settings.garden.title" = "Votre jardin";
@@ -495,7 +494,6 @@
 "domains.open.help" = "Vos domaines et compagnons de lecture";
 "domains.section.domains" = "Vos domaines";
 "domains.section.companions" = "Compagnons de lecture";
-"domains.section.about" = "À propos de Maurice";
 "domains.empty" = "Pas encore de domaine. Un domaine est un pan de votre vie que Maurice suit de près, avec un cahier qu’il tient dessus et qu’il lit dans chaque conversation que vous avez seul avec lui.";
 "domains.explainer" = "Un seul Maurice, qui sait où il est : ouvrez un domaine pour lire ce qu’il en retient, ou pour en parler avec son contexte préchargé. Un compagnon de lecture reprend sa propre conversation, livre en main. Rien d’ici n’est lu dans un salon.";
 "domains.new" = "Nouveau domaine";

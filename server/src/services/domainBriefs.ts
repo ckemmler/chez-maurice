@@ -98,9 +98,8 @@ function storeBrief(row: Omit<BriefRow, "updated_at">): void {
   );
 }
 
-/** A member's domains: the rows of kind `domain` they made. Maurice Maurice
- *  is not stored and has no brief; a domain shared with a guest is the
- *  creator's, not the guest's. */
+/** A member's domains: the rows of kind `domain` they made. A domain shared
+ *  with a guest is the creator's, not the guest's. */
 export function domainsOf(memberId: string): Maurice[] {
   // Kind `domain` only: a reading companion (a book followed at the reading
   // position) is an activity, not a part of a life, and gets no brief.

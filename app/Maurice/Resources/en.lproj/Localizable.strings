@@ -231,7 +231,6 @@
 "chat.post_humans" = "Post to the room (no Maurice)";
 "chat.stop" = "Stop";
 "chat.switch_model" = "Switch model";
-"chat.model_locked" = "Maurice Maurice always runs on this model.";
 
 /* Settings reorg + avatar */
 "settings.garden.title" = "Your garden";
@@ -495,7 +494,6 @@
 "domains.open.help" = "Your domains and reading companions";
 "domains.section.domains" = "Your domains";
 "domains.section.companions" = "Reading companions";
-"domains.section.about" = "About Maurice";
 "domains.empty" = "No domain yet. A domain is a part of your life Maurice follows closely, with a brief he keeps on it and reads in every conversation you have alone with him.";
 "domains.explainer" = "One Maurice, who knows where he is: open a domain to read what he keeps on it, or talk about it with its context preloaded. A reading companion resumes its own conversation, book in hand. Nothing here is read in a room.";
 "domains.new" = "New domain";

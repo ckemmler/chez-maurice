@@ -10,7 +10,7 @@ import { MEMBER } from "./_member";
 
 const db = (await import("../src/db")).default;
 const { addModel, getModel, setModelThinking, toModelInfo } = await import("../src/services/models");
-const { createMaurice, updateMaurice, builtinMaurice } = await import("../src/services/maurices");
+const { createMaurice, updateMaurice } = await import("../src/services/maurices");
 const { thinkingBody, getHouseholdConfig } = await import("../src/services/claude");
 const { openaiTurn } = await import("../src/services/openaiChat");
 const { _resetErrors, fullHealth, DB_CHECK_TTL_MS } = await import("../src/services/health");
@@ -81,10 +81,6 @@ describe("a persona records its choice", () => {
     if ("errors" in made) throw new Error("persona not created");
     expect(made.thinking).toBeNull();
     db.run(`DELETE FROM maurices WHERE id = ?`, [made.id]);
-  });
-
-  test("Maurice Maurice answers without a reasoning phase", () => {
-    expect(builtinMaurice().thinking).toBe(false);
   });
 
   test("the everyday Maurice has a factory setting: answer directly", () => {

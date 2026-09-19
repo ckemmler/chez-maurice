@@ -693,6 +693,14 @@ export function migrateMauriceKinds(): void {
 }
 migrateMauriceKinds();
 
+// Maurice Maurice, the built-in specialist of Maurice (18–19 September 2026),
+// was never a row here, but conversations were bound to his id. He is gone
+// (roadmap P3-A: the `maurice_docs` tool answers instead), so those
+// conversations become ordinary ones with the everyday Maurice — which is
+// what they would resolve to anyway; unbinding them keeps the apps from
+// drawing a mark for a row that does not exist.
+db.run(`UPDATE conversations SET maurice_id = NULL WHERE maurice_id = 'maurice-maurice'`);
+
 // The same choice for the everyday Maurice — the conversation with no persona,
 // which the member cannot configure and which therefore needs its settings
 // "from the factory". Seeded to 0: the everyday Maurice answers directly and

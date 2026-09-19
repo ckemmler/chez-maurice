@@ -86,7 +86,7 @@ tools/corpus/config/corpus.yaml
 !infra/container
 # The model roster, read at repo root by tools/shared/model_config.py.
 !models.yml
-# The system documentation snapshot Maurice Maurice answers from
+# The system documentation snapshot the maurice_docs tool answers from
 # (server/src/services/mauriceDocs.ts; refreshed by scripts/sync-docs.sh).
 !docs/maurice
 

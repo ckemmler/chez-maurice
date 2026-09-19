@@ -40,7 +40,7 @@ services:
       MAURICE_TLS_CERT: /home/maurice/.maurice/tls/server.crt
       MAURICE_TLS_KEY: /home/maurice/.maurice/tls/server.key
       MAURICE_OAUTH_PASSWORD: ${MAURICE_OAUTH_PASSWORD:-}
-      # Where Maurice Maurice's documentation refreshes from; `off` for none.
+      # Where Maurice's documentation (the maurice_docs tool) refreshes from; `off` for none.
       MAURICE_DOCS_URL: ${MAURICE_DOCS_URL:-}
       # The spending fuse (server/src/services/budget.ts): off unless set. For
       # a household that thinks on the operator's key rather than its own —

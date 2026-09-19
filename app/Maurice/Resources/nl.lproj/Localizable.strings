@@ -231,7 +231,6 @@
 "chat.post_humans" = "Plaats (zonder Maurice)";
 "chat.stop" = "Stop";
 "chat.switch_model" = "Model wisselen";
-"chat.model_locked" = "Maurice Maurice draait altijd op dit model.";
 
 /* Settings reorg + avatar */
 "settings.garden.title" = "Jouw tuin";
@@ -495,7 +494,6 @@
 "domains.open.help" = "Je domeinen en leesgezellen";
 "domains.section.domains" = "Je domeinen";
 "domains.section.companions" = "Leesgezellen";
-"domains.section.about" = "Over Maurice";
 "domains.empty" = "Nog geen domein. Een domein is een deel van je leven dat Maurice van dichtbij volgt, met een schrift dat hij erover bijhoudt en leest in elk gesprek dat je alleen met hem hebt.";
 "domains.explainer" = "Eén Maurice, die weet waar hij is: open een domein om te lezen wat hij erover bewaart, of om erover te praten met de context al geladen. Een leesgezel pakt zijn eigen gesprek weer op, boek in de hand. Niets hiervan wordt in een kamer gelezen.";
 "domains.new" = "Nieuw domein";

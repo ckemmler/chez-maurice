@@ -37,9 +37,6 @@ struct Maurice: Identifiable, Equatable {
     var count: Int = 0
     /// allowed tool family ids; nil = inherit (all on cloud, none on-device)
     var toolFamilies: [String]? = nil
-    /// Maurice Maurice, the built-in specialist of Maurice: on everyone's list,
-    /// not editable, and his model is the server's choice — never switchable.
-    var builtin: Bool = false
     /// The member who made this Maurice. Seen from the other side, a Maurice
     /// is a *domain* of that member's life, with a brief Maurice keeps on it;
     /// the brief is the creator's alone (a persona shared with a guest is
@@ -50,20 +47,16 @@ struct Maurice: Identifiable, Equatable {
     var isEveryday: Bool { rawId == nil }
     /// A reading companion: a book followed at the reading position, entered
     /// as a pinned conversation. Never a brief.
-    var isCompanion: Bool { !isEveryday && !builtin && kind == "companion" }
-    /// Whether the member may edit this row at all (not the everyday Maurice,
-    /// not the built-in one).
-    var isEditable: Bool { !isEveryday && !builtin }
+    var isCompanion: Bool { !isEveryday && kind == "companion" }
+    /// Whether the member may edit this row at all (not the everyday Maurice).
+    var isEditable: Bool { !isEveryday }
     /// Whether this row is a domain of the given member: theirs and of kind
     /// domain, hence with a brief they can read, correct and erase.
     func isDomain(of memberId: String?) -> Bool {
         isEditable && kind == "domain" && createdBy != nil && createdBy == memberId
     }
     /// The symbol that stands for this row where a hat used to.
-    var symbol: String {
-        if builtin { return "questionmark.circle" }
-        return isCompanion ? "book.pages" : "book.closed"
-    }
+    var symbol: String { isCompanion ? "book.pages" : "book.closed" }
 
     /// The everyday Maurice — conversations with no binding resolve to it.
     static let everyday = Maurice(
@@ -96,7 +89,6 @@ struct Maurice: Identifiable, Equatable {
             weight: d["weight"] as? Int ?? 0,
             count: d["count"] as? Int ?? 0,
             toolFamilies: d["tool_families"] as? [String],
-            builtin: d["builtin"] as? Bool ?? false,
             createdBy: d["created_by"] as? String
         )
     }
@@ -226,13 +218,10 @@ final class MauriceStore {
     }
 
     /// The member's domains (their own, or the ones granted to a guest), as
-    /// the server scoped them. Maurice Maurice is not among them.
+    /// the server scoped them.
     var domains: [Maurice] { maurices.filter { $0.isEditable && $0.kind == "domain" } }
     /// The member's reading companions.
     var companions: [Maurice] { maurices.filter { $0.isCompanion } }
-    /// Maurice Maurice, while he is still a row on the list (until the
-    /// documentation tool replaces him).
-    var builtin: Maurice? { maurices.first { $0.builtin } }
 
     func model(for id: String?) -> MauriceModel? {
         // No explicit model → the household default, which is what the server
@@ -278,7 +267,6 @@ final class MauriceStore {
     /// chats. The everyday Maurice stores it per-member; a persona stores it on
     /// the persona itself. No-op if the roster lacks the model.
     func setModel(_ modelId: String, for m: Maurice) async {
-        if m.builtin { return } // Maurice Maurice's model is the server's, locked.
         if m.isEveryday {
             guard let json = await request("PUT", "/api/models/everyday", body: ["id": modelId]) as? [String: Any]
             else { return }

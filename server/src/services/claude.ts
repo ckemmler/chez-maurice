@@ -10,6 +10,7 @@ import { resolveBookItem } from "./composer/weights";
 import { type FileAttachment } from "./composer/files";
 import { getConversationMaurice, resolveMauriceContext, resolveMauriceAttachments } from "./maurices";
 import { briefsForPrompt } from "./domainBriefs";
+import { MAURICE_DOCS_TOOL_NAME, askMauriceDocs, mauriceDocsTool } from "./mauriceDocsTool";
 import { ensureUserFirst } from "./openedConversations";
 import { resolveModelId, getModel } from "./models";
 import { resolveUsableModel, getEverydayModel } from "./modelAccess";
@@ -89,7 +90,7 @@ const IMAGE_DIRECTIVES =
 // reduces the rate; the rendered table is the real ground truth. Note the
 // carve-out: web_search returns prose (no table), so it must still be conveyed.
 const TOOL_DATA_DIRECTIVE =
-  `\n\nWhen a tool returns structured data (a list of records, an object — anything but plain prose), the app shows those exact rows and values to the user in a table right beside your reply. They can already see the data. So do NOT re-list, transcribe, or read back the rows, fields, or numbers. Instead interpret: answer the question, summarize the trend, highlight what's notable or surprising, flag anything missing or off — the things a table alone doesn't tell them. If a tool returned fewer rows than asked for, say so plainly rather than papering over it; never invent or estimate values that aren't in the result. (This applies only to structured results shown in a table. web_search returns prose with no table, so convey its findings normally.)`;
+  `\n\nWhen a tool returns structured data (a list of records, an object — anything but plain prose), the app shows those exact rows and values to the user in a table right beside your reply. They can already see the data. So do NOT re-list, transcribe, or read back the rows, fields, or numbers. Instead interpret: answer the question, summarize the trend, highlight what's notable or surprising, flag anything missing or off — the things a table alone doesn't tell them. If a tool returned fewer rows than asked for, say so plainly rather than papering over it; never invent or estimate values that aren't in the result. (This applies only to structured results shown in a table. web_search and maurice_docs return prose with no table, so convey their findings normally.)`;
 
 // Non-negotiable content-safety floor. Appended LAST to every system prompt
 // (after any persona instructions + loaded context), for every provider, so it
@@ -173,11 +174,14 @@ function buildRoomSystemPrompt(conversationId: string, summonerName: string, ima
 // none of them makes the model answer "I'll check your calendar" with nothing
 // to call — and, asked what tools it has, recite the promise instead of looking.
 function toolRosterNotice(toolNames: string[], web: boolean): string {
+  // The documentation tool is in every roster (services/mauriceDocsTool.ts):
+  // a question about Maurice himself is answered from it, never from memory.
+  const docs = `Questions about Maurice himself — what you can do, how something works or is set up, what is built — go to maurice_docs; answer them from its result, not from what you assume.`;
   const names = [...(web ? ["Web search"] : []), ...familyTitles(toolNames)];
   if (names.length === 0) {
-    return `\n\n## Your tools\nYou have no tools at all this turn: no web search, and none of the household's personal tools. Answer from what you know and from this conversation. Anything that would need a tool — the calendar, tasks, contacts, health data, the garden, the library — you cannot reach: say so plainly rather than guessing or describing a lookup you didn't make.`;
+    return `\n\n## Your tools\nYou have no tools this turn but one, maurice_docs, Maurice's own documentation: no web search, and none of the household's personal tools. Answer from what you know and from this conversation. Anything that would need a tool — the calendar, tasks, contacts, health data, the garden, the library — you cannot reach: say so plainly rather than guessing or describing a lookup you didn't make. ${docs}`;
   }
-  return `\n\n## Your tools\nThis turn you have exactly these, and nothing else: ${names.join(", ")}. Use them when they help, and prefer them over guessing for anything about the people here. Every other capability — whatever isn't in that list — is unavailable to you right now, whether or not it exists elsewhere in the household: if asked for it, say you don't have it here rather than pretending to look. When asked what you can do, answer from this list, not from what an assistant like you usually has.`;
+  return `\n\n## Your tools\nThis turn you have exactly these, and nothing else: ${names.join(", ")}, and maurice_docs, Maurice's own documentation. Use them when they help, and prefer them over guessing for anything about the people here. Every other capability — whatever isn't in that list — is unavailable to you right now, whether or not it exists elsewhere in the household: if asked for it, say you don't have it here rather than pretending to look. When asked what you can do, answer from this list, not from what an assistant like you usually has. ${docs}`;
 }
 
 // Anthropic tool definition for our self-hosted web search.
@@ -222,6 +226,14 @@ const WEB_SEARCH_FUNCTION = {
     parameters: WEB_SEARCH_TOOL.input_schema,
   },
 };
+
+// The documentation tool, in every roster whatever the families say: a member
+// may always ask Maurice about Maurice (services/mauriceDocsTool.ts). Built
+// per turn because its description names the notes of the set actually read.
+function mauriceDocsFunction() {
+  const t = mauriceDocsTool();
+  return { type: "function", function: { name: t.name, description: t.description, parameters: t.input_schema } };
+}
 
 // Anthropic content can be a string or an array of blocks (text, images, PDFs).
 // The Ollama chat path here takes plain text, so flatten — but say so where an
@@ -423,13 +435,19 @@ async function executeTool(
   name: string,
   input: any,
   mcp: McpSession | null,
-  ctx: { conversationId: string; provider: string; round: number },
+  ctx: { conversationId: string; provider: string; round: number; memberId?: string | null },
 ): Promise<{ text: string; isError: boolean; data?: unknown }> {
   const start = performance.now();
   const result = await (async (): Promise<{ text: string; isError: boolean; data?: unknown }> => {
     try {
       if (name === "web_search") {
         return { text: formatWebSearch(await webSearch(input?.query || "")), isError: false };
+      }
+      if (name === MAURICE_DOCS_TOOL_NAME) {
+        // A sub-turn on the member's behalf: charged to them in the ledger,
+        // prose back, no data card.
+        const a = await askMauriceDocs(input || {}, ctx.memberId);
+        return { text: a.text, isError: a.isError };
       }
       if (mcp) {
         const r = await mcp.callTool(name, input || {});
@@ -459,6 +477,7 @@ async function* runOllamaAgentic(
   conversationId: string,
   signal?: AbortSignal,
   thinking?: boolean,
+  memberId?: string,
 ): AsyncGenerator<StreamEvent> {
   const convo: any[] = [{ role: "system", content: system }, ...baseMessages];
   const calls: ToolCallLog[] = [];
@@ -504,7 +523,7 @@ async function* runOllamaAgentic(
       if (signal?.aborted) return;
       const name = tc.function?.name || "";
       yield { type: "tool_call", tool: name, status: "start" };
-      const r = await executeTool(name, tc.function?.arguments || {}, mcp, { conversationId, provider: "ollama", round });
+      const r = await executeTool(name, tc.function?.arguments || {}, mcp, { conversationId, provider: "ollama", round, memberId });
       yield { type: "tool_call", tool: name, status: "end" };
       calls.push({ tool: name, ok: !toolFailed(r) });
       if (r.data != null) yield { type: "tool_data", tool: name, data: r.data };
@@ -684,7 +703,7 @@ async function* runOpenAIAgentic(
       let args: any = {};
       try { args = JSON.parse(tc.function.arguments || "{}"); } catch {}
       yield { type: "tool_call", tool: name, status: "start" };
-      const r = await executeTool(name, args, mcp, { conversationId, provider, round });
+      const r = await executeTool(name, args, mcp, { conversationId, provider, round, memberId });
       yield { type: "tool_call", tool: name, status: "end" };
       calls.push({ tool: name, ok: !toolFailed(r) });
       if (r.data != null) yield { type: "tool_data", tool: name, data: r.data };
@@ -1036,9 +1055,8 @@ function trackedBooks(
       // keeps on each part of their life, after the persona and the loaded
       // context so the cached prefix only moves when a brief does. Only in
       // the member's own conversation — never in a room, where another
-      // participant would read them — and not for Maurice Maurice, who
-      // answers from the documentation alone.
-      if (!maurice?.builtin && countParticipants(conversationId) === 1) {
+      // participant would read them.
+      if (countParticipants(conversationId) === 1) {
         systemPrompt += briefsForPrompt(memberId, userDisplayName);
       }
 
@@ -1074,18 +1092,14 @@ function trackedBooks(
   // else their best available. (No member → just persona/default.) For the
   // everyday Maurice (no persona) the "preference" is the member's own everyday
   // model — foyer-mates can each run a different LLM for it.
-  // Maurice Maurice's model is the server's pick (services/maurices.ts), not a
-  // preference: it is neither switchable nor subject to the member's allow-list.
   const preferred = maurice
     ? maurice.model
     : memberId
       ? getEverydayModel(memberId)
       : null;
-  const resolved = maurice?.builtin
-    ? resolveModelId(maurice.model, config.defaultModel)
-    : memberId
-      ? resolveUsableModel(memberId, preferred, config.defaultModel)
-      : resolveModelId(maurice?.model, config.defaultModel);
+  const resolved = memberId
+    ? resolveUsableModel(memberId, preferred, config.defaultModel)
+    : resolveModelId(maurice?.model, config.defaultModel);
   if (!resolved) {
     yield { type: "text_delta", text: t(userLang, "chat.no_model_access") };
     yield { type: "done", message_id: crypto.randomUUID() };
@@ -1139,7 +1153,7 @@ function trackedBooks(
   {
     const ctxK = rec?.ctx && rec.ctx > 0 ? rec.ctx : 128;
     const contextTokens = provider === "ollama" ? Math.min(ctxK * 1024, OLLAMA_NUM_CTX) : ctxK * 1024;
-    const toolText = JSON.stringify(mcpTools.map(mcpToolToFunction)) + (wantsWeb ? JSON.stringify(WEB_SEARCH_FUNCTION) : "");
+    const toolText = JSON.stringify(mcpTools.map(mcpToolToFunction)) + (wantsWeb ? JSON.stringify(WEB_SEARCH_FUNCTION) : "") + JSON.stringify(mauriceDocsFunction());
     const headTokens = estimateText(systemPrompt + CONTENT_SAFETY_FLOOR + WINDOW_NOTICE) + estimateText(toolText);
     const fitted = windowMessages(conversationId, messages, ids, {
       contextTokens, headTokens, replyTokens: replyReserve(contextTokens, config.maxTokens),
@@ -1160,7 +1174,8 @@ function trackedBooks(
   if (provider === "ollama") {
     const tools = mcpTools.map(mcpToolToFunction);
     if (wantsWeb && hasWebSearch()) tools.push(WEB_SEARCH_FUNCTION);
-    yield* runOllamaAgentic(resolved, systemPrompt, toTextMessages(messages), tools, mcp, config.maxTokens, userLang, conversationId, signal, thinking);
+    tools.push(mauriceDocsFunction());
+    yield* runOllamaAgentic(resolved, systemPrompt, toTextMessages(messages), tools, mcp, config.maxTokens, userLang, conversationId, signal, thinking, memberId);
     return;
   }
 
@@ -1176,6 +1191,7 @@ function trackedBooks(
     }
     const tools = mcpTools.map(mcpToolToFunction);
     if (wantsWeb && hasWebSearch()) tools.push(WEB_SEARCH_FUNCTION);
+    tools.push(mauriceDocsFunction());
     yield* runOpenAIAgentic(
       baseUrl, key, resolved, systemPrompt,
       toOpenAIMessages(messages, !!rec?.vision),
@@ -1199,10 +1215,12 @@ function trackedBooks(
     return;
   }
 
-  // Cloud tool set: web search (if selected) + the family-filtered MCP tools.
+  // Cloud tool set: web search (if selected) + the family-filtered MCP tools
+  // + the documentation tool, always.
   const tools: any[] = [];
   if (wantsWeb && hasWebSearch()) tools.push(WEB_SEARCH_TOOL);
   for (const t of mcpTools) tools.push(mcpToolToAnthropic(t));
+  tools.push(mauriceDocsTool());
 
   // Breakpoint 2 of 3: the end of the conversation history. `messages` ends with
   // the time reminder, so the message before it is the last real turn — cache up
@@ -1424,7 +1442,7 @@ function trackedBooks(
       const toolResults: any[] = [];
       for (const tu of toolUses) {
         yield { type: "tool_call", tool: tu.name, status: "start" };
-        const r = await executeTool(tu.name, tu.input || {}, mcp, { conversationId, provider: "anthropic", round });
+        const r = await executeTool(tu.name, tu.input || {}, mcp, { conversationId, provider: "anthropic", round, memberId });
         yield { type: "tool_call", tool: tu.name, status: "end" };
         calls.push({ tool: tu.name, ok: !toolFailed(r) });
         // Surface the structured result on a model-untouched channel so the

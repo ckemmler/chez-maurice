@@ -156,7 +156,7 @@ test("a guest lists what was granted to them, as not theirs and without a brief;
   expect((await req(domainRoutes, guestAuth, "/dk-health/brief")).status).toBe(404);
   // Through /api/maurices the guest reaches the same row, and nothing else.
   const list = await (await req(mauriceRoutes, guestAuth, "/")).json();
-  expect(list.map((m: any) => m.id)).toEqual([maurices.BUILTIN_MAURICE_ID, "dk-health"]);
+  expect(list.map((m: any) => m.id)).toEqual(["dk-health"]);
   expect((await req(domainRoutes, "", "/")).status).toBe(401);
   db.run(`DELETE FROM domain_briefs WHERE maurice_id = 'dk-health'`);
 });

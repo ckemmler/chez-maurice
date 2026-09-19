@@ -67,7 +67,7 @@ admin.get("/status", (c) => {
     users: userCount,
     conversations: convoCount,
     messages: messageCount,
-    // Maurice Maurice's documentation: which set he reads and how fresh it is.
+    // Maurice's documentation (the maurice_docs tool): which set it reads and how fresh it is.
     docs: docsStatus(),
   });
 });

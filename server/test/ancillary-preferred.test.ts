@@ -152,7 +152,8 @@ test("Aline's shape: a GLM chat with a Scaleway key advises Scaleway", () => {
   expect(recommendedModel("moc_evocations")).toBe("mistral-small-3.2-24b-instruct-2506");
 
   const seeded = seedAncillaryPinsOnce();
-  const advisable = presentInvocations().filter((i) => !i.ownDispatch).map((i) => i.id);
+  // The documentation tool has a computed default instead of advice (P3-A).
+  const advisable = presentInvocations().filter((i) => !i.ownDispatch && !i.defaultModel).map((i) => i.id);
   expect(seeded.sort()).toEqual(advisable.sort());
   expect(ancillaryModel("conversation_summary")).toBe("gpt-oss-120b");
 });

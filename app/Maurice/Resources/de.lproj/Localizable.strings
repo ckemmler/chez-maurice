@@ -231,7 +231,6 @@
 "chat.post_humans" = "An den Raum senden (ohne Maurice)";
 "chat.stop" = "Stopp";
 "chat.switch_model" = "Modell wechseln";
-"chat.model_locked" = "Maurice Maurice läuft immer mit diesem Modell.";
 
 /* Settings reorg + avatar */
 "settings.garden.title" = "Dein Garten";
@@ -495,7 +494,6 @@
 "domains.open.help" = "Deine Bereiche und Lesebegleiter";
 "domains.section.domains" = "Deine Bereiche";
 "domains.section.companions" = "Lesebegleiter";
-"domains.section.about" = "Über Maurice";
 "domains.empty" = "Noch kein Bereich. Ein Bereich ist ein Teil deines Lebens, den Maurice genau verfolgt, mit einem Heft, das er dazu führt und in jeder Unterhaltung liest, die du allein mit ihm hast.";
 "domains.explainer" = "Ein Maurice, der weiß, wo er ist: Öffne einen Bereich, um zu lesen, was er dazu behält, oder um mit vorgeladenem Kontext darüber zu sprechen. Ein Lesebegleiter nimmt seine eigene Unterhaltung wieder auf, Buch in der Hand. Nichts davon wird in einem Raum gelesen.";
 "domains.new" = "Neuer Bereich";
