@@ -53,6 +53,9 @@ ancillary.post("/", async (c) => {
     max_tokens?: number;
     temperature?: number;
     effort?: "low" | "medium" | "high";
+    /** An explicit model, for an experiment that compares them; see
+     *  AncillaryRequest.model. Checked like a pin: roster and key. */
+    model?: string;
   } | null;
 
   const invocation = body?.invocation ?? "";
@@ -72,6 +75,7 @@ ancillary.post("/", async (c) => {
       maxTokens,
       temperature: body?.temperature,
       effort: body?.effort,
+      model: typeof body?.model === "string" && body.model.trim() ? body.model.trim() : undefined,
     });
     return c.json(result);
   } catch (err) {

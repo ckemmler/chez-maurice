@@ -30,6 +30,7 @@ import { getModel, configuredProviders, householdDefaultModel } from "./models";
 import { getHouseholdConfig, isOpenAIStyle, openaiStyleBaseUrl, openaiStyleKey } from "./claude";
 import { openaiTurn } from "./openaiChat";
 import { ollamaTurn } from "./ollama";
+import { newUsage, priceUsage, type TurnUsage } from "./pricing";
 
 // ── The invocations ──────────────────────────────────────────────────────────
 
@@ -343,6 +344,15 @@ export interface AncillaryRequest {
   temperature?: number;
   /** Anthropic-only hint (adaptive thinking budget); other providers ignore it. */
   effort?: "low" | "medium" | "high";
+  /**
+   * Run on this model instead of the invocation's pin. For an experiment
+   * that compares models on the same prompt — the domains' night model was
+   * chosen this way, three briefs by two models each — not for a function
+   * to pick its own model: the admin's pin is the rule, this is the exception
+   * that says so in the call. The model must be in the roster and its
+   * provider must have a key, exactly as a pin must.
+   */
+  model?: string;
 }
 
 export interface AncillaryResult {
@@ -352,6 +362,30 @@ export interface AncillaryResult {
   /** Why the model stopped: `end` is the normal case. `refusal` and
    *  `max_tokens` are what callers check before trusting the text. */
   stop: "end" | "max_tokens" | "refusal" | "other";
+  /** What the turn cost, when the provider reported tokens: the same shape
+   *  the chat meters, priced by pricing.ts (null cost = unpriced model). */
+  usage: TurnUsage | null;
+}
+
+function usageOf(provider: string, model: string, input: number, output: number, cached = 0): TurnUsage {
+  const u = newUsage(provider, model);
+  u.rounds = 1;
+  u.input = Math.max(0, input - cached);
+  u.output = output;
+  u.cache_read = cached;
+  return priceUsage(u);
+}
+
+/** The model a request runs on: its override, checked as a pin would be, else
+ *  the invocation's resolution. */
+function requestedModel(req: AncillaryRequest): string {
+  if (!req.model) return ancillaryModel(req.invocation);
+  const model = getModel(req.model);
+  if (!model) throw new AncillaryError(`unknown model "${req.model}"`, 400);
+  if (!configuredProviders().has(model.provider)) {
+    throw new AncillaryError(`no ${model.provider} key configured for this household`, 422);
+  }
+  return req.model;
 }
 
 export class AncillaryError extends Error {
@@ -366,7 +400,7 @@ export class AncillaryError extends Error {
  * are single-turn and never use tools.
  */
 export async function ancillaryComplete(req: AncillaryRequest): Promise<AncillaryResult> {
-  const modelId = ancillaryModel(req.invocation);
+  const modelId = requestedModel(req);
   const model = getModel(modelId);
   const provider = model?.provider ?? "anthropic";
   const config = getHouseholdConfig();
@@ -390,6 +424,7 @@ export async function ancillaryComplete(req: AncillaryRequest): Promise<Ancillar
     const result = (await response.json()) as {
       stop_reason?: string;
       content: Array<{ type: string; text?: string }>;
+      usage?: { input_tokens?: number; output_tokens?: number; cache_read_input_tokens?: number };
     };
     const text = result.content.filter((b) => b.type === "text").map((b) => b.text ?? "").join("").trim();
     const stop: AncillaryResult["stop"] =
@@ -397,7 +432,11 @@ export async function ancillaryComplete(req: AncillaryRequest): Promise<Ancillar
       : result.stop_reason === "max_tokens" ? "max_tokens"
       : result.stop_reason === "end_turn" || result.stop_reason === "stop_sequence" ? "end"
       : "other";
-    return { text, model: modelId, provider, stop };
+    const u = result.usage;
+    const usage = u
+      ? usageOf(provider, modelId, (u.input_tokens ?? 0) + (u.cache_read_input_tokens ?? 0), u.output_tokens ?? 0, u.cache_read_input_tokens ?? 0)
+      : null;
+    return { text, model: modelId, provider, stop, usage };
   }
 
   const messages: Array<{ role: string; content: string }> = [];
@@ -413,7 +452,8 @@ export async function ancillaryComplete(req: AncillaryRequest): Promise<Ancillar
       else if (ev.type === "error") throw new AncillaryError(`Ollama error: ${ev.message}`);
     }
     if (!text.trim()) stop = "other";
-    return { text: text.trim(), model: modelId, provider, stop };
+    // Local tokens are free rather than unpriced, and uncounted here.
+    return { text: text.trim(), model: modelId, provider, stop, usage: usageOf(provider, modelId, 0, 0) };
   }
 
   if (isOpenAIStyle(provider)) {
@@ -422,13 +462,17 @@ export async function ancillaryComplete(req: AncillaryRequest): Promise<Ancillar
     const baseUrl = openaiStyleBaseUrl(provider, config);
     let text = "";
     let stop: AncillaryResult["stop"] = "end";
+    let usage: TurnUsage | null = null;
     for await (const ev of openaiTurn(baseUrl, key, modelId, messages, [], req.temperature)) {
       if (ev.type === "text") text += ev.text;
-      else if (ev.type === "turn_end") text = ev.content || text;
+      else if (ev.type === "turn_end") {
+        text = ev.content || text;
+        if (ev.usage) usage = usageOf(provider, modelId, ev.usage.prompt, ev.usage.completion, ev.usage.cached);
+      }
       else if (ev.type === "error") throw new AncillaryError(`${provider} error: ${ev.message}`);
     }
     if (!text.trim()) stop = "other";
-    return { text: text.trim(), model: modelId, provider, stop };
+    return { text: text.trim(), model: modelId, provider, stop, usage };
   }
 
   throw new AncillaryError(`unknown provider "${provider}" for model ${modelId}`, 500);

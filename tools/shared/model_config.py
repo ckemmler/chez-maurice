@@ -120,6 +120,26 @@ def complete(
     or refuses — never falls back to a provider of its own, because a silent
     fallback is how these tools ended up pinned to one vendor to begin with.
     """
+    return complete_full(
+        invocation, prompt, system=system, max_tokens=max_tokens, temperature=temperature, timeout=timeout
+    )["text"]
+
+
+def complete_full(
+    invocation: str,
+    prompt: str,
+    *,
+    system: str | None = None,
+    max_tokens: int = 1024,
+    temperature: float | None = None,
+    timeout: float = 120.0,
+    model: str | None = None,
+) -> dict:
+    """The same turn, with everything the server said about it: `text`,
+    `model`, `provider`, `stop`, and `usage` (tokens and cost in dollars, or
+    None when the provider reported none). `model` runs the turn on that
+    model instead of the invocation's pin — for an experiment that compares
+    models, never for a tool to choose its own."""
     global _server_base_cache
     import json
     import ssl
@@ -135,6 +155,8 @@ def complete(
         payload["system"] = system
     if temperature is not None:
         payload["temperature"] = temperature
+    if model is not None:
+        payload["model"] = model
 
     # Loopback to a server whose certificate is its own: verifying it would
     # mean trusting a name we already know is this machine.
@@ -169,4 +191,5 @@ def complete(
     text = (body or {}).get("text")
     if not isinstance(text, str) or not text.strip():
         raise AncillaryUnavailable(f"{invocation}: server returned no text")
-    return text.strip()
+    body["text"] = text.strip()
+    return body
