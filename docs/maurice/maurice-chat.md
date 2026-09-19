@@ -1,6 +1,6 @@
 ---
 title: The chat experience
-date: '2026-09-18'
+date: '2026-09-19'
 flags: []
 locale: en
 description: Streaming render, tool-result data cards, math, markdown, images, dictation,
@@ -53,6 +53,12 @@ Two touches make it feel alive rather than mechanical:
 - **Respectful auto-scroll**: the view follows the bottom only while you're near it (within ~120pt); scroll up to re-read mid-answer and it won't yank you back; scroll back down to re-engage.
 
 Two failure modes fixed in September 2026: deleting a thread while Maurice was still answering left the [[maurice-server|server]] running its tools for a room that no longer existed (a fragment landed in a garden fiche a minute after the delete), so the app now stops the stream before deleting; and a room that answers 404 — deleted here, or from another device — is dropped along with its socket, where before the socket reconnected with backoff forever and refetched the vanished conversation for hours.
+
+**A reply survives the cut (19 September 2026).** A turn belongs to the conversation, not to the request that started it (see [[maurice-server]]). When the member switches app or locks the screen while Maurice is answering, the iPhone app first asks iOS for a few seconds of grace (short replies finish normally); if the connection is lost anyway, the activity line under the reply says "Connexion perdue, Maurice continue…" and the app re-attaches to the turn with `GET /api/conversations/:id/turn`: it receives everything produced meanwhile (text, data blocks, the tool at hand, the cost) and then the rest live, and the reply goes on on screen as if nothing had happened. If the server answers that nothing is running any more (`204`), the thread is reloaded: the reply, if it was finished and persisted during the absence, is there. Coming back to the foreground reconnects both live channels (room and member) at once instead of waiting out their backoff, and re-attaches the same way to a turn started in the last five minutes whose end was never seen. The red banner only appears when the re-attach itself fails three times or the server refuses, and it stays until the member taps it or sends again — a refresh that succeeds no longer wipes it, which was the origin of the red "flash" that hid every error until then.
+
+**Stop.** Since generation no longer stops when a client disconnects, ⏹ first tells the server (`POST /api/conversations/:id/turn/stop`), then cancels the local stream; what was produced reaches the thread over the room channel. Leaving the thread or deleting the conversation mid-reply goes the same way.
+
+**One reply at a time.** Sending while Maurice is already answering in that conversation (a previous request the server picked up, or another device) gets a `409`: the app removes the refused message from the thread, says calmly "Maurice est déjà en train de répondre dans cette conversation." and re-attaches to the reply in progress to show it.
 
 ## Tool-result data cards
 
