@@ -9,7 +9,7 @@ import { CHARS_PER_TOKEN, estimateText } from "./contextWindow";
 import { searchConversations } from "./conversationSearch";
 import { isDue } from "./corpusNightly";
 import { userLocale } from "./i18n";
-import { listMaurices, type Maurice } from "./maurices";
+import { isDomain, listMaurices, type Maurice } from "./maurices";
 import { corpusCall } from "./mcpClient";
 import { getModel } from "./models";
 import { listUsers } from "./users";
@@ -98,11 +98,13 @@ function storeBrief(row: Omit<BriefRow, "updated_at">): void {
   );
 }
 
-/** A member's domains: the Maurices they made. Maurice Maurice is not stored
- *  and has no brief; a persona shared with a guest is the creator's domain,
- *  not the guest's. */
+/** A member's domains: the rows of kind `domain` they made. Maurice Maurice
+ *  is not stored and has no brief; a domain shared with a guest is the
+ *  creator's, not the guest's. */
 export function domainsOf(memberId: string): Maurice[] {
-  return listMaurices().filter((m) => m.created_by === memberId);
+  // Kind `domain` only: a reading companion (a book followed at the reading
+  // position) is an activity, not a part of a life, and gets no brief.
+  return listMaurices().filter((m) => m.created_by === memberId && isDomain(m));
 }
 
 /** The model a brief carries when the member wrote it themselves: a correction
@@ -221,7 +223,8 @@ export function briefsForPrompt(memberId: string, memberName: string, budgetToke
     .query(
       `SELECT m.name, b.text, b.updated_at, b.model FROM domain_briefs b
        JOIN maurices m ON m.id = b.maurice_id
-       WHERE b.member_id = ? AND m.created_by = ?`,
+       WHERE b.member_id = ? AND m.created_by = ?
+         AND (m.kind IS NULL OR m.kind = 'domain')`,
     )
     .all(memberId, memberId) as PromptBrief[];
   return briefsSection(rows, memberName, budgetTokens);

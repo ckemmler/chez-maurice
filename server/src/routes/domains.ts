@@ -1,15 +1,27 @@
 import { Hono } from "hono";
 import { requireAuth } from "../middleware/auth";
-import { getMaurice, isBuiltinMaurice, type Maurice } from "../services/maurices";
+import db from "../db";
+import {
+  companionBookId,
+  companionsFor,
+  domainsFor,
+  getMaurice,
+  isBuiltinMaurice,
+  isDomain,
+  type Maurice,
+} from "../services/maurices";
 import { deleteBrief, getBrief, refreshBrief, setBriefText, type BriefRow } from "../services/domainBriefs";
 
-// A domain is a row of `maurices` seen from the other side: not a persona to
-// summon but a part of a member's life that Maurice follows, with a brief he
-// keeps on it (services/domainBriefs.ts). This router is where the brief is
-// served: read, corrected, erased, and rewritten now.
+// A domain is a row of `maurices` of kind `domain`: not a persona to summon
+// but a part of a member's life that Maurice follows, with a brief he keeps
+// on it (services/domainBriefs.ts). This router lists the member's domains
+// and reading companions, and serves the brief: read, corrected, erased, and
+// rewritten now.
 //
-// A brief is the creator's — a persona shared with a guest is still the
+// A brief is the creator's — a domain shared with a guest is still the
 // creator's domain — so only the member who made the domain reaches it here.
+// A reading companion (kind `companion`) has no brief: the routes answer 404
+// for it, and the row it is stays reachable through /api/maurices.
 
 const domains = new Hono();
 
@@ -21,18 +33,73 @@ function ownDomain(c: any): Maurice | null {
   const uid = c.get("userId");
   if (isBuiltinMaurice(id)) return null;
   const domain = getMaurice(id);
-  if (!domain || domain.created_by !== uid) return null;
+  if (!domain || domain.created_by !== uid || !isDomain(domain)) return null;
   return domain;
 }
 
 function notFound(c: any) {
   const id = c.req.param("id");
-  return c.json({ error: isBuiltinMaurice(id) ? "Maurice Maurice has no brief" : "Not found" }, 404);
+  if (isBuiltinMaurice(id)) return c.json({ error: "Maurice Maurice has no brief" }, 404);
+  const row = getMaurice(id);
+  if (row && row.created_by === c.get("userId") && row.kind === "companion") {
+    return c.json({ error: "A reading companion has no brief" }, 404);
+  }
+  return c.json({ error: "Not found" }, 404);
 }
 
 function briefJson(b: BriefRow | null) {
   return b ? { text: b.text, updated_at: b.updated_at, sources: b.sources, read_until: b.read_until, model: b.model } : null;
 }
+
+/** The pinned conversation of a companion for this member: the most recently
+ *  touched conversation bound to it that the member sits in, or null. */
+function pinnedConversation(companionId: string, memberId: string): string | null {
+  const row = db
+    .query(
+      `SELECT c.id FROM conversations c
+         JOIN conversation_participants p ON p.conversation_id = c.id
+        WHERE c.maurice_id = ? AND p.member_id = ?
+        ORDER BY c.updated_at DESC, c.created_at DESC LIMIT 1`,
+    )
+    .get(companionId, memberId) as { id: string } | null;
+  return row?.id ?? null;
+}
+
+// GET /api/domains — the member's domains and reading companions, sorted.
+// A standard member sees the rows they made; a guest the ones granted to
+// them (`mine: false`, and no brief: the brief is the creator's). Each domain
+// carries when its brief was last rewritten and by whom, or `brief: null`;
+// each companion its book and its pinned conversation, when one exists.
+domains.get("/", (c) => {
+  const uid = c.get("userId");
+  const role = c.get("userRole");
+  const list = domainsFor(uid, role).map((d) => {
+    const mine = d.created_by === uid;
+    const b = mine ? getBrief(d.id, uid) : null;
+    return {
+      id: d.id,
+      name: d.name,
+      tagline: d.tagline,
+      kind: d.kind,
+      created_by: d.created_by,
+      mine,
+      count: d.count,
+      weight: d.weight,
+      brief: b ? { updated_at: b.updated_at, model: b.model, sources: b.sources.length } : null,
+    };
+  });
+  const companions = companionsFor(uid, role).map((m) => ({
+    id: m.id,
+    name: m.name,
+    tagline: m.tagline,
+    kind: m.kind,
+    created_by: m.created_by,
+    mine: m.created_by === uid,
+    book_id: companionBookId(m),
+    conversation_id: pinnedConversation(m.id, uid),
+  }));
+  return c.json({ domains: list, companions });
+});
 
 // GET /api/domains/:id/brief — the brief as it stands, or `brief: null` when
 // the night has not written one yet (a 200: the domain exists, the brief

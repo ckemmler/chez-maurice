@@ -2,11 +2,12 @@ import SwiftUI
 
 // MARK: - Hats
 //
-// The hat collection for specialized Maurices, ported from the design's
-// `maurice-hats.jsx`. Each hat is a set of flat silhouette shapes on a shared
-// 48×40 viewBox, drawn in `currentColor` with occasional translucent-white
-// highlights. `HatGlyph` renders the silhouette; `HatBadge` sets it on a
-// curated colored ground.
+// The hat collection, ported from the design's `maurice-hats.jsx`. Each hat is
+// a set of flat silhouette shapes on a shared 48×40 viewBox, drawn in
+// `currentColor` with occasional translucent-white highlights. `HatGlyph`
+// renders the silhouette. Since the personas became domains (19 September
+// 2026) no Maurice wears one of these any more: the collection lives on in
+// the loading animation (`HatLoader`), with its palettes.
 
 /// One primitive of a hat silhouette, in 48×40 viewBox coordinates.
 struct HatShape {
@@ -195,27 +196,6 @@ struct HatGlyph: View {
             }
         }
         .frame(width: size, height: size * 40.0 / 48.0)
-    }
-}
-
-/// A hat on a rounded, palette-colored ground — the persona's visual identity.
-struct HatBadge: View {
-    var kind: String = "boater"
-    var palette: HatPalette = .ink
-    var size: CGFloat = 56
-    var radius: CGFloat? = nil
-
-    var body: some View {
-        RoundedRectangle(cornerRadius: radius ?? (size * 0.28), style: .continuous)
-            .fill(palette.bg)
-            .frame(width: size, height: size)
-            .overlay(
-                HatGlyph(kind: kind, size: size * 0.6, color: palette.ink)
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: radius ?? (size * 0.28), style: .continuous)
-                    .strokeBorder(Color.black.opacity(0.06), lineWidth: 0.5)
-            )
     }
 }
 

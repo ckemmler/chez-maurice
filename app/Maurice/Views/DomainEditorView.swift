@@ -5,16 +5,19 @@ import UIKit
 import AppKit
 #endif
 
-// MARK: - Persona Creator
+// MARK: - Domain editor
 //
-// Full-screen form to build or edit a specialized Maurice, with a live preview.
-// On a regular-width window the preview is pinned in a right rail; on compact it
-// sits at the top of the scroll. Every control tints to the chosen palette
-// colour (accent = palette.bg), so the form re-themes as the hat colour changes.
+// Full-screen form to add or edit a domain (or a reading companion), with a
+// live preview: its name and tagline, what it is about (the statement Maurice
+// and the night's brief follow), the bound context, the model and the tools.
+// On a regular-width window the preview is pinned in a right rail; on compact
+// it sits at the top of the scroll. The controls tint to the member's accent.
+// Until Maurice proposes domains from the conversations himself, this is how
+// one comes to be.
 
-struct PersonaCreator: View {
+struct DomainEditor: View {
     @Environment(MauriceStore.self) private var store
-    @Environment(StudioState.self) private var studio
+    @Environment(DomainsState.self) private var domains
     @Environment(ChatService.self) private var chat
     @Environment(SessionStore.self) private var session
     @Environment(\.mauriceTheme) private var theme
@@ -40,7 +43,7 @@ struct PersonaCreator: View {
         _ctx = State(initialValue: ComposerStore(session: session))
     }
 
-    private var accent: Color { HatPalette.by(draft.palette).bg }
+    private var accent: Color { session.activeDeviceUser?.color ?? .blue }
     private var canSave: Bool { !draft.name.trimmingCharacters(in: .whitespaces).isEmpty && !saving }
     /// Muted terracotta for destructive actions (matches the app's warm palette).
     private let deleteTint = Color(hex: "a6452e")
@@ -65,14 +68,14 @@ struct PersonaCreator: View {
                 HStack(alignment: .top, spacing: 0) {
                     formScroll
                     Divider().overlay(theme.rule)
-                    ScrollView { PersonaPreview(draft: draft, weight: ctx.total, count: ctx.items.count).padding(20) }
+                    ScrollView { DomainPreview(draft: draft, weight: ctx.total, count: ctx.items.count).padding(20) }
                         .frame(width: 360)
                         .background(theme.surfaceAlt)
                 }
             } else {
                 ScrollView {
                     VStack(spacing: 24) {
-                        PersonaPreview(draft: draft, weight: ctx.total, count: ctx.items.count)
+                        DomainPreview(draft: draft, weight: ctx.total, count: ctx.items.count)
                         formSections
                     }
                     .padding(18)
@@ -89,7 +92,7 @@ struct PersonaCreator: View {
         #if os(iOS)
         // A "hide keyboard" control attached to the keyboard (the system keyboard
         // itself can't host a custom key), mirroring the chat composer — so the
-        // keyboard never blocks the hat/colour pickers below the fields.
+        // keyboard never blocks the controls below the fields.
         .toolbar {
             ToolbarItemGroup(placement: .keyboard) {
                 Spacer()
@@ -103,7 +106,7 @@ struct PersonaCreator: View {
         .task {
             ctx.items = draft.contextItems
             await ctx.reweigh()
-            // Default a fresh Maurice to the Garden · Notes tool (web + signals
+            // Default a fresh domain to the Garden · Notes tool (web + signals
             // are always on); the user adjusts from there.
             if draft.toolFamilies == nil { draft.toolFamilies = ["garden-notes"] }
             if store.families.isEmpty { await store.loadFamilies() }
@@ -130,7 +133,7 @@ struct PersonaCreator: View {
 
     private var header: some View {
         HStack(spacing: 14) {
-            Button { studio.backToList() } label: {
+            Button { domains.backToList() } label: {
                 Image(systemName: "chevron.left").font(.system(size: 15, weight: .medium))
                     .foregroundStyle(theme.ink)
             }
@@ -199,7 +202,7 @@ struct PersonaCreator: View {
         Section(number: 1, title: session.localized("persona.section.identity"), theme: theme) {
             VStack(alignment: .leading, spacing: 16) {
                 HStack(spacing: 14) {
-                    HatBadge(kind: draft.hat, palette: HatPalette.by(draft.palette), size: 60)
+                    DomainMark(maurice: draft, size: 60)
                     VStack(alignment: .leading, spacing: 8) {
                         TextField(session.localized("persona.field.name"), text: $draft.name)
                             .textFieldStyle(.plain)
@@ -219,39 +222,32 @@ struct PersonaCreator: View {
                 .background(RoundedRectangle(cornerRadius: 10).fill(theme.bg))
                 .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(theme.rule, lineWidth: 0.5))
 
-                // Hat picker
-                fieldLabel(session.localized("persona.field.hat"))
-                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 6), spacing: 8) {
-                    ForEach(HAT_KINDS, id: \.0) { kind, label in
-                        let on = draft.hat == kind
-                        Button { draft.hat = kind } label: {
-                            HatBadge(kind: kind, palette: HatPalette.by(draft.palette), size: 40)
-                                .overlay(RoundedRectangle(cornerRadius: 40 * 0.28, style: .continuous)
-                                    .strokeBorder(on ? accent : Color.clear, lineWidth: 2))
-                                .padding(2)
-                        }
-                        .buttonStyle(.plain)
-                        .help(label)
-                    }
+                // Domain or reading companion. The server sorted the rows
+                // that predate the distinction once; this is the member's
+                // hand on it.
+                fieldLabel(session.localized("persona.field.kind"))
+                HStack(spacing: 8) {
+                    kindChoice("domain", session.localized("persona.kind.domain"))
+                    kindChoice("companion", session.localized("persona.kind.companion"))
                 }
-
-                // Palette picker
-                fieldLabel(session.localized("persona.field.color"))
-                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 5), spacing: 8) {
-                    ForEach(HatPalette.all) { p in
-                        let on = draft.palette == p.id
-                        Button { draft.palette = p.id } label: {
-                            HatBadge(kind: draft.hat, palette: p, size: 40)
-                                .overlay(RoundedRectangle(cornerRadius: 40 * 0.28, style: .continuous)
-                                    .strokeBorder(on ? theme.ink : Color.clear, lineWidth: 2))
-                                .padding(2)
-                        }
-                        .buttonStyle(.plain)
-                        .help(p.label)
-                    }
-                }
+                Text(session.localized("persona.kind.hint"))
+                    .font(.system(size: 11)).foregroundStyle(theme.inkMute)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
+    }
+
+    private func kindChoice(_ value: String, _ label: String) -> some View {
+        let on = draft.kind == value
+        return Button { draft.kind = value } label: {
+            Text(label)
+                .font(.system(size: 11, weight: on ? .medium : .regular))
+                .foregroundStyle(on ? accent.legible(onDark: theme.isDark) : theme.inkSoft)
+                .padding(.horizontal, 11).padding(.vertical, 6)
+                .background(Capsule().fill(on ? accent.opacity(0.1) : theme.bg))
+                .overlay(Capsule().strokeBorder(on ? accent : theme.ruleHard, lineWidth: on ? 1 : 0.5))
+        }
+        .buttonStyle(.plain)
     }
 
     // MARK: 2 · Model
@@ -334,7 +330,7 @@ struct PersonaCreator: View {
                 // The reasoning switch, only where the roster says the model
                 // takes one (GLM-5.3 and Flash, Anthropic 4.6+, a local model
                 // Ollama reports as thinking). A choice is kept when the model
-                // changes: it is the persona's, and the server ignores it on a
+                // changes: it is the domain's, and the server ignores it on a
                 // model that has no switch.
                 if selectedModel?.thinkingIsOptional == true {
                     fieldLabel(session.localized("persona.field.reasoning")).padding(.top, 6)
@@ -350,7 +346,7 @@ struct PersonaCreator: View {
         }
     }
 
-    /// The model the persona will run on, as the roster describes it.
+    /// The model the domain runs on, as the roster describes it.
     private var selectedModel: MauriceModel? {
         store.model(for: draft.model)
     }
@@ -418,7 +414,7 @@ struct PersonaCreator: View {
         Task {
             _ = await store.save(draft)
             saving = false
-            studio.closeCreator()
+            domains.closeEditor()
         }
     }
 
@@ -427,12 +423,11 @@ struct PersonaCreator: View {
         saving = true
         Task {
             await store.delete(id)
-            // Drop the filter anchor if it pointed here, then refresh the
-            // conversation list (the server has nulled its bound conversations).
-            if studio.currentMauriceId == id { studio.currentMauriceId = nil }
+            // Refresh the conversation list (the server has unbound its
+            // conversations, which go on with the everyday Maurice).
             await chat.loadConversations()
             saving = false
-            studio.closeCreator()
+            domains.closeEditor()
         }
     }
 }
@@ -601,7 +596,7 @@ private struct ModelCard: View {
     }
 }
 
-// MARK: - Tool family picker (reused by the persona creator + chat composer)
+// MARK: - Tool family picker (reused by the domain editor + chat composer)
 
 struct ToolFamilyPicker: View {
     @Environment(\.mauriceTheme) private var theme
@@ -691,7 +686,7 @@ struct ToolFamilyPicker: View {
 
 // MARK: - Live preview
 
-struct PersonaPreview: View {
+struct DomainPreview: View {
     @Environment(MauriceStore.self) private var store
     @Environment(\.mauriceTheme) private var theme
     @Environment(SessionStore.self) private var session
@@ -699,41 +694,35 @@ struct PersonaPreview: View {
     let weight: Int
     let count: Int
 
-    private var palette: HatPalette { HatPalette.by(draft.palette) }
-
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            // Palette banner with the hat badge overlapping it
-            palette.bg
-                .frame(height: 56)
-                .overlay(alignment: .bottomLeading) {
-                    HatBadge(kind: draft.hat, palette: palette, size: 56)
-                        .overlay(RoundedRectangle(cornerRadius: 56 * 0.28, style: .continuous)
-                            .strokeBorder(theme.surface, lineWidth: 2))
-                        .offset(x: 16, y: 28)
-                }
-
-            VStack(alignment: .leading, spacing: 10) {
-                Spacer().frame(height: 26)
-                Text(draft.name.isEmpty ? session.localized("persona.preview.untitled") : draft.name)
-                    .font(.system(size: 19, design: .serif))
-                    .foregroundStyle(draft.name.isEmpty ? theme.inkMute : theme.ink)
-                Text(draft.tagline.isEmpty ? excerpt(draft.prompt) : draft.tagline)
-                    .font(.system(size: 12))
-                    .foregroundStyle(theme.inkSoft)
-                    .lineLimit(3)
-
-                Divider().overlay(theme.rule).padding(.vertical, 2)
-
-                previewRow(session.localized("persona.preview.model"), store.modelName(for: draft))
-                previewRow(session.localized("persona.preview.context"), count == 0 ? session.localized("persona.preview.none") : (count == 1 ? session.localized("persona.preview.sources.one", count, fmtTok(weight)) : session.localized("persona.preview.sources.other", count, fmtTok(weight))))
-                previewRow(session.localized("persona.preview.creativity"), creativityLabel(draft.temp))
-                if store.model(for: draft.model)?.thinkingIsOptional == true {
-                    previewRow(session.localized("persona.preview.reasoning"), reasoningLabel(draft.thinking))
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 12) {
+                DomainMark(maurice: draft, size: 44)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(session.localized(draft.kind == "companion" ? "domains.kicker.companion" : "domains.kicker.domain"))
+                        .font(.system(size: 9, design: .monospaced)).tracking(0.8)
+                        .foregroundStyle(theme.inkMute)
+                    Text(draft.name.isEmpty ? session.localized("persona.preview.untitled") : draft.name)
+                        .font(.system(size: 19, design: .serif))
+                        .foregroundStyle(draft.name.isEmpty ? theme.inkMute : theme.ink)
+                        .lineLimit(2)
                 }
             }
-            .padding(.horizontal, 16).padding(.bottom, 16)
+            Text(draft.tagline.isEmpty ? excerpt(draft.prompt) : draft.tagline)
+                .font(.system(size: 12))
+                .foregroundStyle(theme.inkSoft)
+                .lineLimit(3)
+
+            Divider().overlay(theme.rule).padding(.vertical, 2)
+
+            previewRow(session.localized("persona.preview.model"), store.modelName(for: draft))
+            previewRow(session.localized("persona.preview.context"), count == 0 ? session.localized("persona.preview.none") : (count == 1 ? session.localized("persona.preview.sources.one", count, fmtTok(weight)) : session.localized("persona.preview.sources.other", count, fmtTok(weight))))
+            previewRow(session.localized("persona.preview.creativity"), creativityLabel(draft.temp))
+            if store.model(for: draft.model)?.thinkingIsOptional == true {
+                previewRow(session.localized("persona.preview.reasoning"), reasoningLabel(draft.thinking))
+            }
         }
+        .padding(16)
         .background(RoundedRectangle(cornerRadius: 14).fill(theme.bg))
         .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(theme.rule, lineWidth: 0.5))
         .clipShape(RoundedRectangle(cornerRadius: 14))

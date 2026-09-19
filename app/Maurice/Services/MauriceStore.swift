@@ -1,19 +1,26 @@
 import SwiftUI
 
-// MARK: - Specialized Maurices (personas)
+// MARK: - Domains and reading companions (the rows of `maurices`)
 //
-// Client model + store for the household's specialized Maurices. The server
-// owns persistence (/api/maurices) and the model roster (/api/models); this
-// store loads them, exposes CRUD, and resolves a conversation's bound Maurice.
-// Context items reuse the composer's `TrayItem` shape — a persona's baked-in
-// bundle is the same kind of context the composer assembles per-conversation.
+// Client model + store for what a conversation can be bound to: since 19
+// September 2026 not personas to summon but the member's **domains** — parts
+// of their life Maurice follows, each with a brief he keeps on it — and their
+// **reading companions** (a book followed at the reading position, entered as
+// a pinned conversation). There is one Maurice; a domain is where he is. The
+// server owns persistence (/api/maurices, /api/domains) and the model roster
+// (/api/models); this store loads them, exposes CRUD, and resolves a
+// conversation's binding. Context items reuse the composer's `TrayItem` shape
+// — a domain's baked-in bundle is the same kind of context the composer
+// assembles per-conversation. The type keeps its name, `Maurice`: it is the
+// row's, and the everyday Maurice (`rawId == nil`) is one of its values.
 
-/// A specialized Maurice. `rawId == nil` is the everyday, unspecialized Maurice.
+/// A row of `maurices` — a domain or a reading companion — or, with
+/// `rawId == nil`, the everyday Maurice a conversation with no binding has.
 struct Maurice: Identifiable, Equatable {
     var rawId: String?
     var name: String
-    var hat: String = "boater"
-    var palette: String = "ink"
+    /// "domain" or "companion" (the server's `kind`).
+    var kind: String = "domain"
     var model: String?
     var temp: Double = 0.5
     /// For a model that reasons optionally: nil = the provider's own default,
@@ -41,26 +48,33 @@ struct Maurice: Identifiable, Equatable {
 
     var id: String { rawId ?? "__everyday__" }
     var isEveryday: Bool { rawId == nil }
-    /// Whether the member may edit this Maurice at all (not the everyday one,
+    /// A reading companion: a book followed at the reading position, entered
+    /// as a pinned conversation. Never a brief.
+    var isCompanion: Bool { !isEveryday && !builtin && kind == "companion" }
+    /// Whether the member may edit this row at all (not the everyday Maurice,
     /// not the built-in one).
     var isEditable: Bool { !isEveryday && !builtin }
-    /// Whether this Maurice is a domain of the given member: theirs, hence with
-    /// a brief they can read, correct and erase.
+    /// Whether this row is a domain of the given member: theirs and of kind
+    /// domain, hence with a brief they can read, correct and erase.
     func isDomain(of memberId: String?) -> Bool {
-        isEditable && createdBy != nil && createdBy == memberId
+        isEditable && kind == "domain" && createdBy != nil && createdBy == memberId
     }
-    var paletteValue: HatPalette { HatPalette.by(palette) }
+    /// The symbol that stands for this row where a hat used to.
+    var symbol: String {
+        if builtin { return "questionmark.circle" }
+        return isCompanion ? "book.pages" : "book.closed"
+    }
 
-    /// The everyday Maurice — conversations with no chosen persona resolve to it.
+    /// The everyday Maurice — conversations with no binding resolve to it.
     static let everyday = Maurice(
-        rawId: nil, name: "Maurice", hat: "boater", palette: "ink",
+        rawId: nil, name: "Maurice",
         model: nil, temp: 0.5, tagline: "Your everyday Maurice.", prompt: "",
         users: [], contextItems: [], weight: 0, count: 0
     )
 
-    /// A blank draft for the creator's "new" state.
+    /// A blank draft for the editor's "new" state.
     static func blank() -> Maurice {
-        Maurice(rawId: nil, name: "", hat: "boater", palette: "ink",
+        Maurice(rawId: nil, name: "",
                 model: nil, temp: 0.5, tagline: "", prompt: "", users: [],
                 contextItems: [], weight: 0, count: 0)
     }
@@ -71,8 +85,7 @@ struct Maurice: Identifiable, Equatable {
         return Maurice(
             rawId: id,
             name: name,
-            hat: d["hat"] as? String ?? "boater",
-            palette: d["palette"] as? String ?? "ink",
+            kind: d["kind"] as? String ?? "domain",
             model: d["model"] as? String,
             temp: (d["temp"] as? NSNumber)?.doubleValue ?? 0.5,
             thinking: d["thinking"] as? Bool,
@@ -108,6 +121,34 @@ struct DomainBrief: Equatable {
     static func parse(_ d: [String: Any]) -> DomainBrief? {
         guard let text = d["text"] as? String, let updatedAt = d["updated_at"] as? String else { return nil }
         return DomainBrief(text: text, updatedAt: updatedAt, sources: d["sources"] as? [String] ?? [], model: d["model"] as? String)
+    }
+}
+
+/// One line of `GET /api/domains`: what the list shows of a domain (when its
+/// brief was last rewritten, by whom) or of a companion (its pinned
+/// conversation), beside the row itself.
+struct DomainOverview: Equatable {
+    var id: String
+    var kind: String
+    var mine: Bool
+    /// Domain: the brief's `updated_at`, or nil when the night has not
+    /// written one yet.
+    var briefUpdatedAt: String?
+    var briefByMember: Bool = false
+    /// Companion: the most recently touched conversation bound to it.
+    var conversationId: String?
+
+    static func parse(_ d: [String: Any]) -> DomainOverview? {
+        guard let id = d["id"] as? String else { return nil }
+        let b = d["brief"] as? [String: Any]
+        return DomainOverview(
+            id: id,
+            kind: d["kind"] as? String ?? "domain",
+            mine: d["mine"] as? Bool ?? true,
+            briefUpdatedAt: b?["updated_at"] as? String,
+            briefByMember: (b?["model"] as? String) == "member",
+            conversationId: d["conversation_id"] as? String
+        )
     }
 }
 
@@ -157,6 +198,9 @@ final class MauriceStore {
     let session: SessionStore
 
     var maurices: [Maurice] = []
+    /// `GET /api/domains`, keyed by row id: the brief's date for a domain, the
+    /// pinned conversation for a companion. Refreshed with the list.
+    var overview: [String: DomainOverview] = [:]
     var models: [MauriceModel] = []
     /// The household default model id — the fallback when nothing more specific
     /// is set (the roster's first entry is the "best" model, not the default).
@@ -181,9 +225,14 @@ final class MauriceStore {
         return maurices.first { $0.rawId == id } ?? .everyday
     }
 
-    /// Maurices the active user may use. Custom Maurices are private to their
-    /// creator, so the server already scopes the list to this member.
-    var usableMaurices: [Maurice] { maurices }
+    /// The member's domains (their own, or the ones granted to a guest), as
+    /// the server scoped them. Maurice Maurice is not among them.
+    var domains: [Maurice] { maurices.filter { $0.isEditable && $0.kind == "domain" } }
+    /// The member's reading companions.
+    var companions: [Maurice] { maurices.filter { $0.isCompanion } }
+    /// Maurice Maurice, while he is still a row on the list (until the
+    /// documentation tool replaces him).
+    var builtin: Maurice? { maurices.first { $0.builtin } }
 
     func model(for id: String?) -> MauriceModel? {
         // No explicit model → the household default, which is what the server
@@ -259,6 +308,19 @@ final class MauriceStore {
     func loadMaurices() async {
         guard let arr = await request("GET", "/api/maurices") as? [[String: Any]] else { return }
         maurices = arr.compactMap { Maurice.parse($0) }
+        await loadOverview()
+    }
+
+    /// The list's second read: brief dates and pinned conversations.
+    func loadOverview() async {
+        guard let d = await request("GET", "/api/domains") as? [String: Any] else { return }
+        var next: [String: DomainOverview] = [:]
+        for key in ["domains", "companions"] {
+            for row in d[key] as? [[String: Any]] ?? [] {
+                if let o = DomainOverview.parse(row) { next[o.id] = o }
+            }
+        }
+        overview = next
     }
 
     func loadModels() async {
@@ -294,12 +356,23 @@ final class MauriceStore {
             maurices.append(saved)
         }
         maurices.sort { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+        await loadOverview()
         return saved
+    }
+
+    /// Re-sort a row by hand: a companion the migration took for a domain, or
+    /// the reverse. Nothing else on the row changes.
+    func setKind(_ kind: String, for id: String) async {
+        guard let json = await request("PATCH", "/api/maurices/\(id)", body: ["kind": kind]) as? [String: Any],
+              let saved = Maurice.parse(json) else { return }
+        if let i = maurices.firstIndex(where: { $0.rawId == saved.rawId }) { maurices[i] = saved }
+        await loadOverview()
     }
 
     func delete(_ id: String) async {
         _ = await request("DELETE", "/api/maurices/\(id)")
         maurices.removeAll { $0.rawId == id }
+        overview[id] = nil
     }
 
     // MARK: domain briefs
@@ -345,8 +418,7 @@ final class MauriceStore {
     private static func body(from m: Maurice) -> [String: Any] {
         [
             "name": m.name,
-            "hat": m.hat,
-            "palette": m.palette,
+            "kind": m.kind,
             "model": m.model as Any,
             "temp": m.temp,
             "thinking": m.thinking ?? NSNull(),

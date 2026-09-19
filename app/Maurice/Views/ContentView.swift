@@ -17,7 +17,7 @@ struct ContentView: View {
     @Environment(SessionStore.self) private var session
     @Environment(ChatService.self) private var chat
     @Environment(MauriceStore.self) private var maurices
-    @Environment(StudioState.self) private var studio
+    @Environment(DomainsState.self) private var domains
     @Environment(GardensStore.self) private var gardens
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.scenePhase) private var scenePhase
@@ -65,9 +65,6 @@ struct ContentView: View {
                     await chat.onUserSwitch()
                     await prefs
                     await personas
-                    // Anchor the conversation filter on the active conversation's
-                    // Maurice (the most-recent one, after onUserSwitch selects it).
-                    studio.currentMauriceId = chat.activeConversation?.maurice_id
                     try? await minHold
                     isLoading = false
                     // Foyer badges are non-critical — refresh them in the
@@ -121,18 +118,18 @@ struct ContentView: View {
                 )
             }
         }
-        .sheet(isPresented: pickerBinding) {
-            MauricePicker(onActivate: { preferredColumn = .detail })
+        .sheet(isPresented: listBinding) {
+            DomainsListSheet(onOpen: { preferredColumn = .detail })
         }
         .sheet(isPresented: briefBinding) {
-            if let domain = studio.briefFor {
+            if let domain = domains.briefFor {
                 DomainBriefSheet(maurice: domain, onOpen: { preferredColumn = .detail })
             }
         }
         #if os(iOS)
-        .fullScreenCover(isPresented: creatorBinding) { creatorView }
+        .fullScreenCover(isPresented: editorBinding) { editorView }
         #else
-        .sheet(isPresented: creatorBinding) { creatorView }
+        .sheet(isPresented: editorBinding) { editorView }
         #endif
         .onChange(of: session.hasActiveSession) {
             isLoading = true
@@ -158,20 +155,20 @@ struct ContentView: View {
         columnVisibility = (columnVisibility == .detailOnly) ? .doubleColumn : .detailOnly
     }
 
-    private var pickerBinding: Binding<Bool> {
-        Binding(get: { studio.showPicker }, set: { studio.showPicker = $0 })
+    private var listBinding: Binding<Bool> {
+        Binding(get: { domains.showList }, set: { domains.showList = $0 })
     }
     private var briefBinding: Binding<Bool> {
-        Binding(get: { studio.briefFor != nil }, set: { if !$0 { studio.briefFor = nil } })
+        Binding(get: { domains.briefFor != nil }, set: { if !$0 { domains.briefFor = nil } })
     }
-    private var creatorBinding: Binding<Bool> {
-        Binding(get: { studio.draft != nil }, set: { if !$0 { studio.closeCreator() } })
+    private var editorBinding: Binding<Bool> {
+        Binding(get: { domains.draft != nil }, set: { if !$0 { domains.closeEditor() } })
     }
 
     @ViewBuilder
-    private var creatorView: some View {
-        if let draft = studio.draft {
-            PersonaCreator(draft: draft, isEdit: studio.draftIsEdit, session: session)
+    private var editorView: some View {
+        if let draft = domains.draft {
+            DomainEditor(draft: draft, isEdit: domains.draftIsEdit, session: session)
         }
     }
 }

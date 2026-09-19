@@ -24,7 +24,7 @@ struct SidebarView: View {
     @Environment(ChatService.self) private var chat
     @Environment(SessionStore.self) private var session
     @Environment(MauriceStore.self) private var maurices
-    @Environment(StudioState.self) private var studio
+    @Environment(DomainsState.self) private var domains
     @Environment(GardensStore.self) private var gardens
     @Environment(\.mauriceTheme) private var theme
     @State private var showSettings = false
@@ -109,16 +109,16 @@ struct SidebarView: View {
                 .padding(.bottom, 18)
             }
 
-            // New conversation (inherits the current Maurice) + a hat button that
-            // opens the picker to choose/create a specialized Maurice.
+            // New conversation (with the one Maurice) + the domains button,
+            // which opens the list of the member's domains and companions.
             HStack(spacing: 8) {
                 let disabled = chat.activeConversationIsEmpty
                 Button {
                     gardens.openGardenId = nil
                     onActivateConversation()
-                    // New conversations arm the last Maurice the user sent to
-                    // (everyday if they never picked a specialist).
-                    Task { await chat.createConversation(mauriceId: chat.defaultMauriceId) }
+                    // One Maurice: a new conversation is his. Entering a
+                    // domain is done from its page ("Talk about it").
+                    Task { await chat.createConversation(mauriceId: nil) }
                 } label: {
                     HStack(spacing: 9) {
                         // Accent-filled plus circle (muted when disabled).
@@ -139,6 +139,18 @@ struct SidebarView: View {
                 .buttonStyle(.plain)
                 .glassControl(theme, in: RoundedRectangle(cornerRadius: 13, style: .continuous))
                 .disabled(disabled)
+
+                Button { domains.openList() } label: {
+                    Image(systemName: "books.vertical")
+                        .font(.system(size: 15, weight: .medium))
+                        .foregroundStyle(theme.inkSoft)
+                        .frame(width: 44, height: 44)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .glassControl(theme, in: RoundedRectangle(cornerRadius: 13, style: .continuous))
+                .help(session.localized("domains.open.help"))
+                .accessibilityLabel(session.localized("domains.title"))
             }
             .padding(.horizontal, 10)
             .padding(.bottom, 8)
@@ -530,7 +542,7 @@ private struct SearchHitRow: View {
         let accentColor = session.activeDeviceUser?.color ?? .blue
         HStack(alignment: .top, spacing: 11) {
             if !maurice.isEveryday {
-                HatBadge(kind: maurice.hat, palette: maurice.paletteValue, size: 30, radius: 9)
+                DomainMark(maurice: maurice, size: 30, radius: 9)
             }
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 6) {
@@ -572,11 +584,12 @@ private struct ConversationRow: View {
         let accentColor = session.activeDeviceUser?.color ?? .blue
 
         HStack(spacing: 11) {
-            // The hat badge identifies a specialized Maurice; the everyday one
-            // shows nothing (ragged-left). It's a flex-shrink:0 sibling — it must
-            // not change the row height, which stays uniform via minHeight below.
+            // The mark says the conversation is bound to a domain, a reading
+            // companion or Maurice Maurice; the everyday one shows nothing
+            // (ragged-left). It's a flex-shrink:0 sibling — it must not change
+            // the row height, which stays uniform via minHeight below.
             if !maurice.isEveryday {
-                HatBadge(kind: maurice.hat, palette: maurice.paletteValue, size: 30, radius: 9)
+                DomainMark(maurice: maurice, size: 30, radius: 9)
             } else if let badge = importBadgeProvider(conversation.origin) {
                 // Imported chat — badge it with the source provider's mark (Claude /
                 // OpenAI), like a specialist hat but 25% closer to the title.

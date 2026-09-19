@@ -654,6 +654,45 @@ try { db.run(`ALTER TABLE households ADD COLUMN thinking_seeded INTEGER NOT NULL
 // Ignored on a model whose `thinking` is not `optional`.
 try { db.run(`ALTER TABLE maurices ADD COLUMN thinking INTEGER`); } catch {}
 
+// What a row of `maurices` is, since the personas became domains (19 September
+// 2026, roadmap P3-B): `domain` — a part of its creator's life Maurice follows,
+// with a brief he keeps on it — or `companion` — a reading companion: one book
+// in bound context, followed at the reading position, entered as a pinned
+// conversation from the book, never a brief. NULL reads as `domain`. The
+// one-time sort below fills the rows that predate the column, and only those:
+// a member's later choice (PATCH /api/maurices/:id { kind }) is never
+// revisited. `hat` and `palette` stay as columns nothing writes or reads any
+// more; dropping the column brings the personas back as they were.
+try { db.run(`ALTER TABLE maurices ADD COLUMN kind TEXT`); } catch {}
+
+/** A row whose bound context is exactly one book followed at the reading
+ *  position is a reading companion; anything else is a domain. The rule is
+ *  the design's own (a companion is "a book in context, a conduct prompt, a
+ *  mode one enters"): a book loaded whole is a reference, hence a domain. */
+export function mauriceKindOf(contextJson: string): "domain" | "companion" {
+  let items: any[] = [];
+  try {
+    const spec = JSON.parse(contextJson);
+    items = Array.isArray(spec?.items) ? spec.items : [];
+  } catch {
+    return "domain";
+  }
+  if (items.length !== 1) return "domain";
+  const it = items[0];
+  if (it?.type !== "book") return "domain";
+  const progress = it?.scope?.mode === "progress" || it?.snapshot?.tracksProgress === true;
+  return progress ? "companion" : "domain";
+}
+
+export function migrateMauriceKinds(): void {
+  const rows = db.query(`SELECT id, context_json FROM maurices WHERE kind IS NULL`).all() as Array<{ id: string; context_json: string }>;
+  for (const r of rows) {
+    db.run(`UPDATE maurices SET kind = ? WHERE id = ? AND kind IS NULL`, [mauriceKindOf(r.context_json), r.id]);
+  }
+  if (rows.length) console.log(`[db] maurices: sorted ${rows.length} persona(s) into domains and companions`);
+}
+migrateMauriceKinds();
+
 // The same choice for the everyday Maurice — the conversation with no persona,
 // which the member cannot configure and which therefore needs its settings
 // "from the factory". Seeded to 0: the everyday Maurice answers directly and

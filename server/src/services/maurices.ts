@@ -13,19 +13,26 @@ import type { ItemValidationError } from "./composer/weights";
 import { configuredProviders, getModel, householdDefaultModel } from "./models";
 import { docContextText, docsForContext, docsWeight, isDelta } from "./mauriceDocs";
 
-// Specialized Maurices (personas). Private to their creator: only the member
-// who made one may list, edit, delete, or use it (the routes enforce ownership;
-// the `users` access list exists only so an admin can share a persona with a
-// guest). A persona owns a frozen context bundle (same snapshot shape as
-// composer_specs) — its locked knowledge. A conversation bound to a persona can
-// ADD context but never remove the persona's items.
+// The rows of `maurices`: since 19 September 2026 (roadmap P3-B) not personas
+// to summon but the member's **domains** — parts of their life Maurice follows,
+// each with its name, statement (`prompt`), bound context and a brief he keeps
+// on it (services/domainBriefs.ts) — and their **reading companions** (`kind`
+// = companion): one book in bound context, followed at the reading position,
+// entered as a pinned conversation from the book, never a brief. Private to
+// their creator: only the member who made one may list, edit, delete, or use
+// it (the routes enforce ownership; the `users` access list exists only so an
+// admin can share one with a guest). A row owns a frozen context bundle (same
+// snapshot shape as composer_specs) — its locked knowledge. A conversation
+// bound to it can ADD context but never remove the row's items. The `hat` and
+// `palette` columns are the personas' leftovers: nothing writes or reads them.
+
+export type MauriceKind = "domain" | "companion";
 
 interface MauriceRow {
   id: string;
   household_id: string;
   name: string;
-  hat: string;
-  palette: string;
+  kind: MauriceKind | null;
   model: string | null;
   temp: number;
   thinking: number | null;
@@ -41,8 +48,9 @@ interface MauriceRow {
 export interface Maurice {
   id: string;
   name: string;
-  hat: string;
-  palette: string;
+  /** `domain` (the default; a NULL column reads as such) or `companion`, a
+   *  reading companion. Maurice Maurice is neither: `builtin`. */
+  kind: MauriceKind;
   model: string | null;
   temp: number;
   /** For a model that reasons optionally: null = the provider's own default,
@@ -70,8 +78,9 @@ export interface Maurice {
 
 export interface MauriceInput {
   name: string;
-  hat?: string;
-  palette?: string;
+  /** `domain` or `companion`; anything else (or nothing) leaves the stored
+   *  value alone — `domain` on creation. */
+  kind?: MauriceKind;
   model?: string | null;
   temp?: number;
   /** see Maurice.thinking; undefined leaves the stored value alone */
@@ -122,8 +131,7 @@ function toMaurice(row: MauriceRow): Maurice {
   return {
     id: row.id,
     name: row.name,
-    hat: row.hat,
-    palette: row.palette,
+    kind: row.kind === "companion" ? "companion" : "domain",
     model: row.model,
     temp: row.temp,
     thinking: row.thinking == null ? null : row.thinking === 1,
@@ -212,8 +220,7 @@ export function builtinMaurice(lang = "en"): Maurice {
   return {
     id: BUILTIN_MAURICE_ID,
     name: "Maurice Maurice",
-    hat: "boater",
-    palette: "ink",
+    kind: "domain",
     model: builtinMauriceModel(),
     temp: 0.3,
     // Answers about the docs are lookups, not puzzles: no reasoning phase.
@@ -236,6 +243,25 @@ export function isBuiltinMaurice(id: string | null | undefined): boolean {
   return id === BUILTIN_MAURICE_ID;
 }
 
+/** `domain` or `companion` when the input says so, else undefined. */
+export function parseKind(v: unknown): MauriceKind | undefined {
+  return v === "domain" || v === "companion" ? v : undefined;
+}
+
+/** A domain proper: a stored row of kind `domain` (not a companion, not
+ *  Maurice Maurice). The briefs, the night and the everyday prompt read only
+ *  these. */
+export function isDomain(m: Maurice): boolean {
+  return !m.builtin && m.kind === "domain";
+}
+
+/** The book a reading companion is bound to (its one context item), or null. */
+export function companionBookId(m: Maurice): number | string | null {
+  if (m.kind !== "companion") return null;
+  const book = m.context.find((it) => it.type === "book");
+  return book ? book.id : null;
+}
+
 function getRow(id: string): MauriceRow | null {
   return (db
     .query(`SELECT * FROM maurices WHERE id = ?`)
@@ -256,6 +282,25 @@ export function getMaurice(id: string, lang = "en"): Maurice | null {
   if (isBuiltinMaurice(id)) return builtinMaurice(lang);
   const row = getRow(id);
   return row ? toMaurice(row) : null;
+}
+
+/** The rows a member reaches: their own (a standard member), or the ones an
+ *  admin granted them (a guest). Maurice Maurice is not among them. */
+export function reachableMaurices(memberId: string, role: string): Maurice[] {
+  const all = listMaurices();
+  return role === "guest"
+    ? all.filter((m) => m.users.includes(memberId))
+    : all.filter((m) => m.created_by === memberId);
+}
+
+/** The member's domains: the rows of kind `domain` they reach. */
+export function domainsFor(memberId: string, role = "standard"): Maurice[] {
+  return reachableMaurices(memberId, role).filter((m) => m.kind === "domain");
+}
+
+/** The member's reading companions: the rows of kind `companion` they reach. */
+export function companionsFor(memberId: string, role = "standard"): Maurice[] {
+  return reachableMaurices(memberId, role).filter((m) => m.kind === "companion");
 }
 
 /** Whether a member may use a Maurice — its creator, or a guest it's shared
@@ -296,13 +341,12 @@ export function createMaurice(
   const id = crypto.randomUUID();
   db.run(
     `INSERT INTO maurices
-       (id, name, hat, palette, model, temp, thinking, tagline, prompt, context_json, tool_families, created_by)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       (id, name, kind, model, temp, thinking, tagline, prompt, context_json, tool_families, created_by)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       id,
       input.name.trim(),
-      input.hat ?? "boater",
-      input.palette ?? "ink",
+      parseKind(input.kind) ?? "domain",
       input.model ?? null,
       input.temp ?? 0.5,
       thinkingColumn(input.thinking ?? null),
@@ -341,13 +385,12 @@ export function updateMaurice(
 
   db.run(
     `UPDATE maurices SET
-       name = ?, hat = ?, palette = ?, model = ?, temp = ?, thinking = ?, tagline = ?,
+       name = ?, kind = ?, model = ?, temp = ?, thinking = ?, tagline = ?,
        prompt = ?, context_json = ?, tool_families = ?, updated_at = datetime('now')
      WHERE id = ?`,
     [
       (input.name ?? row.name).trim(),
-      input.hat ?? row.hat,
-      input.palette ?? row.palette,
+      parseKind(input.kind) ?? row.kind ?? "domain",
       input.model !== undefined ? input.model : row.model,
       input.temp ?? row.temp,
       input.thinking !== undefined ? thinkingColumn(input.thinking) : row.thinking,

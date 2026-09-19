@@ -9,12 +9,13 @@ import SwiftUI
 // Maurice reads from the next turn on) and erasable, with when it was last
 // rewritten and by whom, a "rewrite now" that asks the night's model for a
 // fresh one, and "talk about it", a new conversation with the domain's
-// bound context preloaded. Opened from the Studio picker and the greeting.
+// bound context preloaded. Opened from the domains list and the greeting.
 
 struct DomainBriefSheet: View {
     @Environment(MauriceStore.self) private var store
     @Environment(SessionStore.self) private var session
     @Environment(ChatService.self) private var chat
+    @Environment(DomainsState.self) private var domains
     @Environment(\.mauriceTheme) private var theme
     @Environment(\.dismiss) private var dismiss
 
@@ -34,7 +35,7 @@ struct DomainBriefSheet: View {
     @FocusState private var editing: Bool
 
     private let eraseTint = Color(hex: "a6452e")
-    private var accent: Color { maurice.paletteValue.bg }
+    private var accent: Color { session.activeDeviceUser?.color ?? .blue }
     private var trimmed: String { text.trimmingCharacters(in: .whitespacesAndNewlines) }
     private var changed: Bool { trimmed != (brief?.text ?? "") }
 
@@ -91,7 +92,7 @@ struct DomainBriefSheet: View {
 
     private var header: some View {
         HStack(spacing: 14) {
-            HatBadge(kind: maurice.hat, palette: maurice.paletteValue, size: 52)
+            DomainMark(maurice: maurice, size: 52)
             VStack(alignment: .leading, spacing: 3) {
                 Text(session.localized("brief.kicker"))
                     .font(.system(size: 9, design: .monospaced)).tracking(0.8)
@@ -196,6 +197,12 @@ struct DomainBriefSheet: View {
                 pill("trash", session.localized("brief.erase"), tint: eraseTint, disabled: refreshing || saving) {
                     confirmErase = true
                 }
+            }
+
+            // The domain itself — name, statement, context, model — is edited
+            // in the editor, which takes this sheet's place.
+            pill("pencil", session.localized("domain.edit"), disabled: refreshing || saving) {
+                domains.openEditor(maurice, isEdit: true)
             }
         }
         .fixedSize(horizontal: false, vertical: true)

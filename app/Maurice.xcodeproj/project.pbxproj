@@ -10,12 +10,13 @@
 		01BF41C8D7454D75BCFE569A /* MauriceApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A0683126686701347E9871B /* MauriceApp.swift */; };
 		13534AB1DC9B63D211D638DA /* SortMenu.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC55EBC69472BBED58BC1614 /* SortMenu.swift */; };
 		13D7AEF70186BD458531FA85 /* PairingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00B700626149A3D1C0D6D5CB /* PairingView.swift */; };
-		1DF3750F49F0229EA008EE9E /* PersonaCreatorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1D2CFA40CFE0E5C595775127 /* PersonaCreatorView.swift */; };
+		159E0D9DFBCB74432ABCE781 /* DomainEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0D1A322B73BEA06F034F1718 /* DomainEditorView.swift */; };
 		22273DE6923544F195C76CAD /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 462A7ECD4C83B5ADC43A81CB /* ContentView.swift */; };
 		2B268BBE8FAF1C5EE355B1D4 /* Localizable.strings in Resources */ = {isa = PBXBuildFile; fileRef = 64254BB6519693E70459014E /* Localizable.strings */; };
 		32D68A2ACC7ECFB3E37DE97F /* ScopePickerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 68242686E76201D100B8C3A9 /* ScopePickerView.swift */; };
 		40A5F2A1C32240D14842B8D2 /* DictateIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = CEB5E21AE21611A0C6FC115B /* DictateIntent.swift */; };
 		48A8B2E348C99992B23AA7DF /* SessionStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 405F9AA69C83E58A86FDD625 /* SessionStore.swift */; };
+		523860360F61C3CB54C38030 /* DomainsViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = F2BCD320C3B31E341073ED84 /* DomainsViews.swift */; };
 		52B02D3D7EF2D7154BDB5FD8 /* BoaterHat.swift in Sources */ = {isa = PBXBuildFile; fileRef = EE3170FDE5751A81E295CF2E /* BoaterHat.swift */; };
 		5421D4350871A4F9836C8B60 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 2E85AEEB530CF3C1C5C3E79F /* Assets.xcassets */; };
 		5792B7EEEB4D674709A40D76 /* DomainBriefView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5C3DB8955BF008783D2F7399 /* DomainBriefView.swift */; };
@@ -23,7 +24,6 @@
 		59B67C643B5A71D878B6A7D1 /* MarkdownUI in Frameworks */ = {isa = PBXBuildFile; productRef = 7C956089E4A23890D03A7C5B /* MarkdownUI */; };
 		5B4288B9598CBE20AE92F4D9 /* YoungSerif-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 723F14E6AB7B2EAB08CC94EF /* YoungSerif-Regular.ttf */; };
 		5DF005A2A1E5A2B26E0DBCF4 /* MauriceTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1ABC13222ECFAD2CFC3180B /* MauriceTheme.swift */; };
-		5DF6B6C027E0EBBF600EAF50 /* PersonaCreatorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1D2CFA40CFE0E5C595775127 /* PersonaCreatorView.swift */; };
 		6E245195E6CD90C3C83CB1BD /* SwiftMath in Frameworks */ = {isa = PBXBuildFile; productRef = D1B845FF866B55501A5D0C68 /* SwiftMath */; };
 		6E60BACFAEB5A57C921B21BE /* Glass.swift in Sources */ = {isa = PBXBuildFile; fileRef = C5ABD3D073D2DB74064F5A13 /* Glass.swift */; };
 		707E1F5D159DC0ED0841E5D0 /* UserPickerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB58402567AEED97404D604C /* UserPickerView.swift */; };
@@ -42,6 +42,7 @@
 		8D85F19C2F440203BAFC484F /* ChatView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E01BB325D88F4E74B3571BC /* ChatView.swift */; };
 		91817BB3A32C4F1FE886B982 /* OFL.txt in Resources */ = {isa = PBXBuildFile; fileRef = 51780E1D57A085038F7AB3A4 /* OFL.txt */; };
 		98920F5C7DB20F4AF25B7C78 /* SortMenu.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC55EBC69472BBED58BC1614 /* SortMenu.swift */; };
+		9BCAFB3EF7CD1C5F4BB61912 /* DomainsViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = F2BCD320C3B31E341073ED84 /* DomainsViews.swift */; };
 		A6ADC54545F72E5329A2D0D9 /* DomainBriefView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5C3DB8955BF008783D2F7399 /* DomainBriefView.swift */; };
 		AE476FD86F5124FDD239F5AB /* OFL.txt in Resources */ = {isa = PBXBuildFile; fileRef = 51780E1D57A085038F7AB3A4 /* OFL.txt */; };
 		AF3DE3F5A58AC486DD4036F1 /* ComposerViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A157516CA9C98CE6FB4E293 /* ComposerViews.swift */; };
@@ -49,17 +50,16 @@
 		B1ED9211E2F19D6C411ADE78 /* APIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 815355ED837E18AB9BEFDC83 /* APIClient.swift */; };
 		B5655384F94390632B3335BB /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E0D0DF979284275260F31D2 /* SettingsView.swift */; };
 		B80161B44335BB6CEC01F7DA /* YoungSerif-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 723F14E6AB7B2EAB08CC94EF /* YoungSerif-Regular.ttf */; };
+		C75DA94A1212FB984F5CDC62 /* DomainEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0D1A322B73BEA06F034F1718 /* DomainEditorView.swift */; };
 		CAF942F37AE2F3E45A4761D0 /* Hats.swift in Sources */ = {isa = PBXBuildFile; fileRef = DCDEAA0E48CC14C7C18BE8FD /* Hats.swift */; };
 		CB71AD2912D05739932A2EB1 /* ChatView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E01BB325D88F4E74B3571BC /* ChatView.swift */; };
 		CC9F77433FFC0CCC7F8668EA /* UserPickerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB58402567AEED97404D604C /* UserPickerView.swift */; };
 		CCEF2532174820F615C4C61F /* ChatService.swift in Sources */ = {isa = PBXBuildFile; fileRef = EDFA39C22354B093CDDBB691 /* ChatService.swift */; };
 		D050F6CF74E2684FAF9E78A2 /* ChatService.swift in Sources */ = {isa = PBXBuildFile; fileRef = EDFA39C22354B093CDDBB691 /* ChatService.swift */; };
-		D62E56C5C4F7FE3E42018A4E /* StudioViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2605DBDEA2B929B93F14F098 /* StudioViews.swift */; };
 		D8646EEFDB175A13C908F420 /* MarkdownUI in Frameworks */ = {isa = PBXBuildFile; productRef = 452588EF4A59C7B3E4BE0156 /* MarkdownUI */; };
 		DE41C437D70BFE6F0A82015E /* Localizable.strings in Resources */ = {isa = PBXBuildFile; fileRef = 64254BB6519693E70459014E /* Localizable.strings */; };
 		E18185D700DE1B1EB0B18AA0 /* Dictation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8DD6FC0052BD394074159538 /* Dictation.swift */; };
 		E3C10DC76C2CF893DD4DF505 /* ComposerViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A157516CA9C98CE6FB4E293 /* ComposerViews.swift */; };
-		E5C694E6D1F0339BB34D4047 /* StudioViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2605DBDEA2B929B93F14F098 /* StudioViews.swift */; };
 		EE60CB5C6953EB6207373CBA /* MauriceStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8C96937F0554878BAF247D3F /* MauriceStore.swift */; };
 		EEF2722A0817C78F1649422B /* Glass.swift in Sources */ = {isa = PBXBuildFile; fileRef = C5ABD3D073D2DB74064F5A13 /* Glass.swift */; };
 		F8D5EA6FB79DA0781074F0DA /* ScopePickerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 68242686E76201D100B8C3A9 /* ScopePickerView.swift */; };
@@ -70,11 +70,10 @@
 /* Begin PBXFileReference section */
 		00B700626149A3D1C0D6D5CB /* PairingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PairingView.swift; sourceTree = "<group>"; };
 		0CD335EB3BF542EDF13DA17D /* Maurice_iOS.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Maurice_iOS.entitlements; sourceTree = "<group>"; };
+		0D1A322B73BEA06F034F1718 /* DomainEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DomainEditorView.swift; sourceTree = "<group>"; };
 		1033DD525DBD3D990DEF6484 /* es */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = es; path = es.lproj/Localizable.strings; sourceTree = "<group>"; };
 		1A0683126686701347E9871B /* MauriceApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MauriceApp.swift; sourceTree = "<group>"; };
-		1D2CFA40CFE0E5C595775127 /* PersonaCreatorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PersonaCreatorView.swift; sourceTree = "<group>"; };
 		1E096709042498D4C525711C /* Maurice-iOS-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = "Maurice-iOS-Info.plist"; sourceTree = "<group>"; };
-		2605DBDEA2B929B93F14F098 /* StudioViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StudioViews.swift; sourceTree = "<group>"; };
 		2CAFCB68E681C9F8D796C959 /* it */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = it; path = it.lproj/Localizable.strings; sourceTree = "<group>"; };
 		2E85AEEB530CF3C1C5C3E79F /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		405F9AA69C83E58A86FDD625 /* SessionStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionStore.swift; sourceTree = "<group>"; };
@@ -106,6 +105,7 @@
 		DCDEAA0E48CC14C7C18BE8FD /* Hats.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Hats.swift; sourceTree = "<group>"; };
 		EDFA39C22354B093CDDBB691 /* ChatService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatService.swift; sourceTree = "<group>"; };
 		EE3170FDE5751A81E295CF2E /* BoaterHat.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BoaterHat.swift; sourceTree = "<group>"; };
+		F2BCD320C3B31E341073ED84 /* DomainsViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DomainsViews.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -178,14 +178,14 @@
 				7A157516CA9C98CE6FB4E293 /* ComposerViews.swift */,
 				462A7ECD4C83B5ADC43A81CB /* ContentView.swift */,
 				5C3DB8955BF008783D2F7399 /* DomainBriefView.swift */,
+				0D1A322B73BEA06F034F1718 /* DomainEditorView.swift */,
+				F2BCD320C3B31E341073ED84 /* DomainsViews.swift */,
 				C5ABD3D073D2DB74064F5A13 /* Glass.swift */,
 				DCDEAA0E48CC14C7C18BE8FD /* Hats.swift */,
 				00B700626149A3D1C0D6D5CB /* PairingView.swift */,
-				1D2CFA40CFE0E5C595775127 /* PersonaCreatorView.swift */,
 				68242686E76201D100B8C3A9 /* ScopePickerView.swift */,
 				4E0D0DF979284275260F31D2 /* SettingsView.swift */,
 				CC55EBC69472BBED58BC1614 /* SortMenu.swift */,
-				2605DBDEA2B929B93F14F098 /* StudioViews.swift */,
 				AB58402567AEED97404D604C /* UserPickerView.swift */,
 			);
 			path = Views;
@@ -358,18 +358,18 @@
 				87ECEC8E0F3C684D0577613C /* DictateIntent.swift in Sources */,
 				829F549C6E38D127EBA91380 /* Dictation.swift in Sources */,
 				5792B7EEEB4D674709A40D76 /* DomainBriefView.swift in Sources */,
+				159E0D9DFBCB74432ABCE781 /* DomainEditorView.swift in Sources */,
+				523860360F61C3CB54C38030 /* DomainsViews.swift in Sources */,
 				EEF2722A0817C78F1649422B /* Glass.swift in Sources */,
 				CAF942F37AE2F3E45A4761D0 /* Hats.swift in Sources */,
 				7416ECF23A6705C449F95A51 /* MauriceApp.swift in Sources */,
 				72B46D7608456B22303FB423 /* MauriceStore.swift in Sources */,
 				5DF005A2A1E5A2B26E0DBCF4 /* MauriceTheme.swift in Sources */,
 				13D7AEF70186BD458531FA85 /* PairingView.swift in Sources */,
-				5DF6B6C027E0EBBF600EAF50 /* PersonaCreatorView.swift in Sources */,
 				32D68A2ACC7ECFB3E37DE97F /* ScopePickerView.swift in Sources */,
 				48A8B2E348C99992B23AA7DF /* SessionStore.swift in Sources */,
 				B5655384F94390632B3335BB /* SettingsView.swift in Sources */,
 				98920F5C7DB20F4AF25B7C78 /* SortMenu.swift in Sources */,
-				E5C694E6D1F0339BB34D4047 /* StudioViews.swift in Sources */,
 				CC9F77433FFC0CCC7F8668EA /* UserPickerView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -388,18 +388,18 @@
 				40A5F2A1C32240D14842B8D2 /* DictateIntent.swift in Sources */,
 				E18185D700DE1B1EB0B18AA0 /* Dictation.swift in Sources */,
 				A6ADC54545F72E5329A2D0D9 /* DomainBriefView.swift in Sources */,
+				C75DA94A1212FB984F5CDC62 /* DomainEditorView.swift in Sources */,
+				9BCAFB3EF7CD1C5F4BB61912 /* DomainsViews.swift in Sources */,
 				6E60BACFAEB5A57C921B21BE /* Glass.swift in Sources */,
 				58C19733EBF8E99AB41D71A9 /* Hats.swift in Sources */,
 				01BF41C8D7454D75BCFE569A /* MauriceApp.swift in Sources */,
 				EE60CB5C6953EB6207373CBA /* MauriceStore.swift in Sources */,
 				775815BED73706273BEE92F3 /* MauriceTheme.swift in Sources */,
 				FF9F6DF88F721A8C74CFAEF4 /* PairingView.swift in Sources */,
-				1DF3750F49F0229EA008EE9E /* PersonaCreatorView.swift in Sources */,
 				F8D5EA6FB79DA0781074F0DA /* ScopePickerView.swift in Sources */,
 				7D338BE53D7A3CA7660BB1C5 /* SessionStore.swift in Sources */,
 				773B899803CBAAF839CDE0C1 /* SettingsView.swift in Sources */,
 				13534AB1DC9B63D211D638DA /* SortMenu.swift in Sources */,
-				D62E56C5C4F7FE3E42018A4E /* StudioViews.swift in Sources */,
 				707E1F5D159DC0ED0841E5D0 /* UserPickerView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

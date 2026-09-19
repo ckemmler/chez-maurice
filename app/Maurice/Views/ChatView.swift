@@ -10,7 +10,6 @@ struct ChatView: View {
     @Environment(SessionStore.self) private var session
     @Environment(ComposerStore.self) private var composer
     @Environment(MauriceStore.self) private var maurices
-    @Environment(StudioState.self) private var studio
     @Environment(\.mauriceTheme) private var theme
     @State private var inputText = ""
     @State private var pendingImageData: Data?
@@ -87,7 +86,7 @@ struct ChatView: View {
         .sheet(isPresented: $showTools) {
             if let convo = chat.activeConversation {
                 ConversationToolsSheet(conversationId: convo.id,
-                                       accent: maurices.maurice(for: convo.maurice_id).paletteValue.bg)
+                                       accent: session.activeDeviceUser?.color ?? .blue)
                 #if os(iOS)
                     .presentationDetents([.medium, .large])
                     .presentationDragIndicator(.visible)
@@ -165,9 +164,10 @@ struct ChatView: View {
     @ToolbarContentBuilder
     private var chatToolbar: some ToolbarContent {
         if Platform.isPad {
-            // Sidebar toggle + (hat) + conversation title, as one plain item (no
-            // glass capsule) — replaces both the custom header row and the
-            // collapsed back chevron (which we hide via navigationBarBackButtonHidden).
+            // Sidebar toggle + conversation title, as one plain item (no glass
+            // capsule) — replaces both the custom header row and the collapsed
+            // back chevron (which we hide via navigationBarBackButtonHidden).
+            // One Maurice: no badge, whatever the conversation is bound to.
             ToolbarItem(placement: .topBarLeading) {
                 HStack(spacing: 9) {
                     Button { onToggleSidebar() } label: {
@@ -176,9 +176,6 @@ struct ChatView: View {
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel(session.localized("chat.back_to_conversations"))
-                    if !activeMaurice.isEveryday {
-                        HatBadge(kind: activeMaurice.hat, palette: activeMaurice.paletteValue, size: 26, radius: 8)
-                    }
                     Text(chat.activeConversation?.title ?? session.localized("chat.new_conversation"))
                         .font(.system(size: 17, design: .serif))
                         .foregroundStyle(theme.ink)
@@ -303,15 +300,15 @@ struct ChatView: View {
                   }
                 }
             } else {
-                // The greeting reflects the ARMED Maurice (currentMauriceId) — in a
-                // brand-new conversation it isn't persisted as the conversation's
-                // maurice_id until the first message, so use what's armed for the thread.
+                // The greeting reflects the thread's binding (currentMauriceId) —
+                // in a brand-new conversation it isn't persisted as the
+                // conversation's maurice_id until the first message.
                 let boundMaurice = maurices.maurice(for: chat.currentMauriceId)
                 Group {
                     if boundMaurice.isEveryday {
                         EmptyState()
                     } else {
-                        StudioGreeting(maurice: boundMaurice)
+                        DomainGreeting(maurice: boundMaurice)
                     }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -513,7 +510,7 @@ private struct ConversationDetailsButton: View {
     @Environment(ChatService.self) private var chat
     @Environment(SessionStore.self) private var session
     @Environment(MauriceStore.self) private var maurices
-    @Environment(StudioState.self) private var studio
+    @Environment(DomainsState.self) private var domains
     @Environment(\.mauriceTheme) private var theme
     let conversation: ServerConversation
     var inToolbar = false
@@ -566,7 +563,7 @@ private struct ConversationDetailsButton: View {
         guard let action = pending else { return }
         pending = nil
         switch action {
-        case .editMaurice: studio.openCreator(maurice, isEdit: true)
+        case .editMaurice: domains.openEditor(maurice, isEdit: true)
         case .reviewReports: showReports = true
         case .leaveRoom: showLeaveConfirm = true
         }
@@ -647,7 +644,9 @@ private struct ConversationDetailsSheet: View {
                 }
 
                 Section {
-                    if !maurice.isEveryday {
+                    // The domain a conversation is bound to is the member's to
+                    // edit when they made it; Maurice Maurice is nobody's.
+                    if maurice.isEditable, maurice.createdBy == session.activeUserId {
                         Button { onAction(.editMaurice) } label: {
                             Label(session.localized("chat.edit_maurice"), systemImage: "pencil")
                         }
@@ -2190,7 +2189,6 @@ private struct ComposerBar: View {
     @Environment(SessionStore.self) private var session
     @Environment(ComposerStore.self) private var composer
     @Environment(MauriceStore.self) private var maurices
-    @Environment(StudioState.self) private var studio
     @Environment(\.mauriceTheme) private var theme
     @Binding var inputText: String
     @Binding var pendingImageData: Data?
@@ -2231,7 +2229,8 @@ private struct ComposerBar: View {
     var onPostBubble: () -> Void = {}
     let onSend: () -> Void
 
-    /// The thread's armed Maurice (what ➤ summons; nil = everyday).
+    /// What the thread is bound to (nil = the everyday Maurice) — the model
+    /// pill reads it; there is nobody else to summon.
     private var currentMaurice: Maurice { maurices.maurice(for: chat.currentMauriceId) }
 
     /// Start listening if something outside the app asked for it — the Action
@@ -2431,35 +2430,30 @@ private struct ComposerBar: View {
         return maurices.models.compactMap { seen.insert($0.provider).inserted ? $0.provider : nil }
     }
 
-    /// The ➤ button "wears" the current Maurice's hat so who-gets-summoned is
-    /// always visible at the moment of sending.
-    /// The button "wears" the current Maurice's hat so who's armed is always
-    /// visible. `sending` true → an up-arrow (tap sends); false → a down-chevron
-    /// (the empty-composer chooser: tap opens the picker). Either way it's active.
+    /// The ➤ button: Maurice's boater on the member's accent — there is one
+    /// Maurice, so it looks the same whatever the thread is bound to. `sending`
+    /// true → an up-arrow (tap sends); false → the composer is empty and the
+    /// button waits, muted.
     private func actionAvatar(sending: Bool) -> some View {
-        let m = currentMaurice
         let accent = session.activeDeviceUser?.color ?? .blue
         return ZStack(alignment: .bottomTrailing) {
-            Group {
-                if m.isEveryday {
-                    ZStack {
-                        Circle().fill(accent.opacity(0.16))
-                        // The hat is a foreground glyph — keep it legible when the
-                        // user's accent is dark (else it vanishes on a dark surface).
-                        BoaterHat(size: 24, color: accent.legible(onDark: theme.isDark))
-                    }
-                    .overlay(Circle().strokeBorder(theme.ruleHard, lineWidth: 0.75))
-                } else {
-                    HatBadge(kind: m.hat, palette: m.paletteValue, size: 44, radius: 22)
-                }
+            ZStack {
+                Circle().fill(accent.opacity(0.16))
+                // The hat is a foreground glyph — keep it legible when the
+                // user's accent is dark (else it vanishes on a dark surface).
+                BoaterHat(size: 24, color: accent.legible(onDark: theme.isDark))
             }
+            .overlay(Circle().strokeBorder(theme.ruleHard, lineWidth: 0.75))
             .frame(width: 44, height: 44)
-            Image(systemName: sending ? "arrow.up.circle.fill" : "chevron.down.circle.fill")
-                .font(.system(size: 16))
-                .symbolRenderingMode(.palette)
-                .foregroundStyle(.white, accent)
+            if sending {
+                Image(systemName: "arrow.up.circle.fill")
+                    .font(.system(size: 16))
+                    .symbolRenderingMode(.palette)
+                    .foregroundStyle(.white, accent)
+            }
         }
         .frame(width: 44, height: 44)
+        .opacity(sending ? 1 : 0.55)
     }
 
     /// What the Return key does. A room is a conversation between people first,
@@ -2739,7 +2733,7 @@ private struct ComposerBar: View {
                     #endif
 
                     // The send row reads as a sentence:
-                    // 🎩 choose who · ➤ summon them · 💬 just say it to the room.
+                    // ➤ ask Maurice · 💬 just say it to the room.
                     // In a room 💬 is the default: it sits last, under the thumb
                     // and at the end of the line, wears the accent, and is what
                     // Return posts — ➤ keeps ⌘Return.
@@ -2750,28 +2744,14 @@ private struct ComposerBar: View {
                             .buttonStyle(.plain)
                             .help(session.localized("chat.stop"))
                         } else if canSend {
-                            // Draft present: tap sends to the armed Maurice;
-                            // long-press opens the picker to choose someone else,
-                            // then sends to them ("Send" in the picker).
+                            // Draft present: tap (or ⌘Return) sends it to Maurice.
                             Button { submit(onSend) } label: { actionAvatar(sending: true) }
                             .buttonStyle(.plain)
                             .keyboardShortcut(.return, modifiers: .command)
-                            .simultaneousGesture(
-                                LongPressGesture().onEnded { _ in
-                                    studio.pickerSends = true
-                                    studio.showPicker = true
-                                }
-                            )
-                            .help(session.localized("chat.switch_specialist"))
+                            .help(session.localized("chat.send"))
                         } else {
-                            // Empty composer: the button is a plain Maurice chooser
-                            // — tap opens the picker, which just arms them ("Use").
-                            Button {
-                                studio.pickerSends = false
-                                studio.showPicker = true
-                            } label: { actionAvatar(sending: false) }
-                            .buttonStyle(.plain)
-                            .help(session.localized("chat.switch_specialist"))
+                            // Empty composer: the button waits for a draft.
+                            actionAvatar(sending: false)
                         }
 
                         if chat.isRoom {
@@ -2949,13 +2929,6 @@ private struct ComposerBar: View {
             let name = url.lastPathComponent
             guard let data = try? Data(contentsOf: url) else { return }
             Task { await composer.addUploadedFile(name: name, data: data) }
-        }
-        // The picker's "Send" arms a Maurice and raises this — fire the current
-        // draft at them through the normal send path (which clears the field).
-        .onChange(of: studio.pendingSend) {
-            guard studio.pendingSend else { return }
-            studio.pendingSend = false
-            submit(onSend)
         }
     }
 }

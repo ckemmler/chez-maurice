@@ -20,7 +20,7 @@ struct MauriceApp: App {
     @State private var composer: ComposerStore?
     @State private var maurices: MauriceStore?
     @State private var gardens: GardensStore?
-    @State private var studio = StudioState()
+    @State private var domains = DomainsState()
 
     var body: some Scene {
         WindowGroup {
@@ -30,7 +30,7 @@ struct MauriceApp: App {
                 .environment(resolvedComposer)
                 .environment(resolvedMaurices)
                 .environment(resolvedGardens)
-                .environment(studio)
+                .environment(domains)
                 .environment(\.locale, session.resolvedLocale)
                 #if os(macOS)
                 // Kill the macOS keyboard focus rings app-wide — they clash with
