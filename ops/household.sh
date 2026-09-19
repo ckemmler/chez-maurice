@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Households on a shared host: add one, list them, remove one, restart one.
 #
-#   ops/household.sh add     <ssh-host> <name> <domain>
+#   ops/household.sh add     <ssh-host> <name> <domain> [--from <archive>]
 #   ops/household.sh list    <ssh-host>
 #   ops/household.sh up      <ssh-host> <name>
 #   ops/household.sh restart <ssh-host> <name>
@@ -54,9 +54,21 @@ edge)
   ;;
 
 add)
-  name="${1:?usage: household.sh add <ssh-host> <name> <domain>}"
+  name="${1:?usage: household.sh add <ssh-host> <name> <domain> [--from <archive>]}"
   domain="${2:?need the public domain, e.g. aline.chezmaurice.eu}"
   [[ "$name" =~ ^[a-z0-9][a-z0-9-]*$ ]] || { echo "✗ name must be lowercase letters, digits and dashes"; exit 1; }
+  # --from: start this household from an archive (docs/household-archive.md)
+  # rather than empty — a demo becoming someone's own, a household moving
+  # host. Checked here, before anything is written on the host.
+  from=""
+  if [ "${3:-}" = --from ]; then
+    from="${4:?--from needs the archive}"
+    [ -f "$from" ] || { echo "✗ no such archive: $from"; exit 1; }
+    tar -xzOf "$from" manifest.json 2>/dev/null | grep -q '"format": "maurice-archive"' \
+      || { echo "✗ $from is not a Maurice archive (no manifest.json)"; exit 1; }
+    tar -xzOf "$from" manifest.json | grep -q '"version": 1,' \
+      || { echo "✗ $from is not a version-1 archive"; exit 1; }
+  fi
 
   if remote "test -f $REMOTE_DIR/households/$name.env"; then
     echo "✗ $name already exists on $HOST. Use 'up' to (re)start it."; exit 1
@@ -64,7 +76,7 @@ add)
   remote "test -f $REMOTE_DIR/image.env" || {
     echo "✗ no image on $HOST yet — run scripts/deploy.sh $HOST first"; exit 1; }
   port="$(next_admin_port)"
-  echo "▸ $name → $domain  (admin on 127.0.0.1:$port)"
+  echo "▸ $name → $domain  (admin on 127.0.0.1:$port)${from:+  from $(basename "$from")}"
 
   # The env file. Secrets are NOT written here: the shared ones are copied
   # from the host's own defaults.env if it has one, and anything missing is
@@ -89,14 +101,38 @@ $domain {
 }
 SITE"
 
+  if [ -n "$from" ]; then
+    # The volume first, created by compose so it carries compose's labels —
+    # `up` refuses to adopt one it did not make. `remove` keeps a household's
+    # volume, so one may be waiting under this name: a volume with a
+    # maurice.db in it is a household, and nothing is poured over it.
+    dc_household "$name" up --no-start >/dev/null
+    if remote "docker run --rm -v maurice-${name}_home:/v busybox test -e /v/maurice.db" 2>/dev/null; then
+      echo "✗ maurice-${name}_home already holds a household — 'purge' it first if that is what you mean."
+      remote "rm -f $REMOTE_DIR/sites/$name.caddy $REMOTE_DIR/households/$name.env"
+      exit 1
+    fi
+    # Over ssh's stdin, straight into the volume: no copy of the archive is
+    # left lying on the host. The entrypoint repoints config.toml's data_dir
+    # if the archive came from a Mac.
+    echo "▸ pouring $(basename "$from") ($(du -h "$from" | cut -f1)) into maurice-${name}_home"
+    remote "docker run --rm -i -v maurice-${name}_home:/dest busybox tar -xzf - -C /dest" < "$from"
+  fi
+
   dc_household "$name" up -d
   remote "docker exec maurice-caddy caddy reload --config /etc/caddy/Caddyfile" || {
     echo "  ! Caddy would not reload — is the edge up? ops/household.sh edge $HOST"; }
   echo
   echo "✓ $name is up."
   echo "  Point DNS at this host:   $domain  A  <the host's address>   (unproxied)"
-  echo "  Finish the setup:         ssh -L $port:localhost:$port $HOST"
-  echo "                            then http://localhost:$port/admin"
+  if [ -n "$from" ]; then
+    echo "  Its admin and members came with the archive; the console is at"
+    echo "                            ssh -L $port:localhost:$port $HOST"
+    echo "                            then http://localhost:$port/admin"
+  else
+    echo "  Finish the setup:         ssh -L $port:localhost:$port $HOST"
+    echo "                            then http://localhost:$port/admin"
+  fi
   echo
   echo "  Its line in ops/fleet.yaml, which makes that one word (ops/admin.ts $name):"
   echo "    - name: $name"

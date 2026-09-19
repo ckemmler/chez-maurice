@@ -50,6 +50,7 @@ import {
 } from "../services/modelAccess";
 import { ping, discover, totalRamGB } from "../services/ollama";
 import { docsStatus, docsUrl, refreshDocs } from "../services/mauriceDocsRefresh";
+import { ArchiveError, exportResponse } from "../services/archive";
 import { t, langOf, SUPPORTED } from "../services/i18n";
 import { spentTodayUsd, spentMonthUsd, memberDailyCap, setMemberDailyCap, setHouseholdDailyCap } from "../services/budget";
 import { corpusCall } from "../services/mcpClient";
@@ -883,6 +884,14 @@ web.get("/dashboard", async (c) => {
         ${sectionHead(t(lang, "dashboard.kicker_advanced"), t(lang, "docs.title"), t(lang, "docs.desc"))}
         ${docsCard(lang)}
       </section>
+
+      <section id="sec-archive">
+        ${sectionHead(t(lang, "dashboard.kicker_archive"), t(lang, "archive.title"), t(lang, "archive.desc"))}
+        <div class="card pad">
+          <a href="/admin/export" class="btn primary">${escape(t(lang, "archive.export"))}</a>
+          <span class="hint">${escape(t(lang, "archive.hint"))}</span>
+        </div>
+      </section>
     </div>`, true, adminName(c), lang));
 });
 
@@ -923,6 +932,21 @@ web.post("/docs/refresh", async (c) => {
   const outcome = await refreshDocs();
   const msg = { refreshed: "docs_refreshed", unchanged: "docs_up_to_date", failed: "docs_refresh_failed", off: "docs_refresh_off" }[outcome];
   return c.redirect(`/admin/dashboard?msg=${msg}#sec-docs`);
+});
+
+// ── Export (GET) ────────────────────────────────────────────────
+// The household archive from the console — the same stream as
+// GET /api/admin/export, behind the admin cookie instead of a bearer token.
+// See docs/household-archive.md.
+web.get("/export", (c) => {
+  const redir = requireWebAdmin(c);
+  if (redir) return redir;
+  try {
+    return exportResponse();
+  } catch (e: any) {
+    console.error(`[archive] export refused: ${e?.message ?? e}`);
+    return c.text(t(langOf(c), "archive.failed", e instanceof ArchiveError ? e.message : ""), 500);
+  }
 });
 
 // ── Settings (POST) ─────────────────────────────────────────────

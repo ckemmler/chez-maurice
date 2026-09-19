@@ -3,6 +3,7 @@ import { requireAuth, requireAdmin } from "../middleware/auth";
 import { createPairingToken } from "../services/auth";
 import { usageFor } from "../services/budget";
 import { docsStatus } from "../services/mauriceDocsRefresh";
+import { ArchiveError, exportResponse } from "../services/archive";
 import db from "../db";
 
 const admin = new Hono();
@@ -120,6 +121,22 @@ admin.patch("/settings", async (c) => {
 admin.post("/pairing-token", (c) => {
   const { deviceId, pairingToken } = createPairingToken();
   return c.json({ device_id: deviceId, pairing_token: pairingToken }, 201);
+});
+
+// ── GET /api/admin/export ───────────────────────────────────────
+// The whole household as one `maurice-archive` tarball (docs/household-archive.md),
+// streamed as tar produces it: the first bytes leave before the uploads are
+// read, so a big household never sits silent past the server's idle timeout.
+// The archive carries the provider keys with the rest of maurice.db — admin
+// only, and the response is marked not to be cached anywhere.
+
+admin.get("/export", (c) => {
+  try {
+    return exportResponse();
+  } catch (e: any) {
+    console.error(`[archive] export refused: ${e?.message ?? e}`);
+    return c.json({ error: e instanceof ArchiveError ? e.message : "Export failed" }, 500);
+  }
 });
 
 export default admin;
