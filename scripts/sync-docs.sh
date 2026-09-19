@@ -36,6 +36,41 @@ for f in "$DEST"/maurice-*.md; do
 done
 echo "synced ${#kept[@]} notes into docs/maurice/"
 
+# The manifest: what a running instance compares against to refresh its own
+# copy of these notes from the published repo (server/src/services/
+# mauriceDocsRefresh.ts fetches it from raw.githubusercontent.com). One entry
+# per note kept above, the digest included, with the sha256 the instance
+# verifies each download against. `generated_at` only moves when a note does,
+# so a sync that changes nothing leaves the file — and the instances — alone.
+if command -v sha256sum >/dev/null 2>&1; then
+  sha256() { sha256sum "$1" | cut -d' ' -f1; }
+else
+  sha256() { shasum -a 256 "$1" | cut -d' ' -f1; }
+fi
+MANIFEST="$DEST/manifest.json"
+entries=()
+for f in "$DEST"/maurice-*.md; do
+  base="$(basename "$f")"
+  date="$(sed -n "s/^date: *['\"]\{0,1\}\([0-9-]*\)['\"]\{0,1\}$/\1/p" "$f" | head -1)"
+  if [[ -n "$date" ]]; then date="\"$date\""; else date=null; fi
+  bytes="$(wc -c < "$f" | tr -d ' ')"
+  entries+=("$(printf '    { "file": "%s", "slug": "%s", "date": %s, "bytes": %s, "sha256": "%s" }' "$base" "${base%.md}" "$date" "$bytes" "$(sha256 "$f")")")
+done
+notes="$(printf '%s,\n' "${entries[@]}")"
+notes="${notes%,*}"
+write_manifest() {
+  printf '{\n  "format": "maurice-docs",\n  "version": 1,\n  "generated_at": "%s",\n  "notes": [\n%s\n  ]\n}\n' "$1" "$notes"
+}
+generated="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+if [[ -f "$MANIFEST" ]]; then
+  previous="$(sed -n 's/^  "generated_at": "\([^"]*\)",$/\1/p' "$MANIFEST")"
+  if [[ -n "$previous" ]] && write_manifest "$previous" | cmp -s - "$MANIFEST"; then
+    generated="$previous"
+  fi
+fi
+write_manifest "$generated" > "$MANIFEST"
+echo "manifest: ${#entries[@]} notes, generated $generated"
+
 # The delta: notes newer than what the digest's `covers` map records for them,
 # or absent from it. Maurice Maurice loads these in full beside the digest;
 # three or four of them is the cue to rewrite the digest (see the workspace

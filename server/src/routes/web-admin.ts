@@ -49,6 +49,7 @@ import {
   allowedModelIds,
 } from "../services/modelAccess";
 import { ping, discover, totalRamGB } from "../services/ollama";
+import { docsStatus, docsUrl, refreshDocs } from "../services/mauriceDocsRefresh";
 import { t, langOf, SUPPORTED } from "../services/i18n";
 import { corpusCall } from "../services/mcpClient";
 import { mkdirSync, readFileSync, existsSync } from "fs";
@@ -865,7 +866,42 @@ web.get("/dashboard", async (c) => {
         ${sectionHead(t(lang, "dashboard.kicker_advanced"), t(lang, "ancillary.section_title"), t(lang, "ancillary.section_desc"))}
         ${ancillaryCard(lang)}
       </section>
+
+      <section id="sec-docs">
+        ${sectionHead(t(lang, "dashboard.kicker_advanced"), t(lang, "docs.title"), t(lang, "docs.desc"))}
+        ${docsCard(lang)}
+      </section>
     </div>`, true, adminName(c), lang));
+});
+
+// ── Maurice Maurice's documentation ─────────────────────────────
+// Which set the built-in persona reads and how fresh it is; the button asks
+// the published repo now rather than waiting for the daily check.
+function docsCard(lang: string): string {
+  const docs = docsStatus();
+  const on = !!docsUrl();
+  const checked = on
+    ? docs.last_check_at
+      ? t(lang, "docs.last_check", docs.last_check_at.slice(0, 16).replace("T", " "))
+      : t(lang, "docs.never_checked")
+    : t(lang, "docs.off");
+  return `
+        <div class="card pad">
+          <div class="field">
+            <label class="label">${escape(docs.generated_at ? t(lang, "docs.dated", docs.generated_at.slice(0, 10)) : t(lang, "docs.undated"))}</label>
+            <span class="hint">${escape(t(lang, "docs.source_" + docs.source))} · ${escape(checked)}</span>
+            ${docs.last_error ? `<span class="hint" style="color:var(--caution)">${escape(t(lang, "docs.last_error", docs.last_error))}</span>` : ""}
+          </div>
+          ${on ? `<div class="grid-actions"><form method="POST" action="/admin/docs/refresh" class="inline"><button type="submit" class="btn default sm">↻ ${escape(t(lang, "docs.check_now"))}</button></form></div>` : ""}
+        </div>`;
+}
+
+web.post("/docs/refresh", async (c) => {
+  const redir = requireWebAdmin(c);
+  if (redir) return redir;
+  const outcome = await refreshDocs();
+  const msg = { refreshed: "docs_refreshed", unchanged: "docs_up_to_date", failed: "docs_refresh_failed", off: "docs_refresh_off" }[outcome];
+  return c.redirect(`/admin/dashboard?msg=${msg}#sec-docs`);
 });
 
 // ── Settings (POST) ─────────────────────────────────────────────

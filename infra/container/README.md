@@ -194,6 +194,33 @@ times is how you find out what the automation should say.
 would spend a long time on `bun install` and `npm ci`, and there is no
 cross-compilation to get wrong.
 
+### The documentation refreshes itself
+
+Maurice Maurice, the built-in persona, answers from the notes in
+`docs/maurice/` — allowlisted into the image, so an instance is only as current
+as its build. The server therefore fetches the published set itself
+(`server/src/services/mauriceDocsRefresh.ts`): 20 s after boot and then every
+24 h it GETs `manifest.json` from `MAURICE_DOCS_URL` — by default
+`https://raw.githubusercontent.com/ckemmler/chez-maurice/main/docs/maurice`,
+the same files `scripts/sync-docs.sh` commits, as they stand on `main` — and,
+when that manifest is newer than the one it has, downloads the notes whose
+sha256 changed (2 MB cap each, hash verified), stages the whole set beside its
+target and swaps it into `~/.maurice/docs/maurice` on the `home` volume. A
+failure of any kind leaves the previous set as it was, and the persona reads
+the refreshed set only once it is at least as new as the bundle. The admin
+dashboard's last card shows the set's date and where it comes from, with a
+"Check now" button; `GET /api/admin/status` carries the same under `docs`, and
+the log says `[docs] refreshed to …`, `[docs] up to date (…)` or `[docs]
+refresh failed: …`.
+
+`MAURICE_DOCS_URL=off` in the household's `.env` (both compose files pass it
+through) turns it off — an install that wants no outbound call at all; the
+persona then answers from the image's snapshot, or from `MAURICE_DOCS_DIR`
+when that is set, which always wins. Point it at a mirror with
+`MAURICE_DOCS_URL=https://…/docs/maurice`; the URL goes through the same
+guard as article extraction, so a mirror on a private address also needs
+`MAURICE_DOCS_ALLOW_LOCAL=1`.
+
 ### Reaching /admin on a deployed instance
 
 You cannot, through the public name — and that is deliberate.
