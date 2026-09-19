@@ -70,16 +70,36 @@ final class ChatService {
     /// Conversations with unread activity since last viewed — sidebar dots.
     var unread: Set<String> = []
     /// Whether the app is frontmost/active (set from scenePhase); when false we
-    /// notify even for the conversation you "have open".
-    var appActive = true
+    /// notify even for the conversation you "have open". Coming back to the
+    /// front is also the moment to pick up what the suspension broke.
+    var appActive = true {
+        didSet {
+            guard appActive != oldValue else { return }
+            if appActive {
+                Task { await didBecomeActive() }
+            } else {
+                wentInactiveAt = Date()
+            }
+        }
+    }
+    /// When the app last left the front, to tell a glance at the app switcher
+    /// from a suspension that killed every connection.
+    private var wentInactiveAt: Date?
     /// A conversation to open after a household switch (from a cross-household
     /// notification tap), once that household's list has loaded.
     private var pendingOpenConversation: String?
     /// Server-confirmed message ids, so live WS echoes don't double-render.
     private var knownIds: Set<String> = []
-    /// The in-flight streaming consumer, so ⏹ Stop can tear it down (which aborts
-    /// the underlying request). nil when no generation is running.
-    private var streamTask: Task<StreamEvent?, Never>?
+    /// The in-flight turn follower, so ⏹ Stop can tear it down. nil when no
+    /// generation is being followed.
+    private var streamTask: Task<TurnOutcome, Never>?
+    /// The consumer of the stream currently feeding `streamTask` — cancelled
+    /// on its own to force a re-attach without abandoning the turn.
+    private var pumpTask: Task<StreamEvent?, Error>?
+    /// The turn we started (or picked up) and have not yet seen the end of.
+    /// Outlives `streamTask`: when the follower gave up while the app was
+    /// away, a return to the front tries again from here.
+    private var followedTurn: (convoId: String, startedAt: Date)?
     /// The conversation `messages` actually holds, as opposed to the one merely
     /// selected. Anything destructive has to key off this, not off emptiness.
     private var messagesLoadedFor: String?
@@ -141,7 +161,6 @@ final class ChatService {
                 "/api/conversations?limit=\(conversationsPageSize)", token: token)
             conversations = page
             hasMoreConversations = page.count >= conversationsPageSize
-            error = nil
         } catch {
             self.error = error.localizedDescription
         }
@@ -317,7 +336,6 @@ final class ChatService {
                 participants = []
             }
             connectSocket(convo.id)
-            error = nil
         } catch {
             self.error = error.localizedDescription
         }
@@ -445,7 +463,6 @@ final class ChatService {
             knownIds = Set(messages.map { $0.id })
             messagesLoadedFor = conversationId
             pendingSummon = false
-            error = nil
             connectSocket(conversationId)
         } catch {
             if Self.isVanished(error) { dropRoom(conversationId); return }
@@ -536,7 +553,6 @@ final class ChatService {
                 body: Body(member_id: memberId),
                 token: token
             )
-            error = nil
         } catch {
             self.error = error.localizedDescription
         }
@@ -549,7 +565,6 @@ final class ChatService {
         do {
             try await api.delete("/api/conversations/\(convoId)/participants/\(memberId)", token: token)
             participants.removeAll { $0.member_id == memberId }
-            error = nil
         } catch {
             self.error = error.localizedDescription
         }
@@ -566,7 +581,6 @@ final class ChatService {
                 "/api/conversations/\(convoId)/reports",
                 body: Body(target_type: targetType, target_id: targetId, reason: reason, note: note),
                 token: token)
-            error = nil
             return true
         } catch {
             self.error = error.localizedDescription
@@ -582,7 +596,6 @@ final class ChatService {
             let _: OkResp = try await api.post("/api/users/\(memberId)/block", body: EmptyBody(), token: token)
             // Drop their messages locally for an instant effect.
             messages.removeAll { $0.author_id == memberId }
-            error = nil
         } catch {
             self.error = error.localizedDescription
         }
@@ -602,7 +615,6 @@ final class ChatService {
             activeConversationId = conversations.first?.id
             messages = []
             participants = []
-            error = nil
         } catch {
             self.error = error.localizedDescription
         }
@@ -718,9 +730,12 @@ final class ChatService {
             body: BubblePost(content: text, summon: false, image: imageUri), token: token)
     }
 
-    /// ⏹ — stop the in-flight generation. Cancelling the consumer aborts the
-    /// request; the partial reply (if any) comes back over the room socket.
+    /// ⏹ — stop the in-flight generation. The server hears it first: a turn
+    /// belongs to the conversation, not to the request, so dropping the
+    /// request alone would leave Maurice writing. The partial reply (if any)
+    /// comes back over the room socket.
     func stop() {
+        requestServerStop()
         streamTask?.cancel()
     }
 
@@ -732,9 +747,25 @@ final class ChatService {
     /// conversation comes up disabled.
     func stopAndWait() async {
         guard let task = streamTask else { return }
+        requestServerStop()
         task.cancel()
         _ = await task.value
         isStreaming = false
+    }
+
+    /// Fire-and-forget: the local follower is torn down regardless, and a stop
+    /// that finds nothing running (404) has nothing to tell us.
+    private func requestServerStop() {
+        guard let api, let token,
+              let convoId = followedTurn?.convoId ?? activeConversationId else { return }
+        followedTurn = nil
+        Task { try? await api.stopTurn(conversationId: convoId, token: token) }
+    }
+
+    /// Hide the error banner. Nothing else clears it any more: a refresh that
+    /// happens to succeed says nothing about the failure being shown.
+    func dismissError() {
+        error = nil
     }
 
     /// Re-answer the last user turn: drop the previous assistant message and
@@ -755,84 +786,146 @@ final class ChatService {
         mauriceId: String? = nil
     ) async {
         guard let api, let token else { return }
+        await followTurn(convoId: convoId, api: api, token: token) {
+            try api.streamMessage(
+                conversationId: convoId,
+                content: content,
+                image: imageDataUri,
+                token: token,
+                regenerate: regenerate,
+                summon: true,
+                mauriceId: mauriceId
+            )
+        }
+    }
 
+    /// How following a turn ended.
+    private enum TurnOutcome {
+        /// The turn ended on the server: its `done`, or nil after an `error`
+        /// event (already shown).
+        case ended(StreamEvent?)
+        /// Nothing to follow (204): the reply is either persisted already or
+        /// was never produced. Only a re-read of the thread tells which.
+        case nothingRunning
+        /// ⏹, a refusal, or a connection that could not be recovered — the
+        /// banner says so where there is something to say.
+        case abandoned
+    }
+
+    /// Follow one assistant turn to its end and fold the result into the
+    /// thread. `open` makes the first stream (the POST that starts the turn);
+    /// nil means pick up a turn already running (GET /turn).
+    ///
+    /// A stream that ends before its terminal event is a lost connection, not
+    /// a lost reply: the server goes on without us. So it is re-attached,
+    /// quietly — the activity line says "connection lost, Maurice continues"
+    /// — and the red banner is kept for the cases where nothing more can be
+    /// done. On iPhone the whole thing runs under a background grace, so a
+    /// reply that is nearly there survives a few seconds in another app.
+    private func followTurn(
+        convoId: String,
+        api: APIClient,
+        token: String,
+        open: (() throws -> AsyncThrowingStream<StreamEvent, Error>)?
+    ) async {
         isStreaming = true
         streamingText = ""
         streamingData = []
         streamingUsage = nil
         error = nil
+        followedTurn = (convoId, Date())
+        #if os(iOS) && canImport(UIKit)
+        let grace = BackgroundGrace()
+        defer { grace.end() }
+        #endif
 
         // Consume the stream in a cancellable child task (inherits this
-        // @MainActor context). ⏹ Stop cancels it, which throws out of the loop
-        // and — via the stream's onTermination — aborts the HTTP request.
-        let task = Task { () -> StreamEvent? in
-            var doneEvent: StreamEvent?
-            do {
-                let stream = try api.streamMessage(
-                    conversationId: convoId,
-                    content: content,
-                    image: imageDataUri,
-                    token: token,
-                    regenerate: regenerate,
-                    summon: true,
-                    mauriceId: mauriceId
-                )
-                for try await event in stream {
-                    if Task.isCancelled { break }
-                    switch event.type {
-                    case .text_delta:
-                        if let t = event.text {
-                            streamingText += t
-                        }
-                        // Visible text ends the "Thinking" phase (a tool label
-                        // is cleared by its own end event).
-                        if toolActivity == Self.thinkingLabel { toolActivity = nil }
-                    case .thinking:
-                        // Reasoning models go quiet for a while before the first
-                        // word; say so instead of showing a bare spinner.
-                        if toolActivity == nil { toolActivity = Self.thinkingLabel }
-                    case .ping:
-                        break // keepalive — nothing to show
-                    case .image_loading:
-                        streamingText = ""
-                        isGeneratingImage = true
-                    case .image:
-                        isGeneratingImage = false
-                        if let url = event.image_url {
-                            let prompt = event.text ?? "image"
-                            streamingText = "![\(prompt)](\(url))"
-                        }
-                    case .tool_call:
-                        if event.status == "start", let tool = event.tool {
-                            toolActivity = Self.toolLabel(for: tool)
+        // @MainActor context). ⏹ Stop cancels it, which ends the loop and —
+        // via the stream's onTermination — aborts the HTTP request.
+        let task = Task { () -> TurnOutcome in
+            var open = open
+            // Consecutive failures of the re-attach request itself; reset
+            // once a stream is obtained again.
+            var attachFailures = 0
+            // Streams that died mid-way, in total: a tunnel that drops every
+            // re-attached stream must not be chased forever.
+            var drops = 0
+            while true {
+                var attached = false
+                // Whether this pass lost the connection (as opposed to being
+                // told no): only then is the member told we are reconnecting.
+                var lost = false
+                do {
+                    let stream: AsyncThrowingStream<StreamEvent, Error>
+                    if let first = open {
+                        open = nil
+                        stream = try first()
+                    } else if let picked = try await api.streamTurn(conversationId: convoId, token: token) {
+                        stream = picked
+                    } else {
+                        return .nothingRunning
+                    }
+                    attached = true
+                    attachFailures = 0
+                    if let terminal = try await pump(stream) {
+                        return .ended(terminal.type == .done ? terminal : nil)
+                    }
+                    // The bytes ran out before done/error: the connection
+                    // went, not the turn. (Also what a kicked pump looks like.)
+                    if Task.isCancelled { return .abandoned }
+                    drops += 1
+                    lost = true
+                } catch {
+                    // Only ⏹ cancels this task; a CancellationError with the
+                    // task still alive came from the pump and is a drop.
+                    if Task.isCancelled { return .abandoned }
+                    if case APIError.server(let code, _) = error {
+                        if code == 409 {
+                            // Not taken: Maurice is already answering here (an
+                            // earlier request of ours, or another device).
+                            // Follow that reply instead of pretending ours went.
+                            dropUnconfirmedUserMessage()
+                            self.error = L("chat.error.busy")
                         } else {
-                            toolActivity = nil
+                            // The server answered, and no. That is final.
+                            self.error = error.localizedDescription
+                            return .abandoned
                         }
-                    case .tool_data:
-                        if let data = event.data {
-                            streamingData.append(DataBlock(tool: event.tool ?? "tool", data: data))
+                    } else if !attached {
+                        // The re-attach itself failed. A network error gets a
+                        // few more tries; anything else is not going to mend.
+                        attachFailures += 1
+                        if attachFailures >= 3 || !Self.isNetworkError(error) {
+                            self.error = L("chat.error.lost")
+                            return .abandoned
                         }
-                    case .usage:
-                        streamingUsage = event.usage
-                    case .done:
-                        doneEvent = event
-                    case .error:
-                        isGeneratingImage = false
-                        toolActivity = nil
-                        self.error = event.message ?? "Stream error"
+                        lost = true
+                    } else {
+                        drops += 1
+                        lost = true
                     }
                 }
-            } catch is CancellationError {
-                // Stopped by the user — drop the partial locally; the server
-                // persists what it produced and pushes it over the room socket.
-            } catch {
-                if !Task.isCancelled { self.error = error.localizedDescription }
+                if drops >= 6 {
+                    self.error = L("chat.error.lost")
+                    return .abandoned
+                }
+                if lost {
+                    toolActivity = L("chat.activity.reconnecting")
+                    isGeneratingImage = false
+                }
+                try? await Task.sleep(for: .seconds(attachFailures > 0 ? 2 : 1))
+                if Task.isCancelled { return .abandoned }
             }
-            return doneEvent
         }
         streamTask = task
-        let doneEvent = await task.value
+        let outcome = await task.value
         streamTask = nil
+        switch outcome {
+        case .ended, .nothingRunning:
+            if followedTurn?.convoId == convoId { followedTurn = nil }
+        case .abandoned:
+            break // ⏹ cleared it; a give-up keeps it for the next foreground
+        }
 
         // Everything below belongs to the thread this stream was started for.
         // Cancelling does not stop it: we are suspended at `await task.value`
@@ -850,7 +943,7 @@ final class ChatService {
             return
         }
 
-        if let event = doneEvent {
+        if case .ended(let event) = outcome, let event {
             let id = event.message_id ?? UUID().uuidString
             // The room socket may have already delivered this reply — only append
             // if it's not already in the thread.
@@ -877,7 +970,126 @@ final class ChatService {
         isGeneratingImage = false
         toolActivity = nil
         pendingSummon = false
+        if case .nothingRunning = outcome {
+            // Persisted while we were away, or never made: the thread knows.
+            await reloadActiveMessages()
+        }
         await loadConversations()
+    }
+
+    /// Render one stream's events until its terminal event. Returns that
+    /// event, or nil when the bytes ran out first (a dropped connection).
+    /// Runs in a task of its own so a re-attach can be forced from outside
+    /// (`didBecomeActive`) without abandoning the turn being followed.
+    private func pump(_ stream: AsyncThrowingStream<StreamEvent, Error>) async throws -> StreamEvent? {
+        let task = Task { () throws -> StreamEvent? in
+            for try await event in stream {
+                if Task.isCancelled { return nil }
+                render(event)
+                if event.type == .done || event.type == .error { return event }
+            }
+            return nil
+        }
+        pumpTask = task
+        defer { pumpTask = nil }
+        return try await withTaskCancellationHandler {
+            try await task.value
+        } onCancel: {
+            task.cancel()
+        }
+    }
+
+    /// Show one event of a turn — the same whether it comes from the request
+    /// that started the turn or from one re-attached to it.
+    private func render(_ event: StreamEvent) {
+        switch event.type {
+        case .resume:
+            // Everything the turn produced while we were not looking.
+            streamingText = event.text ?? ""
+            streamingData = event.blocks ?? []
+            streamingUsage = event.usage
+            isGeneratingImage = false
+            toolActivity = event.tool.map(Self.toolLabel(for:))
+        case .text_delta:
+            if let t = event.text {
+                streamingText += t
+            }
+            // Visible text ends the "Thinking" phase (a tool label
+            // is cleared by its own end event).
+            if toolActivity == Self.thinkingLabel { toolActivity = nil }
+        case .thinking:
+            // Reasoning models go quiet for a while before the first
+            // word; say so instead of showing a bare spinner.
+            if toolActivity == nil { toolActivity = Self.thinkingLabel }
+        case .ping:
+            break // keepalive — nothing to show
+        case .image_loading:
+            streamingText = ""
+            isGeneratingImage = true
+        case .image:
+            isGeneratingImage = false
+            if let url = event.image_url {
+                let prompt = event.text ?? "image"
+                streamingText = "![\(prompt)](\(url))"
+            }
+        case .tool_call:
+            if event.status == "start", let tool = event.tool {
+                toolActivity = Self.toolLabel(for: tool)
+            } else {
+                toolActivity = nil
+            }
+        case .tool_data:
+            if let data = event.data {
+                streamingData.append(DataBlock(tool: event.tool ?? "tool", data: data))
+            }
+        case .usage:
+            streamingUsage = event.usage
+        case .done:
+            break // the follower takes it from here
+        case .error:
+            isGeneratingImage = false
+            toolActivity = nil
+            self.error = event.message ?? "Stream error"
+        }
+    }
+
+    /// Take back the message the server refused: the optimistic copy send()
+    /// appended, which no echo will ever reconcile.
+    private func dropUnconfirmedUserMessage() {
+        guard let i = messages.lastIndex(where: {
+            $0.role == "user" && $0.author_id == session.activeUserId && !knownIds.contains($0.id)
+        }) else { return }
+        messages.remove(at: i)
+    }
+
+    /// Whether the network let us down (worth another try) rather than the
+    /// server or the code.
+    private static func isNetworkError(_ error: Error) -> Bool {
+        if error is URLError { return true }
+        if case APIError.requestFailed = error { return true }
+        return (error as NSError).domain == NSPOSIXErrorDomain
+    }
+
+    /// Back in front. A suspension kills every connection: reconnect both
+    /// sockets now rather than after their backoff, and if a reply was being
+    /// followed, pick it up. Either the follower is still up — perhaps hung
+    /// on a socket iOS closed without a word: kick it, it re-attaches — or it
+    /// gave up while we were away and the same turn is followed afresh.
+    private func didBecomeActive() async {
+        let away = wentInactiveAt.map { Date().timeIntervalSince($0) } ?? 0
+        // A glance at the app switcher leaves everything alive; only a real
+        // absence is worth tearing connections down for.
+        guard away >= 3 else { return }
+        socket?.reconnectNow()
+        userSocket?.reconnectNow()
+        if streamTask != nil {
+            pumpTask?.cancel()
+            return
+        }
+        guard let turn = followedTurn, turn.convoId == activeConversationId,
+              Date().timeIntervalSince(turn.startedAt) < 300,
+              let api, let token else { return }
+        await followTurn(convoId: turn.convoId, api: api, token: token, open: nil)
     }
 
     /// Activity label while a reasoning model thinks (see `.thinking` above).
@@ -910,6 +1122,7 @@ final class ChatService {
         unread = []
         pendingSummon = false
         activeConversationId = nil
+        followedTurn = nil
         streamingText = ""
         streamingData = []
         streamingUsage = nil
@@ -928,6 +1141,29 @@ final class ChatService {
 }
 
 private struct EmptyBody: Encodable {}
+
+#if os(iOS) && canImport(UIKit)
+/// Asks iOS to keep the app running a while after it leaves the screen, so a
+/// reply that is nearly there finishes instead of dying with the suspension.
+/// Ended explicitly by the follower, or by the system when its patience runs
+/// out (the handler runs on the main thread, as documented).
+@MainActor
+private final class BackgroundGrace {
+    private var id: UIBackgroundTaskIdentifier = .invalid
+
+    init() {
+        id = UIApplication.shared.beginBackgroundTask(withName: "chat.turn") { [weak self] in
+            MainActor.assumeIsolated { self?.end() }
+        }
+    }
+
+    func end() {
+        guard id != .invalid else { return }
+        UIApplication.shared.endBackgroundTask(id)
+        id = .invalid
+    }
+}
+#endif
 
 // MARK: - Room Socket
 //
@@ -972,6 +1208,15 @@ final class RoomSocket {
         epoch &+= 1
         task?.cancel(with: .goingAway, reason: nil)
         task = nil
+    }
+
+    /// Reopen now, backoff reset — for a return to the foreground, when the
+    /// old connection is dead and the scheduled retry may be 30 s out.
+    func reconnectNow() {
+        guard !closed else { return }
+        backoff = 1
+        openSocket()
+        onReconnect()
     }
 
     private func openSocket() {
@@ -1067,6 +1312,14 @@ final class UserSocket {
         epoch &+= 1
         task?.cancel(with: .goingAway, reason: nil)
         task = nil
+    }
+
+    /// See RoomSocket.reconnectNow.
+    func reconnectNow() {
+        guard !closed else { return }
+        backoff = 1
+        openSocket()
+        onReconnect()
     }
 
     private func openSocket() {

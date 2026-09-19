@@ -404,6 +404,11 @@
 "chat.activity.thinking" = "Thinking";
 "chat.activity.webSearch" = "Searching the web";
 "chat.activity.usingTool" = "Using %@";
+"chat.activity.reconnecting" = "Connection lost, Maurice carries on…";
+
+/* A reply that could not be followed to its end */
+"chat.error.busy" = "Maurice is already answering in this conversation.";
+"chat.error.lost" = "The connection to Maurice was lost. If he finished answering, his reply will show up in the thread.";
 
 
 /* Reading progress: pause while you look ahead, and reset */

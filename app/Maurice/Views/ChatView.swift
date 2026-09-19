@@ -319,6 +319,8 @@ struct ChatView: View {
                 .onTapGesture { isInputFocused = false }
             }
 
+            // Stays until the member taps it or sends again: no refresh that
+            // happens to succeed is allowed to wipe it (it used to flash).
             if let error = chat.error {
                 Text(error)
                     .font(.caption)
@@ -327,6 +329,8 @@ struct ChatView: View {
                     .padding(.vertical, 8)
                     .frame(maxWidth: .infinity)
                     .background(.red.opacity(0.85))
+                    .contentShape(Rectangle())
+                    .onTapGesture { chat.dismissError() }
             }
         }
     }

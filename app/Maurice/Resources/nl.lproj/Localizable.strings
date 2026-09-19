@@ -404,6 +404,11 @@
 "chat.activity.thinking" = "Denkt na";
 "chat.activity.webSearch" = "Zoekt op het web";
 "chat.activity.usingTool" = "Gebruikt %@";
+"chat.activity.reconnecting" = "Verbinding verbroken, Maurice gaat door…";
+
+/* A reply that could not be followed to its end */
+"chat.error.busy" = "Maurice is in dit gesprek al aan het antwoorden.";
+"chat.error.lost" = "De verbinding met Maurice is verbroken. Als hij klaar was met antwoorden, verschijnt zijn antwoord in de draad.";
 
 
 /* Reading progress: pause while you look ahead, and reset */

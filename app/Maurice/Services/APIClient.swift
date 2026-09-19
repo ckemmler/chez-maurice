@@ -111,6 +111,10 @@ final class APIClient: Sendable {
     // MARK: - Streaming (ndjson)
 
     /// Sends a message and returns an AsyncStream of parsed events.
+    ///
+    /// A refusal (409 while a reply is already running, 4xx/5xx in general)
+    /// surfaces through the stream as `APIError.server`, body included, so
+    /// the caller can tell "the server said no" from "the connection died".
     func streamMessage(
         conversationId: String,
         content: String,
@@ -138,31 +142,104 @@ final class APIClient: Sendable {
             let task = Task.detached {
                 do {
                     let (bytes, response) = try await session.bytes(for: request)
-                    guard let http = response as? HTTPURLResponse,
-                          (200...299).contains(http.statusCode) else {
+                    guard let http = response as? HTTPURLResponse else {
                         continuation.finish(throwing: APIError.requestFailed)
                         return
                     }
-
-                    let decoder = JSONDecoder()
-                    for try await line in bytes.lines {
-                        let trimmed = line.trimmingCharacters(in: .whitespaces)
-                        guard !trimmed.isEmpty,
-                              let data = trimmed.data(using: .utf8) else { continue }
-                        if let event = try? decoder.decode(StreamEvent.self, from: data) {
-                            continuation.yield(event)
-                            if event.type == .done || event.type == .error {
-                                break
-                            }
-                        }
+                    guard (200...299).contains(http.statusCode) else {
+                        continuation.finish(throwing: await Self.httpError(http, bytes))
+                        return
                     }
-                    continuation.finish()
+                    try await Self.pump(bytes, into: continuation)
                 } catch {
                     continuation.finish(throwing: error)
                 }
             }
             continuation.onTermination = { _ in task.cancel() }
         }
+    }
+
+    /// Pick up the turn in flight in a conversation — the one a lost request
+    /// was following, or one started elsewhere. nil on 204: nothing is running
+    /// and nothing finished in the last minute. Otherwise the stream opens on
+    /// a `resume` snapshot (everything so far) and carries the live events to
+    /// the terminal `done`/`error`, exactly as the POST stream would.
+    ///
+    /// The request is made here, before the stream is handed out, so a 204 is
+    /// a value and not an event the caller has to fish out of the stream.
+    func streamTurn(
+        conversationId: String,
+        token: String
+    ) async throws -> AsyncThrowingStream<StreamEvent, Error>? {
+        let request = buildRequest(
+            "/api/conversations/\(conversationId)/turn",
+            method: "GET",
+            token: token
+        )
+        let (bytes, response) = try await streamSession.bytes(for: request)
+        guard let http = response as? HTTPURLResponse else { throw APIError.requestFailed }
+        if http.statusCode == 204 { return nil }
+        guard (200...299).contains(http.statusCode) else {
+            throw await Self.httpError(http, bytes)
+        }
+        return AsyncThrowingStream { continuation in
+            let task = Task.detached {
+                do {
+                    try await Self.pump(bytes, into: continuation)
+                } catch {
+                    continuation.finish(throwing: error)
+                }
+            }
+            continuation.onTermination = { _ in task.cancel() }
+        }
+    }
+
+    /// Ask the server to halt the turn running in a conversation. Generation
+    /// no longer stops when a client disconnects — the turn belongs to the
+    /// conversation — so ⏹ has to say so explicitly.
+    func stopTurn(conversationId: String, token: String) async throws {
+        let _: OkResponse = try await post(
+            "/api/conversations/\(conversationId)/turn/stop",
+            body: EmptyJSON(),
+            token: token
+        )
+    }
+
+    /// Feed one ndjson byte stream to a continuation, line by line, and finish
+    /// it on the terminal event (or when the bytes run out).
+    private static func pump(
+        _ bytes: URLSession.AsyncBytes,
+        into continuation: AsyncThrowingStream<StreamEvent, Error>.Continuation
+    ) async throws {
+        let decoder = JSONDecoder()
+        for try await line in bytes.lines {
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            guard !trimmed.isEmpty,
+                  let data = trimmed.data(using: .utf8) else { continue }
+            if let event = try? decoder.decode(StreamEvent.self, from: data) {
+                continuation.yield(event)
+                if event.type == .done || event.type == .error {
+                    break
+                }
+            }
+        }
+        continuation.finish()
+    }
+
+    /// The error a non-2xx streaming response stands for: the JSON `error`
+    /// field when the body carries one, the status alone otherwise.
+    private static func httpError(_ http: HTTPURLResponse, _ bytes: URLSession.AsyncBytes) async -> APIError {
+        var body = Data()
+        do {
+            // Bounded: an error body is a sentence, not a stream.
+            for try await byte in bytes.prefix(4096) { body.append(byte) }
+        } catch {
+            // A body cut short still has its status; fall through to it.
+        }
+        if let parsed = try? JSONDecoder().decode(ErrorBody.self, from: body) {
+            return .server(http.statusCode, parsed.error)
+        }
+        return .server(http.statusCode, "Request failed")
     }
 
     // MARK: - Internals
@@ -210,8 +287,16 @@ struct StreamEvent: Decodable {
     let status: String?
     /// tool_data events: the structured rows a tool returned (model-untouched).
     let data: JSONValue?
+    /// resume events: every tool_data block the turn produced before we caught
+    /// up with it. Same wire key as `data`, but an array of {tool, data}.
+    let blocks: [DataBlock]?
     /// usage events: what the turn cost, sent once just before `done`.
+    /// On a resume: what it has cost so far, if the server knows yet.
     let usage: TurnUsage?
+    /// resume events: the turn already ended; its terminal event follows.
+    let finished: Bool?
+    /// resume events: when the turn started (ISO 8601).
+    let started_at: String?
 
     enum EventType: String, Decodable {
         case text_delta
@@ -226,6 +311,42 @@ struct StreamEvent: Decodable {
         case tool_call
         case tool_data
         case usage
+        /// First line of a re-attached turn: a snapshot of everything so far.
+        case resume
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case type, text, message_id, message, image_url, tool, status, data, usage, finished, started_at
+    }
+
+    /// One malformed block must not cost the whole snapshot.
+    private struct LenientBlock: Decodable {
+        let block: DataBlock?
+        init(from decoder: Decoder) throws { block = try? DataBlock(from: decoder) }
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        type = try c.decode(EventType.self, forKey: .type)
+        text = try? c.decodeIfPresent(String.self, forKey: .text)
+        message_id = try? c.decodeIfPresent(String.self, forKey: .message_id)
+        message = try? c.decodeIfPresent(String.self, forKey: .message)
+        image_url = try? c.decodeIfPresent(String.self, forKey: .image_url)
+        tool = try? c.decodeIfPresent(String.self, forKey: .tool)
+        status = try? c.decodeIfPresent(String.self, forKey: .status)
+        usage = try? c.decodeIfPresent(TurnUsage.self, forKey: .usage)
+        finished = try? c.decodeIfPresent(Bool.self, forKey: .finished)
+        started_at = try? c.decodeIfPresent(String.self, forKey: .started_at)
+        // `data` is one tool's payload on tool_data and the list of blocks on
+        // resume — two shapes under one key, split by the event type.
+        if type == .resume {
+            data = nil
+            blocks = (try? c.decodeIfPresent([LenientBlock].self, forKey: .data))?
+                .compactMap { $0.block }
+        } else {
+            data = try? c.decodeIfPresent(JSONValue.self, forKey: .data)
+            blocks = nil
+        }
     }
 }
 
@@ -493,6 +614,9 @@ enum APIError: LocalizedError {
 private struct ErrorBody: Decodable {
     let error: String
 }
+
+/// `{}` — for endpoints that take a POST with nothing to say.
+private struct EmptyJSON: Encodable {}
 
 // MARK: - API Response Types
 

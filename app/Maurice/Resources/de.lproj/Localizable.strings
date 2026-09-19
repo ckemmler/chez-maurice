@@ -404,6 +404,11 @@
 "chat.activity.thinking" = "Denkt nach";
 "chat.activity.webSearch" = "Sucht im Web";
 "chat.activity.usingTool" = "Nutzt %@";
+"chat.activity.reconnecting" = "Verbindung verloren, Maurice macht weiter…";
+
+/* A reply that could not be followed to its end */
+"chat.error.busy" = "Maurice antwortet in dieser Unterhaltung bereits.";
+"chat.error.lost" = "Die Verbindung zu Maurice ist abgebrochen. Falls er fertig geantwortet hat, erscheint seine Antwort im Verlauf.";
 
 
 /* Reading progress: pause while you look ahead, and reset */
