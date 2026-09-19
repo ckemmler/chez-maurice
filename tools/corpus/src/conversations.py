@@ -126,28 +126,55 @@ class MauriceConversations:
 
         current = {r["id"]: r for r in rows}
         hashes = {r["id"]: _hash(r["content"]) for r in rows}
-        embed_cache: Dict[str, tuple] = {}  # message_id -> (chunks, embed_result)
 
-        async def embedded(message_id: str):
-            if message_id not in embed_cache:
-                content = current[message_id]["content"]
-                chunks = paragraph_chunks(content, max_chars=_MAX_CHARS)
-                vecs = await embedder.embed_batch(c.text for c in chunks) if chunks else None
-                embed_cache[message_id] = (chunks, vecs)
-            return embed_cache[message_id]
+        # First pass: what each participant's store lacks, and the union of
+        # messages that need a vector. Deletions happen here too.
+        indexed_by_member: Dict[str, Dict[str, str]] = {}
+        needed: List[str] = []
+        seen: set = set()
+        for member in participants:
+            indexed = self._indexed_units(store, member, conversation_id)
+            indexed_by_member[member] = indexed
+            for stale in set(indexed) - set(current):
+                store.delete_unit(unit_key=_unit_key(stale), member_id=member)
+            for mid in current:
+                if indexed.get(mid) != hashes[mid] and mid not in seen:
+                    seen.add(mid)
+                    needed.append(mid)
+
+        # Embed once, in batches that span messages. A message is one to three
+        # thought-sized chunks, and embedding it alone meant one HTTP round trip
+        # per message: the full re-index of September 2026 ran at a third of
+        # the model's speed because of it. The embedder drops blank strings,
+        # so blank chunks are dropped here first to keep the two aligned.
+        chunks_by_msg: Dict[str, list] = {
+            mid: [c for c in paragraph_chunks(current[mid]["content"], max_chars=_MAX_CHARS) if c.text.strip()]
+            for mid in needed
+        }
+        flat = [(mid, c) for mid in needed for c in chunks_by_msg[mid]]
+        vectors_by_msg: Dict[str, List[List[float]]] = {mid: [] for mid in needed}
+        model = ""
+        batch_size = max(1, int(getattr(getattr(embedder, "config", None), "batch_size", 32) or 32))
+        for i in range(0, len(flat), batch_size):
+            batch = flat[i : i + batch_size]
+            result = await embedder.embed_batch(c.text for _, c in batch)
+            if len(result.vectors) != len(batch):
+                raise RuntimeError(
+                    f"conversation {conversation_id}: embedded {len(result.vectors)} of {len(batch)} chunks"
+                )
+            model = result.model
+            for (mid, _), vector in zip(batch, result.vectors):
+                vectors_by_msg[mid].append(vector)
 
         written = 0
         for member in participants:
-            indexed = self._indexed_units(store, member, conversation_id)
-            # deletions: indexed but no longer present
-            for stale in set(indexed) - set(current):
-                store.delete_unit(unit_key=_unit_key(stale), member_id=member)
-            # additions + edits
+            indexed = indexed_by_member[member]
             for mid, row in current.items():
                 if indexed.get(mid) == hashes[mid]:
                     continue  # up to date
-                chunks, vecs = await embedded(mid)
-                if not chunks or vecs is None or not vecs.vectors:
+                chunks = chunks_by_msg.get(mid) or []
+                vectors = vectors_by_msg.get(mid) or []
+                if not chunks or not vectors:
                     continue
                 store.delete_unit(unit_key=_unit_key(mid), member_id=member)
                 written += store.upsert(
@@ -155,9 +182,9 @@ class MauriceConversations:
                     unit_key=_unit_key(mid),
                     unit_hash=hashes[mid],
                     chunks=chunks,
-                    vectors=vecs.vectors,
+                    vectors=vectors,
                     base_metadata=self._metadata(conversation_id, title, row),
-                    embedding_model=vecs.model,
+                    embedding_model=model,
                 )
         return written
 

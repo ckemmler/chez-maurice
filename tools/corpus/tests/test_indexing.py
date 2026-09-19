@@ -387,6 +387,57 @@ async def main() -> int:
     except ValueError as exc:
         check("dimensions must equal vector_size", "vector_size" in str(exc))
 
+    print("\n── conversations reconcile per message hash, embedded once in batches ──")
+    import sqlite3
+
+    from src.conversations import MauriceConversations
+
+    mdb = TMP / "maurice.db"
+    con = sqlite3.connect(mdb)
+    con.executescript(
+        "CREATE TABLE conversations (id TEXT PRIMARY KEY, title TEXT);"
+        "CREATE TABLE messages (id TEXT PRIMARY KEY, conversation_id TEXT, role TEXT, content TEXT, author_id TEXT, created_at TEXT);"
+        "CREATE TABLE conversation_participants (conversation_id TEXT, member_id TEXT);"
+        "INSERT INTO conversations VALUES ('c1', 'Violon');"
+        "INSERT INTO conversation_participants VALUES ('c1', 'anna'), ('c1', 'ben');"
+        "INSERT INTO messages VALUES ('m1', 'c1', 'user', 'Quel concerto travailler ?', 'anna', '2026-09-01T10:00:00');"
+        "INSERT INTO messages VALUES ('m2', 'c1', 'assistant', 'Le Bruch.\n\nPuis le Mendelssohn.', NULL, '2026-09-01T10:00:05');"
+        "INSERT INTO messages VALUES ('m3', 'c1', 'system', 'ignored', NULL, '2026-09-01T10:00:06');"
+        "INSERT INTO messages VALUES ('m4', 'c1', 'user', '   ', 'anna', '2026-09-01T10:00:07');"
+    )
+    con.commit(); con.close()
+    convs = MauriceConversations(mdb)
+    calls: list[int] = []
+    real_embed = orch.embedder.embed_batch  # type: ignore[attr-defined]
+
+    async def counting(texts, **kw):
+        batch = list(texts)
+        calls.append(len(batch))
+        return await real_embed(batch, **kw)
+
+    orch.embedder.embed_batch = counting  # type: ignore[attr-defined]
+    written = await convs.reconcile_conversation("c1", store=orch.indexer, embedder=orch.embedder)
+    # Two indexable messages (the system one and the blank one are skipped),
+    # one thought-sized chunk each, for each of two members.
+    eq("two messages, two chunks, written for each of two members", written, 4)
+    eq("embedded once, in one batch, not per message", calls, [2])
+    for m in ("anna", "ben"):
+        eq(f"{m} holds the conversation", orch.indexer.count(where={"conversation_id": "c1"}, member_id=m), 2)
+    anna = next(iter(orch.indexer.iter_chunks(where={"message_id": "m1"}, member_id="anna")))
+    eq("the chunk carries its conversation title", anna.get("conversation_title"), "Violon")
+    calls.clear()
+    eq("a second pass writes nothing", await convs.reconcile_conversation("c1", store=orch.indexer, embedder=orch.embedder), 0)
+    eq("and embeds nothing", calls, [])
+    con = sqlite3.connect(mdb)
+    con.execute("UPDATE messages SET content = 'Quel concerto travailler cet hiver ?' WHERE id = 'm1'")
+    con.execute("DELETE FROM messages WHERE id = 'm2'")
+    con.commit(); con.close()
+    eq("an edit re-embeds that message for both members", await convs.reconcile_conversation("c1", store=orch.indexer, embedder=orch.embedder), 2)
+    eq("only that message", calls, [1])
+    eq("a deleted message is gone from each store", orch.indexer.count(where={"message_id": "m2"}, member_id="ben"), 0)
+    check("the edited text is what is stored",
+          "hiver" in next(iter(orch.indexer.iter_chunks(where={"message_id": "m1"}, member_id="ben")))["text"])
+
     print(f"\n{_count} checks · " + ("ALL PASS" if not _failures else f"{len(_failures)} FAILURE(S)"))
     for f in _failures:
         print(f"   ✗ {f}")
