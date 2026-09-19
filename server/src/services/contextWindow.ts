@@ -20,7 +20,7 @@
 /** Rough tokens-per-character for prose across the household's languages.
  *  French and English both run near 3.5–4 chars per token; 3 is the pessimistic
  *  side of that, which is where an estimate used as a ceiling should sit. */
-const CHARS_PER_TOKEN = 3;
+export const CHARS_PER_TOKEN = 3;
 
 /** What one image costs, absent its dimensions. Anthropic bills about
  *  width*height/750; a phone photo downsized to ~1.15 megapixels comes to

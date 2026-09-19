@@ -33,12 +33,22 @@ struct Maurice: Identifiable, Equatable {
     /// Maurice Maurice, the built-in specialist of Maurice: on everyone's list,
     /// not editable, and his model is the server's choice — never switchable.
     var builtin: Bool = false
+    /// The member who made this Maurice. Seen from the other side, a Maurice
+    /// is a *domain* of that member's life, with a brief Maurice keeps on it;
+    /// the brief is the creator's alone (a persona shared with a guest is
+    /// still the creator's domain).
+    var createdBy: String? = nil
 
     var id: String { rawId ?? "__everyday__" }
     var isEveryday: Bool { rawId == nil }
     /// Whether the member may edit this Maurice at all (not the everyday one,
     /// not the built-in one).
     var isEditable: Bool { !isEveryday && !builtin }
+    /// Whether this Maurice is a domain of the given member: theirs, hence with
+    /// a brief they can read, correct and erase.
+    func isDomain(of memberId: String?) -> Bool {
+        isEditable && createdBy != nil && createdBy == memberId
+    }
     var paletteValue: HatPalette { HatPalette.by(palette) }
 
     /// The everyday Maurice — conversations with no chosen persona resolve to it.
@@ -73,9 +83,44 @@ struct Maurice: Identifiable, Equatable {
             weight: d["weight"] as? Int ?? 0,
             count: d["count"] as? Int ?? 0,
             toolFamilies: d["tool_families"] as? [String],
-            builtin: d["builtin"] as? Bool ?? false
+            builtin: d["builtin"] as? Bool ?? false,
+            createdBy: d["created_by"] as? String
         )
     }
+}
+
+/// The brief Maurice keeps on a domain: his working memory on that part of the
+/// member's life, made visible. Written at night (or on demand) from the
+/// domain's conversations; read in every conversation the member has alone
+/// with Maurice; corrected or erased by the member in the app.
+struct DomainBrief: Equatable {
+    var text: String
+    /// Server time, "YYYY-MM-DD HH:MM:SS" (UTC) — parse with `parseServerDate`.
+    var updatedAt: String
+    /// The conversations the last rewrite read.
+    var sources: [String]
+    /// The model that wrote it, or "member" when the member did.
+    var model: String?
+
+    /// The member rewrote this brief by hand; their wording prevails.
+    var byMember: Bool { model == "member" }
+
+    static func parse(_ d: [String: Any]) -> DomainBrief? {
+        guard let text = d["text"] as? String, let updatedAt = d["updated_at"] as? String else { return nil }
+        return DomainBrief(text: text, updatedAt: updatedAt, sources: d["sources"] as? [String] ?? [], model: d["model"] as? String)
+    }
+}
+
+/// What a rewrite-now answered (POST /api/domains/:id/brief/refresh).
+enum BriefRefreshOutcome: Equatable {
+    /// Rewritten from that many conversations.
+    case written(sources: Int)
+    /// Nothing new since the last brief: no model call was made.
+    case unchanged
+    /// The night's allowance is spent for today.
+    case capped
+    /// The model call failed, or the server could not be reached.
+    case failed(String)
 }
 
 /// A tool family (an MCP server group) the apps can expose to a Maurice.
@@ -257,6 +302,46 @@ final class MauriceStore {
         maurices.removeAll { $0.rawId == id }
     }
 
+    // MARK: domain briefs
+
+    /// The brief on a domain, or nil when the night has not written one yet
+    /// (or the domain is not this member's). `found` tells the two apart.
+    func loadBrief(_ domainId: String) async -> (found: Bool, brief: DomainBrief?) {
+        let (status, json) = await requestStatus("GET", "/api/domains/\(domainId)/brief")
+        guard status == 200, let d = json as? [String: Any] else { return (false, nil) }
+        return (true, (d["brief"] as? [String: Any]).flatMap(DomainBrief.parse))
+    }
+
+    /// The member's correction: what Maurice reads from the next turn on, and
+    /// what the next night starts from. An empty text erases the brief.
+    func saveBrief(_ domainId: String, text: String) async -> (ok: Bool, brief: DomainBrief?) {
+        let (status, json) = await requestStatus("PUT", "/api/domains/\(domainId)/brief", body: ["text": text])
+        guard status == 200, let d = json as? [String: Any] else { return (false, nil) }
+        return (true, (d["brief"] as? [String: Any]).flatMap(DomainBrief.parse))
+    }
+
+    @discardableResult
+    func deleteBrief(_ domainId: String) async -> Bool {
+        let (status, _) = await requestStatus("DELETE", "/api/domains/\(domainId)/brief")
+        return status == 200
+    }
+
+    /// Rewrite the brief now. Seconds: one model call on the night's model,
+    /// against the night's allowance.
+    func refreshBrief(_ domainId: String) async -> (outcome: BriefRefreshOutcome, brief: DomainBrief?) {
+        let (status, json) = await requestStatus("POST", "/api/domains/\(domainId)/brief/refresh")
+        let d = json as? [String: Any] ?? [:]
+        let brief = (d["brief"] as? [String: Any]).flatMap(DomainBrief.parse)
+        let error = d["error"] as? String ?? ""
+        switch (status, d["outcome"] as? String) {
+        case (200, "written"): return (.written(sources: d["sources"] as? Int ?? 0), brief)
+        case (200, "unchanged"): return (.unchanged, brief)
+        case (429, _): return (.capped, brief)
+        case (502, _): return (.failed(error), brief)
+        default: return (.failed(error.isEmpty ? "HTTP \(status)" : error), brief)
+        }
+    }
+
     private static func body(from m: Maurice) -> [String: Any] {
         [
             "name": m.name,
@@ -275,14 +360,22 @@ final class MauriceStore {
     // MARK: networking
 
     private func request(_ method: String, _ path: String, body: [String: Any]? = nil) async -> Any? {
-        guard let base, let token, let url = URL(string: base + path) else { return nil }
+        let (status, json) = await requestStatus(method, path, body: body)
+        return (200..<300).contains(status) ? json : nil
+    }
+
+    /// The status and the JSON body whatever the status (0 when the request
+    /// never reached the server) — for routes whose error status carries a
+    /// message, like the brief's rewrite.
+    private func requestStatus(_ method: String, _ path: String, body: [String: Any]? = nil) async -> (Int, Any?) {
+        guard let base, let token, let url = URL(string: base + path) else { return (0, nil) }
         var req = URLRequest(url: url)
         req.httpMethod = method
         req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         if let body { req.httpBody = try? JSONSerialization.data(withJSONObject: body) }
         guard let (data, resp) = try? await URLSession.shared.data(for: req),
-              let http = resp as? HTTPURLResponse, (200..<300).contains(http.statusCode) else { return nil }
-        return try? JSONSerialization.jsonObject(with: data)
+              let http = resp as? HTTPURLResponse else { return (0, nil) }
+        return (http.statusCode, try? JSONSerialization.jsonObject(with: data))
     }
 }

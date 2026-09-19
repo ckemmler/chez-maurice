@@ -467,3 +467,31 @@
 "chat.review_reports" = "Voir les signalements";
 "chat.leave_room" = "Quitter le salon";
 "sidebar.search" = "Rechercher";
+
+// Domain briefs (DomainBriefView.swift)
+"brief.title" = "Cahier";
+"brief.kicker" = "DOMAINE";
+"brief.open" = "Cahier";
+"brief.open.help" = "Lire le cahier que Maurice tient sur ce domaine";
+"brief.none" = "Pas encore de cahier. Maurice l’écrit la nuit à partir de vos conversations sur ce domaine — ou tout de suite, ci-dessous.";
+"brief.by_you" = "De votre main · %@";
+"brief.by_maurice" = "Écrit par Maurice · %@";
+"brief.sources_one" = "%d conversation lue";
+"brief.sources_other" = "%d conversations lues";
+"brief.placeholder" = "Ce que Maurice sait de ce domaine, en quelques paragraphes.";
+"brief.rewrite" = "Réécrire maintenant";
+"brief.rewriting" = "Réécriture…";
+"brief.talk" = "En parler";
+"brief.erase" = "Effacer";
+"brief.erase.title" = "Effacer le cahier ?";
+"brief.erase.message" = "Maurice oublie ce qu’il retenait de ce domaine. La nuit suivante écrit un cahier neuf à partir de vos conversations.";
+"brief.saved" = "Enregistré. C’est ce que Maurice lit désormais.";
+"brief.erased" = "Effacé. Maurice ne retient rien de ce domaine jusqu’au prochain cahier.";
+"brief.save_failed" = "Le serveur n’a pas pris la modification. Réessayez.";
+"brief.unreachable" = "Ce cahier n’a pas pu être chargé.";
+"brief.outcome.written_one" = "Réécrit à partir de %d conversation.";
+"brief.outcome.written_other" = "Réécrit à partir de %d conversations.";
+"brief.outcome.unchanged" = "Rien de neuf depuis le dernier cahier.";
+"brief.outcome.capped" = "L’allocation de la nuit est épuisée pour aujourd’hui ; le cahier sera réécrit demain.";
+"brief.outcome.failed" = "La réécriture a échoué : %@";
+"brief.explainer" = "Ce cahier est la mémoire de travail de Maurice sur ce domaine : il le lit dans chaque conversation que vous avez seul avec lui, jamais dans un salon. Corrigez-le — vos mots priment — ou effacez-le.";

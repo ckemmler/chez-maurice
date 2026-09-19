@@ -467,3 +467,31 @@
 "chat.review_reports" = "Meldingen bekijken";
 "chat.leave_room" = "Kamer verlaten";
 "sidebar.search" = "Zoeken";
+
+// Domain briefs (DomainBriefView.swift)
+"brief.title" = "Schrift";
+"brief.kicker" = "DOMEIN";
+"brief.open" = "Schrift";
+"brief.open.help" = "Het schrift lezen dat Maurice over dit domein bijhoudt";
+"brief.none" = "Nog geen schrift. Maurice schrijft het ’s nachts uit je gesprekken over dit domein — of meteen, hieronder.";
+"brief.by_you" = "In jouw woorden · %@";
+"brief.by_maurice" = "Geschreven door Maurice · %@";
+"brief.sources_one" = "%d gesprek gelezen";
+"brief.sources_other" = "%d gesprekken gelezen";
+"brief.placeholder" = "Wat Maurice over dit domein weet, in een paar alinea’s.";
+"brief.rewrite" = "Nu herschrijven";
+"brief.rewriting" = "Herschrijven…";
+"brief.talk" = "Erover praten";
+"brief.erase" = "Wissen";
+"brief.erase.title" = "Het schrift wissen?";
+"brief.erase.message" = "Maurice vergeet wat hij over dit domein bijhield. De volgende nacht schrijft hij een nieuw schrift uit je gesprekken.";
+"brief.saved" = "Opgeslagen. Dit is wat Maurice voortaan leest.";
+"brief.erased" = "Gewist. Maurice houdt niets over dit domein bij tot het volgende schrift.";
+"brief.save_failed" = "De server nam de wijziging niet aan. Probeer opnieuw.";
+"brief.unreachable" = "Dit schrift kon niet worden geladen.";
+"brief.outcome.written_one" = "Herschreven uit %d gesprek.";
+"brief.outcome.written_other" = "Herschreven uit %d gesprekken.";
+"brief.outcome.unchanged" = "Niets nieuws sinds het vorige schrift.";
+"brief.outcome.capped" = "Het nachtbudget is voor vandaag op; het schrift wordt morgen herschreven.";
+"brief.outcome.failed" = "Het herschrijven is mislukt: %@";
+"brief.explainer" = "Dit schrift is Maurices werkgeheugen over dit domein: hij leest het in elk gesprek dat je alleen met hem voert, nooit in een kamer. Verbeter het — jouw woorden gelden — of wis het.";

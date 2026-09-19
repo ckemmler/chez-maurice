@@ -467,3 +467,31 @@
 "chat.review_reports" = "Rever denúncias";
 "chat.leave_room" = "Sair da sala";
 "sidebar.search" = "Pesquisar";
+
+// Domain briefs (DomainBriefView.swift)
+"brief.title" = "Caderno";
+"brief.kicker" = "DOMÍNIO";
+"brief.open" = "Caderno";
+"brief.open.help" = "Ler o caderno que o Maurice mantém sobre este domínio";
+"brief.none" = "Ainda não há caderno. O Maurice escreve-o à noite a partir das suas conversas sobre este domínio — ou agora mesmo, abaixo.";
+"brief.by_you" = "Nas suas palavras · %@";
+"brief.by_maurice" = "Escrito pelo Maurice · %@";
+"brief.sources_one" = "%d conversa lida";
+"brief.sources_other" = "%d conversas lidas";
+"brief.placeholder" = "O que o Maurice sabe deste domínio, em poucos parágrafos.";
+"brief.rewrite" = "Reescrever agora";
+"brief.rewriting" = "A reescrever…";
+"brief.talk" = "Falar sobre isto";
+"brief.erase" = "Apagar";
+"brief.erase.title" = "Apagar o caderno?";
+"brief.erase.message" = "O Maurice esquece o que guardava sobre este domínio. Na noite seguinte escreve um caderno novo a partir das suas conversas.";
+"brief.saved" = "Guardado. É o que o Maurice lê a partir de agora.";
+"brief.erased" = "Apagado. O Maurice não guarda nada sobre este domínio até ao próximo caderno.";
+"brief.save_failed" = "O servidor não aceitou a alteração. Tente de novo.";
+"brief.unreachable" = "Não foi possível carregar este caderno.";
+"brief.outcome.written_one" = "Reescrito a partir de %d conversa.";
+"brief.outcome.written_other" = "Reescrito a partir de %d conversas.";
+"brief.outcome.unchanged" = "Nada de novo desde o último caderno.";
+"brief.outcome.capped" = "O orçamento da noite esgotou-se por hoje; o caderno será reescrito amanhã.";
+"brief.outcome.failed" = "A reescrita falhou: %@";
+"brief.explainer" = "Este caderno é a memória de trabalho do Maurice sobre este domínio: ele lê-o em cada conversa que tem a sós com ele, nunca numa sala. Corrija-o — as suas palavras prevalecem — ou apague-o.";

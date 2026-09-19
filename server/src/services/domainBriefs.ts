@@ -5,6 +5,7 @@ import db from "../db";
 import { ancillaryComplete, ancillaryModel, type AncillaryRequest, type AncillaryResult } from "./ancillary";
 import { SYSTEM_SPENDER, recordSpend, verdict } from "./budget";
 import { getStoredSummary, transcriptHash, transcriptRows, transcriptText } from "./composer/conversationSummary";
+import { CHARS_PER_TOKEN, estimateText } from "./contextWindow";
 import { searchConversations } from "./conversationSearch";
 import { isDue } from "./corpusNightly";
 import { userLocale } from "./i18n";
@@ -102,6 +103,128 @@ function storeBrief(row: Omit<BriefRow, "updated_at">): void {
  *  not the guest's. */
 export function domainsOf(memberId: string): Maurice[] {
   return listMaurices().filter((m) => m.created_by === memberId);
+}
+
+/** The model a brief carries when the member wrote it themselves: a correction
+ *  in the app replaces the text and is what Maurice reads from the next turn;
+ *  the night's next rewrite starts from it and is told whose words they are. */
+export const MEMBER_AUTHOR = "member";
+
+/** The member corrected (or wrote) the brief by hand. What the night knew —
+ *  the conversations read and how far — is kept, so the next rewrite still
+ *  reads only what came after. An empty text is a deletion. */
+export function setBriefText(domainId: string, memberId: string, text: string): BriefRow | null {
+  const clean = text.replace(/\r\n/g, "\n").trim();
+  if (!clean) {
+    deleteBrief(domainId, memberId);
+    return null;
+  }
+  const previous = getBrief(domainId, memberId);
+  storeBrief({
+    maurice_id: domainId,
+    member_id: memberId,
+    text: clean,
+    sources: previous?.sources ?? [],
+    read_until: previous?.read_until ?? null,
+    model: MEMBER_AUTHOR,
+  });
+  return getBrief(domainId, memberId);
+}
+
+/** Erase the brief: Maurice forgets what he kept on the domain, and the next
+ *  night writes a first brief again, from the whole domain. */
+export function deleteBrief(domainId: string, memberId: string): boolean {
+  const before = db.query(`SELECT 1 FROM domain_briefs WHERE maurice_id = ? AND member_id = ?`).get(domainId, memberId);
+  if (!before) return false;
+  db.run(`DELETE FROM domain_briefs WHERE maurice_id = ? AND member_id = ?`, [domainId, memberId]);
+  return true;
+}
+
+// ── What the everyday Maurice reads ──────────────────────────────────────────
+//
+// Every brief of the member's domains rides in the system prompt of their own
+// conversations — after the persona and the loaded context, so the cached
+// prefix only moves when a brief does (once a night, or on a correction) —
+// under one global budget. Never in a room, never for another member: the
+// caller (services/claude.ts) holds those two rules; this side only knows
+// whose briefs to fetch.
+
+/** The global budget of the briefs section, in estimated tokens. */
+export const BRIEFS_BUDGET_TOKENS = 3000;
+
+export interface PromptBrief {
+  name: string;
+  text: string;
+  updated_at: string;
+  model: string | null;
+}
+
+/** The section of the system prompt, or "" when the member has no brief. The
+ *  briefs are taken most recently rewritten first; one that does not fit whole
+ *  is cut at a paragraph (never mid-sentence) and closes the section, and the
+ *  domains left out are named so Maurice knows they exist. */
+export function briefsSection(briefs: PromptBrief[], memberName: string, budgetTokens = BRIEFS_BUDGET_TOKENS): string {
+  const live = briefs.filter((b) => b.text.trim()).sort((a, b) => (a.updated_at < b.updated_at ? 1 : a.updated_at > b.updated_at ? -1 : 0));
+  if (!live.length) return "";
+  const head =
+    `\n\n## Your briefs on ${memberName}'s domains\n` +
+    `A domain is a part of ${memberName}'s life you follow. On each you keep a brief: your working memory, written from past conversations and read, corrected or erased by ${memberName} — a brief marked "in their own words" is theirs and prevails over anything you remember otherwise. ` +
+    `Draw on these when a question falls into a domain, without reciting them or claiming more than they say; ` +
+    `${memberName} can read and edit every brief in the app, so when they ask what you know of a domain, this is it.`;
+  let used = estimateText(head);
+  const parts: string[] = [];
+  const left: string[] = [];
+  for (const b of live) {
+    if (left.length) { left.push(b.name); continue; }
+    const day = b.updated_at.slice(0, 10);
+    const by = b.model === MEMBER_AUTHOR ? ", in their own words" : "";
+    const title = `\n\n### ${b.name} (brief of ${day}${by})\n`;
+    const room = budgetTokens - used - estimateText(title);
+    const whole = estimateText(b.text.trim());
+    if (whole <= room) {
+      parts.push(title + b.text.trim());
+      used += estimateText(title) + whole;
+      continue;
+    }
+    // Cut at a paragraph if at least a third of the room is left for it.
+    const cut = cutToTokens(b.text.trim(), room);
+    if (cut && estimateText(cut) >= Math.min(whole, 120)) {
+      parts.push(title + cut + "\n(…cut short for room.)");
+      used = budgetTokens;
+    }
+    left.push(b.name);
+  }
+  // A brief cut short is also listed as left out — the list names what
+  // Maurice does not have in full, which is the useful fact.
+  const tail = left.length ? `\n\nNot loaded in full, for room: ${left.join(", ")}.` : "";
+  return head + parts.join("") + tail;
+}
+
+/** The longest prefix of `text` under `tokens`, ending on a paragraph break,
+ *  else on a sentence end; "" when no sentence fits. */
+function cutToTokens(text: string, tokens: number): string {
+  if (tokens <= 0) return "";
+  const chars = tokens * CHARS_PER_TOKEN;
+  if (text.length <= chars) return text;
+  const head = text.slice(0, chars);
+  const para = head.lastIndexOf("\n\n");
+  if (para > 0) return head.slice(0, para).trim();
+  const sentence = Math.max(head.lastIndexOf(". "), head.lastIndexOf(".\n"), head.lastIndexOf("! "), head.lastIndexOf("? "));
+  if (sentence > 0) return head.slice(0, sentence + 1).trim();
+  return "";
+}
+
+/** The briefs section for a member's own conversation: every brief on the
+ *  domains they made. The caller decides whether this conversation is one. */
+export function briefsForPrompt(memberId: string, memberName: string, budgetTokens = BRIEFS_BUDGET_TOKENS): string {
+  const rows = db
+    .query(
+      `SELECT m.name, b.text, b.updated_at, b.model FROM domain_briefs b
+       JOIN maurices m ON m.id = b.maurice_id
+       WHERE b.member_id = ? AND m.created_by = ?`,
+    )
+    .all(memberId, memberId) as PromptBrief[];
+  return briefsSection(rows, memberName, budgetTokens);
 }
 
 // ── What the model reads ─────────────────────────────────────────────────────
@@ -245,7 +368,10 @@ export async function findMaterial(
     .all(memberId, domain.id) as Array<{ id: string }>;
   for (const b of bound) offer(b.id, { how: "bound", score: 1 });
 
-  const query = [domain.name, domain.tagline].filter((s) => s && s.trim()).join(". ");
+  // The query is the domain's name and tagline, plus the opening of its
+  // prompt when it has one: what the member wrote it is about. A name alone
+  // ("Yi Jing") pulls in neighbours; a sentence of intent narrows the search.
+  const query = [domain.name, domain.tagline, domainStatement(domain, 300)].filter((s) => s && s.trim()).join(". ");
   try {
     for (const hit of await deps.search(memberId, query)) {
       offer(hit.conversation_id, { how: "semantic", score: hit.score });
@@ -311,18 +437,44 @@ export function systemPrompt(name: string, language: string, words: number): str
   ].join("\n\n");
 }
 
+/** What the domain is about, in the member's words: the opening of its
+ *  prompt, cut on a sentence. "" when it has none. */
+export function domainStatement(domain: Maurice, chars: number): string {
+  const p = (domain.prompt ?? "").replace(/\s+/g, " ").trim();
+  if (!p) return "";
+  if (p.length <= chars) return p;
+  const head = p.slice(0, chars);
+  const end = Math.max(head.lastIndexOf(". "), head.lastIndexOf("! "), head.lastIndexOf("? "));
+  return end > chars / 3 ? head.slice(0, end + 1) : head.trim() + "…";
+}
+
+function aboutLine(domain: Maurice, name: string): string {
+  const st = domainStatement(domain, 800);
+  return st ? ` ${name} describes it so: "${st}" Take that as the statement of what the domain is about — the brief covers this, not the rest.` : "";
+}
+
 export function firstPrompt(domain: Maurice, name: string, excerpts: string): string {
   const tag = domain.tagline?.trim() ? ` (${domain.tagline.trim()})` : "";
   return [
-    `The domain is called "${domain.name}"${tag}. Here are excerpts from ${name}'s conversations that belong to it, oldest first:`,
+    `The domain is called "${domain.name}"${tag}.${aboutLine(domain, name)} Here are excerpts from ${name}'s conversations that belong to it, oldest first:`,
     excerpts,
     `Write the brief of this domain: what you know of this part of their life, where it stands, what remains open.`,
   ].join("\n\n");
 }
 
-export function incrementalPrompt(domain: Maurice, previous: string, excerpts: string, words: number): string {
+export function incrementalPrompt(
+  domain: Maurice,
+  previous: string,
+  excerpts: string,
+  words: number,
+  opts: { name?: string; byMember?: boolean } = {},
+): string {
+  const name = opts.name ?? "the member";
+  const kept = opts.byMember
+    ? `Here is the brief as ${name} rewrote it by hand — their wording is right by definition: keep it unless the conversations below moved things on:`
+    : `Here is the brief you kept until now:`;
   return [
-    `The domain is called "${domain.name}". Here is the brief you kept until now:`,
+    `The domain is called "${domain.name}".${aboutLine(domain, name)} ${kept}`,
     previous,
     `And here are excerpts from conversations since then, oldest first:`,
     excerpts,
@@ -411,7 +563,7 @@ async function doRefresh(domain: Maurice, memberId: string): Promise<RefreshResu
   const words = previous?.text.trim() ? INCREMENTAL_WORDS : FIRST_WORDS;
   const excerpts = material.map((m) => m.excerpt).join("\n\n");
   const prompt = previous?.text.trim()
-    ? incrementalPrompt(domain, previous.text.trim(), excerpts, words)
+    ? incrementalPrompt(domain, previous.text.trim(), excerpts, words, { name, byMember: previous.model === MEMBER_AUTHOR })
     : firstPrompt(domain, name, excerpts);
 
   let result: AncillaryResult;

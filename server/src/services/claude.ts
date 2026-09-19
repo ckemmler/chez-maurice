@@ -9,6 +9,7 @@ import { resolveToText, resolveAttachments, getSpec } from "./composer/specs";
 import { resolveBookItem } from "./composer/weights";
 import { type FileAttachment } from "./composer/files";
 import { getConversationMaurice, resolveMauriceContext, resolveMauriceAttachments } from "./maurices";
+import { briefsForPrompt } from "./domainBriefs";
 import { resolveModelId, getModel } from "./models";
 import { resolveUsableModel, getEverydayModel } from "./modelAccess";
 import { ollamaTurn, OLLAMA_NUM_CTX, type OllamaToolCall } from "./ollama";
@@ -1028,6 +1029,16 @@ function trackedBooks(
           `even if you know the work — being spoiled is the one failure they cannot undo. ` +
           `When they say they have read further, record it with the calibre \`set_reading_progress\` tool and say where you have moved them to. ` +
           `If they do not say how far, ask for the chapter before writing anything.`;
+      }
+
+      // The member's domain briefs (services/domainBriefs.ts): what Maurice
+      // keeps on each part of their life, after the persona and the loaded
+      // context so the cached prefix only moves when a brief does. Only in
+      // the member's own conversation — never in a room, where another
+      // participant would read them — and not for Maurice Maurice, who
+      // answers from the documentation alone.
+      if (!maurice?.builtin && countParticipants(conversationId) === 1) {
+        systemPrompt += briefsForPrompt(memberId, userDisplayName);
       }
 
       // Library binaries (img/pdf) → real content blocks on the latest user turn.

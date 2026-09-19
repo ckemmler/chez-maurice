@@ -467,3 +467,31 @@
 "chat.review_reports" = "Esamina le segnalazioni";
 "chat.leave_room" = "Lascia la stanza";
 "sidebar.search" = "Cerca";
+
+// Domain briefs (DomainBriefView.swift)
+"brief.title" = "Quaderno";
+"brief.kicker" = "AMBITO";
+"brief.open" = "Quaderno";
+"brief.open.help" = "Leggi il quaderno che Maurice tiene su questo ambito";
+"brief.none" = "Nessun quaderno ancora. Maurice lo scrive di notte dalle tue conversazioni su questo ambito — o subito, qui sotto.";
+"brief.by_you" = "Con le tue parole · %@";
+"brief.by_maurice" = "Scritto da Maurice · %@";
+"brief.sources_one" = "%d conversazione letta";
+"brief.sources_other" = "%d conversazioni lette";
+"brief.placeholder" = "Ciò che Maurice sa di questo ambito, in pochi paragrafi.";
+"brief.rewrite" = "Riscrivi ora";
+"brief.rewriting" = "Riscrittura…";
+"brief.talk" = "Parlarne";
+"brief.erase" = "Cancella";
+"brief.erase.title" = "Cancellare il quaderno?";
+"brief.erase.message" = "Maurice dimentica ciò che teneva su questo ambito. La notte successiva scrive un quaderno nuovo dalle tue conversazioni.";
+"brief.saved" = "Salvato. È ciò che Maurice legge d’ora in poi.";
+"brief.erased" = "Cancellato. Maurice non tiene nulla su questo ambito fino al prossimo quaderno.";
+"brief.save_failed" = "Il server non ha accettato la modifica. Riprova.";
+"brief.unreachable" = "Impossibile caricare questo quaderno.";
+"brief.outcome.written_one" = "Riscritto da %d conversazione.";
+"brief.outcome.written_other" = "Riscritto da %d conversazioni.";
+"brief.outcome.unchanged" = "Niente di nuovo dall’ultimo quaderno.";
+"brief.outcome.capped" = "Il budget della notte è esaurito per oggi; il quaderno sarà riscritto domani.";
+"brief.outcome.failed" = "La riscrittura non è riuscita: %@";
+"brief.explainer" = "Questo quaderno è la memoria di lavoro di Maurice su questo ambito: lo legge in ogni conversazione che hai da solo con lui, mai in una stanza. Correggilo — le tue parole prevalgono — o cancellalo.";

@@ -124,6 +124,11 @@ struct ContentView: View {
         .sheet(isPresented: pickerBinding) {
             MauricePicker(onActivate: { preferredColumn = .detail })
         }
+        .sheet(isPresented: briefBinding) {
+            if let domain = studio.briefFor {
+                DomainBriefSheet(maurice: domain, onOpen: { preferredColumn = .detail })
+            }
+        }
         #if os(iOS)
         .fullScreenCover(isPresented: creatorBinding) { creatorView }
         #else
@@ -155,6 +160,9 @@ struct ContentView: View {
 
     private var pickerBinding: Binding<Bool> {
         Binding(get: { studio.showPicker }, set: { studio.showPicker = $0 })
+    }
+    private var briefBinding: Binding<Bool> {
+        Binding(get: { studio.briefFor != nil }, set: { if !$0 { studio.briefFor = nil } })
     }
     private var creatorBinding: Binding<Bool> {
         Binding(get: { studio.draft != nil }, set: { if !$0 { studio.closeCreator() } })

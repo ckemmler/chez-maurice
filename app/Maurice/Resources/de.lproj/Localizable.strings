@@ -467,3 +467,31 @@
 "chat.review_reports" = "Meldungen prüfen";
 "chat.leave_room" = "Raum verlassen";
 "sidebar.search" = "Suchen";
+
+// Domain briefs (DomainBriefView.swift)
+"brief.title" = "Heft";
+"brief.kicker" = "BEREICH";
+"brief.open" = "Heft";
+"brief.open.help" = "Das Heft lesen, das Maurice zu diesem Bereich führt";
+"brief.none" = "Noch kein Heft. Maurice schreibt es nachts aus deinen Gesprächen zu diesem Bereich — oder gleich jetzt, unten.";
+"brief.by_you" = "In deinen Worten · %@";
+"brief.by_maurice" = "Von Maurice geschrieben · %@";
+"brief.sources_one" = "%d Gespräch gelesen";
+"brief.sources_other" = "%d Gespräche gelesen";
+"brief.placeholder" = "Was Maurice über diesen Bereich weiß, in wenigen Absätzen.";
+"brief.rewrite" = "Jetzt neu schreiben";
+"brief.rewriting" = "Wird neu geschrieben…";
+"brief.talk" = "Darüber sprechen";
+"brief.erase" = "Löschen";
+"brief.erase.title" = "Heft löschen?";
+"brief.erase.message" = "Maurice vergisst, was er zu diesem Bereich festgehalten hat. In der nächsten Nacht schreibt er ein neues Heft aus deinen Gesprächen.";
+"brief.saved" = "Gespeichert. Das liest Maurice von nun an.";
+"brief.erased" = "Gelöscht. Maurice behält bis zum nächsten Heft nichts zu diesem Bereich.";
+"brief.save_failed" = "Der Server hat die Änderung nicht angenommen. Versuch es noch einmal.";
+"brief.unreachable" = "Dieses Heft konnte nicht geladen werden.";
+"brief.outcome.written_one" = "Neu geschrieben aus %d Gespräch.";
+"brief.outcome.written_other" = "Neu geschrieben aus %d Gesprächen.";
+"brief.outcome.unchanged" = "Nichts Neues seit dem letzten Heft.";
+"brief.outcome.capped" = "Das Nachtbudget ist für heute aufgebraucht; das Heft wird morgen neu geschrieben.";
+"brief.outcome.failed" = "Das Neuschreiben ist fehlgeschlagen: %@";
+"brief.explainer" = "Dieses Heft ist Maurices Arbeitsgedächtnis zu diesem Bereich: Er liest es in jedem Gespräch, das du allein mit ihm führst, nie in einem Raum. Korrigiere es — deine Worte gelten — oder lösche es.";

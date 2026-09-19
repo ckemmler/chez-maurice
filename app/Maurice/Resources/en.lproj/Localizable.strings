@@ -467,3 +467,31 @@
 "chat.review_reports" = "Review reports";
 "chat.leave_room" = "Leave room";
 "sidebar.search" = "Search";
+
+// Domain briefs (DomainBriefView.swift)
+"brief.title" = "Brief";
+"brief.kicker" = "DOMAIN";
+"brief.open" = "Brief";
+"brief.open.help" = "Read the brief Maurice keeps on this domain";
+"brief.none" = "No brief yet. Maurice writes one at night from your conversations on this domain — or right now, below.";
+"brief.by_you" = "In your words · %@";
+"brief.by_maurice" = "Written by Maurice · %@";
+"brief.sources_one" = "%d conversation read";
+"brief.sources_other" = "%d conversations read";
+"brief.placeholder" = "What Maurice knows about this domain, in a few paragraphs.";
+"brief.rewrite" = "Rewrite now";
+"brief.rewriting" = "Rewriting…";
+"brief.talk" = "Talk about it";
+"brief.erase" = "Erase";
+"brief.erase.title" = "Erase the brief?";
+"brief.erase.message" = "Maurice forgets what he kept on this domain. The next night writes a fresh brief from your conversations.";
+"brief.saved" = "Saved. This is what Maurice reads from now on.";
+"brief.erased" = "Erased. Maurice keeps nothing on this domain until the next brief.";
+"brief.save_failed" = "The server did not take it. Try again.";
+"brief.unreachable" = "This brief could not be loaded.";
+"brief.outcome.written_one" = "Rewritten from %d conversation.";
+"brief.outcome.written_other" = "Rewritten from %d conversations.";
+"brief.outcome.unchanged" = "Nothing new since the last brief.";
+"brief.outcome.capped" = "The night’s allowance is spent for today; the brief is rewritten tomorrow.";
+"brief.outcome.failed" = "The rewrite failed: %@";
+"brief.explainer" = "This brief is Maurice’s working memory on this domain: he reads it in every conversation you have alone with him, never in a room. Correct it — your words prevail — or erase it.";

@@ -30,6 +30,14 @@ final class StudioState {
     var draft: Maurice?
     var draftIsEdit = false
 
+    /// The domain whose brief is open (DomainBriefView.swift); nil = closed.
+    var briefFor: Maurice?
+
+    func openBrief(_ maurice: Maurice) {
+        briefFor = maurice
+        showPicker = false
+    }
+
     func openCreator(_ maurice: Maurice?, isEdit: Bool) {
         draft = maurice ?? Maurice.blank()
         draftIsEdit = isEdit
@@ -110,7 +118,8 @@ struct MauricePicker: View {
                             maurice: m,
                             startLabel: studio.pickerSends ? L("studio.send") : L("studio.use"),
                             onStart: { pick(m) },
-                            onEdit: { studio.openCreator(m, isEdit: true) }
+                            onEdit: { studio.openCreator(m, isEdit: true) },
+                            onBrief: { studio.openBrief(m) }
                         )
                     }
 
@@ -162,11 +171,13 @@ struct MauricePicker: View {
 
 private struct PickerRow: View {
     @Environment(MauriceStore.self) private var store
+    @Environment(SessionStore.self) private var session
     @Environment(\.mauriceTheme) private var theme
     let maurice: Maurice
     let startLabel: String
     let onStart: () -> Void
     let onEdit: () -> Void
+    let onBrief: () -> Void
 
     var body: some View {
         HStack(spacing: 12) {
@@ -194,6 +205,17 @@ private struct PickerRow: View {
             }
 
             Spacer(minLength: 6)
+
+            // A Maurice of the member's own is a domain: its brief opens here.
+            if maurice.isDomain(of: session.activeUserId) {
+                Button(action: onBrief) {
+                    Image(systemName: "book.closed").font(.system(size: 13))
+                        .foregroundStyle(theme.inkMute)
+                        .frame(width: 30, height: 30)
+                }
+                .buttonStyle(.plain)
+                .help(L("brief.open.help"))
+            }
 
             // Neither the everyday Maurice nor Maurice Maurice can be edited.
             if maurice.isEditable {
@@ -230,6 +252,7 @@ private struct PickerRow: View {
 struct StudioGreeting: View {
     @Environment(MauriceStore.self) private var store
     @Environment(StudioState.self) private var studio
+    @Environment(SessionStore.self) private var session
     @Environment(\.mauriceTheme) private var theme
     let maurice: Maurice
 
@@ -268,22 +291,32 @@ struct StudioGreeting: View {
             .fixedSize(horizontal: true, vertical: false)
 
             // Maurice Maurice is built in: nothing to edit, the model included.
+            // A Maurice of the member's own is also a domain, with a brief.
             if maurice.isEditable {
-                Button { studio.openCreator(maurice, isEdit: true) } label: {
-                    HStack(spacing: 6) {
-                        Image(systemName: "pencil").font(.system(size: 11))
-                        Text(L("studio.edit_maurice")).font(.system(size: 11, design: .monospaced))
+                HStack(spacing: 8) {
+                    if maurice.isDomain(of: session.activeUserId) {
+                        greetingButton("book.closed", L("brief.open")) { studio.openBrief(maurice) }
                     }
-                    .foregroundStyle(theme.inkMute)
-                    .padding(.horizontal, 12).padding(.vertical, 6)
-                    .overlay(Capsule().strokeBorder(theme.ruleHard, lineWidth: 0.5))
+                    greetingButton("pencil", L("studio.edit_maurice")) { studio.openCreator(maurice, isEdit: true) }
                 }
-                .buttonStyle(.plain)
                 .padding(.top, 2)
             }
 
             Spacer()
         }
         .frame(maxWidth: .infinity)
+    }
+
+    private func greetingButton(_ icon: String, _ label: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 6) {
+                Image(systemName: icon).font(.system(size: 11))
+                Text(label).font(.system(size: 11, design: .monospaced))
+            }
+            .foregroundStyle(theme.inkMute)
+            .padding(.horizontal, 12).padding(.vertical, 6)
+            .overlay(Capsule().strokeBorder(theme.ruleHard, lineWidth: 0.5))
+        }
+        .buttonStyle(.plain)
     }
 }

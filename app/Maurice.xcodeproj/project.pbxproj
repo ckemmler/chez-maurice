@@ -18,6 +18,7 @@
 		48A8B2E348C99992B23AA7DF /* SessionStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 405F9AA69C83E58A86FDD625 /* SessionStore.swift */; };
 		52B02D3D7EF2D7154BDB5FD8 /* BoaterHat.swift in Sources */ = {isa = PBXBuildFile; fileRef = EE3170FDE5751A81E295CF2E /* BoaterHat.swift */; };
 		5421D4350871A4F9836C8B60 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 2E85AEEB530CF3C1C5C3E79F /* Assets.xcassets */; };
+		5792B7EEEB4D674709A40D76 /* DomainBriefView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5C3DB8955BF008783D2F7399 /* DomainBriefView.swift */; };
 		58C19733EBF8E99AB41D71A9 /* Hats.swift in Sources */ = {isa = PBXBuildFile; fileRef = DCDEAA0E48CC14C7C18BE8FD /* Hats.swift */; };
 		59B67C643B5A71D878B6A7D1 /* MarkdownUI in Frameworks */ = {isa = PBXBuildFile; productRef = 7C956089E4A23890D03A7C5B /* MarkdownUI */; };
 		5B4288B9598CBE20AE92F4D9 /* YoungSerif-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 723F14E6AB7B2EAB08CC94EF /* YoungSerif-Regular.ttf */; };
@@ -41,6 +42,7 @@
 		8D85F19C2F440203BAFC484F /* ChatView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E01BB325D88F4E74B3571BC /* ChatView.swift */; };
 		91817BB3A32C4F1FE886B982 /* OFL.txt in Resources */ = {isa = PBXBuildFile; fileRef = 51780E1D57A085038F7AB3A4 /* OFL.txt */; };
 		98920F5C7DB20F4AF25B7C78 /* SortMenu.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC55EBC69472BBED58BC1614 /* SortMenu.swift */; };
+		A6ADC54545F72E5329A2D0D9 /* DomainBriefView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5C3DB8955BF008783D2F7399 /* DomainBriefView.swift */; };
 		AE476FD86F5124FDD239F5AB /* OFL.txt in Resources */ = {isa = PBXBuildFile; fileRef = 51780E1D57A085038F7AB3A4 /* OFL.txt */; };
 		AF3DE3F5A58AC486DD4036F1 /* ComposerViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A157516CA9C98CE6FB4E293 /* ComposerViews.swift */; };
 		B124B0C5C8B1A67C94E9A4FE /* BoaterHat.swift in Sources */ = {isa = PBXBuildFile; fileRef = EE3170FDE5751A81E295CF2E /* BoaterHat.swift */; };
@@ -80,6 +82,7 @@
 		4E01BB325D88F4E74B3571BC /* ChatView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatView.swift; sourceTree = "<group>"; };
 		4E0D0DF979284275260F31D2 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		51780E1D57A085038F7AB3A4 /* OFL.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = OFL.txt; sourceTree = "<group>"; };
+		5C3DB8955BF008783D2F7399 /* DomainBriefView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DomainBriefView.swift; sourceTree = "<group>"; };
 		68242686E76201D100B8C3A9 /* ScopePickerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScopePickerView.swift; sourceTree = "<group>"; };
 		70240FCC64F152DDCEC0F0E2 /* ComposerStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerStore.swift; sourceTree = "<group>"; };
 		70ED879F4FDF2E7978D56133 /* nl */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = nl; path = nl.lproj/Localizable.strings; sourceTree = "<group>"; };
@@ -174,6 +177,7 @@
 				4E01BB325D88F4E74B3571BC /* ChatView.swift */,
 				7A157516CA9C98CE6FB4E293 /* ComposerViews.swift */,
 				462A7ECD4C83B5ADC43A81CB /* ContentView.swift */,
+				5C3DB8955BF008783D2F7399 /* DomainBriefView.swift */,
 				C5ABD3D073D2DB74064F5A13 /* Glass.swift */,
 				DCDEAA0E48CC14C7C18BE8FD /* Hats.swift */,
 				00B700626149A3D1C0D6D5CB /* PairingView.swift */,
@@ -353,6 +357,7 @@
 				22273DE6923544F195C76CAD /* ContentView.swift in Sources */,
 				87ECEC8E0F3C684D0577613C /* DictateIntent.swift in Sources */,
 				829F549C6E38D127EBA91380 /* Dictation.swift in Sources */,
+				5792B7EEEB4D674709A40D76 /* DomainBriefView.swift in Sources */,
 				EEF2722A0817C78F1649422B /* Glass.swift in Sources */,
 				CAF942F37AE2F3E45A4761D0 /* Hats.swift in Sources */,
 				7416ECF23A6705C449F95A51 /* MauriceApp.swift in Sources */,
@@ -382,6 +387,7 @@
 				8420EA02F7C918A622052FF4 /* ContentView.swift in Sources */,
 				40A5F2A1C32240D14842B8D2 /* DictateIntent.swift in Sources */,
 				E18185D700DE1B1EB0B18AA0 /* Dictation.swift in Sources */,
+				A6ADC54545F72E5329A2D0D9 /* DomainBriefView.swift in Sources */,
 				6E60BACFAEB5A57C921B21BE /* Glass.swift in Sources */,
 				58C19733EBF8E99AB41D71A9 /* Hats.swift in Sources */,
 				01BF41C8D7454D75BCFE569A /* MauriceApp.swift in Sources */,
