@@ -289,8 +289,12 @@ export function autoCommit(garden: GardenRef, paths: string[], message: string):
   if (!root) return;
   try {
     // Skip stray paths rather than aborting the whole commit on one of them.
+    // Through the real path: git answers with symlinks resolved (/private/var
+    // for a /var/folders garden on macOS), and a path relative to a root the
+    // caller spelt differently would start with ".." and be skipped.
+    const real = (p: string) => { try { return fs.realpathSync(p); } catch { return p; } };
     const rel = paths
-      .map((p) => path.relative(root, p))
+      .map((p) => path.relative(root, real(p)))
       .filter((p) => p && !p.startsWith(".."));
     if (!rel.length) return;
     spawnSync("git", ["add", "--", ...rel], { cwd: root });

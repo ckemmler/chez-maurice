@@ -16,6 +16,7 @@ struct DomainBriefSheet: View {
     @Environment(SessionStore.self) private var session
     @Environment(ChatService.self) private var chat
     @Environment(DomainsState.self) private var domains
+    @Environment(GardensStore.self) private var gardens
     @Environment(\.mauriceTheme) private var theme
     @Environment(\.dismiss) private var dismiss
 
@@ -27,6 +28,7 @@ struct DomainBriefSheet: View {
     @State private var loaded = false
     @State private var found = true
     @State private var brief: DomainBrief?
+    @State private var notes: SeededNotes?
     @State private var text = ""
     @State private var saving = false
     @State private var refreshing = false
@@ -57,6 +59,7 @@ struct DomainBriefSheet: View {
                                 .fixedSize(horizontal: false, vertical: true)
                         }
                         actions
+                        gardenNotes
                         Text(session.localized("brief.explainer"))
                             .font(.system(size: 12)).foregroundStyle(theme.inkMute)
                             .fixedSize(horizontal: false, vertical: true)
@@ -132,6 +135,40 @@ struct DomainBriefSheet: View {
             Text(session.localized("brief.none"))
                 .font(.system(size: 13)).foregroundStyle(theme.inkSoft)
                 .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    // MARK: the garden's notes (P2-C)
+
+    /// The notes Maurice seeded in the garden at the domain's adoption: how
+    /// many, how many still to review, and the way to them. Nothing when the
+    /// garden holds none for this domain.
+    @ViewBuilder
+    private var gardenNotes: some View {
+        if let notes {
+            HStack(spacing: 6) {
+                Image(systemName: "leaf").font(.system(size: 11))
+                Text(String(format: notes.total == 1 ? session.localized("brief.notes_one") : session.localized("brief.notes_other"), notes.total))
+                if notes.unreviewed > 0 {
+                    Text("·")
+                    Text(String(format: notes.unreviewed == 1 ? session.localized("brief.notes.unreviewed_one") : session.localized("brief.notes.unreviewed_other"), notes.unreviewed))
+                }
+                if let path = notes.webPath {
+                    Button {
+                        gardens.browse(path: path)
+                    } label: {
+                        HStack(spacing: 3) {
+                            Text(session.localized("brief.notes.open"))
+                            Image(systemName: "arrow.up.forward").font(.system(size: 8, weight: .medium))
+                        }
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(theme.inkSoft)
+                    .help(session.localized("gardens.browse_note"))
+                }
+            }
+            .font(.system(size: 11, design: .monospaced))
+            .foregroundStyle(theme.inkMute)
         }
     }
 
@@ -230,6 +267,7 @@ struct DomainBriefSheet: View {
         let r = await store.loadBrief(id)
         found = r.found
         brief = r.brief
+        notes = r.notes
         text = r.brief?.text ?? ""
         loaded = true
     }

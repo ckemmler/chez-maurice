@@ -505,3 +505,12 @@
 "domains.kicker.domain" = "BEREICH";
 "domains.kicker.companion" = "LESEBEGLEITER";
 "domain.edit" = "Bearbeiten";
+
+/* The garden's notes of a domain, seeded by Maurice at its adoption (P2-C) */
+"gardens.unreviewed" = "durchzusehen";
+"gardens.unreviewed.help" = "Von Maurice geschrieben, noch nicht durchgesehen – im Garten öffnen, um sie zu behalten, zu korrigieren oder zu verwerfen";
+"brief.notes_one" = "%d Notiz im Garten";
+"brief.notes_other" = "%d Notizen im Garten";
+"brief.notes.unreviewed_one" = "%d durchzusehen";
+"brief.notes.unreviewed_other" = "%d durchzusehen";
+"brief.notes.open" = "Öffnen";

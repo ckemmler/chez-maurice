@@ -508,7 +508,30 @@ def _note_summary(note_id: str, fm: dict[str, Any]) -> dict[str, Any]:
         summary["status"] = fm["status"]
     if fm.get("order") is not None:
         summary["order"] = fm["order"]
+    # Written by Maurice (a domain's seeding) and not reviewed yet — the fiche
+    # convention, `meta.opened: false`, on a note.
+    if _is_unreviewed(fm):
+        summary["unreviewed"] = True
     return summary
+
+
+def _is_unreviewed(fm: dict[str, Any]) -> bool:
+    meta = fm.get("meta")
+    return isinstance(meta, dict) and meta.get("opened") is False
+
+
+def _clear_unreviewed(fm: dict[str, Any]) -> bool:
+    """Drop `meta.opened: false` — the member has written on the note, which is
+    the review. Absence is the reviewed state; `meta:` goes when empty."""
+    if not _is_unreviewed(fm):
+        return False
+    meta = dict(fm["meta"])
+    meta.pop("opened", None)
+    if meta:
+        fm["meta"] = meta
+    else:
+        fm.pop("meta", None)
+    return True
 
 
 def _json_default(obj: Any) -> Any:
@@ -2166,6 +2189,9 @@ def _handle_update_note(args: dict[str, Any]) -> dict[str, Any]:
         if not body.startswith("\n"):
             body = f"\n{body}\n"
         updated_fields.append("body")
+        # Rewriting a note Maurice seeded is the member's review of it.
+        if _clear_unreviewed(fm):
+            updated_fields.append("reviewed")
 
     _write_note(path, fm, body)
     _auto_commit([path], f"Update note: {note_id}")

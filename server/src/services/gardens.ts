@@ -38,6 +38,8 @@ export interface GardenNote {
   kind: GardenItemKind;
   /** the resource collection for a fiche or a card; null for a note */
   collection: string | null;
+  /** written by Maurice and not reviewed yet (P2-C); absent otherwise */
+  unreviewed?: true;
 }
 
 export interface Garden {
@@ -211,6 +213,7 @@ export function gardensFor(memberId: string): Garden[] {
         web_path: noteWebPath(owner.username, note),
         kind: "note",
         collection: null,
+        ...(note.unreviewed ? { unreviewed: true as const } : {}),
       });
     }
 

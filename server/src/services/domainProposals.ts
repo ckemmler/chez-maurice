@@ -3,6 +3,7 @@ import { refreshBrief, type RefreshResult } from "./domainBriefs";
 import { createMaurice, getMaurice, type Maurice } from "./maurices";
 import type { McpTool } from "./mcpClient";
 import { OPENED_BY_MAURICE } from "./openedConversations";
+import { describeSeeding, seedDomain, type SeedResult } from "./domainSeeding";
 
 // The domain proposals — what the night's mapping found and offers, and the
 // three tools Maurice holds in the conversation that carries them.
@@ -40,6 +41,9 @@ export interface ProposalStats {
   origin?: "mapping" | "split" | "model_split" | "member" | "merge";
   /** The night this proposal was made, as a local day. */
   night?: string;
+  /** After adoption (P2-C): whether the garden was seeded for this domain,
+   *  or the member declined the notes. Absent = not offered yet. */
+  seed?: { state: "written" | "declined"; at: string; notes?: string[] };
 }
 
 export interface Proposal {
@@ -208,17 +212,20 @@ export function expireStale(memberId: string, days: number, now = new Date()): n
 // ── Whose conversation is this? ──────────────────────────────────────────────
 
 /** The member whose proposals a conversation carries, if it is one Maurice
- *  opened for that purpose and a proposal is still open in it; else null.
- *  This is the whole grant: the tools exist here and nowhere else. */
+ *  opened for that purpose and something in it still waits for their word:
+ *  a proposal open, or a domain adopted whose garden notes were neither
+ *  written nor declined (P2-C); else null. This is the whole grant: the
+ *  tools exist here and nowhere else. */
 export function proposalMemberOf(conversationId: string): string | null {
   const conv = db.query(`SELECT user_id, opened_by FROM conversations WHERE id = ?`).get(conversationId) as
     | { user_id: string; opened_by: string }
     | null;
   if (!conv || conv.opened_by !== OPENED_BY_MAURICE) return null;
-  const has = db
-    .query(`SELECT 1 FROM domain_proposals WHERE conversation_id = ? AND member_id = ? AND state = 'proposed' LIMIT 1`)
-    .get(conversationId, conv.user_id);
-  return has ? conv.user_id : null;
+  const rows = db
+    .query(`SELECT state, stats_json FROM domain_proposals WHERE conversation_id = ? AND member_id = ? AND state IN ('proposed', 'adopted')`)
+    .all(conversationId, conv.user_id) as Array<{ state: ProposalState; stats_json: string }>;
+  const waiting = rows.some((r) => r.state === "proposed" || !parseJson<ProposalStats>(r.stats_json, {}).seed);
+  return waiting ? conv.user_id : null;
 }
 
 /** The proposals carried by a conversation (any state), presented first. */
@@ -297,21 +304,27 @@ export function proposalPromptSection(conversationId: string, memberName: string
   const settled = all.filter((p) => p.state !== "proposed");
   const line = (p: Proposal) =>
     `- ${p.name} (id ${p.id}; ${p.conversation_ids.length} conversations, ${p.stats.verdict === "lived" ? "lived, quiet now" : "alive"}${p.presented ? ", presented in your opening message" : ""}${p.stats.split_hint ? `; might be several things: ${p.stats.split_hint}` : ""})`;
+  const settledLine = (p: Proposal) =>
+    p.state !== "adopted"
+      ? `${p.name} (${p.state})`
+      : `${p.name} (id ${p.id}; adopted, ${p.stats.seed?.state === "written" ? `${p.stats.seed.notes?.length ?? 0} note(s) seeded in the garden` : p.stats.seed?.state === "declined" ? "garden notes declined" : "garden notes not offered yet"})`;
   return (
     `\n\n## Proposing domains\n` +
     `You opened this conversation yourself, at night, to propose domains: parts of ${memberName}'s life you seem to follow across their conversations (imported ones and the ones lived with you). A domain, once adopted, is a row with a name and a statement that you keep a brief on. ` +
     `Nothing becomes a domain without ${memberName}'s yes in this conversation — never adopt on a hint, an "ok" to something else, or your own judgement. Discuss: they may rename, merge two, cut one, say one is not a domain (then dismiss it, and its conversations will not come up again), or point at something you missed (then propose it). Their words on what a domain is about are right by definition.\n` +
     `Three tools, here only: \`domains__propose\` (list the proposals with their sample conversations, show one in full, or add one ${memberName} names), \`domains__adjust\` (rename, merge, split, dismiss), \`domains__adopt\` (create the domain — after an explicit yes). ` +
     `Adopting writes the first brief in the background; say it will appear on the domain's page in the app shortly. In ${memberName}'s language the app calls a brief "${word}" — use that word. Do not read ids aloud; use names.\n` +
+    `Seeding the garden (\`domains__seed\`): once a domain is adopted, offer once to write a few notes on it in ${memberName}'s garden — what you understood, the open threads, where it comes from, perhaps one note per salient subject — each marked as written by you and not yet reviewed, for them to keep, correct or throw away. ` +
+    `A yes to the domain is not a yes to the notes: call \`domains__seed\` only after ${memberName} agrees to the notes themselves. It takes up to a minute and returns the notes with their links — give them. If they decline, call it with \`action: "decline"\` so you do not ask again.\n` +
     (open.length ? `\nOpen proposals:\n${open.map(line).join("\n")}` : `\nNo proposal is open any more in this conversation.`) +
-    (settled.length ? `\n\nSettled: ${settled.map((p) => `${p.name} (${p.state})`).join(", ")}.` : "")
+    (settled.length ? `\n\nSettled: ${settled.map(settledLine).join("; ")}.` : "")
   );
 }
 
 // ── The tools ────────────────────────────────────────────────────────────────
 
 export const DOMAIN_TOOL_PREFIX = "domains__";
-export const DOMAIN_TOOL_NAMES = ["domains__propose", "domains__adjust", "domains__adopt"] as const;
+export const DOMAIN_TOOL_NAMES = ["domains__propose", "domains__adjust", "domains__adopt", "domains__seed"] as const;
 
 export function isDomainTool(name: string): boolean {
   return (DOMAIN_TOOL_NAMES as readonly string[]).includes(name);
@@ -376,10 +389,24 @@ const TOOLS: McpTool[] = [
       required: ["id"],
     },
   },
+  {
+    name: "domains__seed",
+    description:
+      "Write a few notes in the member's garden on a domain adopted in this conversation — only after the member said yes to the notes themselves (adopting the domain is not that yes). One note for the domain (what Maurice understood, the open threads, where it comes from) and up to three on its salient subjects, all marked as written by Maurice and not yet reviewed, with their provenance; the member keeps, corrects or throws each away. Takes up to a minute; returns the notes with their links. `action: \"decline\"` records that the member does not want notes, so they are not asked again.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        id: { type: "string", description: "the adopted proposal" },
+        action: { type: "string", enum: ["write", "decline"], description: "write (default) or decline" },
+      },
+      required: ["id"],
+    },
+  },
 ];
 
-/** The tools for a turn: the three, when the conversation carries an open
- *  proposal of the member taking the turn; nothing otherwise. */
+/** The tools for a turn: the four, when the conversation carries an open
+ *  proposal of the member taking the turn, or an adopted one whose notes
+ *  still wait for their word; nothing otherwise. */
 export function domainToolsFor(conversationId: string, memberId: string | undefined): McpTool[] {
   if (!memberId) return [];
   const owner = proposalMemberOf(conversationId);
@@ -524,6 +551,28 @@ export async function runDomainTool(name: string, input: any, conversationId: st
       domain_id: r.domain.id,
       conversations_bound: r.bound,
       brief: "being written now; it will appear on the domain's page in the app",
+      garden: "no note written: offer to seed the garden (domains__seed) and wait for a yes to the notes",
+    });
+  }
+
+  if (name === "domains__seed") {
+    const p = mine(str(inp.id));
+    if (!p) return fail("no such proposal in this conversation");
+    if (p.state !== "adopted" || !p.maurice_id) return fail(`this proposal is ${p.state}; only an adopted domain can be seeded`);
+    if (p.stats.seed) return fail(p.stats.seed.state === "written" ? "the garden was already seeded for this domain" : "the member declined notes on this domain");
+    if (str(inp.action) === "decline") {
+      updateProposal(p.id, { stats: { ...p.stats, seed: { state: "declined", at: new Date().toISOString() } } });
+      return ok({ declined: p.name, note: "no note written; do not offer again" });
+    }
+    const domain = getMaurice(p.maurice_id);
+    if (!domain || domain.created_by !== memberId) return fail("the domain no longer exists");
+    const r = await seedProposal(p, domain, memberId);
+    if (r.outcome !== "written") return fail(describeSeeding(r));
+    return ok({
+      seeded: domain.name,
+      notes: r.notes.map((n) => ({ title: n.title, role: n.role, link: n.web_path })),
+      from_conversations: r.sources,
+      note: "each note is marked as written by Maurice and not yet reviewed; the member keeps, corrects or throws it away in the garden",
     });
   }
   return fail(`unknown tool ${name}`);
@@ -592,4 +641,20 @@ export function adoptProposal(p: Proposal, opts: { name?: string; summary?: stri
     return { outcome: "failed", brief: null, sources: 0, cost_usd: null, error: String(err) } as RefreshResult;
   });
   return { domain, bound, brief };
+}
+
+// ── Seeding (P2-C) ───────────────────────────────────────────────────────────
+
+/**
+ * Write the garden notes of an adopted proposal's domain, on the member's
+ * turn and account (services/domainSeeding.ts), and record the outcome on
+ * the proposal so it is offered once. The yes is the caller's business.
+ */
+export async function seedProposal(p: Proposal, domain: Maurice, memberId: string): Promise<SeedResult> {
+  const r = await seedDomain(domain, memberId);
+  if (r.outcome === "written") {
+    updateProposal(p.id, { stats: { ...p.stats, seed: { state: "written", at: new Date().toISOString(), notes: r.notes.map((n) => n.slug) } } });
+    console.log(`[proposals] "${domain.name}": garden seeded for ${memberId} — ${r.notes.map((n) => n.slug).join(", ")}`);
+  }
+  return r;
 }

@@ -231,7 +231,7 @@ export function briefsForPrompt(memberId: string, memberName: string, budgetToke
 
 // ── What the model reads ─────────────────────────────────────────────────────
 
-interface Turn {
+export interface Turn {
   role: string;
   content: string;
   created_at: string;
@@ -271,7 +271,7 @@ function day(iso: string): string {
 
 /** The excerpt P0 bis settled on: the first turn nearly whole, the rest cut
  *  short, up to the character budget. */
-function excerptOf(turns: Turn[], title: string, who: string): string {
+export function excerptOf(turns: Turn[], title: string, who: string): string {
   const lines = [`— ${day(turns[turns.length - 1]!.created_at)} — "${title || "(untitled)"}"`];
   let used = 0;
   turns.forEach((t, i) => {
@@ -286,7 +286,7 @@ function excerptOf(turns: Turn[], title: string, who: string): string {
   return lines.join("\n");
 }
 
-function turnsOf(conversationId: string, since: string | null): Turn[] {
+export function turnsOf(conversationId: string, since: string | null): Turn[] {
   const rows = (
     since
       ? db

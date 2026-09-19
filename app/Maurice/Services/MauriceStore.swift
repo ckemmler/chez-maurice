@@ -129,6 +129,9 @@ struct DomainOverview: Equatable {
     var briefByMember: Bool = false
     /// Companion: the most recently touched conversation bound to it.
     var conversationId: String?
+    /// Domain: the notes Maurice seeded in the garden for it (P2-C) — how
+    /// many, how many not reviewed yet, and the hub's web path; nil when none.
+    var notes: SeededNotes?
 
     static func parse(_ d: [String: Any]) -> DomainOverview? {
         guard let id = d["id"] as? String else { return nil }
@@ -139,8 +142,21 @@ struct DomainOverview: Equatable {
             mine: d["mine"] as? Bool ?? true,
             briefUpdatedAt: b?["updated_at"] as? String,
             briefByMember: (b?["model"] as? String) == "member",
-            conversationId: d["conversation_id"] as? String
+            conversationId: d["conversation_id"] as? String,
+            notes: SeededNotes.parse(d["notes"])
         )
+    }
+}
+
+/// What a domain has in the garden: the notes Maurice wrote at its adoption.
+struct SeededNotes: Equatable {
+    var total: Int
+    var unreviewed: Int
+    var webPath: String?
+
+    static func parse(_ raw: Any?) -> SeededNotes? {
+        guard let d = raw as? [String: Any], let total = d["total"] as? Int, total > 0 else { return nil }
+        return SeededNotes(total: total, unreviewed: d["unreviewed"] as? Int ?? 0, webPath: d["web_path"] as? String)
     }
 }
 
@@ -367,10 +383,12 @@ final class MauriceStore {
 
     /// The brief on a domain, or nil when the night has not written one yet
     /// (or the domain is not this member's). `found` tells the two apart.
-    func loadBrief(_ domainId: String) async -> (found: Bool, brief: DomainBrief?) {
+    /// The domain's page: its brief, and the notes Maurice seeded in the
+    /// garden for it (nil when there are none).
+    func loadBrief(_ domainId: String) async -> (found: Bool, brief: DomainBrief?, notes: SeededNotes?) {
         let (status, json) = await requestStatus("GET", "/api/domains/\(domainId)/brief")
-        guard status == 200, let d = json as? [String: Any] else { return (false, nil) }
-        return (true, (d["brief"] as? [String: Any]).flatMap(DomainBrief.parse))
+        guard status == 200, let d = json as? [String: Any] else { return (false, nil, nil) }
+        return (true, (d["brief"] as? [String: Any]).flatMap(DomainBrief.parse), SeededNotes.parse(d["notes"]))
     }
 
     /// The member's correction: what Maurice reads from the next turn on, and

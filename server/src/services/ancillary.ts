@@ -116,6 +116,11 @@ export const ANCILLARY_INVOCATIONS: AncillaryInvocation[] = [
   { id: "domain_mapping", side: "server", tier: "standard", label: "Domain mapping",
     blurb: "Naming and describing the groups of conversations the night finds, to propose them as domains.",
     prefer: NIGHT_MODELS },
+  // Seeding the garden (services/domainSeeding.ts): on the member's yes, in
+  // their own turn, charged to them — the night's model, not the night's purse.
+  { id: "domain_seed", side: "server", tier: "standard", label: "Domain notes",
+    blurb: "The notes Maurice writes in the garden when a member adopts a domain and asks for them — marked as not yet reviewed.",
+    prefer: NIGHT_MODELS },
   // The documentation tool (services/mauriceDocsTool.ts): a question about
   // Maurice himself, answered from the system documentation in a sub-turn of
   // the member's own turn, charged to that member. The model was Maurice

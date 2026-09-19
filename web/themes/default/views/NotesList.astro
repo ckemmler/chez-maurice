@@ -24,6 +24,11 @@ function isPrivate(note: typeof notes[number]) {
   return isEncrypted(note.data);
 }
 
+// Written by Maurice at a domain's adoption, not reviewed yet (meta.opened: false).
+function isUnreviewed(note: typeof notes[number]) {
+  return (note.data as any).meta?.opened === false;
+}
+
 const allMocs = notes.filter((n) => isMocFlag(n.data));
 
 // Build set of slugs claimed as children by any MOC (wikilinks only — markdown links are cross-references)
@@ -64,7 +69,7 @@ const recent = notes;
                   <div class="moc-card__body">
                     <h3 class="moc-card__title">
                       <svg class="moc-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></svg>
-                      <span class="moc-card__title-wrap">{moc.data.title}{!isDraft(moc) && <span class="public-dot">•</span>}{isPrivate(moc) && <svg class="private-lock" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>}</span>
+                      <span class="moc-card__title-wrap">{moc.data.title}{!isDraft(moc) && <span class="public-dot">•</span>}{isUnreviewed(moc) && <span class="unreviewed-tag">{t(locale, "notes.unreviewed.tag")}</span>}{isPrivate(moc) && <svg class="private-lock" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>}</span>
                     </h3>
                     {moc.data.description && <p class="moc-card__desc">{moc.data.description}</p>}
                   </div>
@@ -83,7 +88,7 @@ const recent = notes;
                   {isMocFlag(note.data) && (
                     <svg class="moc-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></svg>
                   )}
-                  {note.data.title}</a>{!isDraft(note) && <span class="public-dot">•</span>}{isPrivate(note) && <svg class="private-lock" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>}
+                  {note.data.title}</a>{!isDraft(note) && <span class="public-dot">•</span>}{isUnreviewed(note) && <span class="unreviewed-tag">{t(locale, "notes.unreviewed.tag")}</span>}{isPrivate(note) && <svg class="private-lock" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>}
                 <span class="text-muted text-sm">
                   {" "}— {formatShortDate(note.data.date, locale)}
                 </span>
@@ -102,6 +107,12 @@ const recent = notes;
 </Base>
 
 <style>
+  .unreviewed-tag {
+    display: inline-block; margin-left: 0.4rem; padding: 0 0.4rem; border-radius: 999px;
+    border: 1px dashed var(--color-text-quiet, #888); color: var(--color-text-quiet, #666);
+    font-size: 0.7rem; font-weight: 400; vertical-align: middle; text-transform: lowercase;
+  }
+
   .moc-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));

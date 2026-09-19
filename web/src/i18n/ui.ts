@@ -84,6 +84,15 @@ export const ui: Record<Locale, Record<string, string>> = {
     "notes.recent": "Recent",
     "notes.noNotesYet": "No notes yet.",
     "notes.backToNotes": "← Back to notes",
+    // A note Maurice seeded at a domain's adoption, not reviewed yet
+    "notes.unreviewed.tag": "to review",
+    "notes.unreviewed.title": "Written by Maurice, not reviewed yet",
+    "notes.unreviewed.from": "From {n} conversations, with {model}. Where it comes from is at the end of the note.",
+    "notes.unreviewed.hint": "Read it, then keep it as it is, correct it (Edit, in the toolbar), or throw it away.",
+    "notes.unreviewed.keep": "Keep",
+    "notes.unreviewed.discard": "Throw away",
+    "notes.unreviewed.confirm": "Throw this note away? The garden keeps its history.",
+    "notes.unreviewed.kept": "Kept",
 
     // Podcasts
     "podcasts.title": "Podcasts",
@@ -234,6 +243,14 @@ export const ui: Record<Locale, Record<string, string>> = {
     "notes.recent": "Récentes",
     "notes.noNotesYet": "Aucune note pour le moment.",
     "notes.backToNotes": "← Retour aux notes",
+    "notes.unreviewed.tag": "à relire",
+    "notes.unreviewed.title": "Écrite par Maurice, pas encore relue",
+    "notes.unreviewed.from": "À partir de {n} conversations, avec {model}. D'où ça vient est dit en fin de note.",
+    "notes.unreviewed.hint": "Lisez-la, puis gardez-la telle quelle, corrigez-la (Modifier, dans la barre d'outils) ou jetez-la.",
+    "notes.unreviewed.keep": "Garder",
+    "notes.unreviewed.discard": "Jeter",
+    "notes.unreviewed.confirm": "Jeter cette note ? Le jardin en garde l'historique.",
+    "notes.unreviewed.kept": "Gardée",
 
     // Podcasts
     "podcasts.title": "Podcasts",

@@ -814,6 +814,10 @@ struct ServerGardenNote: Decodable, Identifiable {
     let kind: String?
     /// The resource collection for a fiche or a card; nil for a note.
     let collection: String?
+    /// Written by Maurice at a domain's adoption and not reviewed yet — the
+    /// server sends `true` for those and nothing otherwise (P2-C).
+    let unreviewed: Bool?
+    var isUnreviewed: Bool { unreviewed == true }
 
     /// Kind is part of the identity, not decoration: a note and a card can hold
     /// the same slug, and a duplicate id makes SwiftUI drop rows from the list.
@@ -951,6 +955,12 @@ final class GardensStore {
 
     func browseNote(_ n: ServerGardenNote) {
         Task { await open(to: n.web_path, theme: nil) }
+    }
+
+    /// Browse any signed-in web path of the garden — the hub of a domain's
+    /// seeded notes, from the domain's page.
+    func browse(path: String) {
+        Task { await open(to: path, theme: nil) }
     }
 
     /// host/path the garden lives at, for the page header's quiet meta line.
@@ -1625,6 +1635,19 @@ private struct GardenNoteRow: View {
                     .lineLimit(1)
                     .frame(maxWidth: .infinity, alignment: .leading)
                 HStack(spacing: trailSpacing) {
+                    // Written by Maurice, not reviewed yet: the moon of the
+                    // night's work and the word, until the reader keeps it.
+                    if note.isUnreviewed {
+                        HStack(spacing: 3) {
+                            Image(systemName: "moon.stars").font(.system(size: 9))
+                            Text(session.localized("gardens.unreviewed"))
+                        }
+                        .font(.system(size: 10, design: .monospaced))
+                        .foregroundStyle(theme.inkMute)
+                        .padding(.horizontal, 6).padding(.vertical, 2)
+                        .overlay(Capsule().strokeBorder(theme.ruleHard, style: StrokeStyle(lineWidth: 0.5, dash: [2, 2])))
+                        .help(session.localized("gardens.unreviewed.help"))
+                    }
                     Text(gardenAge(note.updated_at, session: session))
                         .font(.system(size: 10, design: .monospaced))
                         .foregroundStyle(theme.inkMute)

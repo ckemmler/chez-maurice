@@ -236,6 +236,76 @@ export function togglePrivate(garden: GardenRef, urlPath: string): { file: strin
   return { file: found.filePath, private: enabled };
 }
 
+// ── Reviewing a note Maurice wrote (P2-C) ─────────────────
+//
+// A note seeded at a domain's adoption carries `meta.opened: false` — the
+// fiche convention — until the member keeps it. Keeping is this: the marker
+// line goes, by a string edit that leaves the rest of the file exactly as it
+// was (the frontmatter may have been written by a person since). Correcting
+// it through Maurice clears the mark too (tools/garden/server.py, update_note
+// with a body); throwing it away is `deleteNote`.
+
+/** The `meta:` block of a frontmatter, as [start, end) offsets of its own
+ *  lines, or null when there is none. */
+function metaBlockRange(fm: string): { start: number; end: number } | null {
+  const m = fm.match(/^meta:[ \t]*\n/m);
+  if (!m || m.index === undefined) return null;
+  const start = m.index + m[0].length;
+  let end = start;
+  for (const line of fm.slice(start).split(/(?<=\n)/)) {
+    if (!/^[ \t]+\S/.test(line)) break;
+    end += line.length;
+  }
+  return { start, end };
+}
+
+/** Whether a note file is marked as written by Maurice and not reviewed. */
+export function isUnreviewed(content: string): boolean {
+  const head = content.match(/^---\n([\s\S]*?)\n---/);
+  if (!head) return false;
+  const fm = head[1] ?? "";
+  const r = metaBlockRange(fm);
+  return !!r && /^[ \t]+opened:[ \t]*false[ \t]*$/m.test(fm.slice(r.start, r.end));
+}
+
+/** Clear the mark — the `opened: false` line under `meta:`, and `meta:`
+ *  itself when nothing is left under it. Unchanged content when there is
+ *  no mark. */
+export function clearUnreviewed(content: string): string {
+  const head = content.match(/^---\n([\s\S]*?)\n---/);
+  if (!head || head.index === undefined) return content;
+  const fm = head[1] ?? "";
+  const r = metaBlockRange(fm);
+  if (!r) return content;
+  const block = fm.slice(r.start, r.end);
+  const next = block.replace(/^[ \t]+opened:[ \t]*false[ \t]*\n?/m, "");
+  if (next === block) return content;
+  const keepMeta = /\S/.test(next);
+  const metaLine = fm.slice(0, r.start).match(/^meta:[ \t]*\n$/m);
+  const fmNext = keepMeta
+    ? fm.slice(0, r.start) + next + fm.slice(r.end)
+    : fm.slice(0, r.start - (metaLine ? metaLine[0].length : 0)) + fm.slice(r.end);
+  return content.slice(0, head.index + 4) + fmNext + content.slice(head.index + 4 + fm.length);
+}
+
+export function reviewState(garden: GardenRef, urlPath: string): { file: string; unreviewed: boolean } | null {
+  const found = resolveContentFile(garden, urlPath);
+  if (!found || !found.isNotes) return null;
+  return { file: found.filePath, unreviewed: isUnreviewed(fs.readFileSync(found.filePath, "utf-8")) };
+}
+
+/** Keep the note: the mark goes, one commit. Idempotent. */
+export function reviewNote(garden: GardenRef, urlPath: string): { file: string; unreviewed: boolean; reviewed: boolean } | null {
+  const found = resolveContentFile(garden, urlPath);
+  if (!found || !found.isNotes) return null;
+  const content = fs.readFileSync(found.filePath, "utf-8");
+  const next = clearUnreviewed(content);
+  if (next === content) return { file: found.filePath, unreviewed: false, reviewed: false };
+  atomicWrite(found.filePath, next);
+  autoCommit(garden, [found.filePath], `Review note: ${path.basename(found.filePath, path.extname(found.filePath))}`);
+  return { file: found.filePath, unreviewed: false, reviewed: true };
+}
+
 /**
  * Delete a note: the file, its illustration, and the index lines that pointed
  * at it — one commit, because a link that outlives its target is a broken

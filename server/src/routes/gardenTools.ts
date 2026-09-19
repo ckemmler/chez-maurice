@@ -7,6 +7,8 @@
  *   POST /api/v1/garden-tools/toggle-private    → { file, private }
  *   POST /api/v1/garden-tools/content-path      → { contentPath, absPath, repo… }
  *   POST /api/v1/garden-tools/delete-note       → { deleted }
+ *   POST /api/v1/garden-tools/review-state      → { file, unreviewed }
+ *   POST /api/v1/garden-tools/review-note       → { file, unreviewed, reviewed } — keep a note Maurice wrote
  *   POST /api/v1/garden-tools/reorder-children  → { updated, count }
  *   POST /api/v1/garden-tools/social-state      → the sharing panel's state
  *   POST /api/v1/garden-tools/social-publish    → { ok, url | post_urn }
@@ -25,7 +27,7 @@ import { watchGarden } from "../services/gardenWatch";
 import { gardenFor } from "../../data-api/services/gardenFiche";
 import {
   REPO_ROOT, deleteNote, editorTargets, privateState, publicState, recordShare,
-  reorderChildren, repoPython, resolveContentFile, socialState, togglePrivate, togglePublic,
+  reorderChildren, repoPython, resolveContentFile, reviewNote, reviewState, socialState, togglePrivate, togglePublic,
   type GardenRef,
 } from "../services/gardenTools";
 
@@ -73,6 +75,8 @@ handle("/toggle-public", togglePublic);
 handle("/private-state", privateState, "Not a note");
 handle("/toggle-private", togglePrivate, "Not a note");
 handle("/delete-note", deleteNote, "Not a notes page");
+handle("/review-state", reviewState, "Not a note");
+handle("/review-note", reviewNote, "Not a note");
 handle("/social-state", socialState, "Not a shareable page");
 handle("/content-path", (garden, p) => {
   const found = resolveContentFile(garden, p);

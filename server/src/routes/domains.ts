@@ -10,6 +10,7 @@ import {
   type Maurice,
 } from "../services/maurices";
 import { deleteBrief, getBrief, refreshBrief, setBriefText, type BriefRow } from "../services/domainBriefs";
+import { seededNotesOf } from "../services/domainSeeding";
 
 // A domain is a row of `maurices` of kind `domain`: not a persona to summon
 // but a part of a member's life that Maurice follows, with a brief he keeps
@@ -65,8 +66,10 @@ function pinnedConversation(companionId: string, memberId: string): string | nul
 // GET /api/domains — the member's domains and reading companions, sorted.
 // A standard member sees the rows they made; a guest the ones granted to
 // them (`mine: false`, and no brief: the brief is the creator's). Each domain
-// carries when its brief was last rewritten and by whom, or `brief: null`;
-// each companion its book and its pinned conversation, when one exists.
+// carries when its brief was last rewritten and by whom, or `brief: null`,
+// and the notes Maurice seeded in the garden for it (P2-C: how many, how many
+// not reviewed yet, the hub's web path) or `notes: null`; each companion its
+// book and its pinned conversation, when one exists.
 domains.get("/", (c) => {
   const uid = c.get("userId");
   const role = c.get("userRole");
@@ -83,6 +86,7 @@ domains.get("/", (c) => {
       count: d.count,
       weight: d.weight,
       brief: b ? { updated_at: b.updated_at, model: b.model, sources: b.sources.length } : null,
+      notes: mine ? seededNotesOf(uid, d.id) : null,
     };
   });
   const companions = companionsFor(uid, role).map((m) => ({
@@ -107,6 +111,7 @@ domains.get("/:id/brief", (c) => {
   return c.json({
     domain: { id: domain.id, name: domain.name, tagline: domain.tagline },
     brief: briefJson(getBrief(domain.id, domain.created_by!)),
+    notes: seededNotesOf(domain.created_by!, domain.id),
   });
 });
 

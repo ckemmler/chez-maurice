@@ -28,6 +28,11 @@ export interface NoteMeta {
   weight: number;
   /** File mtime, ISO-8601 — when the note was last edited. */
   updatedAt: string;
+  /** `meta.opened: false` — written by Maurice, not reviewed yet (P2-C);
+   *  the same mark the articles pipeline puts on an unopened fiche. */
+  unreviewed: boolean;
+  /** `meta.domain` — the domain Maurice seeded this note for, when any. */
+  domain?: string;
 }
 
 const WIKI_RE = /\[\[([a-z0-9-]+)(?:\|[^\]]+)?\]\]/g;
@@ -65,6 +70,12 @@ function field(fmText: string, key: string): string | undefined {
   return m ? unquote(m[1]) : undefined;
 }
 
+/** The `meta:` block's own lines (indented under it), "" when there is none. */
+function metaBlock(fmText: string): string {
+  const m = fmText.match(/^meta:[ \t]*\n((?:[ \t]+.*(?:\n|$))*)/m);
+  return m?.[1] ?? "";
+}
+
 function parseNote(raw: string, slug: string, locale: string, updatedAt: string): NoteMeta | null {
   const m = raw.match(/^---\n([\s\S]*?)\n---\n?([\s\S]*)$/);
   if (!m) return null;
@@ -72,7 +83,11 @@ function parseNote(raw: string, slug: string, locale: string, updatedAt: string)
   const body = m[2] ?? "";
   const flags = parseFlags(fmText);
   const links = [...new Set([...body.matchAll(WIKI_RE)].map((x) => x[1]))];
+  const meta = metaBlock(fmText);
+  const domain = meta.match(/^[ \t]+domain:[ \t]*(.+)$/m);
   return {
+    unreviewed: /^[ \t]+opened:[ \t]*false[ \t]*$/m.test(meta),
+    domain: domain?.[1] ? unquote(domain[1]) : undefined,
     slug,
     locale,
     title: field(fmText, "title") || slug,

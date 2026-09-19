@@ -505,3 +505,12 @@
 "domains.kicker.domain" = "DOMINIO";
 "domains.kicker.companion" = "COMPAGNO DI LETTURA";
 "domain.edit" = "Modifica";
+
+/* The garden's notes of a domain, seeded by Maurice at its adoption (P2-C) */
+"gardens.unreviewed" = "da rileggere";
+"gardens.unreviewed.help" = "Scritta da Maurice, non ancora riletta: aprila nel giardino per tenerla, correggerla o buttarla";
+"brief.notes_one" = "%d nota nel giardino";
+"brief.notes_other" = "%d note nel giardino";
+"brief.notes.unreviewed_one" = "%d da rileggere";
+"brief.notes.unreviewed_other" = "%d da rileggere";
+"brief.notes.open" = "Apri";

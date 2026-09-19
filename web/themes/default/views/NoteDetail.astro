@@ -53,6 +53,17 @@ const fragments = parseFragments(fragmentsDir);
 const alternatePath = await getAlternateContentPath("notes", note.data.translationKey, locale);
 const isBilan = stripLocalePrefix(note.id).startsWith("bilan-");
 const isDream = note.data.tags?.some((t: string) => t.toLowerCase() === "rêve");
+// A note Maurice seeded at a domain's adoption carries `meta.opened: false`
+// — the unopened-fiche convention — until its owner keeps it (the mark goes),
+// corrects it, or throws it away. The banner says so; the two gestures are
+// the owner's (the toolbar's Edit is the third).
+const isUnreviewed = (d: any) => d?.meta?.opened === false;
+const unreviewed = isUnreviewed(note.data);
+const unreviewedFrom = unreviewed
+  ? t(locale, "notes.unreviewed.from")
+      .replace("{n}", String(Array.isArray(note.data.meta?.sources) ? note.data.meta.sources.length : 0))
+      .replace("{model}", String(note.data.meta?.model ?? "Maurice"))
+  : "";
 
 const WIKI_RE = /\[\[([^\]|]+?)(?:\|[^\]]+?)?\]\]/g;
 const thisSlug = stripLocalePrefix(note.id);
@@ -173,6 +184,52 @@ function monthSeparator(d: Date): string | null {
       </header>
     )}
 
+    {unreviewed && (
+      <aside class="unreviewed" id="unreviewed" data-owner={Astro.locals.owner ? "true" : undefined}>
+        <p class="unreviewed__title">{t(locale, "notes.unreviewed.title")}</p>
+        <p class="unreviewed__from">{unreviewedFrom}</p>
+        {Astro.locals.owner && (
+          <div class="unreviewed__actions">
+            <p class="unreviewed__hint">{t(locale, "notes.unreviewed.hint")}</p>
+            <button type="button" class="unreviewed__keep" data-keep-note>{t(locale, "notes.unreviewed.keep")}</button>
+            <button type="button" class="unreviewed__discard" data-discard-note>{t(locale, "notes.unreviewed.discard")}</button>
+            <span class="unreviewed__status" data-unreviewed-status></span>
+          </div>
+        )}
+      </aside>
+      <script is:inline define:vars={{ confirmText: t(locale, "notes.unreviewed.confirm"), keptText: t(locale, "notes.unreviewed.kept") }}>
+        (() => {
+          const box = document.getElementById("unreviewed");
+          if (!box || box.dataset.owner !== "true") return;
+          const status = box.querySelector("[data-unreviewed-status]");
+          // Root-absolute on purpose: the server's own API, not a garden path.
+          const call = (route) => fetch("/api/v1/garden-tools/" + route, {
+            method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ path: location.pathname }),
+          });
+          box.querySelector("[data-keep-note]")?.addEventListener("click", async (e) => {
+            const btn = e.currentTarget; btn.disabled = true;
+            try {
+              const res = await call("review-note");
+              if (!res.ok) throw new Error((await res.json()).error || res.statusText);
+              status.textContent = keptText;
+              box.classList.add("unreviewed--kept");
+              setTimeout(() => box.remove(), 900);
+            } catch (err) { status.textContent = String(err); btn.disabled = false; }
+          });
+          box.querySelector("[data-discard-note]")?.addEventListener("click", async (e) => {
+            if (!confirm(confirmText)) return;
+            const btn = e.currentTarget; btn.disabled = true;
+            try {
+              const res = await call("delete-note");
+              if (!res.ok) throw new Error((await res.json()).error || res.statusText);
+              location.href = location.pathname.replace(/\/notes\/[^/]+\/?$/, "/notes");
+            } catch (err) { status.textContent = String(err); btn.disabled = false; }
+          });
+        })();
+      </script>
+    )}
+
     {subtree && subtreeNodeCount > 1 && (
       <dialog class="subtree-modal" id="subtree-modal">
         <div class="subtree-modal__header">
@@ -235,6 +292,7 @@ function monthSeparator(d: Date): string | null {
                   <span class="child-link__title">
                     {child.data.title}
                     {isPublic(child.data) && <span class="public-dot">•</span>}
+                    {isUnreviewed(child.data) && <span class="unreviewed-tag">{t(locale, "notes.unreviewed.tag")}</span>}
                     {child.data.status && child.data.tags?.includes("backlog") && (
                       <span class={`status-badge status-badge--${child.data.status}`}>{child.data.status.replace("_", " ")}</span>
                     )}
@@ -1010,6 +1068,33 @@ function monthSeparator(d: Date): string | null {
 </Base>
 
 <style>
+  /* A note written by Maurice, not reviewed yet (P2-C) */
+  .unreviewed {
+    margin: 0 0 var(--spacing-lg, 1.5rem);
+    padding: 0.85rem 1rem;
+    border: 1px dashed var(--color-text-quiet, #888);
+    border-radius: 8px;
+    font-size: 0.9rem;
+    transition: opacity 0.6s;
+  }
+  .unreviewed--kept { opacity: 0; }
+  .unreviewed__title { margin: 0 0 0.25rem; font-weight: 600; }
+  .unreviewed__from, .unreviewed__hint { margin: 0 0 0.5rem; color: var(--color-text-quiet, #666); }
+  .unreviewed__actions { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; }
+  .unreviewed__actions .unreviewed__hint { flex-basis: 100%; }
+  .unreviewed__keep, .unreviewed__discard {
+    font: inherit; font-size: 0.85rem; padding: 0.3rem 0.8rem; border-radius: 999px; cursor: pointer;
+    border: 1px solid var(--color-text-quiet, #888); background: transparent; color: var(--color-text, inherit);
+  }
+  .unreviewed__keep { border-color: var(--color-text, #222); font-weight: 600; }
+  .unreviewed__discard { opacity: 0.8; }
+  .unreviewed__keep:disabled, .unreviewed__discard:disabled { opacity: 0.4; cursor: default; }
+  .unreviewed__status { font-size: 0.8rem; color: var(--color-text-quiet, #666); }
+  .unreviewed-tag {
+    display: inline-block; margin-left: 0.4rem; padding: 0 0.4rem; border-radius: 999px;
+    border: 1px dashed var(--color-text-quiet, #888); color: var(--color-text-quiet, #666);
+    font-size: 0.7rem; font-weight: 400; vertical-align: middle; text-transform: lowercase;
+  }
   article {
     max-width: 65ch;
   }

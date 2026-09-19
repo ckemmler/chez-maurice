@@ -330,7 +330,7 @@ async function opened(): Promise<{ conversationId: string; byName: Map<string, p
 
 test("the three tools exist in the proposal conversation only, for its member only", async () => {
   const { conversationId } = await opened();
-  expect(proposals.domainToolsFor(conversationId, ANNA).map((t) => t.name)).toEqual(["domains__propose", "domains__adjust", "domains__adopt"]);
+  expect(proposals.domainToolsFor(conversationId, ANNA).map((t) => t.name)).toEqual(["domains__propose", "domains__adjust", "domains__adopt", "domains__seed"]);
   expect(proposals.domainToolsFor(conversationId, BEN)).toEqual([]);
   const other = convo(ANNA, "Ordinary chat", "2026-09-18");
   expect(proposals.domainToolsFor(other, ANNA)).toEqual([]);
@@ -445,9 +445,13 @@ test("adopt: a domain of the member's, its conversations bound, its first brief 
 
   // Adopted twice is refused; the tools stay while another proposal is open.
   expect((await proposals.runDomainTool("domains__adopt", { id: violin.id }, conversationId)).isError).toBe(true);
-  expect(proposals.domainToolsFor(conversationId, ANNA)).toHaveLength(3);
-  // Every proposal settled: the tools go, the section says so.
+  expect(proposals.domainToolsFor(conversationId, ANNA)).toHaveLength(4);
+  // Every proposal settled and the adopted domain's garden notes declined
+  // (P2-C: the tools stay until the notes are written or declined): the
+  // tools go, the section says so.
   for (const p of proposals.openProposals(ANNA)) proposals.updateProposal(p.id, { state: "dismissed" });
+  expect(proposals.domainToolsFor(conversationId, ANNA)).toHaveLength(4);
+  expect((await proposals.runDomainTool("domains__seed", { id: violin.id, action: "decline" }, conversationId)).isError).toBe(false);
   expect(proposals.domainToolsFor(conversationId, ANNA)).toEqual([]);
   expect(proposals.proposalPromptSection(conversationId, "Anna")).toContain("No proposal is open any more");
   // The adopted domain's conversations are not mapped again.
