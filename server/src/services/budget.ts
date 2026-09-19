@@ -7,13 +7,18 @@
 // money. This is the thing that says *no* — for the demo fleet, where every
 // household runs on our key, and for any hosted instance sold with a bundle.
 //
-// Two caps, either or both, both off by default:
+// Three layers of cap, the tightest one wins, all off by default:
 //
-//   MAURICE_SPEND_CAP_USD        total, over the life of the instance
-//   MAURICE_SPEND_CAP_DAILY_USD  rolling 24 hours
+//   the instance's — env, the operator's fuse, counted over the whole household
+//     MAURICE_SPEND_CAP_USD        total, over the life of the instance
+//     MAURICE_SPEND_CAP_DAILY_USD  rolling 24 hours
+//   the household's — households.spend_cap_daily_usd, its own choice, counted
+//     over the whole household
+//   the member's — users.spend_cap_daily_usd, counted over that member alone
 //
-// With neither set the instance is uncapped and every function here is a
-// no-op, which is what a household paying its own provider wants.
+// With none set the instance is uncapped and every function here is a no-op,
+// which is what a household paying its own provider wants. The ledger names
+// who spent each turn either way, so a member can always see their own figure.
 //
 // ── The trap this file exists to avoid ──────────────────────────────────────
 //
@@ -51,6 +56,7 @@ function num(name: string): number | null {
   return n;
 }
 
+/** The instance's caps — the operator's, from the environment. */
 export function caps(): BudgetCaps {
   return {
     totalUsd: num("MAURICE_SPEND_CAP_USD"),
@@ -58,9 +64,54 @@ export function caps(): BudgetCaps {
   };
 }
 
-export function capped(): boolean {
-  const c = caps();
-  return c.totalUsd != null || c.dailyUsd != null;
+/** A stored cap column: null, or a non-negative number. The setters never let
+ *  anything else in, but a hand-edited database is no reason to obey nonsense. */
+function stored(v: unknown): number | null {
+  return typeof v === "number" && Number.isFinite(v) && v >= 0 ? v : null;
+}
+
+export function householdDailyCap(): number | null {
+  const row = db
+    .query<{ cap: number | null }, []>(`SELECT spend_cap_daily_usd AS cap FROM households WHERE id = 'default'`)
+    .get();
+  return stored(row?.cap);
+}
+
+export function memberDailyCap(userId: string): number | null {
+  const row = db
+    .query<{ cap: number | null }, [string]>(`SELECT spend_cap_daily_usd AS cap FROM users WHERE id = ?`)
+    .get(userId);
+  return stored(row?.cap);
+}
+
+/** Set (or clear with null) the household's own daily cap. */
+export function setHouseholdDailyCap(usd: number | null): void {
+  db.run(`UPDATE households SET spend_cap_daily_usd = ? WHERE id = 'default'`, [stored(usd)]);
+}
+
+/** Set (or clear with null) a member's daily cap. */
+export function setMemberDailyCap(userId: string, usd: number | null): void {
+  db.run(`UPDATE users SET spend_cap_daily_usd = ? WHERE id = ?`, [stored(usd), userId]);
+}
+
+/** Every cap that applies to a member, layer by layer. */
+export interface AppliedCaps extends BudgetCaps {
+  householdDailyUsd: number | null;
+  memberDailyUsd: number | null;
+}
+
+export function capsFor(userId?: string | null): AppliedCaps {
+  return {
+    ...caps(),
+    householdDailyUsd: householdDailyCap(),
+    memberDailyUsd: userId ? memberDailyCap(userId) : null,
+  };
+}
+
+/** Is anything capped at all — for this member, or household-wide with none named? */
+export function capped(userId?: string | null): boolean {
+  const c = capsFor(userId);
+  return c.totalUsd != null || c.dailyUsd != null || c.householdDailyUsd != null || c.memberDailyUsd != null;
 }
 
 // ── The ledger ──────────────────────────────────────────────────────────────
@@ -80,16 +131,37 @@ db.run(`
   )
 `);
 db.run(`CREATE INDEX IF NOT EXISTS idx_spend_ledger_at ON spend_ledger(at)`);
+// Who spent it: the member whose turn it was (in a room, whoever sent the
+// message Maurice answered). Null on rows from before this column existed.
+try { db.run(`ALTER TABLE spend_ledger ADD COLUMN user_id TEXT`); } catch {}
+db.run(`CREATE INDEX IF NOT EXISTS idx_spend_ledger_user_at ON spend_ledger(user_id, at)`);
 
-/** Record what a completed turn cost. Called wherever usage is persisted, so
- *  every turn is counted once regardless of which route produced it. */
-export function recordSpend(u: TurnUsage | null | undefined): void {
+/** Record what a completed turn cost, and whose turn it was. Called wherever
+ *  usage is persisted, so every turn is counted once regardless of which
+ *  route produced it. */
+export function recordSpend(u: TurnUsage | null | undefined, spenderId?: string | null): void {
   if (!u || u.cost == null || u.cost <= 0) return;
-  db.run(`INSERT INTO spend_ledger (provider, model, cost_usd) VALUES (?, ?, ?)`, [
+  db.run(`INSERT INTO spend_ledger (provider, model, cost_usd, user_id) VALUES (?, ?, ?, ?)`, [
     u.provider,
     u.model,
     u.cost,
+    spenderId ?? null,
   ]);
+}
+
+/** Sum of the ledger since `since` (an SQLite datetime expression), for one
+ *  member or, with no member named, the whole household. */
+function spentSince(since: string, userId?: string | null): number {
+  const row = userId
+    ? db
+        .query<{ total: number | null }, [string]>(
+          `SELECT sum(cost_usd) AS total FROM spend_ledger WHERE at >= ${since} AND user_id = ?`,
+        )
+        .get(userId)
+    : db
+        .query<{ total: number | null }, []>(`SELECT sum(cost_usd) AS total FROM spend_ledger WHERE at >= ${since}`)
+        .get();
+  return row?.total ?? 0;
 }
 
 export function spentTotalUsd(): number {
@@ -99,13 +171,15 @@ export function spentTotalUsd(): number {
   return row?.total ?? 0;
 }
 
-export function spentTodayUsd(): number {
-  const row = db
-    .query<{ total: number | null }, []>(
-      `SELECT sum(cost_usd) AS total FROM spend_ledger WHERE at >= datetime('now', '-1 day')`,
-    )
-    .get();
-  return row?.total ?? 0;
+/** Rolling 24 hours — the window every daily cap is counted over. */
+export function spentTodayUsd(userId?: string | null): number {
+  return spentSince(`datetime('now', '-1 day')`, userId);
+}
+
+/** The calendar month so far, on the server's clock. Information for the
+ *  member, never a cap. */
+export function spentMonthUsd(userId?: string | null): number {
+  return spentSince(`datetime('now', 'start of month')`, userId);
 }
 
 // ── The verdict ─────────────────────────────────────────────────────────────
@@ -118,6 +192,60 @@ export interface Verdict {
   remainingUsd: number | null;
 }
 
+/** One cap, what has been spent under it, and what to say when it is reached. */
+interface Layer {
+  capUsd: number;
+  spentUsd: number;
+  reason: string;
+}
+
+/** The caps that apply to a member, most specific first, so that when more
+ *  than one is reached the refusal names the one closest to the person reading
+ *  it. Each layer is counted over what its cap covers: the member's own turns
+ *  for their cap, the whole household's for the other three. */
+function layers(userId?: string | null): Layer[] {
+  const c = capsFor(userId);
+  const usd = (n: number) => `$${n.toFixed(2)}`;
+  const out: Layer[] = [];
+  if (c.memberDailyUsd != null && userId) {
+    out.push({
+      capUsd: c.memberDailyUsd,
+      spentUsd: spentTodayUsd(userId),
+      reason:
+        `You have reached your daily limit of ${usd(c.memberDailyUsd)}. ` +
+        `It resets as the day rolls forward; nothing here is lost in the meantime.`,
+    });
+  }
+  if (c.householdDailyUsd != null) {
+    out.push({
+      capUsd: c.householdDailyUsd,
+      spentUsd: spentTodayUsd(),
+      reason:
+        `This household has reached its daily limit of ${usd(c.householdDailyUsd)}. ` +
+        `It resets as the day rolls forward; nothing here is lost in the meantime.`,
+    });
+  }
+  if (c.dailyUsd != null) {
+    out.push({
+      capUsd: c.dailyUsd,
+      spentUsd: spentTodayUsd(),
+      reason:
+        `This instance has reached its daily limit of ${usd(c.dailyUsd)}. ` +
+        `It resets as the day rolls forward; nothing here is lost in the meantime.`,
+    });
+  }
+  if (c.totalUsd != null) {
+    out.push({
+      capUsd: c.totalUsd,
+      spentUsd: spentTotalUsd(),
+      reason:
+        `This instance has spent its allowance of ${usd(c.totalUsd)}. ` +
+        `Nothing is lost — the conversation and everything in the garden are still here.`,
+    });
+  }
+  return out;
+}
+
 /**
  * May a turn proceed?
  *
@@ -125,10 +253,18 @@ export interface Verdict {
  * written to the ledger — pass it when checking between agentic rounds, or a
  * single turn with six tool rounds can walk straight through a cap that was
  * only ever consulted before the first one.
+ *
+ * `userId` is whose turn it is. Without it only the household-wide layers
+ * apply: a member's own cap cannot be checked against nobody.
  */
-export function verdict(provider: string | null, model: string | null, pendingUsd = 0): Verdict {
-  const c = caps();
-  if (c.totalUsd == null && c.dailyUsd == null) return { ok: true, remainingUsd: null };
+export function verdict(
+  provider: string | null,
+  model: string | null,
+  pendingUsd = 0,
+  userId?: string | null,
+): Verdict {
+  const applied = layers(userId);
+  if (applied.length === 0) return { ok: true, remainingUsd: null };
 
   // Nobody is billed for a local model, so no cap can apply to it. Decided by
   // provider rather than by model name, because that is how priceUsage decides
@@ -146,32 +282,36 @@ export function verdict(provider: string | null, model: string | null, pendingUs
     };
   }
 
-  const headroom: number[] = [];
-  if (c.totalUsd != null) {
-    const left = c.totalUsd - (spentTotalUsd() + pendingUsd);
-    if (left <= 0) {
-      return {
-        ok: false,
-        remainingUsd: 0,
-        reason:
-          `This instance has spent its allowance of $${c.totalUsd.toFixed(2)}. ` +
-          `Nothing is lost — the conversation and everything in the garden are still here.`,
-      };
-    }
-    headroom.push(left);
+  let remaining = Infinity;
+  for (const l of applied) {
+    const left = l.capUsd - (l.spentUsd + pendingUsd);
+    if (left <= 0) return { ok: false, remainingUsd: 0, reason: l.reason };
+    remaining = Math.min(remaining, left);
   }
-  if (c.dailyUsd != null) {
-    const left = c.dailyUsd - (spentTodayUsd() + pendingUsd);
-    if (left <= 0) {
-      return {
-        ok: false,
-        remainingUsd: 0,
-        reason:
-          `This instance has reached its daily limit of $${c.dailyUsd.toFixed(2)}. ` +
-          `It resets as the day rolls forward; nothing here is lost in the meantime.`,
-      };
-    }
-    headroom.push(left);
-  }
-  return { ok: true, remainingUsd: Math.min(...headroom) };
+  return { ok: true, remainingUsd: remaining };
+}
+
+// ── A member's own view ─────────────────────────────────────────────────────
+
+export interface MemberUsage {
+  today_usd: number;
+  month_usd: number;
+  /** The tightest daily cap that applies to this member, or null. */
+  cap_daily_usd: number | null;
+  /** Headroom under the tightest cap of any kind, or null when uncapped. */
+  remaining_usd: number | null;
+}
+
+/** What a member has spent and how much room they have left, for them to
+ *  read — the same layers the verdict weighs, minus the model question. */
+export function usageFor(userId: string): MemberUsage {
+  const c = capsFor(userId);
+  const daily = [c.memberDailyUsd, c.householdDailyUsd, c.dailyUsd].filter((n): n is number => n != null);
+  const applied = layers(userId);
+  return {
+    today_usd: spentTodayUsd(userId),
+    month_usd: spentMonthUsd(userId),
+    cap_daily_usd: daily.length ? Math.min(...daily) : null,
+    remaining_usd: applied.length ? Math.max(0, Math.min(...applied.map((l) => l.capUsd - l.spentUsd))) : null,
+  };
 }

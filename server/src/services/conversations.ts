@@ -349,6 +349,9 @@ export function addMessage(
     data?: { tool: string; data: unknown }[] | null;
     /** token counts + cost for this turn; persisted as JSON */
     usage?: TurnUsage | null;
+    /** whose turn it was — the member the ledger charges it to. In a room,
+     *  the one who sent the message Maurice answered. */
+    spenderId?: string | null;
   } = {}
 ): Message {
   const id = crypto.randomUUID();
@@ -369,7 +372,7 @@ export function addMessage(
   // What the turn cost goes to the spending ledger as well as to the message.
   // Here rather than in the route because this is the one place every turn
   // passes through, and because a deleted message must not un-spend its money.
-  recordSpend(opts.usage ?? null);
+  recordSpend(opts.usage ?? null, opts.spenderId ?? null);
 
   return hydrateMessage(
     db.query(`SELECT * FROM messages WHERE id = ?`).get(id)

@@ -227,6 +227,10 @@ try { db.run(`ALTER TABLE users ADD COLUMN cloudflare_account TEXT`); } catch {}
 try { db.run(`ALTER TABLE users ADD COLUMN cloudflare_token TEXT`); } catch {}
 // Per-member gate that unlocks the Experimental tool families (off by default).
 try { db.run(`ALTER TABLE users ADD COLUMN experimental_tools INTEGER NOT NULL DEFAULT 0`); } catch {}
+// A member's own daily spending cap (USD, rolling 24 hours); null = none of
+// their own. The household's and the instance's still apply — see budget.ts.
+// Added here, before the guest-role rebuild below, which must carry it across.
+try { db.run(`ALTER TABLE users ADD COLUMN spend_cap_daily_usd REAL`); } catch {}
 
 // ── Per-user file library: nestable folders + files stored on disk ──────────
 db.run(`
@@ -305,18 +309,19 @@ try {
           notes_domain  TEXT,
           avatar_url    TEXT,
           cloudflare_account TEXT,
-          cloudflare_token   TEXT
+          cloudflare_token   TEXT,
+          spend_cap_daily_usd REAL
         )
       `);
       db.run(`
         INSERT INTO users_new
           (id, household_id, username, display_name, role, password_hash, pin_hash,
            avatar_color, profile_text, created_at, last_active_at, notes_domain,
-           avatar_url, cloudflare_account, cloudflare_token)
+           avatar_url, cloudflare_account, cloudflare_token, spend_cap_daily_usd)
         SELECT
            id, household_id, username, display_name, role, password_hash, pin_hash,
            avatar_color, profile_text, created_at, last_active_at, notes_domain,
-           avatar_url, cloudflare_account, cloudflare_token
+           avatar_url, cloudflare_account, cloudflare_token, spend_cap_daily_usd
         FROM users
       `);
       const after = (db.query(`SELECT COUNT(*) AS n FROM users_new`).get() as { n: number }).n;
@@ -533,6 +538,9 @@ try { db.run(`ALTER TABLE households ADD COLUMN scaleway_api_key TEXT`); } catch
 // needs nothing. Empty = organization-wide.
 try { db.run(`ALTER TABLE households ADD COLUMN scaleway_project_id TEXT`); } catch {}
 try { db.run(`ALTER TABLE households ADD COLUMN providers_seeded INTEGER NOT NULL DEFAULT 0`); } catch {}
+// The household's own daily spending cap (USD, rolling 24 hours, summed over
+// every member); null = none. The operator's env caps stay above it — budget.ts.
+try { db.run(`ALTER TABLE households ADD COLUMN spend_cap_daily_usd REAL`); } catch {}
 // Separate guard from providers_seeded: that flag is already set on every
 // existing database, so the GLM rows would never appear if they rode on it.
 try { db.run(`ALTER TABLE households ADD COLUMN zai_seeded INTEGER NOT NULL DEFAULT 0`); } catch {}

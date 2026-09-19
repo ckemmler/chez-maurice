@@ -588,6 +588,7 @@ async function* runOpenAIAgentic(
   conversationId: string,
   signal?: AbortSignal,
   thinking?: boolean,
+  memberId?: string,
 ): AsyncGenerator<StreamEvent> {
   const convo: any[] = [{ role: "system", content: system }, ...baseMessages];
   const calls: ToolCallLog[] = [];
@@ -608,8 +609,9 @@ async function* runOpenAIAgentic(
     // The fuse. Checked every round, not just before the first: a turn with six
     // tool rounds is six billed requests, and a cap consulted once would let the
     // other five through. `priceUsage` gives what this turn has run up so far,
-    // which the ledger does not know about until the turn is persisted.
-    const budget = budgetVerdict(provider, model, priceUsage(usage).cost ?? 0);
+    // which the ledger does not know about until the turn is persisted. The
+    // member is whose turn it is: their own cap is weighed with the others.
+    const budget = budgetVerdict(provider, model, priceUsage(usage).cost ?? 0, memberId);
     if (!budget.ok) {
       yield* reportUsage();
       yield { type: "error", message: budget.reason };
@@ -1146,7 +1148,7 @@ function trackedBooks(
     yield* runOpenAIAgentic(
       baseUrl, key, resolved, systemPrompt,
       toOpenAIMessages(messages, !!rec?.vision),
-      tools, mcp, temperature, userLang, provider, conversationId, signal, thinking,
+      tools, mcp, temperature, userLang, provider, conversationId, signal, thinking, memberId,
     );
     return;
   }
@@ -1192,7 +1194,7 @@ function trackedBooks(
   try {
     for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
       // The fuse — see the twin of this check in the OpenAI-compatible loop.
-      const budget = budgetVerdict("anthropic", resolved, priceUsage(usage).cost ?? 0);
+      const budget = budgetVerdict("anthropic", resolved, priceUsage(usage).cost ?? 0, memberId);
       if (!budget.ok) {
         yield* reportUsage();
         yield { type: "error", message: budget.reason };
