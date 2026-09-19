@@ -1160,6 +1160,7 @@ function trackedBooks(
       ? t(userLang, "chat.echo_mode_said", lastUserMsg.content)
       : t(userLang, "chat.echo_mode");
     for (const word of echo.split(" ")) {
+      if (signal?.aborted) break;
       yield { type: "text_delta", text: word + " " };
       await new Promise((r) => setTimeout(r, 30));
     }

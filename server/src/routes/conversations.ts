@@ -32,6 +32,15 @@ import { publishToRoom, publishToUser, userHasSocket } from "../services/roomBus
 import { pushToUser } from "../services/push";
 import { indexConversationInBackground } from "../services/mcpClient";
 import { searchConversations } from "../services/conversationSearch";
+import {
+  beginTurn,
+  recordEvent,
+  endTurn,
+  subscribe as subscribeTurn,
+  stopTurn,
+  currentTurn,
+  type TurnEvent,
+} from "../services/turns";
 
 const conversations = new Hono();
 
@@ -343,7 +352,10 @@ conversations.post("/:id/messages", async (c) => {
   if (regenerate) {
     // Re-answer: drop the previous assistant message and stream a fresh
     // response from the existing history (which now ends at the last user
-    // message). No new user message is added.
+    // message). No new user message is added — and nothing is dropped while
+    // a reply is still being written.
+    const running = currentTurn(convoId);
+    if (running && !running.snapshot.finished) return c.json({ error: "A reply is already in progress" }, 409);
     deleteLastAssistantMessage(convoId);
   } else {
     if (!content?.trim() && !image) {
@@ -386,14 +398,21 @@ conversations.post("/:id/messages", async (c) => {
     // Maurice stays silent until summoned.
     return c.json({ ok: true, summoned: false });
   }
+  // One reply at a time per conversation. The human message above is stored
+  // and broadcast either way; only the summons is refused.
+  const turn = beginTurn(convoId, { mauriceId: summonedMaurice, startedBy: userId });
+  if (!turn) return c.json({ error: "A reply is already in progress" }, 409);
   publishToRoom(convoId, { type: "summoned", by: userId });
 
   // Get user profile for system prompt
   const user = getUser(userId);
 
-  // Aborts when the client hangs up (the app's ⏹ Stop tears down the request) —
-  // forwarded to the upstream model so generation actually halts.
-  const signal = c.req.raw.signal;
+  // The generation runs under the turn's signal, not the request's: a client
+  // that vanishes (iOS suspending the app) no longer halts the reply. Only
+  // POST /:id/turn/stop aborts it. `attached` is whether this response is
+  // still worth writing to.
+  const signal = turn.controller.signal;
+  const attached = () => !c.req.raw.signal.aborted;
 
   // Stream with throttled flushing — accumulate text and emit every ~30ms
   // so the client sees a smooth streaming effect even when Anthropic is fast
@@ -437,16 +456,30 @@ conversations.post("/:id/messages", async (c) => {
           return msg;
         };
 
+        // Write a line to this response — only while the client is still
+        // there, and never letting a dead response stop the turn.
+        let lastWrite = Date.now();
+        const write = async (line: object) => {
+          if (!attached()) return;
+          try {
+            controller.write(encoder.encode(JSON.stringify(line) + "\n"));
+            await controller.flush();
+            lastWrite = Date.now();
+          } catch {}
+        };
+        // Every event a client would see goes to the registry first, so a
+        // re-attaching client gets exactly what this one got.
+        const send = async (event: TurnEvent) => {
+          recordEvent(convoId, event);
+          await write(event);
+        };
+
         const flushPending = async () => {
           if (!pendingText) return;
           const text = pendingText;
           pendingText = "";
-          controller.write(
-            encoder.encode(JSON.stringify({ type: "text_delta", text }) + "\n")
-          );
-          await controller.flush();
+          await send({ type: "text_delta", text });
           lastFlush = Date.now();
-          lastWrite = lastFlush;
         };
 
         // Keepalive for the whole turn. The app drops the request after 180s
@@ -454,16 +487,12 @@ conversations.post("/:id/messages", async (c) => {
         // can stay silent longer than that — the reply then lands in the
         // database while the client shows a timeout. A `ping` every 15s of
         // silence keeps the socket warm; clients that don't know the type skip
-        // it. Written from a timer, like the image-generation keepalives.
-        let lastWrite = Date.now();
+        // it. Written from a timer, like the image-generation keepalives; not
+        // recorded, a re-attached client has its own.
         const KEEPALIVE_INTERVAL = 15_000;
-        const keepalive = setInterval(async () => {
+        const keepalive = setInterval(() => {
           if (Date.now() - lastWrite < KEEPALIVE_INTERVAL) return;
-          try {
-            controller.write(encoder.encode(JSON.stringify({ type: "ping" }) + "\n"));
-            await controller.flush();
-            lastWrite = Date.now();
-          } catch {}
+          void write({ type: "ping" });
         }, KEEPALIVE_INTERVAL);
 
         // `thinking` arrives per reasoning token; one a second is plenty for
@@ -519,11 +548,7 @@ conversations.post("/:id/messages", async (c) => {
             // Everything else (tool_call, tool_data, errors) — flush pending
             // text first so ordering stays correct, then forward the event.
             await flushPending();
-            controller.write(
-              encoder.encode(JSON.stringify(event) + "\n")
-            );
-            await controller.flush();
-            lastWrite = Date.now();
+            await send(event as TurnEvent);
           }
 
           // Flush any remaining text
@@ -539,26 +564,11 @@ conversations.post("/:id/messages", async (c) => {
             if (config.falApiKey) {
               try {
                 // Tell client we're generating an image
-                controller.write(
-                  encoder.encode(
-                    JSON.stringify({
-                      type: "image_loading",
-                      text: imagePrompt,
-                    }) + "\n"
-                  )
-                );
-                await controller.flush();
+                await send({ type: "image_loading", text: imagePrompt });
 
                 // Send keepalive events so the connection doesn't timeout
-                const keepalive = setInterval(async () => {
-                  try {
-                    controller.write(
-                      encoder.encode(
-                        JSON.stringify({ type: "image_loading", text: imagePrompt }) + "\n"
-                      )
-                    );
-                    await controller.flush();
-                  } catch {}
+                const keepalive = setInterval(() => {
+                  void write({ type: "image_loading", text: imagePrompt });
                 }, 15_000);
 
                 let filename: string;
@@ -575,27 +585,10 @@ conversations.post("/:id/messages", async (c) => {
                 fullResponse = `![${imagePrompt}](${imageUrl})`;
 
                 // Send the image event so client can render immediately
-                controller.write(
-                  encoder.encode(
-                    JSON.stringify({
-                      type: "image",
-                      image_url: imageUrl,
-                      text: imagePrompt,
-                    }) + "\n"
-                  )
-                );
-                await controller.flush();
+                await send({ type: "image", image_url: imageUrl, text: imagePrompt });
               } catch (err: any) {
                 // Image generation failed — keep the text response
-                controller.write(
-                  encoder.encode(
-                    JSON.stringify({
-                      type: "error",
-                      message: `Image generation failed: ${err.message}`,
-                    }) + "\n"
-                  )
-                );
-                await controller.flush();
+                await send({ type: "error", message: `Image generation failed: ${err.message}` });
                 fullResponse = `I tried to generate an image but it failed: ${err.message}`;
               }
             }
@@ -628,26 +621,11 @@ conversations.post("/:id/messages", async (c) => {
                   fullResponse =
                     "I'd love to edit an image for you, but I couldn't find an uploaded photo in this conversation. Could you share one?";
                 } else {
-                  controller.write(
-                    encoder.encode(
-                      JSON.stringify({
-                        type: "image_loading",
-                        text: editPrompt,
-                      }) + "\n"
-                    )
-                  );
-                  await controller.flush();
+                  await send({ type: "image_loading", text: editPrompt });
 
                   // Send keepalive events so the connection doesn't timeout
-                  const keepalive = setInterval(async () => {
-                    try {
-                      controller.write(
-                        encoder.encode(
-                          JSON.stringify({ type: "image_loading", text: editPrompt }) + "\n"
-                        )
-                      );
-                      await controller.flush();
-                    } catch {}
+                  const keepalive = setInterval(() => {
+                    void write({ type: "image_loading", text: editPrompt });
                   }, 15_000);
 
                   const dataUri = loadImageAsDataUri(sourceFilename);
@@ -664,59 +642,29 @@ conversations.post("/:id/messages", async (c) => {
                   const imageUrl = `/api/images/${filename}`;
                   fullResponse = `![${editPrompt}](${imageUrl})`;
 
-                  controller.write(
-                    encoder.encode(
-                      JSON.stringify({
-                        type: "image",
-                        image_url: imageUrl,
-                        text: editPrompt,
-                      }) + "\n"
-                    )
-                  );
-                  await controller.flush();
+                  await send({ type: "image", image_url: imageUrl, text: editPrompt });
                 }
               } catch (err: any) {
-                controller.write(
-                  encoder.encode(
-                    JSON.stringify({
-                      type: "error",
-                      message: `Image edit failed: ${err.message}`,
-                    }) + "\n"
-                  )
-                );
-                await controller.flush();
+                await send({ type: "error", message: `Image edit failed: ${err.message}` });
                 fullResponse = `I tried to edit the image but it failed: ${err.message}`;
               }
             }
           }
 
           const msg = persistReply();
-          if (msg) {
-            controller.write(
-              encoder.encode(
-                JSON.stringify({ type: "done", message_id: msg.id }) + "\n"
-              )
-            );
-            await controller.flush();
-          }
+          if (msg) await send({ type: "done", message_id: msg.id });
         } catch (err: any) {
-          // Client hung up (⏹ Stop) or the stream broke — keep the partial reply,
-          // and only bother reporting an error if anyone's still listening.
-          persistReply();
-          if (!signal.aborted) {
-            try {
-              controller.write(
-                encoder.encode(
-                  JSON.stringify({
-                    type: "error",
-                    message: err.message || "Stream failed",
-                  }) + "\n"
-                )
-              );
-            } catch {}
+          // Stopped (POST /:id/turn/stop) or the stream broke — keep the
+          // partial reply. A stop is a normal end; a break is an error.
+          const msg = persistReply();
+          if (signal.aborted) {
+            if (msg) await send({ type: "done", message_id: msg.id });
+          } else {
+            await send({ type: "error", message: err.message || "Stream failed" });
           }
         } finally {
           clearInterval(keepalive);
+          endTurn(convoId);
         }
 
         try { controller.close(); } catch {}
@@ -730,6 +678,81 @@ conversations.post("/:id/messages", async (c) => {
       },
     }
   );
+});
+
+// ── GET /api/conversations/:id/turn — re-attach to the reply in progress ──
+// For a client whose stream died (iOS suspended the app). 204 when nothing is
+// known; otherwise NDJSON: a `resume` line with everything so far, then the
+// live events to the terminal one. A turn finished within the last 60 s is
+// `resume` (finished: true) + its terminal event.
+
+conversations.get("/:id/turn", (c) => {
+  const convoId = c.req.param("id");
+  if (!getConversation(convoId, c.get("userId"))) return c.json({ error: "Not found" }, 404);
+  const sub = subscribeTurn(convoId);
+  if (!sub) return c.body(null, 204);
+  const { snapshot, events } = sub;
+
+  return c.body(
+    new ReadableStream({
+      type: "direct",
+      async pull(controller) {
+        const encoder = new TextEncoder();
+        let lastWrite = Date.now();
+        const write = async (line: object) => {
+          if (c.req.raw.signal.aborted) return;
+          try {
+            controller.write(encoder.encode(JSON.stringify(line) + "\n"));
+            await controller.flush();
+            lastWrite = Date.now();
+          } catch {}
+        };
+        // Same keepalive as the main pump: the app drops a silent request.
+        const KEEPALIVE_INTERVAL = 15_000;
+        const keepalive = setInterval(() => {
+          if (Date.now() - lastWrite < KEEPALIVE_INTERVAL) return;
+          void write({ type: "ping" });
+        }, KEEPALIVE_INTERVAL);
+        try {
+          await write({
+            type: "resume",
+            text: snapshot.text,
+            data: snapshot.data,
+            tool: snapshot.tool,
+            usage: snapshot.usage,
+            started_at: snapshot.started_at,
+            finished: snapshot.finished,
+          });
+          for await (const event of events) {
+            // The reader hung up: leave the turn to run, just stop following it.
+            if (c.req.raw.signal.aborted) break;
+            await write(event);
+          }
+        } finally {
+          clearInterval(keepalive);
+        }
+        try { controller.close(); } catch {}
+      },
+    }) as any,
+    {
+      headers: {
+        "Content-Type": "application/x-ndjson",
+        "Cache-Control": "no-cache",
+        "X-Accel-Buffering": "no",
+      },
+    },
+  );
+});
+
+// ── POST /api/conversations/:id/turn/stop — the explicit ⏹ ──────
+// Hanging up no longer stops a reply; this does. What streamed so far is
+// kept, as before.
+
+conversations.post("/:id/turn/stop", (c) => {
+  const convoId = c.req.param("id");
+  if (!getConversation(convoId, c.get("userId"))) return c.json({ error: "Not found" }, 404);
+  if (!stopTurn(convoId)) return c.json({ error: "No reply in progress" }, 404);
+  return c.json({ ok: true });
 });
 
 export default conversations;
