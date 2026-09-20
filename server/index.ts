@@ -72,6 +72,10 @@ import { validateSession } from "./src/services/auth";
 import { isParticipant } from "./src/services/conversations";
 import { setRoomPublisher, setSubscriberCount, roomTopic, userTopic } from "./src/services/roomBus";
 
+// The live channels' keepalive (see `websocket.open` below).
+const WS_KEEPALIVE_MS = 40_000;
+const WS_PING = JSON.stringify({ type: "ping" });
+
 // ── Data-API route imports (from akita) ──────────────────────────────────
 import sleep from "./data-api/routes/health/sleep";
 import meditation from "./data-api/routes/health/meditation";
@@ -864,14 +868,19 @@ try {
       idleTimeout: 960, // long-lived HMR socket; Vite sends its own keepalives
       open(ws) {
         const d = ws.data as any;
-        if (d.kind === "room") {
-          // Subscribe to the room topic; publishToRoom() fans messages here.
-          ws.subscribe(roomTopic(d.roomId));
-          return;
-        }
-        if (d.kind === "user") {
-          // Global per-user channel; publishToUser() fans notifications here.
-          ws.subscribe(userTopic(d.userId));
+        if (d.kind === "room" || d.kind === "user") {
+          // Subscribe to the topic; publishToRoom() / publishToUser() fan
+          // events here. The channel is otherwise silent for as long as
+          // nothing happens, and a silent WebSocket is closed by whatever
+          // sits between the phone and this process (the Cloudflare tunnel,
+          // a carrier NAT) after two or three minutes: the app then
+          // reconnected and refetched the list and the thread every ~150 s
+          // while in front (20 September 2026). A frame every 40 s keeps the
+          // path warm; the clients ignore a `ping`.
+          ws.subscribe(d.kind === "room" ? roomTopic(d.roomId) : userTopic(d.userId));
+          d.keepalive = setInterval(() => {
+            try { ws.send(WS_PING); } catch { clearInterval(d.keepalive); }
+          }, WS_KEEPALIVE_MS);
           return;
         }
         const flush = () => { for (const m of d.queue) { try { d.upstream.send(m); } catch {} } d.queue = []; };
@@ -889,6 +898,7 @@ try {
       },
       close(ws) {
         const d = ws.data as any;
+        if (d.keepalive) clearInterval(d.keepalive);
         if (d.kind === "room") { try { ws.unsubscribe(roomTopic(d.roomId)); } catch {} return; }
         if (d.kind === "user") { try { ws.unsubscribe(userTopic(d.userId)); } catch {} return; }
         try { d.upstream.close(); } catch {}

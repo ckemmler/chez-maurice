@@ -360,3 +360,288 @@ struct DomainGreeting: View {
         .buttonStyle(.plain)
     }
 }
+
+// MARK: - The drawer "Define my domains" (P2-D, 20 September 2026)
+//
+// Under the message Maurice opened the conversation with, while the server
+// lists open proposals (GET /api/domains/proposals), a button opens this
+// drawer — a sheet from the bottom on the phone, a sheet on the Mac. Each
+// proposal is a row: its weight on five dots, its numbers, a box to adopt
+// it, the name and the one-line summary editable in place, "put away" to
+// dismiss it, and — only once the row is ticked — a second box, off by
+// default, to have Maurice seed the garden with a few notes on it: a yes to
+// the domain is not a yes to the notes, and the notes carry what the
+// conversations say, so the decision is taken domain by domain. "Apply"
+// sends the lot in one request; what was done comes back into the thread
+// as a message of Maurice's.
+
+/// The way into the drawer, drawn under the opening message.
+struct DefineDomainsButton: View {
+    @Environment(SessionStore.self) private var session
+    @Environment(\.mauriceTheme) private var theme
+    let count: Int
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 8) {
+                Image(systemName: "checklist").font(.system(size: 13, weight: .medium))
+                Text(session.localized("proposals.cta"))
+                    .font(.system(size: 14, weight: .medium))
+                Text("\(count)")
+                    .font(.system(size: 11, design: .monospaced))
+                    .padding(.horizontal, 6).padding(.vertical, 2)
+                    .background(Capsule().fill(theme.ink.opacity(0.12)))
+            }
+            .padding(.horizontal, 16).padding(.vertical, 10)
+        }
+        .glassProminentButton()
+        .tint(session.activeDeviceUser?.color ?? .blue)
+        .help(session.localized("proposals.cta.help"))
+        .padding(.top, 2)
+    }
+}
+
+/// One row's draft: what the member decided and wrote.
+private struct ProposalDraft: Identifiable, Equatable {
+    let id: String
+    var name: String
+    var summary: String
+    var adopt = false
+    var dismiss = false
+    var seed = false
+}
+
+struct DomainProposalsSheet: View {
+    @Environment(ChatService.self) private var chat
+    @Environment(MauriceStore.self) private var store
+    @Environment(SessionStore.self) private var session
+    @Environment(\.mauriceTheme) private var theme
+    @Environment(\.dismiss) private var dismiss
+
+    @State private var drafts: [ProposalDraft] = []
+    @State private var applying = false
+    @State private var failed = false
+
+    private var accent: Color { session.activeDeviceUser?.color ?? .blue }
+    private var byId: [String: DomainProposal] { Dictionary(chat.openProposals.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a }) }
+    private var decided: Int { drafts.filter { $0.adopt || $0.dismiss }.count }
+    private var changed: Bool {
+        drafts.contains { d in
+            guard let p = byId[d.id] else { return false }
+            return d.adopt || d.dismiss || d.name.trimmingCharacters(in: .whitespaces) != p.name || d.summary.trimmingCharacters(in: .whitespaces) != (p.one_line ?? p.summary)
+        }
+    }
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 10) {
+                    Text(session.localized("proposals.explainer"))
+                        .font(.system(size: 13)).foregroundStyle(theme.inkSoft)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.bottom, 4)
+
+                    if drafts.isEmpty {
+                        Text(session.localized("proposals.empty"))
+                            .font(.system(size: 13)).foregroundStyle(theme.inkMute)
+                    }
+
+                    ForEach($drafts) { $draft in
+                        if let p = byId[draft.id] {
+                            ProposalRow(proposal: p, draft: $draft, total: chat.proposalsTotalConversations, accent: accent)
+                        }
+                    }
+
+                    if failed {
+                        Text(session.localized("proposals.failed"))
+                            .font(.system(size: 12)).foregroundStyle(Color(hex: "a6452e"))
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+
+                    Text(session.localized("proposals.rule"))
+                        .font(.system(size: 12)).foregroundStyle(theme.inkMute)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.top, 6)
+                }
+                .padding(18)
+            }
+            .background(theme.surface)
+            .navigationTitle(session.localized("proposals.title"))
+            #if os(iOS)
+            .navigationBarTitleDisplayMode(.inline)
+            #endif
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button(session.localized("common.cancel")) { dismiss() }.tint(theme.ink).disabled(applying)
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button { Task { await apply() } } label: {
+                        if applying { ProgressView().controlSize(.small) }
+                        else { Text(decided > 0 ? String(format: session.localized("proposals.apply.count"), decided) : session.localized("proposals.apply")) }
+                    }
+                    .disabled(!changed || applying)
+                    .tint(accent)
+                }
+            }
+        }
+        #if os(macOS)
+        .frame(minWidth: 520, idealWidth: 580, minHeight: 520, idealHeight: 680)
+        #endif
+        .task {
+            await chat.loadProposals()
+            reset()
+        }
+        .onChange(of: chat.openProposals) { _, _ in
+            // The server's list moved (a tool call in the thread, another
+            // device): keep what the member typed, drop the rows that went.
+            let kept = Dictionary(drafts.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+            drafts = chat.openProposals.map { p in kept[p.id] ?? ProposalDraft(id: p.id, name: p.name, summary: p.one_line ?? p.summary) }
+        }
+        .interactiveDismissDisabled(applying)
+    }
+
+    private func reset() {
+        drafts = chat.openProposals.map { ProposalDraft(id: $0.id, name: $0.name, summary: $0.one_line ?? $0.summary) }
+    }
+
+    private func apply() async {
+        applying = true
+        failed = false
+        defer { applying = false }
+        var items: [DomainProposalApplyItem] = []
+        for d in drafts {
+            guard let p = byId[d.id] else { continue }
+            let name = d.name.trimmingCharacters(in: .whitespacesAndNewlines)
+            let summary = d.summary.trimmingCharacters(in: .whitespacesAndNewlines)
+            let renamed = name != p.name && !name.isEmpty
+            let resummarised = summary != (p.one_line ?? p.summary) && !summary.isEmpty
+            let action = d.adopt ? "adopt" : d.dismiss ? "dismiss" : "keep"
+            if action == "keep" && !renamed && !resummarised { continue }
+            items.append(DomainProposalApplyItem(id: d.id, action: action,
+                                                 name: renamed ? name : nil,
+                                                 summary: resummarised ? summary : nil,
+                                                 seed: d.adopt && d.seed))
+        }
+        guard !items.isEmpty else { return }
+        guard let result = await chat.applyProposals(items) else { failed = true; return }
+        if !result.adopted.isEmpty {
+            // The new domains join the list and the sidebar's overview.
+            await store.loadMaurices()
+        }
+        if !result.errors.isEmpty && result.adopted.isEmpty && result.dismissed.isEmpty && result.renamed.isEmpty {
+            failed = true
+            return
+        }
+        dismiss()
+    }
+}
+
+/// One proposal in the drawer.
+private struct ProposalRow: View {
+    @Environment(SessionStore.self) private var session
+    @Environment(\.mauriceTheme) private var theme
+    let proposal: DomainProposal
+    @Binding var draft: ProposalDraft
+    let total: Int
+    let accent: Color
+
+    private var numbers: String {
+        var bits: [String] = []
+        bits.append(String(format: session.localized(proposal.conversations == 1 ? "proposals.conversations.one" : "proposals.conversations.other"), proposal.conversations))
+        if proposal.share > 0 { bits.append("\(proposal.share) %") }
+        if let r = proposal.recent_90_days, r > 0 { bits.append(String(format: session.localized("proposals.recent"), r)) }
+        if !proposal.isAlive, let to = proposal.to { bits.append(String(format: session.localized("proposals.quiet_since"), String(to.prefix(7)))) }
+        return bits.joined(separator: " · ")
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .top, spacing: 12) {
+                // Adopt: the box.
+                Button {
+                    draft.adopt.toggle()
+                    if draft.adopt { draft.dismiss = false } else { draft.seed = false }
+                } label: {
+                    Image(systemName: draft.adopt ? "checkmark.square.fill" : "square")
+                        .font(.system(size: 22, weight: .regular))
+                        .foregroundStyle(draft.adopt ? accent : theme.inkMute)
+                }
+                .buttonStyle(.plain)
+                .disabled(draft.dismiss)
+                .help(session.localized("proposals.adopt"))
+                .padding(.top, 2)
+
+                VStack(alignment: .leading, spacing: 5) {
+                    HStack(spacing: 8) {
+                        Text(dots(proposal.weight))
+                            .font(.system(size: 11, design: .monospaced))
+                            .foregroundStyle(proposal.isAlive ? accent.legible(onDark: theme.isDark) : theme.inkMute)
+                            .accessibilityLabel(String(format: session.localized("proposals.weight"), proposal.weight, 5))
+                        Text(numbers)
+                            .font(.system(size: 11, design: .monospaced))
+                            .foregroundStyle(theme.inkMute)
+                            .lineLimit(2)
+                    }
+                    TextField(session.localized("proposals.name"), text: $draft.name)
+                        .textFieldStyle(.plain)
+                        .font(.system(size: 16, weight: .medium))
+                        .foregroundStyle(theme.ink)
+                        .disabled(draft.dismiss)
+                    TextField(session.localized("proposals.summary"), text: $draft.summary, axis: .vertical)
+                        .textFieldStyle(.plain)
+                        .lineLimit(1...4)
+                        .font(.system(size: 13))
+                        .foregroundStyle(theme.inkSoft)
+                        .disabled(draft.dismiss)
+                    if let hint = proposal.split_hint, !hint.isEmpty {
+                        Text(String(format: session.localized("proposals.split_hint"), hint))
+                            .font(.system(size: 11)).italic().foregroundStyle(theme.inkMute)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    if draft.adopt {
+                        Toggle(isOn: $draft.seed) {
+                            Text(session.localized("proposals.seed"))
+                                .font(.system(size: 12)).foregroundStyle(theme.inkSoft)
+                        }
+                        .toggleStyle(.switch)
+                        .tint(accent)
+                        #if os(macOS)
+                        .controlSize(.small)
+                        #endif
+                        .padding(.top, 2)
+                    }
+                }
+
+                Spacer(minLength: 0)
+
+                // Put away: the proposal is not a domain.
+                Button {
+                    draft.dismiss.toggle()
+                    if draft.dismiss { draft.adopt = false; draft.seed = false }
+                } label: {
+                    Image(systemName: draft.dismiss ? "arrow.uturn.backward.circle" : "xmark.circle")
+                        .font(.system(size: 18))
+                        .foregroundStyle(draft.dismiss ? accent : theme.inkMute)
+                }
+                .buttonStyle(.plain)
+                .help(session.localized(draft.dismiss ? "proposals.undo_dismiss" : "proposals.dismiss"))
+                .padding(.top, 2)
+            }
+            if draft.dismiss {
+                Text(session.localized("proposals.dismissed"))
+                    .font(.system(size: 11)).foregroundStyle(theme.inkMute)
+                    .padding(.leading, 34)
+            }
+        }
+        .padding(.horizontal, 12).padding(.vertical, 10)
+        .background(RoundedRectangle(cornerRadius: 12).fill(theme.bg))
+        .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(draft.adopt ? accent.opacity(0.6) : theme.ruleHard, lineWidth: draft.adopt ? 1 : 0.5))
+        .opacity(draft.dismiss ? 0.55 : 1)
+    }
+
+    private func dots(_ w: Int) -> String {
+        let n = max(0, min(5, w))
+        return String(repeating: "●", count: n) + String(repeating: "○", count: 5 - n)
+    }
+}

@@ -538,3 +538,27 @@
 "settings.import.never" = "nog geen import";
 "settings.import.run" = "%d gesprekken · %d berichten";
 "settings.import.night" = "Geïmporteerde gesprekken verschijnen in je lijst met hun herkomst. De nacht erna leest Maurice ze: je domeinen kunnen je 's ochtends worden voorgesteld.";
+
+/* The drawer "Define my domains" under the conversation Maurice opens (P2-D, 20 September 2026) */
+"proposals.cta" = "Mijn domeinen bepalen";
+"proposals.cta.help" = "De domeinen die Maurice voorstelt overnemen, verbeteren of opbergen";
+"proposals.title" = "Mijn domeinen";
+"proposals.explainer" = "Vink de domeinen aan die je overneemt, verbeter een naam of zijn regel zoals jij het zou zeggen, berg op wat er geen is. Niets bestaat voordat je toepast.";
+"proposals.empty" = "Er is geen voorstel meer open.";
+"proposals.failed" = "De server nam het niet aan. Probeer opnieuw, of antwoord Maurice in het gesprek.";
+"proposals.rule" = "Een overgenomen domein krijgt zijn schrift, binnen een minuut of twee door Maurice geschreven. Notities in je tuin worden alleen geschreven waar je erom vraagt, elk gemarkeerd als nog niet nagekeken.";
+"proposals.apply" = "Toepassen";
+"proposals.apply.count" = "Toepassen (%d)";
+"proposals.conversations.one" = "%d gesprek";
+"proposals.conversations.other" = "%d gesprekken";
+"proposals.recent" = "%d recent";
+"proposals.quiet_since" = "stil sinds %@";
+"proposals.weight" = "Gewicht %d van %d";
+"proposals.name" = "Naam";
+"proposals.summary" = "Eén regel over wat het is";
+"proposals.split_hint" = "Misschien meerdere dingen: %@";
+"proposals.seed" = "Mijn tuin inzaaien met een paar notities";
+"proposals.adopt" = "Overnemen";
+"proposals.dismiss" = "Opbergen";
+"proposals.undo_dismiss" = "In de lijst houden";
+"proposals.dismissed" = "Opgeborgen: zijn gesprekken komen niet meer terug.";

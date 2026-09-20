@@ -1,8 +1,11 @@
 import db from "../db";
-import { refreshBrief, type RefreshResult } from "./domainBriefs";
+import { addMessage } from "./conversations";
+import { memberLocale, refreshBrief, type RefreshResult } from "./domainBriefs";
+import { oneLine, shareOf, weightOf } from "./domainOpener";
 import { createMaurice, getMaurice, type Maurice } from "./maurices";
 import type { McpTool } from "./mcpClient";
 import { OPENED_BY_MAURICE } from "./openedConversations";
+import { publishToRoom } from "./roomBus";
 import { describeSeeding, seedDomain, type SeedResult } from "./domainSeeding";
 
 // The domain proposals — what the night's mapping found and offers, and the
@@ -19,6 +22,13 @@ import { describeSeeding, seedDomain, type SeedResult } from "./domainSeeding";
 // splits and dismisses (a dismissed proposal's conversations never come up
 // again). The tools exist in exactly one place: the conversation
 // `domain_proposals.conversation_id` points to, which Maurice opened.
+//
+// Since P2-D (20 September 2026) the same acts have a second door: the
+// app's drawer "Define my domains", on the member routes of
+// routes/domains.ts — the list with each proposal's weight, a rename, an
+// adoption, a dismissal, or the whole lot at once (`applyProposals`), which
+// then says in the conversation, in Maurice's voice, what was done. Both
+// doors run the functions below; neither adopts without the member's act.
 
 export type ProposalState = "proposed" | "adopted" | "dismissed" | "expired" | "superseded";
 
@@ -286,6 +296,56 @@ export function proposalCard(p: Proposal, opts: { titles?: number; ids?: boolean
   };
 }
 
+/** The member's conversations in all — their own, opened by them — for the
+ *  share a proposal represents. */
+export function memberConversationCount(memberId: string): number {
+  const row = db
+    .query(`SELECT COUNT(*) AS n FROM conversations c WHERE c.user_id = ? AND c.opened_by = 'member'
+              AND (SELECT COUNT(*) FROM conversation_participants p WHERE p.conversation_id = c.id) <= 1`)
+    .get(memberId) as { n: number } | null;
+  return Number(row?.n ?? 0);
+}
+
+/** What the app's drawer shows of a proposal: the card, plus its weight on
+ *  a five-dot bar relative to the biggest of the lot, its share of the
+ *  member's conversations, and one line of its summary. */
+export function proposalView(p: Proposal, maxSize: number, total: number) {
+  const n = p.conversation_ids.length;
+  return {
+    ...proposalCard(p, { titles: 3 }),
+    one_line: oneLine(p.summary),
+    weight: weightOf(n, maxSize),
+    share: shareOf(n, total),
+    conversation_id: p.conversation_id,
+    seed: p.stats.seed ?? null,
+    created_at: p.created_at,
+    updated_at: p.updated_at,
+  };
+}
+
+/** The member's open proposals as the drawer lists them: alive first, the
+ *  most recent conversations first, with their weights; and the settled
+ *  ones of the same conversation for the record. */
+export function proposalsForMember(memberId: string) {
+  const open = openProposals(memberId).sort(orderForDrawer);
+  const conversationId = open.find((p) => p.conversation_id)?.conversation_id ?? null;
+  const settled = conversationId ? proposalsInConversation(conversationId).filter((p) => p.state !== "proposed") : [];
+  const total = memberConversationCount(memberId);
+  const maxSize = Math.max(1, ...open.map((p) => p.conversation_ids.length), ...settled.map((p) => p.conversation_ids.length));
+  return {
+    conversation_id: conversationId,
+    total_conversations: total,
+    proposals: open.map((p) => proposalView(p, maxSize, total)),
+    settled: settled.map((p) => proposalView(p, maxSize, total)),
+  };
+}
+
+function orderForDrawer(a: Proposal, b: Proposal): number {
+  const av = a.stats.verdict === "lived" ? 1 : 0;
+  const bv = b.stats.verdict === "lived" ? 1 : 0;
+  return av - bv || (b.stats.recent_90 ?? 0) - (a.stats.recent_90 ?? 0) || b.conversation_ids.length - a.conversation_ids.length;
+}
+
 // ── The prompt section ───────────────────────────────────────────────────────
 
 /** What the app calls a brief in each of its languages, so Maurice uses the
@@ -313,7 +373,8 @@ export function proposalPromptSection(conversationId: string, memberName: string
     `You opened this conversation yourself, at night, to propose domains: parts of ${memberName}'s life you seem to follow across their conversations (imported ones and the ones lived with you). A domain, once adopted, is a row with a name and a statement that you keep a brief on. ` +
     `Nothing becomes a domain without ${memberName}'s yes in this conversation — never adopt on a hint, an "ok" to something else, or your own judgement. Discuss: they may rename, merge two, cut one, say one is not a domain (then dismiss it, and its conversations will not come up again), or point at something you missed (then propose it). Their words on what a domain is about are right by definition.\n` +
     `Three tools, here only: \`domains__propose\` (list the proposals with their sample conversations, show one in full, or add one ${memberName} names), \`domains__adjust\` (rename, merge, split, dismiss), \`domains__adopt\` (create the domain — after an explicit yes). ` +
-    `Adopting writes the first brief in the background; say it will appear on the domain's page in the app shortly. In ${memberName}'s language the app calls a brief "${word}" — use that word. Do not read ids aloud; use names.\n` +
+    `Adopting writes the first brief in the background; say it will appear on the domain's page in the app shortly. In ${memberName}'s language the app calls a brief "${word}" — use that word. Do not read ids aloud; use names. ` +
+    `${memberName} can also settle the proposals without you, in the app's drawer "Define my domains" under your opening message (adopt, rename, put away, ask for garden notes); what they did there appears in this conversation as a message of yours, and the list below is always current.\n` +
     `Seeding the garden (\`domains__seed\`): once a domain is adopted, offer once to write a few notes on it in ${memberName}'s garden — what you understood, the open threads, where it comes from, perhaps one note per salient subject — each marked as written by you and not yet reviewed, for them to keep, correct or throw away. ` +
     `A yes to the domain is not a yes to the notes: call \`domains__seed\` only after ${memberName} agrees to the notes themselves. It takes up to a minute and returns the notes with their links — give them. If they decline, call it with \`action: "decline"\` so you do not ask again.\n` +
     (open.length ? `\nOpen proposals:\n${open.map(line).join("\n")}` : `\nNo proposal is open any more in this conversation.`) +
@@ -480,14 +541,12 @@ export async function runDomainTool(name: string, input: any, conversationId: st
     if (action === "rename") {
       const p = mine(str(inp.id));
       if (!p) return fail("no such proposal in this conversation");
-      const nm = str(inp.name) || p.name;
-      const sm = str(inp.summary) || p.summary;
-      return ok({ renamed: proposalCard(updateProposal(p.id, { name: nm, summary: sm })!) });
+      return ok({ renamed: proposalCard(renameProposal(p, { name: str(inp.name), summary: str(inp.summary) })) });
     }
     if (action === "dismiss") {
       const p = mine(str(inp.id));
       if (!p) return fail("no such proposal in this conversation");
-      updateProposal(p.id, { state: "dismissed" });
+      dismissProposal(p);
       return ok({ dismissed: p.name, note: "put away; its conversations will not be proposed again" });
     }
     if (action === "merge") {
@@ -594,6 +653,22 @@ function mergedStats(parts: Proposal[]): ProposalStats {
   };
 }
 
+// ── Rename, dismiss ──────────────────────────────────────────────────────────
+
+/** A new name and/or summary in the member's words; an empty one keeps the old. */
+export function renameProposal(p: Proposal, patch: { name?: string; summary?: string }): Proposal {
+  const name = (patch.name ?? "").trim() || p.name;
+  const summary = (patch.summary ?? "").trim() || p.summary;
+  if (name === p.name && summary === p.summary) return p;
+  return updateProposal(p.id, { name, summary })!;
+}
+
+/** The member says it is not a domain: put away, its conversations never
+ *  come up in a mapping again. */
+export function dismissProposal(p: Proposal): Proposal {
+  return updateProposal(p.id, { state: "dismissed" })!;
+}
+
 // ── Adoption ─────────────────────────────────────────────────────────────────
 
 /** How many of the proposal's conversations are baked into the domain's
@@ -657,4 +732,209 @@ export async function seedProposal(p: Proposal, domain: Maurice, memberId: strin
     console.log(`[proposals] "${domain.name}": garden seeded for ${memberId} — ${r.notes.map((n) => n.slug).join(", ")}`);
   }
   return r;
+}
+
+// ── The drawer's validation (P2-D) ───────────────────────────────────────────
+
+export type ApplyAction = "adopt" | "dismiss" | "keep";
+
+export interface ApplyItem {
+  id: string;
+  action: ApplyAction;
+  name?: string;
+  summary?: string;
+  /** Adopt only: write the garden notes too. A yes to the domain is not a
+   *  yes to the notes; the drawer's box is off by default. */
+  seed?: boolean;
+}
+
+export interface ApplyResult {
+  adopted: Array<{ id: string; name: string; domain_id: string; conversations_bound: number; seeding: boolean }>;
+  dismissed: Array<{ id: string; name: string }>;
+  renamed: Array<{ id: string; name: string }>;
+  errors: Array<{ id: string; error: string }>;
+  /** The message Maurice left in the conversation, or null when nothing changed. */
+  message_id: string | null;
+  conversation_id: string | null;
+}
+
+/** What Maurice says in the conversation once the drawer is validated, in
+ *  the member's language. */
+const DONE: Record<string, { adopted: string; brief: string; dismissed: string; renamed: string; no_notes: string; seeding: string; seeded: string; seed_failed: string; notes_one: string; notes_other: string }> = {
+  en: {
+    adopted: "Done, from the app. Adopted: %s.",
+    brief: "The first brief is being written now and will appear on the domain's page in a minute or two.",
+    dismissed: "Put away: %s — their conversations will not come up again.",
+    renamed: "Corrected: %s.",
+    no_notes: "No note was written in your garden.",
+    seeding: "You asked for garden notes on %s: I am writing them and will tell you here when they are there.",
+    seeded: "Notes on %s are in your garden (%s), each marked as written by me and not reviewed yet — keep, correct or throw away:",
+    seed_failed: "The notes on %s could not be written: %s.",
+    notes_one: "%d note",
+    notes_other: "%d notes",
+  },
+  fr: {
+    adopted: "C'est fait, depuis l'app. Adopté : %s.",
+    brief: "Le premier cahier s'écrit maintenant et apparaîtra sur la fiche du domaine d'ici une minute ou deux.",
+    dismissed: "Rangé : %s — leurs conversations ne remonteront plus.",
+    renamed: "Corrigé : %s.",
+    no_notes: "Aucune note n'a été écrite dans ton jardin.",
+    seeding: "Tu as demandé des notes de jardin sur %s : je les écris et je te le dis ici quand elles y sont.",
+    seeded: "Les notes sur %s sont dans ton jardin (%s), chacune marquée comme écrite par moi et pas encore relue — garde, corrige ou jette :",
+    seed_failed: "Les notes sur %s n'ont pas pu être écrites : %s.",
+    notes_one: "%d note",
+    notes_other: "%d notes",
+  },
+  it: {
+    adopted: "Fatto, dall'app. Adottati: %s.",
+    brief: "Il primo quaderno si sta scrivendo ora e comparirà nella pagina del dominio tra un minuto o due.",
+    dismissed: "Messi via: %s — le loro conversazioni non torneranno più.",
+    renamed: "Corretti: %s.",
+    no_notes: "Nessuna nota è stata scritta nel tuo giardino.",
+    seeding: "Hai chiesto note di giardino su %s: le sto scrivendo e te lo dirò qui quando ci saranno.",
+    seeded: "Le note su %s sono nel tuo giardino (%s), ciascuna segnata come scritta da me e non ancora riletta — tieni, correggi o butta:",
+    seed_failed: "Le note su %s non hanno potuto essere scritte: %s.",
+    notes_one: "%d nota",
+    notes_other: "%d note",
+  },
+  de: {
+    adopted: "Erledigt, aus der App. Übernommen: %s.",
+    brief: "Das erste Heft wird jetzt geschrieben und erscheint in ein, zwei Minuten auf der Seite des Bereichs.",
+    dismissed: "Weggelegt: %s — ihre Gespräche kommen nicht wieder hoch.",
+    renamed: "Korrigiert: %s.",
+    no_notes: "In deinem Garten wurde keine Notiz geschrieben.",
+    seeding: "Du hast Gartennotizen zu %s gewünscht: Ich schreibe sie und sage dir hier Bescheid, wenn sie da sind.",
+    seeded: "Die Notizen zu %s sind in deinem Garten (%s), jede als von mir geschrieben und noch nicht durchgesehen markiert — behalten, korrigieren oder wegwerfen:",
+    seed_failed: "Die Notizen zu %s konnten nicht geschrieben werden: %s.",
+    notes_one: "%d Notiz",
+    notes_other: "%d Notizen",
+  },
+  es: {
+    adopted: "Hecho, desde la app. Adoptados: %s.",
+    brief: "El primer cuaderno se está escribiendo ahora y aparecerá en la página del dominio en uno o dos minutos.",
+    dismissed: "Guardados: %s — sus conversaciones no volverán a salir.",
+    renamed: "Corregidos: %s.",
+    no_notes: "No se ha escrito ninguna nota en tu jardín.",
+    seeding: "Has pedido notas de jardín sobre %s: las estoy escribiendo y te lo diré aquí cuando estén.",
+    seeded: "Las notas sobre %s están en tu jardín (%s), cada una marcada como escrita por mí y aún sin revisar — guarda, corrige o tira:",
+    seed_failed: "Las notas sobre %s no se han podido escribir: %s.",
+    notes_one: "%d nota",
+    notes_other: "%d notas",
+  },
+  pt: {
+    adopted: "Feito, a partir da app. Adotados: %s.",
+    brief: "O primeiro caderno está a ser escrito agora e aparecerá na página do domínio dentro de um ou dois minutos.",
+    dismissed: "Arrumados: %s — as suas conversas não voltarão a aparecer.",
+    renamed: "Corrigidos: %s.",
+    no_notes: "Nenhuma nota foi escrita no teu jardim.",
+    seeding: "Pediste notas de jardim sobre %s: estou a escrevê-las e digo-te aqui quando lá estiverem.",
+    seeded: "As notas sobre %s estão no teu jardim (%s), cada uma marcada como escrita por mim e ainda não revista — guarda, corrige ou deita fora:",
+    seed_failed: "As notas sobre %s não puderam ser escritas: %s.",
+    notes_one: "%d nota",
+    notes_other: "%d notas",
+  },
+  nl: {
+    adopted: "Gedaan, vanuit de app. Overgenomen: %s.",
+    brief: "Het eerste schrift wordt nu geschreven en verschijnt binnen een minuut of twee op de pagina van het domein.",
+    dismissed: "Opgeborgen: %s — hun gesprekken komen niet meer terug.",
+    renamed: "Verbeterd: %s.",
+    no_notes: "Er is geen notitie in je tuin geschreven.",
+    seeding: "Je vroeg om tuinnotities over %s: ik schrijf ze en laat het je hier weten zodra ze er zijn.",
+    seeded: "De notities over %s staan in je tuin (%s), elk gemarkeerd als door mij geschreven en nog niet nagekeken — bewaar, verbeter of gooi weg:",
+    seed_failed: "De notities over %s konden niet worden geschreven: %s.",
+    notes_one: "%d notitie",
+    notes_other: "%d notities",
+  },
+};
+
+function fill(s: string, ...args: Array<string | number>): string {
+  let i = 0;
+  return s.replace(/%[ds]/g, () => String(args[i++] ?? ""));
+}
+
+const bold = (names: string[]) => names.map((n) => `**${n}**`).join(", ");
+
+/** Leave a message of Maurice's in the proposal conversation and fan it out
+ *  to the member's open thread. Returns its id. */
+export function sayInConversation(conversationId: string, text: string): string {
+  const msg = addMessage(conversationId, "assistant", text, { mauriceId: null });
+  publishToRoom(conversationId, { type: "message", message: msg });
+  return msg.id;
+}
+
+/** Tests wait on the seeding kicked off by `applyProposals`. */
+let lastSeeding: Promise<void> = Promise.resolve();
+export function seedingSettled(): Promise<void> {
+  return lastSeeding;
+}
+
+/**
+ * The drawer's validation: every item is a proposal of the member's, still
+ * open; a name or summary given is theirs and prevails; `adopt` creates the
+ * domain (adoptProposal, the same as the tool), `dismiss` puts it away,
+ * `keep` only renames. Then Maurice says in the conversation what was
+ * done, and the garden notes asked for are written in the background, each
+ * announced in turn (charged to the member, like the tool).
+ */
+export async function applyProposals(memberId: string, items: ApplyItem[]): Promise<ApplyResult> {
+  const out: ApplyResult = { adopted: [], dismissed: [], renamed: [], errors: [], message_id: null, conversation_id: null };
+  const seeds: Array<{ p: Proposal; domain: Maurice }> = [];
+  for (const it of items) {
+    const p = it.id ? getProposal(it.id) : null;
+    if (!p || p.member_id !== memberId) { out.errors.push({ id: it.id, error: "no such proposal" }); continue; }
+    if (p.state !== "proposed") { out.errors.push({ id: it.id, error: `this proposal is ${p.state}` }); continue; }
+    out.conversation_id ??= p.conversation_id;
+    const renamed = renameProposal(p, { name: it.name, summary: it.summary });
+    if (renamed.name !== p.name || renamed.summary !== p.summary) out.renamed.push({ id: p.id, name: renamed.name });
+    if (it.action === "adopt") {
+      const r = adoptProposal(renamed);
+      if ("error" in r) { out.errors.push({ id: p.id, error: r.error }); continue; }
+      out.adopted.push({ id: p.id, name: r.domain.name, domain_id: r.domain.id, conversations_bound: r.bound, seeding: !!it.seed });
+      // The box left unticked is not a refusal: the notes stay offerable
+      // in the conversation (domains__seed), where Maurice may propose them.
+      if (it.seed) seeds.push({ p: getProposal(p.id)!, domain: r.domain });
+    } else if (it.action === "dismiss") {
+      dismissProposal(renamed);
+      out.dismissed.push({ id: p.id, name: renamed.name });
+    }
+  }
+
+  const changed = out.adopted.length || out.dismissed.length || out.renamed.length;
+  if (changed && out.conversation_id) {
+    const t = DONE[memberLocale(memberId)] ?? DONE.en!;
+    const lines: string[] = [];
+    if (out.adopted.length) {
+      lines.push(fill(t.adopted, bold(out.adopted.map((a) => a.name))) + " " + t.brief);
+    }
+    if (out.dismissed.length) lines.push(fill(t.dismissed, bold(out.dismissed.map((d) => d.name))));
+    const renamedOnly = out.renamed.filter((r) => !out.adopted.some((a) => a.id === r.id) && !out.dismissed.some((d) => d.id === r.id));
+    if (renamedOnly.length) lines.push(fill(t.renamed, bold(renamedOnly.map((r) => r.name))));
+    if (out.adopted.length) {
+      lines.push(seeds.length ? fill(t.seeding, bold(seeds.map((s) => s.domain.name))) : t.no_notes);
+    }
+    out.message_id = sayInConversation(out.conversation_id, lines.join("\n\n"));
+    console.log(`[proposals] ${memberId} applied from the app: ${out.adopted.length} adopted, ${out.dismissed.length} dismissed, ${renamedOnly.length} renamed, ${seeds.length} to seed`);
+  }
+
+  if (seeds.length && out.conversation_id) {
+    const conversationId = out.conversation_id;
+    const t = DONE[memberLocale(memberId)] ?? DONE.en!;
+    lastSeeding = lastSeeding.then(async () => {
+      for (const { p, domain } of seeds) {
+        try {
+          const r = await seedProposal(p, domain, memberId);
+          if (r.outcome === "written") {
+            const n = r.notes.length;
+            const links = r.notes.map((note) => `- [${note.title}](${note.web_path})`).join("\n");
+            sayInConversation(conversationId, `${fill(t.seeded, `**${domain.name}**`, fill(n === 1 ? t.notes_one : t.notes_other, n))}\n${links}`);
+          } else {
+            sayInConversation(conversationId, fill(t.seed_failed, `**${domain.name}**`, describeSeeding(r)));
+          }
+        } catch (err) {
+          sayInConversation(conversationId, fill(t.seed_failed, `**${domain.name}**`, (err as Error).message));
+        }
+      }
+    });
+  }
+  return out;
 }

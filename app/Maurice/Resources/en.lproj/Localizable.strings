@@ -538,3 +538,27 @@
 "settings.import.never" = "no import yet";
 "settings.import.run" = "%d conversations · %d messages";
 "settings.import.night" = "Imported conversations appear in your list with their origin. The night after, Maurice reads them: your domains may be proposed the next morning.";
+
+/* The drawer "Define my domains" under the conversation Maurice opens (P2-D, 20 September 2026) */
+"proposals.cta" = "Define my domains";
+"proposals.cta.help" = "Adopt, correct or put away the domains Maurice proposes";
+"proposals.title" = "My domains";
+"proposals.explainer" = "Tick the domains you adopt, correct a name or its line as you would say it, put away what is not one. Nothing exists until you apply.";
+"proposals.empty" = "No proposal is open any more.";
+"proposals.failed" = "The server did not take it. Try again, or answer Maurice in the conversation.";
+"proposals.rule" = "An adopted domain gets its brief written by Maurice within a minute or two. Notes in your garden are written only where you ask for them, each marked as not reviewed yet.";
+"proposals.apply" = "Apply";
+"proposals.apply.count" = "Apply (%d)";
+"proposals.conversations.one" = "%d conversation";
+"proposals.conversations.other" = "%d conversations";
+"proposals.recent" = "%d recent";
+"proposals.quiet_since" = "quiet since %@";
+"proposals.weight" = "Weight %d of %d";
+"proposals.name" = "Name";
+"proposals.summary" = "One line on what it is";
+"proposals.split_hint" = "Might be several things: %@";
+"proposals.seed" = "Seed my garden with a few notes";
+"proposals.adopt" = "Adopt";
+"proposals.dismiss" = "Put away";
+"proposals.undo_dismiss" = "Keep it on the list";
+"proposals.dismissed" = "Put away: its conversations will not come up again.";

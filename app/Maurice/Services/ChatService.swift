@@ -131,6 +131,51 @@ final class ChatService {
         conversations.first { $0.id == activeConversationId }
     }
 
+    // ── Domain proposals (the drawer "Define my domains", P2-D) ───
+    /// The member's open proposals, read from the server whenever a
+    /// conversation Maurice opened is selected — the app detects the state by
+    /// the route, not by the text of the message. Empty = no drawer button.
+    var openProposals: [DomainProposal] = []
+    var proposalsTotalConversations = 0
+    /// Whether the active conversation is the one carrying the proposals.
+    var activeConversationHasProposals: Bool {
+        guard let id = activeConversationId, !openProposals.isEmpty else { return false }
+        return openProposals.contains { $0.conversation_id == id }
+    }
+
+    /// Refresh the proposals; cheap, one GET. Called for a conversation
+    /// Maurice opened, and after the drawer is validated.
+    func loadProposals() async {
+        guard let api, let token else { return }
+        do {
+            let res: DomainProposalsResponse = try await api.get("/api/domains/proposals", token: token)
+            if res.proposals != openProposals { openProposals = res.proposals }
+            proposalsTotalConversations = res.total_conversations
+        } catch {
+            // A proposals list that fails to load hides the button; nothing more.
+        }
+    }
+
+    /// The drawer's validation, in one request. Maurice's word on what was
+    /// done lands in the thread over the room socket; the domains list and the
+    /// proposals are refreshed here.
+    func applyProposals(_ items: [DomainProposalApplyItem]) async -> DomainProposalApplyResult? {
+        guard let api, let token else { return nil }
+        struct Body: Encodable { let items: [DomainProposalApplyItem] }
+        do {
+            let res: DomainProposalApplyResult = try await api.post("/api/domains/proposals/apply", body: Body(items: items), token: token)
+            await loadProposals()
+            if let id = activeConversationId, !isStreaming, res.message_id != nil,
+               !messages.contains(where: { $0.id == res.message_id }) {
+                await reloadActiveMessages()
+            }
+            return res
+        } catch {
+            report(error)
+            return nil
+        }
+    }
+
     // ── Search ──────────────────────────────────────────────────
     /// What the sidebar search box holds; empty = the plain list.
     var searchQuery = ""
@@ -169,7 +214,10 @@ final class ChatService {
         do {
             let page: [ServerConversation] = try await api.get(
                 "/api/conversations?limit=\(conversationsPageSize)", token: token)
-            conversations = page
+            // Assign only what changed: the list is re-read on every socket
+            // reconnect, and replacing it wholesale re-rendered the sidebar
+            // and the header for nothing (the flashes of 20 September 2026).
+            if !Self.sameList(conversations, page) { conversations = page }
             notice = nil
             hasMoreConversations = page.count >= conversationsPageSize
             // What the server says is unread (a conversation Maurice opened and
@@ -212,6 +260,9 @@ final class ChatService {
         await loadMessages(for: id)
         // The thread's armed Maurice = its current maurice_id (sticky in-thread).
         currentMauriceId = activeConversation?.maurice_id
+        // A conversation Maurice opened may carry domain proposals: ask the
+        // server, which decides whether the drawer has anything to show.
+        if activeConversation?.openedByMaurice == true { await loadProposals() }
         // Mark read on the server so the foyer unread roll-up reflects it.
         if let api, let token {
             let _: OkResponse? = try? await api.post("/api/conversations/\(id)/read", body: ["":""], token: token)
@@ -526,10 +577,34 @@ final class ChatService {
             return
         }
         guard id == activeConversationId else { return } // room changed meanwhile
-        messages = detail.messages
+        // Same restraint as the list: a reconnect that missed nothing must not
+        // rebuild every row of the thread.
+        if !Self.sameThread(messages, detail.messages) { messages = detail.messages }
         participants = detail.participants ?? []
         knownIds = Set(messages.map { $0.id })
         pendingSummon = false
+    }
+
+    /// Whether two pages of the list are the same rows in the same order, as
+    /// far as what is drawn goes (id, title, last activity, unread).
+    private static func sameList(_ a: [ServerConversation], _ b: [ServerConversation]) -> Bool {
+        guard a.count == b.count else { return false }
+        for (x, y) in zip(a, b) {
+            if x.id != y.id || x.title != y.title || x.updated_at != y.updated_at
+                || x.unread != y.unread || x.maurice_id != y.maurice_id
+                || x.message_count != y.message_count || x.last_message_at != y.last_message_at
+                || (x.participants?.count ?? 0) != (y.participants?.count ?? 0) { return false }
+        }
+        return true
+    }
+
+    /// Whether a re-read thread is the one on screen: same ids, same texts.
+    private static func sameThread(_ a: [ServerMessage], _ b: [ServerMessage]) -> Bool {
+        guard a.count == b.count else { return false }
+        for (x, y) in zip(a, b) {
+            if x.id != y.id || x.content != y.content || x.data != y.data || x.usage != y.usage { return false }
+        }
+        return true
     }
 
     private func handle(_ event: RoomEvent) {
@@ -1148,6 +1223,7 @@ final class ChatService {
         roster = []
         knownIds = []
         unread = []
+        openProposals = []
         pendingSummon = false
         activeConversationId = nil
         followedTurn = nil

@@ -538,3 +538,27 @@
 "settings.import.never" = "sem importação";
 "settings.import.run" = "%d conversas · %d mensagens";
 "settings.import.night" = "As conversas importadas aparecem na sua lista com a sua origem. Na noite seguinte o Maurice lê-as: os seus domínios podem ser-lhe propostos de manhã.";
+
+/* The drawer "Define my domains" under the conversation Maurice opens (P2-D, 20 September 2026) */
+"proposals.cta" = "Definir os meus domínios";
+"proposals.cta.help" = "Adotar, corrigir ou arrumar os domínios que o Maurice propõe";
+"proposals.title" = "Os meus domínios";
+"proposals.explainer" = "Assinala os domínios que adotas, corrige um nome ou a sua linha como o dirias, arruma o que não o é. Nada existe enquanto não aplicares.";
+"proposals.empty" = "Já não há nenhuma proposta aberta.";
+"proposals.failed" = "O servidor não aceitou. Tenta de novo, ou responde ao Maurice na conversa.";
+"proposals.rule" = "Um domínio adotado recebe o seu caderno, escrito pelo Maurice dentro de um ou dois minutos. As notas no teu jardim só são escritas onde as pedes, cada uma marcada como ainda não revista.";
+"proposals.apply" = "Aplicar";
+"proposals.apply.count" = "Aplicar (%d)";
+"proposals.conversations.one" = "%d conversa";
+"proposals.conversations.other" = "%d conversas";
+"proposals.recent" = "%d recentes";
+"proposals.quiet_since" = "parado desde %@";
+"proposals.weight" = "Peso %d em %d";
+"proposals.name" = "Nome";
+"proposals.summary" = "Uma linha sobre o que é";
+"proposals.split_hint" = "Talvez várias coisas: %@";
+"proposals.seed" = "Semear o meu jardim com algumas notas";
+"proposals.adopt" = "Adotar";
+"proposals.dismiss" = "Arrumar";
+"proposals.undo_dismiss" = "Mantê-lo na lista";
+"proposals.dismissed" = "Arrumado: as suas conversas não voltarão a aparecer.";

@@ -706,6 +706,62 @@ struct ConversationSearchResponse: Decodable {
     let results: [ConversationSearchHit]
 }
 
+// MARK: - Domain proposals (the drawer "Define my domains", P2-D)
+
+/// One proposal of the night, as GET /api/domains/proposals lists it: the
+/// name and paragraph the night wrote, its conversations, its weight on five
+/// dots relative to the biggest, its share of the member's conversations,
+/// how many were recent, one line of the summary, and its state.
+struct DomainProposal: Decodable, Identifiable, Equatable {
+    let id: String
+    let name: String
+    let summary: String
+    let one_line: String?
+    let state: String
+    let verdict: String?
+    let conversations: Int
+    let weight: Int
+    let share: Int
+    let recent_90_days: Int?
+    let split_hint: String?
+    let from: String?
+    let to: String?
+    let conversation_id: String?
+    let domain_id: String?
+
+    var isAlive: Bool { verdict != "lived" }
+    var isOpen: Bool { state == "proposed" }
+}
+
+struct DomainProposalsResponse: Decodable {
+    let conversation_id: String?
+    let total_conversations: Int
+    let proposals: [DomainProposal]
+    let settled: [DomainProposal]?
+}
+
+/// One line of the drawer's validation (POST /api/domains/proposals/apply).
+struct DomainProposalApplyItem: Encodable {
+    let id: String
+    /// "adopt", "dismiss" or "keep" (rename only).
+    let action: String
+    let name: String?
+    let summary: String?
+    let seed: Bool
+}
+
+struct DomainProposalApplyResult: Decodable {
+    struct Adopted: Decodable { let id: String; let name: String; let domain_id: String; let conversations_bound: Int; let seeding: Bool }
+    struct Named: Decodable { let id: String; let name: String }
+    struct Failed: Decodable { let id: String; let error: String }
+    let adopted: [Adopted]
+    let dismissed: [Named]
+    let renamed: [Named]
+    let errors: [Failed]
+    let message_id: String?
+    let conversation_id: String?
+}
+
 struct ServerConversationDetail: Decodable {
     let id: String
     let title: String?

@@ -538,3 +538,27 @@
 "settings.import.never" = "aucun import";
 "settings.import.run" = "%d conversations · %d messages";
 "settings.import.night" = "Les conversations importées apparaissent dans votre liste avec leur origine. La nuit suivante, Maurice les lit : vos domaines peuvent vous être proposés au matin.";
+
+/* The drawer "Define my domains" under the conversation Maurice opens (P2-D, 20 September 2026) */
+"proposals.cta" = "Définir mes domaines";
+"proposals.cta.help" = "Adopter, corriger ou ranger les domaines que Maurice propose";
+"proposals.title" = "Mes domaines";
+"proposals.explainer" = "Coche les domaines que tu adoptes, corrige un nom ou sa ligne comme tu le dirais, range ce qui n’en est pas un. Rien n’existe tant que tu n’as pas appliqué.";
+"proposals.empty" = "Plus aucune proposition n’est ouverte.";
+"proposals.failed" = "Le serveur n’a pas pris. Réessaie, ou réponds à Maurice dans la conversation.";
+"proposals.rule" = "Un domaine adopté reçoit son cahier, écrit par Maurice d’ici une minute ou deux. Les notes dans ton jardin ne sont écrites que là où tu les demandes, chacune marquée comme pas encore relue.";
+"proposals.apply" = "Appliquer";
+"proposals.apply.count" = "Appliquer (%d)";
+"proposals.conversations.one" = "%d conversation";
+"proposals.conversations.other" = "%d conversations";
+"proposals.recent" = "%d récentes";
+"proposals.quiet_since" = "calme depuis %@";
+"proposals.weight" = "Poids %d sur %d";
+"proposals.name" = "Nom";
+"proposals.summary" = "Une ligne sur ce que c’est";
+"proposals.split_hint" = "Peut-être plusieurs choses : %@";
+"proposals.seed" = "Ensemencer mon jardin de quelques notes";
+"proposals.adopt" = "Adopter";
+"proposals.dismiss" = "Ranger";
+"proposals.undo_dismiss" = "Le garder dans la liste";
+"proposals.dismissed" = "Rangé : ses conversations ne remonteront plus.";

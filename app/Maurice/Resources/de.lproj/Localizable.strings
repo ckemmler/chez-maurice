@@ -538,3 +538,27 @@
 "settings.import.never" = "noch kein Import";
 "settings.import.run" = "%d Gespräche · %d Nachrichten";
 "settings.import.night" = "Importierte Gespräche erscheinen mit ihrer Herkunft in deiner Liste. In der Nacht danach liest Maurice sie: Am Morgen können dir deine Bereiche vorgeschlagen werden.";
+
+/* The drawer "Define my domains" under the conversation Maurice opens (P2-D, 20 September 2026) */
+"proposals.cta" = "Meine Bereiche festlegen";
+"proposals.cta.help" = "Die von Maurice vorgeschlagenen Bereiche übernehmen, korrigieren oder weglegen";
+"proposals.title" = "Meine Bereiche";
+"proposals.explainer" = "Hake die Bereiche ab, die du übernimmst, korrigiere einen Namen oder seine Zeile so, wie du es sagen würdest, lege weg, was keiner ist. Nichts existiert, bevor du anwendest.";
+"proposals.empty" = "Kein Vorschlag ist mehr offen.";
+"proposals.failed" = "Der Server hat es nicht angenommen. Versuch es noch einmal oder antworte Maurice im Gespräch.";
+"proposals.rule" = "Ein übernommener Bereich bekommt sein Heft, von Maurice in ein, zwei Minuten geschrieben. Notizen in deinem Garten werden nur dort geschrieben, wo du sie anforderst, jede als noch nicht durchgesehen markiert.";
+"proposals.apply" = "Anwenden";
+"proposals.apply.count" = "Anwenden (%d)";
+"proposals.conversations.one" = "%d Gespräch";
+"proposals.conversations.other" = "%d Gespräche";
+"proposals.recent" = "%d aktuell";
+"proposals.quiet_since" = "ruhig seit %@";
+"proposals.weight" = "Gewicht %d von %d";
+"proposals.name" = "Name";
+"proposals.summary" = "Eine Zeile dazu, was es ist";
+"proposals.split_hint" = "Vielleicht mehrere Dinge: %@";
+"proposals.seed" = "Meinen Garten mit ein paar Notizen bepflanzen";
+"proposals.adopt" = "Übernehmen";
+"proposals.dismiss" = "Weglegen";
+"proposals.undo_dismiss" = "In der Liste behalten";
+"proposals.dismissed" = "Weggelegt: seine Gespräche kommen nicht wieder hoch.";

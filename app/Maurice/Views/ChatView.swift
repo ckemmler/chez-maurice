@@ -16,6 +16,9 @@ struct ChatView: View {
     @State private var showAddContext = false
     @State private var showAddParticipant = false
     @State private var showTools = false
+    /// The drawer "Define my domains" (DomainsViews.swift), under the message
+    /// Maurice opened the conversation with, while proposals are open.
+    @State private var showProposals = false
     @State private var trayOpen = false
     /// Whether the stream is "following" the bottom. Goes false when the user
     /// scrolls up mid-answer, so tokens don't yank them back down.
@@ -81,6 +84,13 @@ struct ChatView: View {
                 .presentationDragIndicator(.visible)
             #else
             AddContextSheet(accent: accent)
+            #endif
+        }
+        .sheet(isPresented: $showProposals) {
+            DomainProposalsSheet()
+            #if os(iOS)
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
             #endif
         }
         .sheet(isPresented: $showTools) {
@@ -215,6 +225,14 @@ struct ChatView: View {
                             ForEach(Array(chat.messages.enumerated()), id: \.element.id) { index, message in
                                 MessageRow(message: message, isLast: index == chat.messages.count - 1)
                                     .id(message.id)
+                                // Under the message Maurice opened the
+                                // conversation with, while the server says
+                                // proposals are open: the way into the drawer.
+                                if index == 0, message.role == "assistant",
+                                   chat.activeConversation?.openedByMaurice == true,
+                                   chat.activeConversationHasProposals {
+                                    DefineDomainsButton(count: chat.openProposals.count) { showProposals = true }
+                                }
                             }
 
                             // Streaming row — kept alive with a stable id so

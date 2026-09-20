@@ -5,12 +5,14 @@ import db from "../db";
 import { ancillaryComplete, ancillaryModel, type AncillaryRequest, type AncillaryResult } from "./ancillary";
 import { SYSTEM_SPENDER, recordSpend, verdict as budgetVerdict } from "./budget";
 import { isDue } from "./corpusNightly";
-import { memberLanguage } from "./domainBriefs";
+import { memberLanguage, memberLocale } from "./domainBriefs";
+import { openerPrompt, openerStrings, openerSystem, openingTitle, parseOpener, renderOpening } from "./domainOpener";
 import {
   attachProposals,
   conversationsSpokenFor,
   expireStale,
   insertProposal,
+  memberConversationCount,
   openProposals,
   type Proposal,
   type ProposalStats,
@@ -35,9 +37,11 @@ import { listUsers } from "./users";
 // to see every title — the normal path for someone who talks little, as
 // step 0 found on Paola — and left aside otherwise. What remains is written
 // as proposals; when at least two are alive, Maurice opens a conversation
-// (P2-A) with a message the same model writes: three domains that count now,
-// the others that lived, the nuances. The three tools of that conversation
-// live in domainProposals.ts.
+// (P2-A) whose first message the server renders from the proposals — every
+// alive one with its weight, the lived ones named apart — around three short
+// parts the same model writes: the introduction, the nuances, the invitation
+// (domainOpener.ts, P2-D). The tools of that conversation live in
+// domainProposals.ts.
 //
 // Nothing here creates a domain. A member who ignores the conversation is
 // not reminded; their proposals expire after a few weeks and the next night
@@ -66,8 +70,8 @@ export function thresholdsFor(n: number): Thresholds {
 export const MIN_ALIVE_PROPOSALS = 2;
 /** Conversations at least before the night looks at a member. */
 export const MIN_CONVERSATIONS = 6;
-/** Presented in the opening message. */
-export const PRESENTED = 3;
+/** Alive proposals at least, for the night to open a conversation. Every
+ *  alive proposal is presented in the opening message since P2-D. */
 /** Groups named per night, alive first: the cost ceiling of a first night. */
 export const MAX_NAMED = 18;
 /** A group the model may cut itself: it must see every title. */
@@ -300,25 +304,10 @@ export function parseSplit(text: string, n: number): Array<{ name: string; summa
 }
 
 // ── The opening message ──────────────────────────────────────────────────────
+// Rendered by the server since P2-D (domainOpener.ts); re-exported for the
+// callers that knew them here.
 
-export function openerSystem(name: string, language: string): string {
-  return [
-    `You are Maurice, ${name}'s personal assistant. Tonight you looked over their past conversations — the ones imported from other assistants and the ones lived with you — and saw a few parts of their life you seem to follow. You are opening a conversation to propose them as *domains*: a domain is a part of their life you follow closely, with a short brief you keep on it that they can read and correct in the app. Nothing exists until they say yes.`,
-    `Write in ${language}, addressing ${name} as "you" (the familiar form where the language has one — "tu" in French), in your own voice: warm, plain, no flattery, no filler, no emoji. Markdown is fine (a short list for the three domains). 150 to 250 words. No title. Say what you did in one sentence, present the three domains with what you understood of each in one or two sentences, mention that others lived at some point and name them briefly, raise the nuances you see (a group that might be two things, two that might be one, one that may not be a domain), and end by inviting them to adopt, rename, cut, merge or refuse — in this conversation, in their words. Ask nothing you could not act on here.`,
-  ].join("\n\n");
-}
-
-export function openerPrompt(presented: Proposal[], others: Proposal[], name: string, sampleTitles: (p: Proposal) => string[]): string {
-  const card = (p: Proposal) =>
-    `- ${p.name} — ${p.conversation_ids.length} conversations, ${p.stats.first?.slice(0, 7)} → ${p.stats.last?.slice(0, 7)}, ${p.stats.recent_90 ?? 0} in the last 90 days.${p.stats.split_hint ? ` Might be several things: ${p.stats.split_hint}` : ""}\n  ${p.summary}\n  Sample: ${sampleTitles(p).join("; ")}`;
-  return [
-    `The three domains to present, alive now:\n${presented.map(card).join("\n")}`,
-    others.length
-      ? `Others you found — alive but not presented, or lived at some point (name them briefly, no detail):\n${others.map((p) => `- ${p.name} (${p.conversation_ids.length} conversations, ${p.stats.verdict === "lived" ? "quiet since " + p.stats.last?.slice(0, 7) : "alive"})`).join("\n")}`
-      : `You found nothing else worth naming.`,
-    `Write your opening message to ${name}.`,
-  ].join("\n\n");
-}
+export { openerPrompt, openerSystem, renderOpening };
 
 // ── One member ───────────────────────────────────────────────────────────────
 
@@ -487,19 +476,21 @@ export async function mapMember(memberId: string, opts: { dryRun?: boolean; forc
     return { ...res, outcome: "proposed", proposals: candidates.length, dry: candidates.map((c) => ({ ...c.named, stats: c.stats })) };
   }
 
-  // Write the proposals: the three alive ones that count now are presented.
+  // Write the proposals: every alive one is presented in the opening
+  // message (alive first, the most recent conversations first); the lived
+  // ones are named apart.
   const sorted = [...candidates].sort((a, b) => {
     const av = a.stats.verdict === "alive" ? 0 : 1;
     const bv = b.stats.verdict === "alive" ? 0 : 1;
     return av - bv || (b.stats.recent_90 ?? 0) - (a.stats.recent_90 ?? 0) || (b.stats.size ?? 0) - (a.stats.size ?? 0);
   });
-  const proposals = sorted.map((c, i) =>
+  const proposals = sorted.map((c) =>
     insertProposal({
       member_id: memberId,
       name: c.named.name,
       summary: c.named.summary,
       conversation_ids: c.ids,
-      presented: i < PRESENTED && c.stats.verdict === "alive",
+      presented: c.stats.verdict === "alive",
       stats: c.stats,
     }),
   );
@@ -508,7 +499,21 @@ export async function mapMember(memberId: string, opts: { dryRun?: boolean; forc
   return finishOpening(res, memberId, name, language, proposals, byId, opts);
 }
 
-/** Write the opening message with the model and open the conversation. */
+/** The order the opening message shows proposals in: alive first, then the
+ *  most recent conversations, then the biggest. */
+export function openingOrder(a: Proposal, b: Proposal): number {
+  const av = a.stats.verdict === "lived" ? 1 : 0;
+  const bv = b.stats.verdict === "lived" ? 1 : 0;
+  return av - bv || (b.stats.recent_90 ?? 0) - (a.stats.recent_90 ?? 0) || b.conversation_ids.length - a.conversation_ids.length;
+}
+
+/**
+ * Compose the opening message and open the conversation. The model writes
+ * the introduction, the nuances and the invitation (one call, under the
+ * cap); the server renders the list of proposals around them. A model reply
+ * that cannot be read is not an obstacle: the fixed sentences stand in and
+ * the conversation opens all the same.
+ */
 async function finishOpening(
   res: MemberResult,
   memberId: string,
@@ -518,19 +523,32 @@ async function finishOpening(
   byId: Map<string, Convo>,
   opts: { force?: boolean },
 ): Promise<MemberResult> {
-  const presented = proposals.filter((p) => p.presented).slice(0, PRESENTED);
-  const others = proposals.filter((p) => !presented.includes(p));
+  const sorted = [...proposals].sort(openingOrder);
+  const alive = sorted.filter((p) => p.stats.verdict !== "lived");
+  const lived = sorted.filter((p) => p.stats.verdict === "lived");
   res.proposals = proposals.length;
-  res.presented = presented.map((p) => p.name);
+  res.presented = alive.map((p) => p.name);
   const titles = byId.size ? sampleTitles(byId) : sampleTitlesFromDb(memberId);
-  const r = await call("domain_mapping", openerSystem(name, language), openerPrompt(presented, others, name, titles), 0.6);
-  if ("capped" in r) return { ...res, outcome: "capped", reason: r.capped };
-  if ("failed" in r) return { ...res, outcome: "proposed", reason: `opener: ${r.failed}`, cost_usd: res.cost_usd + r.cost };
-  res.cost_usd += r.cost;
-  const opened = await deps.open({ memberId, text: r.text.trim(), title: null, force: opts.force });
+  const locale = memberLocale(memberId);
+  const r = await call("domain_mapping", openerSystem(name, language, openerStrings(locale).button), openerPrompt(alive, lived, name, titles), 0.6);
+  let parts = {};
+  if ("capped" in r) {
+    // Opening costs nothing: the list is the server's, the fixed sentences
+    // frame it, and the member is not made to wait a night for the cap.
+    console.warn(`[mapping] opener capped for ${name}: ${r.capped} — opening with the fixed sentences`);
+  } else if ("failed" in r) {
+    res.cost_usd += r.cost;
+    console.warn(`[mapping] opener failed for ${name}: ${r.failed} — opening with the fixed sentences`);
+  } else {
+    res.cost_usd += r.cost;
+    parts = parseOpener(r.text);
+    if (!("intro" in parts)) console.warn(`[mapping] opener for ${name} was not JSON — opening with the fixed sentences`);
+  }
+  const text = renderOpening({ locale, alive, lived, total: memberConversationCount(memberId), parts });
+  const opened = await deps.open({ memberId, text, title: openingTitle(locale), force: opts.force });
   if (!opened.ok) return { ...res, outcome: opened.reason === "empty" ? "proposed" : "guarded", reason: opened.reason };
   attachProposals(proposals.map((p) => p.id), opened.conversation.id);
-  console.log(`[mapping] ${name}: conversation ${opened.conversation.id} opened with ${presented.length} domain(s) presented`);
+  console.log(`[mapping] ${name}: conversation ${opened.conversation.id} opened with ${alive.length} domain(s) presented, ${lived.length} named apart`);
   return { ...res, outcome: "opened", conversation_id: opened.conversation.id };
 }
 

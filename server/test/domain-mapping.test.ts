@@ -212,7 +212,7 @@ test("too few conversations, or fewer than two alive groups: nothing named, noth
   expect(budget.spentTodayUsd(budget.SYSTEM_SPENDER)).toBe(0);
 });
 
-test("a mature member: proposals written, the grab-bag cut by the model, the conversation opened with three presented", async () => {
+test("a mature member: proposals written, the grab-bag cut by the model, the conversation opened with every alive one presented", async () => {
   annaCorpus();
   const r = await mapping.mapMember(ANNA);
   expect(r.outcome).toBe("opened");
@@ -234,8 +234,9 @@ test("a mature member: proposals written, the grab-bag cut by the model, the con
   expect(byName.get("Sailing")!.presented).toBe(false);
   expect(byName.get("The cats")!.stats.origin).toBe("model_split");
   expect(byName.get("The cats")!.conversation_ids).toHaveLength(3);
-  expect(all.filter((p) => p.presented).map((p) => p.name).sort()).toEqual(["Baking bread", "The cats", "The violin"]);
-  expect(r.presented).toHaveLength(3);
+  // Every alive proposal is presented (P2-D); the lived one is named apart.
+  expect(all.filter((p) => p.presented).map((p) => p.name).sort()).toEqual(["Baking bread", "Taxes", "The cats", "The violin"]);
+  expect(r.presented).toHaveLength(4);
   expect(all.every((p) => p.state === "proposed" && p.conversation_id === r.conversation_id)).toBe(true);
 
   // The conversation is Maurice's, with his message first.
@@ -243,13 +244,19 @@ test("a mature member: proposals written, the grab-bag cut by the model, the con
   expect(conv).toEqual({ opened_by: "maurice", user_id: ANNA });
   const first = db.query(`SELECT role, content FROM messages WHERE conversation_id = ? ORDER BY created_at LIMIT 1`).get(r.conversation_id!) as any;
   expect(first.role).toBe("assistant");
-  expect(first.content).toContain("The violin");
-  // The opener prompt carried the three and named the others.
+  // The list is the server's: every alive proposal with its weight and its
+  // numbers, the lived one named apart, the model's intro on top.
+  expect(first.content).toContain("●●●●● **The violin** · 5 conversations · 28 %");
+  expect(first.content).toContain("**What lived at some point** : Sailing (3 conversations, quiet since 2025-08).");
+  expect(first.content).toContain("A domain is a part of your life I follow closely");
+  expect(first.content.indexOf("The violin")).toBeLessThan(first.content.indexOf("Sailing"));
+  // The opener prompt carried every alive one and the lived one apart.
   const opener = requests[5]!.prompt;
-  expect(opener).toContain("The three domains to present");
+  expect(opener).toContain("The domains alive now");
   expect(opener).toContain("Sailing");
   expect(opener).toContain("Taxes");
   expect(requests[5]!.system).toContain("English");
+  expect(requests[5]!.system).toContain("you do not list them");
 
   // Waiting from now on: nothing mapped again, nothing spent.
   requests = [];
@@ -268,9 +275,9 @@ test("the night's cap stops the naming before the call, and nothing is written",
   expect(proposals.listProposals(ANNA)).toHaveLength(0);
 });
 
-test("a failed opener leaves the proposals for the next night, which opens without mapping again", async () => {
+test("a failed opener does not stop the opening: the fixed sentences stand in, and the model's parts are used when they parse", async () => {
   annaCorpus();
-  const failOnce = mapping.setMappingDeps({
+  mapping.setMappingDeps({
     write: async (req) => {
       if (!req.prompt.includes("Return a JSON") && !req.prompt.includes("Cut it into")) throw new Error("opener down");
       return write(req);
@@ -278,16 +285,35 @@ test("a failed opener leaves the proposals for the next night, which opens witho
     map, now: () => TODAY,
   });
   const r = await mapping.mapMember(ANNA);
-  expect(r.outcome).toBe("proposed");
-  expect(proposals.openProposals(ANNA)).toHaveLength(5);
-  expect(proposals.openProposals(ANNA).every((p) => p.conversation_id === null)).toBe(true);
-  mapping.setMappingDeps({ write, map, now: () => TODAY });
-  requests = [];
+  expect(r.outcome).toBe("opened");
+  expect(r.cost_usd).toBeCloseTo(0.015, 6); // five calls charged, the failed opener nothing
+  const first = db.query(`SELECT content FROM messages WHERE conversation_id = ? ORDER BY created_at LIMIT 1`).get(r.conversation_id!) as any;
+  expect(first.content).toContain("Tonight I looked over our past conversations");
+  expect(first.content).toContain("**The violin**");
+  expect(first.content).toContain("Define my domains");
+  expect(proposals.openProposals(ANNA).every((p) => p.conversation_id === r.conversation_id)).toBe(true);
+
+  // With a JSON reply, the model's three parts frame the server's list.
+  db.run(`DELETE FROM domain_proposals`);
+  db.run(`DELETE FROM conversations WHERE user_id = ?`, [ANNA]);
+  annaCorpus();
+  mapping.setMappingDeps({
+    write: async (req) => {
+      if (!req.prompt.includes("Return a JSON") && !req.prompt.includes("Cut it into")) {
+        return { text: 'Here: {"intro": "Bonjour Anna, cette nuit j\'ai relu.", "nuances": "Les chats et les impôts sont peut-être deux choses.", "invitation": "Dis-moi."}', model: NIGHT, provider: "scaleway", stop: "end" as const, usage: usage(cost) };
+      }
+      return write(req);
+    },
+    map, now: () => TODAY,
+  });
   const again = await mapping.mapMember(ANNA);
   expect(again.outcome).toBe("opened");
-  expect(requests).toHaveLength(1); // the opener only
-  expect(proposals.openProposals(ANNA).every((p) => p.conversation_id === again.conversation_id)).toBe(true);
-  void failOnce;
+  const text = (db.query(`SELECT content FROM messages WHERE conversation_id = ? ORDER BY created_at LIMIT 1`).get(again.conversation_id!) as any).content as string;
+  expect(text.startsWith("Bonjour Anna, cette nuit j'ai relu.")).toBe(true);
+  expect(text).toContain("Les chats et les impôts sont peut-être deux choses.");
+  expect(text.trim().endsWith("Dis-moi.")).toBe(true);
+  expect(text.indexOf("**What I see living now**")).toBeLessThan(text.indexOf("Les chats"));
+  mapping.setMappingDeps({ write, map, now: () => TODAY });
 });
 
 test("a proposal left unanswered expires, and the night maps again", async () => {

@@ -10,6 +10,16 @@ import {
   type Maurice,
 } from "../services/maurices";
 import { deleteBrief, getBrief, refreshBrief, setBriefText, type BriefRow } from "../services/domainBriefs";
+import {
+  applyProposals,
+  getProposal,
+  memberConversationCount,
+  proposalView,
+  proposalsForMember,
+  renameProposal,
+  type ApplyItem,
+  type Proposal,
+} from "../services/domainProposals";
 import { seededNotesOf } from "../services/domainSeeding";
 
 // A domain is a row of `maurices` of kind `domain`: not a persona to summon
@@ -22,10 +32,102 @@ import { seededNotesOf } from "../services/domainSeeding";
 // creator's domain — so only the member who made the domain reaches it here.
 // A reading companion (kind `companion`) has no brief: the routes answer 404
 // for it, and the row it is stays reachable through /api/maurices.
+//
+// The proposal routes (P2-D, 20 September 2026) are the app's drawer "Define
+// my domains": what the night proposed to the member, with each proposal's
+// weight, and the member's word on it — rename, adopt, put away, one at a
+// time or the whole lot — on the same functions as the tools of the
+// conversation Maurice opened (services/domainProposals.ts). The member is
+// the caller; a proposal of someone else's is not found.
 
 const domains = new Hono();
 
 domains.use("/*", requireAuth);
+
+/** The caller's open proposal, or null. */
+function ownProposal(c: any): Proposal | null {
+  const p = getProposal(c.req.param("id"));
+  return p && p.member_id === c.get("userId") ? p : null;
+}
+
+function proposalOrNotFound(c: any): Proposal | Response {
+  const p = ownProposal(c);
+  if (!p) return c.json({ error: "Not found" }, 404);
+  if (p.state !== "proposed") return c.json({ error: `This proposal is ${p.state}`, state: p.state }, 409);
+  return p;
+}
+
+async function jsonBody(c: any): Promise<any | null> {
+  try {
+    return await c.req.json();
+  } catch {
+    return null;
+  }
+}
+
+const str = (v: unknown): string | undefined => (typeof v === "string" ? v : undefined);
+
+// GET /api/domains/proposals — the member's open proposals, alive first,
+// each with its weight (1–5, relative to the biggest), its share of the
+// member's conversations, how many were recent, one line of summary, and
+// the conversation that carries them; the settled ones of that conversation
+// ride along for the record. An empty `proposals` means the drawer has
+// nothing to show — the app hides its button on that.
+domains.get("/proposals", (c) => {
+  return c.json(proposalsForMember(c.get("userId")));
+});
+
+// PATCH /api/domains/proposals/:id — `{ name?, summary? }`, the member's words.
+domains.patch("/proposals/:id", async (c) => {
+  const p = proposalOrNotFound(c);
+  if (p instanceof Response) return p;
+  const body = await jsonBody(c);
+  if (!body) return c.json({ error: "Expected a JSON body" }, 400);
+  const renamed = renameProposal(p, { name: str(body.name), summary: str(body.summary) });
+  return c.json({ proposal: proposalView(renamed, Math.max(1, renamed.conversation_ids.length), memberConversationCount(p.member_id)) });
+});
+
+// POST /api/domains/proposals/:id/adopt — `{ name?, summary?, seed? }`: the
+// domain is created as the tool creates it (kind domain, conversations bound,
+// first brief in the background); `seed: true` also writes the garden notes,
+// in the background — the box is off by default, a yes to the domain is not
+// a yes to the notes. Maurice says what was done in the conversation.
+domains.post("/proposals/:id/adopt", async (c) => {
+  const p = proposalOrNotFound(c);
+  if (p instanceof Response) return p;
+  const body = (await jsonBody(c)) ?? {};
+  const r = await applyProposals(p.member_id, [{ id: p.id, action: "adopt", name: str(body.name), summary: str(body.summary), seed: body.seed === true }]);
+  if (r.errors.length) return c.json({ error: r.errors[0]!.error }, 422);
+  return c.json({ adopted: r.adopted[0], message_id: r.message_id });
+});
+
+// POST /api/domains/proposals/:id/dismiss — put away; its conversations
+// never come up again.
+domains.post("/proposals/:id/dismiss", async (c) => {
+  const p = proposalOrNotFound(c);
+  if (p instanceof Response) return p;
+  const r = await applyProposals(p.member_id, [{ id: p.id, action: "dismiss" }]);
+  return c.json({ dismissed: r.dismissed[0], message_id: r.message_id });
+});
+
+// POST /api/domains/proposals/apply — the drawer's validation in one go:
+// `{ items: [{ id, action: adopt | dismiss | keep, name?, summary?, seed? }] }`.
+// `keep` only renames. Answers with what was adopted, dismissed and renamed,
+// the errors per item, and the id of the message Maurice left.
+domains.post("/proposals/apply", async (c) => {
+  const body = await jsonBody(c);
+  const items = Array.isArray(body?.items) ? body.items : null;
+  if (!items) return c.json({ error: "Expected a JSON body with `items`" }, 400);
+  const clean: ApplyItem[] = [];
+  for (const it of items) {
+    const id = str(it?.id);
+    const action = str(it?.action);
+    if (!id || !action || !["adopt", "dismiss", "keep"].includes(action)) continue;
+    clean.push({ id, action: action as ApplyItem["action"], name: str(it.name), summary: str(it.summary), seed: it.seed === true });
+  }
+  const r = await applyProposals(c.get("userId"), clean);
+  return c.json(r);
+});
 
 /** The domain when it is the caller's, else null. */
 function ownDomain(c: any): Maurice | null {
