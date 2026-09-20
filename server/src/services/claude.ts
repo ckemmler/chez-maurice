@@ -177,24 +177,30 @@ function buildRoomSystemPrompt(conversationId: string, summonerName: string, ima
 // to call — and, asked what tools it has, recite the promise instead of looking.
 /** What to do with the corpus, when the turn holds it. The briefs above say
  *  what matters to the member; this says where what they actually wrote is
- *  kept, and in which order to look. The order is Maurice's promise back to
- *  them: the garden first because it is what they decided was worth keeping on
- *  a subject, then what they have said, then what they only read. Nothing in
- *  the corpus ranks the sources — one unfiltered search returns whatever
- *  scores highest, all sources mixed — so the order has to be walked here, one
- *  filtered search at a time. */
+ *  kept, and how to ask for it. Nothing in the corpus ranks the sources — one
+ *  unfiltered search returns whatever scores highest, all sources mixed, and
+ *  conversations outnumber the garden sixty to one — so the layers have to be
+ *  asked for separately, which is what this says.
+ *
+ *  The first draft said "one search per step, and stop as soon as you have
+ *  enough". GLM-5.3-Flash ignored the sequence on the first real turn and
+ *  fired both searches in the same round, which is better on both counts: one
+ *  round of latency rather than three, and every layer answered rather than a
+ *  walk that stops at the first plausible hit. The instruction now says what
+ *  the model did. */
 function corpusNotice(toolNames: string[]): string {
   if (!toolNames.includes("corpus__search")) return "";
   return (
     `\n\n## Your memory of what they keep\n` +
     `corpus__search reads everything of theirs that is indexed. Ask it a question the way they would put it, not in keywords. ` +
     `Reach for it when a question falls into one of the domains above: the briefs say what matters to them, the corpus holds what they actually wrote. ` +
-    `Go in the order of what they chose to keep, one search per step, and stop as soon as you have enough: ` +
-    `their garden first (filters {"source_type": ["note", "fiche", "card", "fragment"]}) — what they decided was worth keeping on a subject; ` +
-    `then what they have already said (filters {"source_type": "conversation"}); ` +
-    `then what they have only read or gathered (filters {"source_type": ["book", "dossier", "thought"]}). ` +
-    `Nothing ranks those sources for you: an unfiltered search mixes them, and the conversations, being by far the most numerous, usually win. ` +
-    `Say where something came from when it matters — a note they wrote is not a passage from someone else's book.`
+    `It ranks nothing across sources — an unfiltered search mixes them, and past conversations, being far the most numerous, take every slot. ` +
+    `So ask each layer separately, in the same round, one call per layer you need:\n` +
+    `- their garden, what they chose to keep on a subject: filters {"source_type": ["note", "fiche", "card", "fragment"]}\n` +
+    `- what they have already said to you: filters {"source_type": "conversation"}\n` +
+    `- what they have only read or gathered, and rarely needs asking: filters {"source_type": ["book", "dossier", "thought"]}\n` +
+    `The first two are the usual pair. Weigh what comes back in that same order — what they wrote down themselves outranks what they once said in passing, which outranks a page from someone else's book. ` +
+    `Say where something came from when it matters, and say when something comes from a brief rather than from a search you just ran.`
   );
 }
 
