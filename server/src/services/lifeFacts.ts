@@ -149,12 +149,19 @@ export function rememberFactTool(): McpTool {
   return {
     name: REMEMBER_FACT_TOOL,
     description:
-      "Write down one small, lasting fact you have just learnt about the person you are talking to, so you still know it in a year. " +
-      "For facts only: their children's names and ages, where they live, what they do, an allergy, an instrument they play, a date that recurs. " +
-      "Not for what belongs to a domain (what they are working on, reading, deciding — that is a brief), not for anything passing " +
-      "(a mood, today's plan), not for anything you inferred rather than were told, and never for someone who is not in this conversation. " +
+      "Write down one small, lasting fact you have just learnt about the person you are talking to, so you still know it in a year.\n\n" +
+      "THE TEST, and it is the only one: would this still be true in a year if neither of you ever mentioned it again? " +
+      "A fact needs no tending. A project, a plan, an idea, an opinion, a decision being weighed, something they are reading or building — " +
+      "all of those change by being lived, and they belong to a domain brief, which you already keep. This is not a place to record progress.\n\n" +
+      "Facts: \"Emilio a onze ans.\" \"Elle vit à Bruxelles.\" \"Il joue du violon.\" \"Elle est allergique aux arachides.\" " +
+      "\"Leur anniversaire de mariage est le 3 mai.\" \"Il est végétarien.\"\n" +
+      "Not facts: \"Il pense acheter une voiture électrique.\" \"Elle lit Humus.\" \"Il veut apprendre le portugais.\" " +
+      "\"Ils envisagent un voyage aux Galápagos.\" \"Il trouve ce modèle décevant.\" \"Il travaille sur l'app cette semaine.\"\n\n" +
+      "Never write down what you inferred rather than were told, anything about someone who is not in this conversation, " +
+      "or anything that merely restates what you already know about them. When in doubt, do not write: a fact you missed comes back, " +
+      "a wrong one has to be found and removed.\n\n" +
       "One short sentence in their own language, written as a statement about them. " +
-      "The fact is shown to them for confirmation and only counts once they keep it, so propose rather than assert, and do not announce it as already known.",
+      "It is shown to them for confirmation and counts only once they keep it, so propose rather than assert, and do not announce it as already known.",
     inputSchema: {
       type: "object",
       properties: {
