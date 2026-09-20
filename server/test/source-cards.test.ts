@@ -2,10 +2,13 @@
 // Both searches — the corpus and the web — collapse into one shape, because a
 // search is a list of things to go and look at whichever index answered.
 //
-// The part worth pinning down is the cover. The garden's frontmatter names an
-// image in four incompatible dialects, so the path is derived from collection,
-// locale and slug instead, and only handed over when the file is really there:
-// a card with a broken image is worse than a card with a letter in a box.
+// Two things are worth pinning down. The cover, because the garden's
+// frontmatter names an image in four incompatible dialects: the resolvable one
+// is used when it is there, the conventional name is tried otherwise, and
+// either way the file is stat-ed — a card with a broken image is worse than a
+// card with an icon in a box. And the de-duplication, because a search returns
+// chunks: one Guardian article came back four times in the first real run, and
+// four cards for one article is not four sources.
 
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
@@ -100,11 +103,65 @@ describe("a corpus search becomes a card", () => {
     expect(corpusSourceCard(null)).toBeNull();
   });
 
-  test("the card is capped, and says how many there really were", () => {
-    const many = Array.from({ length: 30 }, () => hit());
+  test("the card is capped, and says how many sources there really were", () => {
+    const many = Array.from({ length: 30 }, (_, i) =>
+      hit({ file_path: join(root, "anna", "books", "fr", `book-${i}-fiche.md`), resource_id: `book-${i}` }));
     const card = corpusSourceCard({ results: many })!;
     expect(card.results.length).toBe(12);
     expect(card.count).toBe(30);
+  });
+
+  test("a long article is one source, not one per chunk", () => {
+    // What a real search returns: the same Guardian piece four times over,
+    // best passage first. Four cards for one article is not four sources.
+    const chunks = [0, 1, 2, 3].map((i) =>
+      hit({ chunk_index: i, chunk_id: `c${i}`, score: 0.4 - i / 100, text: `passage ${i}` }));
+    const card = corpusSourceCard({ results: [...chunks, hit({ file_path: join(root, "anna", "notes", "fr", "autre.md"), title: "Autre" })] })!;
+    expect(card.count).toBe(2);
+    expect(card.results.length).toBe(2);
+    // The first hit of the file wins, which is the highest-scoring passage.
+    expect(card.results[0].snippet).toBe("passage 0");
+    expect(card.results[1].title).toBe("Autre");
+  });
+
+  test("a conversation is one source however many passages matched", () => {
+    // A conversation has no file path, so it identifies by conversation_id.
+    // Without that, the same thread came back three times in a real search.
+    const turns = [0, 1, 2].map((i) => ({
+      chunk_id: `k${i}`,
+      conversation_id: "convo-7",
+      conversation_title: "American political polarization",
+      source_type: "conversation",
+      date: "2026-03-12",
+      text: `tour ${i}`,
+      score: 0.62 - i / 100,
+    }));
+    const card = corpusSourceCard({ results: turns })!;
+    expect(card.count).toBe(1);
+    expect(card.results[0].snippet).toBe("tour 0");
+  });
+
+  test("a garden article keeps the link it was read at", () => {
+    const [item] = corpusSourceCard({
+      results: [hit({ url: "https://www.theguardian.com/x", publication: "the Guardian" })],
+    })!.results;
+    expect(item.url).toBe("https://www.theguardian.com/x");
+    // A relative or junk value is not a link.
+    const [none] = corpusSourceCard({ results: [hit({ url: "/local/path" })] })!.results;
+    expect(none.url).toBeUndefined();
+  });
+
+  test("the frontmatter's own image is used when it resolves", () => {
+    const [item] = corpusSourceCard({
+      results: [
+        hit({
+          resource_id: "",
+          slug: "",
+          image: "/images/anna/resources/books/fr-humus.jpg",
+        }),
+      ],
+    })!.results;
+    expect(item.image).toBe("/api/garden-images/anna/books/fr-humus.jpg");
   });
 });
 

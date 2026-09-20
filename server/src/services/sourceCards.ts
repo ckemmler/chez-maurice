@@ -91,30 +91,45 @@ function memberFromPath(filePath: string): string {
 /**
  * The cover of a corpus hit, as an app-reachable path — or nothing.
  *
- * The garden keeps every cover in one place and names it after the thing it
- * covers: `<garden>/images/resources/<collection>/<locale>-<slug>.jpg`, served
- * openly at `/api/garden-images/<member>/<collection>/<locale>-<slug>.jpg`
- * (the authenticated `/images/…` twin is no use to an AsyncImage, which sends
- * no credentials). So the path is *derived*, never read from the frontmatter:
- * the frontmatter speaks four incompatible dialects — a local `image` on
- * cards and article fiches, a Google Books `thumbnail`, a TMDB `poster_path`,
- * a Wikimedia `image_filename` — and only the first is resolvable without
- * inventing a CDN prefix.
+ * The garden keeps every cover in one place: `<garden>/images/resources/…`,
+ * written into the frontmatter as `/images/<member>/resources/…`. That URL is
+ * authenticated, which is no use to an AsyncImage — it sends no credentials —
+ * so it is rewritten to the open twin, `/api/garden-images/<member>/…`.
  *
- * The file is stat-ed before the path is handed out: a card with a broken
- * image is worse than a card with an initial in a box.
+ * Two ways in, in this order. The frontmatter's own `image`, which cards and
+ * article fiches carry and which is the only dialect of the four that resolves
+ * (the others are a Google Books `thumbnail`, a TMDB `poster_path` and a
+ * Wikimedia `image_filename`, none of them a URL without inventing a CDN
+ * prefix). Failing that, the conventional name — `<collection>/<locale>-<slug>`
+ * — since a fiche names its cover after itself. The identifier is spelled
+ * three ways across sources (`resource_id` on a fiche, `slug` on a note,
+ * `translationKey` on a card), so all three are tried.
+ *
+ * Whichever way, the file is stat-ed before the path is handed out: a card
+ * with a broken image is worse than a card with an icon in a box.
  */
 function coverPath(row: any): string | undefined {
+  const member = memberFromPath(clean(row?.file_path));
+  if (!member) return undefined;
+  const openPath = (rest: string) => {
+    if (!existsSync(join(gardensRoot(), member, "images", "resources", rest))) return undefined;
+    return `/api/garden-images/${member}/${rest}`;
+  };
+
+  // Stated outright by the frontmatter.
+  const stated = firstString(row, ["image"]);
+  const prefix = `/images/${member}/resources/`;
+  if (stated.startsWith(prefix)) {
+    const found = openPath(stated.slice(prefix.length));
+    if (found) return found;
+  }
+
+  // Or named by convention.
   const collection = firstString(row, ["resource_collection", "collection"]);
-  const slug = firstString(row, ["resource_id", "slug"]);
+  const slug = firstString(row, ["resource_id", "slug", "translationKey"]);
   const locale = firstString(row, ["locale", "lang"]) || "fr";
-  const filePath = clean(row?.file_path);
-  const member = memberFromPath(filePath);
-  if (!collection || !slug || !member) return undefined;
-  const name = `${locale}-${slug}.jpg`;
-  const onDisk = join(gardensRoot(), member, "images", "resources", collection, name);
-  if (!existsSync(onDisk)) return undefined;
-  return `/api/garden-images/${member}/${collection}/${name}`;
+  if (!collection || !slug) return undefined;
+  return openPath(`${collection}/${locale}-${slug}.jpg`);
 }
 
 /** The line under the title: who made the thing, and when. Ordered by what
@@ -149,8 +164,25 @@ function corpusTitle(row: any): string {
  * renderer, never to a wrong card.
  */
 export function corpusSourceCard(data: unknown, query?: string): SourceCard | null {
-  const rows = (data as any)?.results;
-  if (!Array.isArray(rows) || rows.length === 0) return null;
+  const all = (data as any)?.results;
+  if (!Array.isArray(all) || all.length === 0) return null;
+  // A search returns chunks, and a long article is a dozen of them: four cards
+  // for one Guardian piece is not four sources. Keep the first hit of each
+  // source — the corpus sorts by score, so the first is its best passage — and
+  // count distinct sources, which is what "6 sources" ought to mean.
+  //
+  // What identifies a source depends on what it is. A file has its path; a
+  // conversation has no file at all, so it identifies by `conversation_id`,
+  // and without that clause the same thread came back three times in a row
+  // under three different chunk ids.
+  const seen = new Set<string>();
+  const rows: any[] = [];
+  for (const row of all) {
+    const key = clean(row?.conversation_id) || clean(row?.file_path) || clean(row?.chunk_id);
+    if (key && seen.has(key)) continue;
+    if (key) seen.add(key);
+    rows.push(row);
+  }
   const results: SourceCardItem[] = rows.slice(0, MAX_CARDS).map((row: any) => {
     const item: SourceCardItem = { title: corpusTitle(row), kind: corpusKind(row) };
     const sub = corpusSubtitle(row);
@@ -159,6 +191,10 @@ export function corpusSourceCard(data: unknown, query?: string): SourceCard | nu
     if (cover) item.image = cover;
     const s = snippet(row?.text);
     if (s) item.snippet = s;
+    // An article kept in the garden remembers where it was read: that is
+    // somewhere to open, unlike a note, which lives only here.
+    const href = firstString(row, ["url", "canonical_url"]);
+    if (/^https?:\/\//.test(href)) item.url = href;
     if (typeof row?.score === "number") item.score = Math.round(row.score * 1000) / 1000;
     return item;
   });
