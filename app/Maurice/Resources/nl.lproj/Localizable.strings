@@ -355,6 +355,20 @@
 "fiche.state_draft" = "kaart in concept";
 "fiche.state_published" = "kaart gepubliceerd";
 "fiche.counts" = "voorkant %1$d · achterkant %2$d tekens";
+
+/* Source cards: what a corpus or web search found. */
+"sources.corpus" = "%d bronnen in je geheugen";
+"sources.web" = "%d bronnen op het web";
+"sources.more" = "%1$@ van %2$d";
+"sources.kind.note" = "notitie";
+"sources.kind.fiche" = "fiche";
+"sources.kind.card" = "kaart";
+"sources.kind.fragment" = "fragment";
+"sources.kind.conversation" = "gesprek";
+"sources.kind.book" = "boek";
+"sources.kind.dossier" = "dossier";
+"sources.kind.thought" = "gedachte";
+"sources.kind.web" = "web";
 "fiche.created" = "fiche zojuist aangemaakt";
 "fiche.open_fiche" = "Fiche openen";
 "fiche.open_card" = "Kaart openen";

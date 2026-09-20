@@ -355,6 +355,20 @@
 "fiche.state_draft" = "Karte im Entwurf";
 "fiche.state_published" = "Karte veröffentlicht";
 "fiche.counts" = "Vorderseite %1$d · Rückseite %2$d Zeichen";
+
+/* Source cards: what a corpus or web search found. */
+"sources.corpus" = "%d Quellen in deinem Gedächtnis";
+"sources.web" = "%d Quellen im Web";
+"sources.more" = "%1$@ von %2$d";
+"sources.kind.note" = "Notiz";
+"sources.kind.fiche" = "Karteikarte";
+"sources.kind.card" = "Karte";
+"sources.kind.fragment" = "Fragment";
+"sources.kind.conversation" = "Gespräch";
+"sources.kind.book" = "Buch";
+"sources.kind.dossier" = "Dossier";
+"sources.kind.thought" = "Gedanke";
+"sources.kind.web" = "Web";
 "fiche.created" = "Notizkarte gerade erstellt";
 "fiche.open_fiche" = "Notizkarte öffnen";
 "fiche.open_card" = "Karte öffnen";

@@ -1220,6 +1220,7 @@ private struct DataCardStack: View {
                 switch block.data.cardKind {
                 case "candidates": CandidatePickerCard(data: block.data)
                 case "media": MediaFicheCard(data: block.data)
+                case "sources": SourcesCard(data: block.data)
                 default: EmptyView()
                 }
             }

@@ -355,6 +355,20 @@
 "fiche.state_draft" = "carta in bozza";
 "fiche.state_published" = "carta pubblicata";
 "fiche.counts" = "fronte %1$d · retro %2$d caratteri";
+
+/* Source cards: what a corpus or web search found. */
+"sources.corpus" = "%d fonti nella tua memoria";
+"sources.web" = "%d fonti sul web";
+"sources.more" = "%1$@ su %2$d";
+"sources.kind.note" = "nota";
+"sources.kind.fiche" = "scheda";
+"sources.kind.card" = "carta";
+"sources.kind.fragment" = "frammento";
+"sources.kind.conversation" = "conversazione";
+"sources.kind.book" = "libro";
+"sources.kind.dossier" = "dossier";
+"sources.kind.thought" = "pensiero";
+"sources.kind.web" = "web";
 "fiche.created" = "scheda appena creata";
 "fiche.open_fiche" = "Apri la scheda";
 "fiche.open_card" = "Apri la carta";

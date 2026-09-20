@@ -355,6 +355,20 @@
 "fiche.state_draft" = "tarjeta en borrador";
 "fiche.state_published" = "tarjeta publicada";
 "fiche.counts" = "anverso %1$d · reverso %2$d caracteres";
+
+/* Source cards: what a corpus or web search found. */
+"sources.corpus" = "%d fuentes en tu memoria";
+"sources.web" = "%d fuentes en la web";
+"sources.more" = "%1$@ de %2$d";
+"sources.kind.note" = "nota";
+"sources.kind.fiche" = "ficha";
+"sources.kind.card" = "tarjeta";
+"sources.kind.fragment" = "fragmento";
+"sources.kind.conversation" = "conversación";
+"sources.kind.book" = "libro";
+"sources.kind.dossier" = "dosier";
+"sources.kind.thought" = "pensamiento";
+"sources.kind.web" = "web";
 "fiche.created" = "ficha recién creada";
 "fiche.open_fiche" = "Abrir la ficha";
 "fiche.open_card" = "Abrir la tarjeta";

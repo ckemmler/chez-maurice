@@ -355,6 +355,20 @@
 "fiche.state_draft" = "carte en brouillon";
 "fiche.state_published" = "carte publiée";
 "fiche.counts" = "recto %1$d · verso %2$d caractères";
+
+/* Source cards: what a corpus or web search found. */
+"sources.corpus" = "%d sources dans ta mémoire";
+"sources.web" = "%d sources sur le web";
+"sources.more" = "%1$@ sur %2$d";
+"sources.kind.note" = "note";
+"sources.kind.fiche" = "fiche";
+"sources.kind.card" = "carte";
+"sources.kind.fragment" = "fragment";
+"sources.kind.conversation" = "conversation";
+"sources.kind.book" = "livre";
+"sources.kind.dossier" = "dossier";
+"sources.kind.thought" = "pensée";
+"sources.kind.web" = "web";
 "fiche.created" = "fiche créée à l'instant";
 "fiche.open_fiche" = "Ouvrir la fiche";
 "fiche.open_card" = "Ouvrir la carte";
