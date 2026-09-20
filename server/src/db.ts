@@ -864,6 +864,26 @@ db.run(`
     PRIMARY KEY (maurice_id, member_id)
   )
 `);
+// Facts of a life (20 September 2026): the small, lasting things Maurice
+// learns about a member in conversation — a child's age, an allergy, where
+// they live. A third kind of memory beside the domain briefs and the corpus,
+// and the only one written during a turn rather than at night, which is why
+// nothing counts until the member has kept it (services/lifeFacts.ts).
+// `users.profile_text` stays theirs: this is held apart so a fact can be taken
+// back one at a time.
+db.run(`
+  CREATE TABLE IF NOT EXISTS life_facts (
+    id              TEXT PRIMARY KEY,
+    member_id       TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    text            TEXT NOT NULL,
+    state           TEXT NOT NULL DEFAULT 'proposed' CHECK (state IN ('proposed', 'kept', 'dismissed')),
+    conversation_id TEXT,
+    created_at      TEXT NOT NULL DEFAULT (datetime('now')),
+    decided_at      TEXT
+  )
+`);
+try { db.run(`CREATE INDEX IF NOT EXISTS idx_life_facts_member ON life_facts(member_id, state)`); } catch {}
+
 // The brief's own one-liner (20 September 2026). The everyday prompt carries an
 // *index* of the member's domains — a name and a sentence each — rather than
 // every brief in full, and loads a brief only when a question falls into it

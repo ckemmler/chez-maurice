@@ -357,6 +357,14 @@
 "fiche.counts" = "frente %1$d · verso %2$d caracteres";
 
 /* Source cards: what a corpus or web search found. */
+
+/* A fact Maurice wrote down about you, waiting on your word. */
+"fact.heading" = "Estou a anotar isto sobre ti";
+"fact.keep" = "Guardar";
+"fact.dismiss" = "Esquecer";
+"fact.kept" = "guardado";
+"fact.dismissed" = "esquecido";
+"fact.failed" = "Não consegui registar a tua resposta.";
 "sources.count" = "%d fontes";
 "sources.corpus" = "%d fontes na tua memória";
 "sources.web" = "%d fontes na web";

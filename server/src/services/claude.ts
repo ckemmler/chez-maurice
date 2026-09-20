@@ -13,6 +13,7 @@ import { type FileAttachment } from "./composer/files";
 import { getConversationMaurice, resolveMauriceContext, resolveMauriceAttachments } from "./maurices";
 import { briefsForPrompt, memberLocale } from "./domainBriefs";
 import { domainBriefTool, isDomainBriefTool, runDomainBriefTool } from "./domainTools";
+import { factsForPrompt, isRememberFactTool, rememberFactTool, runRememberFactTool } from "./lifeFacts";
 import { importHintSection } from "./chatImport";
 import { MAURICE_DOCS_TOOL_NAME, askMauriceDocs, mauriceDocsTool } from "./mauriceDocsTool";
 import { domainToolsFor, isDomainTool, proposalPromptSection, runDomainTool } from "./domainProposals";
@@ -476,7 +477,14 @@ async function executeTool(
   name: string,
   input: any,
   mcp: McpSession | null,
-  ctx: { conversationId: string; provider: string; round: number; memberId?: string | null },
+  ctx: {
+    conversationId: string;
+    provider: string;
+    round: number;
+    memberId?: string | null;
+    /** Shared across the turn's rounds: how many facts have been proposed. */
+    factsProposed?: { n: number };
+  },
 ): Promise<{ text: string; isError: boolean; data?: unknown }> {
   const start = performance.now();
   const result = await (async (): Promise<{ text: string; isError: boolean; data?: unknown }> => {
@@ -501,6 +509,15 @@ async function executeTool(
       // and scoped to the member taking the turn.
       if (isDomainBriefTool(name)) {
         return runDomainBriefTool(input || {}, ctx.memberId ?? undefined);
+      }
+      // A small lasting fact about the member, proposed for their approval
+      // (services/lifeFacts.ts). The count is the turn's, not the day's: a
+      // conversation that genuinely taught Maurice two things is fine, a model
+      // filling a form is not.
+      if (isRememberFactTool(name)) {
+        const outcome = runRememberFactTool(input || {}, ctx.memberId ?? undefined, ctx.conversationId, ctx.factsProposed?.n ?? 0);
+        if (outcome.data && ctx.factsProposed) ctx.factsProposed.n += 1;
+        return outcome;
       }
       // The domain proposal tools (services/domainProposals.ts) are native:
       // they exist only in the conversation Maurice opened to propose, and
@@ -551,6 +568,9 @@ async function* runOllamaAgentic(
 ): AsyncGenerator<StreamEvent> {
   const convo: any[] = [{ role: "system", content: system }, ...baseMessages];
   const calls: ToolCallLog[] = [];
+  // Counted for the whole turn, across its rounds (services/lifeFacts.ts).
+  const factsProposed = { n: 0 };
+
   let useTools = tools.length > 0;
   for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
     if (signal?.aborted) return;
@@ -700,6 +720,9 @@ async function* runOpenAIAgentic(
 ): AsyncGenerator<StreamEvent> {
   const convo: any[] = [{ role: "system", content: system }, ...baseMessages];
   const calls: ToolCallLog[] = [];
+  // Counted for the whole turn, across its rounds (services/lifeFacts.ts).
+  const factsProposed = { n: 0 };
+
   const usage = newUsage(provider, model);
   function* reportUsage(): Generator<StreamEvent> {
     if (hasUsage(usage)) yield { type: "usage", usage: priceUsage(usage) };
@@ -1137,6 +1160,10 @@ function trackedBooks(
       // the member's own conversation — never in a room, where another
       // participant would read them.
       if (countParticipants(conversationId) === 1) {
+        // What the member has confirmed Maurice may know (services/lifeFacts.ts),
+        // then the index of their domains. Both are theirs alone, so both are
+        // held by the same one-participant rule.
+        systemPrompt += factsForPrompt(memberId);
         systemPrompt += briefsForPrompt(memberId, userDisplayName);
         carriesDomainIndex = true;
         // A member who never imported a history may hear of the import once,
@@ -1249,8 +1276,8 @@ function trackedBooks(
   // ordinary conversation does not move.
   const domainTools: McpTool[] = memberId ? domainToolsFor(conversationId, memberId) : [];
   mcpTools = [...mcpTools, ...domainTools];
-  // And the one that reads a brief, wherever the index was carried.
-  if (carriesDomainIndex) mcpTools = [...mcpTools, domainBriefTool()];
+  // And the two that go with them: reading a brief, and writing down a fact.
+  if (carriesDomainIndex) mcpTools = [...mcpTools, domainBriefTool(), rememberFactTool()];
 
   // Now that the roster is settled, tell the model what it really holds.
   systemPrompt += toolRosterNotice(mcpTools.map((t) => t.name), wantsWeb && hasWebSearch());
@@ -1347,6 +1374,9 @@ function trackedBooks(
   // (each round is a separate billed request) and reported once at the end.
   const usage = newUsage("anthropic", resolved);
   const calls: ToolCallLog[] = [];
+  // Counted for the whole turn, across its rounds (services/lifeFacts.ts).
+  const factsProposed = { n: 0 };
+
   function* reportUsage(): Generator<StreamEvent> {
     if (hasUsage(usage)) yield { type: "usage", usage: priceUsage(usage) };
   }

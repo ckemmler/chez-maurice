@@ -42,6 +42,7 @@
 		87ECEC8E0F3C684D0577613C /* DictateIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = CEB5E21AE21611A0C6FC115B /* DictateIntent.swift */; };
 		8D85F19C2F440203BAFC484F /* ChatView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E01BB325D88F4E74B3571BC /* ChatView.swift */; };
 		A1B2C3D40000000000000102 /* SourcesCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D40000000000000101 /* SourcesCard.swift */; };
+		A1B2C3D40000000000000202 /* LifeFactCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D40000000000000201 /* LifeFactCard.swift */; };
 		91817BB3A32C4F1FE886B982 /* OFL.txt in Resources */ = {isa = PBXBuildFile; fileRef = 51780E1D57A085038F7AB3A4 /* OFL.txt */; };
 		98920F5C7DB20F4AF25B7C78 /* SortMenu.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC55EBC69472BBED58BC1614 /* SortMenu.swift */; };
 		9BCAFB3EF7CD1C5F4BB61912 /* DomainsViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = F2BCD320C3B31E341073ED84 /* DomainsViews.swift */; };
@@ -56,6 +57,7 @@
 		CAF942F37AE2F3E45A4761D0 /* Hats.swift in Sources */ = {isa = PBXBuildFile; fileRef = DCDEAA0E48CC14C7C18BE8FD /* Hats.swift */; };
 		CB71AD2912D05739932A2EB1 /* ChatView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E01BB325D88F4E74B3571BC /* ChatView.swift */; };
 		A1B2C3D40000000000000103 /* SourcesCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D40000000000000101 /* SourcesCard.swift */; };
+		A1B2C3D40000000000000203 /* LifeFactCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D40000000000000201 /* LifeFactCard.swift */; };
 		CC9F77433FFC0CCC7F8668EA /* UserPickerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB58402567AEED97404D604C /* UserPickerView.swift */; };
 		CCEF2532174820F615C4C61F /* ChatService.swift in Sources */ = {isa = PBXBuildFile; fileRef = EDFA39C22354B093CDDBB691 /* ChatService.swift */; };
 		D050F6CF74E2684FAF9E78A2 /* ChatService.swift in Sources */ = {isa = PBXBuildFile; fileRef = EDFA39C22354B093CDDBB691 /* ChatService.swift */; };
@@ -85,6 +87,7 @@
 		462A7ECD4C83B5ADC43A81CB /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		4E01BB325D88F4E74B3571BC /* ChatView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatView.swift; sourceTree = "<group>"; };
 		A1B2C3D40000000000000101 /* SourcesCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SourcesCard.swift; sourceTree = "<group>"; };
+		A1B2C3D40000000000000201 /* LifeFactCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LifeFactCard.swift; sourceTree = "<group>"; };
 		4E0D0DF979284275260F31D2 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		51780E1D57A085038F7AB3A4 /* OFL.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = OFL.txt; sourceTree = "<group>"; };
 		5C3DB8955BF008783D2F7399 /* DomainBriefView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DomainBriefView.swift; sourceTree = "<group>"; };
@@ -182,6 +185,7 @@
 				EE3170FDE5751A81E295CF2E /* BoaterHat.swift */,
 				4E01BB325D88F4E74B3571BC /* ChatView.swift */,
 				A1B2C3D40000000000000101 /* SourcesCard.swift */,
+				A1B2C3D40000000000000201 /* LifeFactCard.swift */,
 				7A157516CA9C98CE6FB4E293 /* ComposerViews.swift */,
 				462A7ECD4C83B5ADC43A81CB /* ContentView.swift */,
 				5C3DB8955BF008783D2F7399 /* DomainBriefView.swift */,
@@ -361,6 +365,7 @@
 				CCEF2532174820F615C4C61F /* ChatService.swift in Sources */,
 				8D85F19C2F440203BAFC484F /* ChatView.swift in Sources */,
 				A1B2C3D40000000000000102 /* SourcesCard.swift in Sources */,
+				A1B2C3D40000000000000202 /* LifeFactCard.swift in Sources */,
 				7D41CDDFD359570A173D9D72 /* ComposerStore.swift in Sources */,
 				AF3DE3F5A58AC486DD4036F1 /* ComposerViews.swift in Sources */,
 				22273DE6923544F195C76CAD /* ContentView.swift in Sources */,
@@ -393,6 +398,7 @@
 				D050F6CF74E2684FAF9E78A2 /* ChatService.swift in Sources */,
 				CB71AD2912D05739932A2EB1 /* ChatView.swift in Sources */,
 				A1B2C3D40000000000000103 /* SourcesCard.swift in Sources */,
+				A1B2C3D40000000000000203 /* LifeFactCard.swift in Sources */,
 				7CB12254AF16A2499EAEA7D7 /* ComposerStore.swift in Sources */,
 				E3C10DC76C2CF893DD4DF505 /* ComposerViews.swift in Sources */,
 				8420EA02F7C918A622052FF4 /* ContentView.swift in Sources */,
