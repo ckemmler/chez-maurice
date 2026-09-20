@@ -447,9 +447,13 @@ struct DomainProposalsSheet: View {
                             .font(.system(size: 13)).foregroundStyle(theme.inkMute)
                     }
 
-                    ForEach($drafts) { $draft in
-                        if let p = byId[draft.id] {
-                            ProposalRow(proposal: p, draft: $draft, total: chat.proposalsTotalConversations, accent: accent)
+                    // Rows are bound by id, never by position: the list can
+                    // shrink under an open drawer (Apply, a tool call in the
+                    // thread, another device) and a positional binding then
+                    // read past the end — that was a crash on the first Apply.
+                    ForEach(drafts) { d in
+                        if let p = byId[d.id] {
+                            ProposalRow(proposal: p, draft: draftBinding(d.id), total: chat.proposalsTotalConversations, accent: accent)
                         }
                     }
 
@@ -495,6 +499,8 @@ struct DomainProposalsSheet: View {
         .onChange(of: chat.openProposals) { _, _ in
             // The server's list moved (a tool call in the thread, another
             // device): keep what the member typed, drop the rows that went.
+            // Not while we are the ones moving it: Apply dismisses on its own.
+            if applying { return }
             let kept = Dictionary(drafts.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
             drafts = chat.openProposals.map { p in kept[p.id] ?? ProposalDraft(id: p.id, name: p.name, summary: p.one_line ?? p.summary) }
         }
@@ -503,6 +509,15 @@ struct DomainProposalsSheet: View {
 
     private func reset() {
         drafts = chat.openProposals.map { ProposalDraft(id: $0.id, name: $0.name, summary: $0.one_line ?? $0.summary) }
+    }
+
+    /// A binding to one draft found by id. Reading a row that has gone gives
+    /// its last value back (an inert placeholder), writing to it does nothing.
+    private func draftBinding(_ id: String) -> Binding<ProposalDraft> {
+        Binding(
+            get: { drafts.first { $0.id == id } ?? ProposalDraft(id: id, name: "", summary: "") },
+            set: { new in if let i = drafts.firstIndex(where: { $0.id == id }) { drafts[i] = new } }
+        )
     }
 
     private func apply() async {
