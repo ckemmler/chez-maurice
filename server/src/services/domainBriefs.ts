@@ -75,6 +75,9 @@ export interface BriefRow {
   /** The newest message the last rewrite saw (ISO); the next reads after it. */
   read_until: string | null;
   model: string | null;
+  /** One sentence naming what this domain is about, written by the night
+   *  beside the brief. Null until a night has run on this brief. */
+  summary: string | null;
 }
 
 export function getBrief(domainId: string, memberId: string): BriefRow | null {
@@ -93,13 +96,20 @@ export function getBrief(domainId: string, memberId: string): BriefRow | null {
 
 function storeBrief(row: Omit<BriefRow, "updated_at">): void {
   db.run(
-    `INSERT INTO domain_briefs (maurice_id, member_id, text, updated_at, sources_json, read_until, model)
-     VALUES (?, ?, ?, datetime('now'), ?, ?, ?)
+    `INSERT INTO domain_briefs (maurice_id, member_id, text, updated_at, sources_json, read_until, model, summary)
+     VALUES (?, ?, ?, datetime('now'), ?, ?, ?, ?)
      ON CONFLICT(maurice_id, member_id) DO UPDATE SET
        text = excluded.text, updated_at = datetime('now'), sources_json = excluded.sources_json,
-       read_until = excluded.read_until, model = excluded.model`,
-    [row.maurice_id, row.member_id, row.text, JSON.stringify(row.sources), row.read_until, row.model],
+       read_until = excluded.read_until, model = excluded.model, summary = excluded.summary`,
+    [row.maurice_id, row.member_id, row.text, JSON.stringify(row.sources), row.read_until, row.model, row.summary],
   );
+}
+
+/** The one-liner alone, written after the brief it summarises. Kept apart from
+ *  `storeBrief` so a summary can be (re)written without touching the brief —
+ *  a failed summary must never cost the brief that was just written. */
+export function storeSummary(domainId: string, memberId: string, summary: string): void {
+  db.run(`UPDATE domain_briefs SET summary = ? WHERE maurice_id = ? AND member_id = ?`, [summary, domainId, memberId]);
 }
 
 /** A member's domains: the rows of kind `domain` they made. A domain shared
@@ -132,6 +142,10 @@ export function setBriefText(domainId: string, memberId: string, text: string): 
     sources: previous?.sources ?? [],
     read_until: previous?.read_until ?? null,
     model: MEMBER_AUTHOR,
+    // The one-liner described the text that was just replaced. Dropping it is
+    // truer than keeping it: the index falls back to the member's own opening
+    // sentences until the next night writes a summary of what they wrote.
+    summary: null,
   });
   return getBrief(domainId, memberId);
 }
@@ -147,97 +161,145 @@ export function deleteBrief(domainId: string, memberId: string): boolean {
 
 // ── What the everyday Maurice reads ──────────────────────────────────────────
 //
-// Every brief of the member's domains rides in the system prompt of their own
-// conversations — after the persona and the loaded context, so the cached
-// prefix only moves when a brief does (once a night, or on a correction) —
-// under one global budget. Never in a room, never for another member: the
-// caller (services/claude.ts) holds those two rules; this side only knows
-// whose briefs to fetch.
+// An *index* of the member's domains rides in the system prompt of their own
+// conversations — one line each, a name and a sentence — and the brief itself
+// is loaded only when a question falls into a domain, through the native
+// `domain_brief` tool (services/domainTools.ts). Never in a room, never for
+// another member: the caller (services/claude.ts) holds those two rules; this
+// side only knows whose domains to list.
+//
+// It used to be every brief in full, most recently rewritten first, under a
+// budget that grew from 3 000 to 5 000 tokens in one morning. What that missed
+// is that the budget was never the problem: eleven briefs weigh about 4 900
+// tokens and they rode into a conversation about a family holiday in the
+// Galápagos, where not one of them applied. An index is about 500 tokens for
+// the same eleven domains, and a domain that does apply costs its own brief
+// and no one else's. The brief also arrives as a tool result rather than in
+// the prompt, so a night's rewrite no longer moves the cached prefix of every
+// conversation.
 
-/** The global budget of the briefs section, in estimated tokens. Raised from
- *  3 000 on 20 September 2026: eleven domains came to about 4 850 tokens, so
- *  five briefs rode and six were named only — and since the nightly rewrite
- *  stamps them all in the same minute, the same five rode every night. The
- *  extra ~1 850 tokens sit in the cached prefix and cost about a dollar a
- *  month at the owner's rate. This is a ceiling, not a target: the section is
- *  meant to be what Maurice holds top of mind, and a member with twenty
- *  domains should get shorter briefs rather than a bigger budget. */
-export const BRIEFS_BUDGET_TOKENS = 5000;
+/** The budget of the index. Generous on purpose: eleven one-line entries come
+ *  to about 500 tokens, so this only bites for someone with dozens of domains,
+ *  and then it cuts whole entries rather than a sentence in half. */
+export const INDEX_BUDGET_TOKENS = 1200;
+
+/** How much of a brief stands in for a missing summary — the opening sentences,
+ *  cut at one. Until a night has run, every entry is this. */
+const FALLBACK_CHARS = 200;
 
 export interface PromptBrief {
   name: string;
   text: string;
   updated_at: string;
   model: string | null;
+  summary: string | null;
 }
 
-/** The section of the system prompt, or "" when the member has no brief. The
- *  briefs are taken most recently rewritten first; one that does not fit whole
- *  is cut at a paragraph (never mid-sentence) and closes the section, and the
- *  domains left out are named so Maurice knows they exist. */
-export function briefsSection(briefs: PromptBrief[], memberName: string, budgetTokens = BRIEFS_BUDGET_TOKENS): string {
-  const live = briefs.filter((b) => b.text.trim()).sort((a, b) => (a.updated_at < b.updated_at ? 1 : a.updated_at > b.updated_at ? -1 : 0));
+/** The sentence that names a domain in the index: the night's summary, else
+ *  the brief's own opening, cut at a sentence end. A domain whose brief is
+ *  empty is still listed by name — Maurice should know it exists. */
+export function indexLine(b: PromptBrief): string {
+  const summary = (b.summary ?? "").trim();
+  if (summary) return oneLine(summary);
+  const head = b.text.trim();
+  if (!head) return "";
+  if (head.length <= FALLBACK_CHARS) return oneLine(head);
+  const cut = head.slice(0, FALLBACK_CHARS);
+  const stop = Math.max(cut.lastIndexOf(". "), cut.lastIndexOf("! "), cut.lastIndexOf("? "));
+  return oneLine(stop > 40 ? cut.slice(0, stop + 1) : cut.trimEnd() + "…");
+}
+
+function oneLine(s: string): string {
+  return s.replace(/\s+/g, " ").trim();
+}
+
+/**
+ * The section of the system prompt, or "" when the member has no domain.
+ *
+ * Ordered most recently rewritten first, like the briefs were, so the entries
+ * that move stay together at the end of the cached prefix. A domain cut for
+ * room is still named: knowing it exists is most of what the index is for, and
+ * the tool can load it by that name.
+ */
+export function briefsSection(briefs: PromptBrief[], memberName: string, budgetTokens = INDEX_BUDGET_TOKENS): string {
+  const live = briefs.slice().sort((a, b) => (a.updated_at < b.updated_at ? 1 : a.updated_at > b.updated_at ? -1 : 0));
   if (!live.length) return "";
   const head =
-    `\n\n## Your briefs on ${memberName}'s domains\n` +
-    `A domain is a part of ${memberName}'s life you follow. On each you keep a brief: your working memory, written from past conversations and read, corrected or erased by ${memberName} — a brief marked "in their own words" is theirs and prevails over anything you remember otherwise. ` +
-    `Draw on these when a question falls into a domain, without reciting them or claiming more than they say; ` +
-    `${memberName} can read and edit every brief in the app, so when they ask what you know of a domain, this is it.`;
+    `\n\n## ${memberName}'s domains\n` +
+    `A domain is a part of ${memberName}'s life you follow, and on each you keep a brief: your working memory, written from past conversations and read, corrected or erased by ${memberName}. ` +
+    `Below is one line per domain — enough to know what you know. ` +
+    `When a question falls into one of them, call \`domain_brief\` with the domain's name to read that brief in full before answering; ` +
+    `it is the difference between remembering that ${memberName} plays the violin and remembering what they are working on this month. ` +
+    `Do not recite a brief or claim more than it says, and say when something comes from a brief rather than from something you have just looked up. ` +
+    `${memberName} can read and edit every brief in the app, so when they ask what you know of a domain, load it and tell them.`;
   let used = estimateText(head);
-  const parts: string[] = [];
+  const lines: string[] = [];
   const left: string[] = [];
   for (const b of live) {
-    if (left.length) { left.push(b.name); continue; }
-    const day = b.updated_at.slice(0, 10);
-    const by = b.model === MEMBER_AUTHOR ? ", in their own words" : "";
-    const title = `\n\n### ${b.name} (brief of ${day}${by})\n`;
-    const room = budgetTokens - used - estimateText(title);
-    const whole = estimateText(b.text.trim());
-    if (whole <= room) {
-      parts.push(title + b.text.trim());
-      used += estimateText(title) + whole;
-      continue;
-    }
-    // Cut at a paragraph if at least a third of the room is left for it.
-    const cut = cutToTokens(b.text.trim(), room);
-    if (cut && estimateText(cut) >= Math.min(whole, 120)) {
-      parts.push(title + cut + "\n(…cut short for room.)");
-      used = budgetTokens;
-    }
-    left.push(b.name);
+    const line = `\n- **${b.name}** — ${indexLine(b) || "(no brief yet)"}`;
+    const cost = estimateText(line);
+    if (left.length || used + cost > budgetTokens) { left.push(b.name); continue; }
+    lines.push(line);
+    used += cost;
   }
-  // A brief cut short is also listed as left out — the list names what
-  // Maurice does not have in full, which is the useful fact.
-  const tail = left.length ? `\n\nNot loaded in full, for room: ${left.join(", ")}.` : "";
-  return head + parts.join("") + tail;
+  const tail = left.length ? `\n\nAlso theirs, not listed for room: ${left.join(", ")}.` : "";
+  return head + lines.join("") + tail;
 }
 
-/** The longest prefix of `text` under `tokens`, ending on a paragraph break,
- *  else on a sentence end; "" when no sentence fits. */
-function cutToTokens(text: string, tokens: number): string {
-  if (tokens <= 0) return "";
-  const chars = tokens * CHARS_PER_TOKEN;
-  if (text.length <= chars) return text;
-  const head = text.slice(0, chars);
-  const para = head.lastIndexOf("\n\n");
-  if (para > 0) return head.slice(0, para).trim();
-  const sentence = Math.max(head.lastIndexOf(". "), head.lastIndexOf(".\n"), head.lastIndexOf("! "), head.lastIndexOf("? "));
-  if (sentence > 0) return head.slice(0, sentence + 1).trim();
-  return "";
-}
-
-/** The briefs section for a member's own conversation: every brief on the
- *  domains they made. The caller decides whether this conversation is one. */
-export function briefsForPrompt(memberId: string, memberName: string, budgetTokens = BRIEFS_BUDGET_TOKENS): string {
+/** The index for a member's own conversation: every domain they made. The
+ *  caller decides whether this conversation is one. */
+export function briefsForPrompt(memberId: string, memberName: string, budgetTokens = INDEX_BUDGET_TOKENS): string {
   const rows = db
     .query(
-      `SELECT m.name, b.text, b.updated_at, b.model FROM domain_briefs b
+      `SELECT m.name, b.text, b.updated_at, b.model, b.summary FROM domain_briefs b
        JOIN maurices m ON m.id = b.maurice_id
        WHERE b.member_id = ? AND m.created_by = ?
          AND (m.kind IS NULL OR m.kind = 'domain')`,
     )
     .all(memberId, memberId) as PromptBrief[];
   return briefsSection(rows, memberName, budgetTokens);
+}
+
+/** The whole brief of one of the member's domains, found by the name the index
+ *  showed. Matching is forgiving — the model retypes a name, it does not copy
+ *  an id — but never across members: the query is scoped to the domains this
+ *  member created, so a name that belongs to someone else simply does not
+ *  exist here. */
+export function findBriefByName(memberId: string, name: string): { name: string; brief: BriefRow | null } | null {
+  const wanted = name.trim().toLowerCase();
+  if (!wanted) return null;
+  const rows = db
+    .query(
+      `SELECT m.id, m.name FROM maurices m
+       WHERE m.created_by = ? AND (m.kind IS NULL OR m.kind = 'domain')`,
+    )
+    .all(memberId) as Array<{ id: string; name: string }>;
+  const exact = rows.find((r) => r.name.trim().toLowerCase() === wanted);
+  const loose =
+    exact ??
+    rows.find((r) => {
+      const n = r.name.trim().toLowerCase();
+      return n.includes(wanted) || wanted.includes(n);
+    });
+  if (!loose) return null;
+  // The domain exists even when nothing has been written into it. Saying "no
+  // such domain" there would send the model looking for a name it read in its
+  // own prompt; "nothing written yet" is the truth and ends the search.
+  return { name: loose.name, brief: getBrief(loose.id, memberId) };
+}
+
+/** The names of the member's domains, for a tool's error message: a model that
+ *  guessed wrong should be told what there actually is. */
+export function domainNames(memberId: string): string[] {
+  return (
+    db
+      .query(
+        `SELECT m.name FROM maurices m
+         WHERE m.created_by = ? AND (m.kind IS NULL OR m.kind = 'domain')
+         ORDER BY m.name`,
+      )
+      .all(memberId) as Array<{ name: string }>
+  ).map((r) => r.name);
 }
 
 // ── What the model reads ─────────────────────────────────────────────────────
@@ -641,12 +703,51 @@ async function doRefresh(domain: Maurice, memberId: string): Promise<RefreshResu
     sources: material.map((m) => m.conversation_id),
     read_until: readUntil || null,
     model: result.model,
+    summary: null,
   });
+  // Then the line that will stand for this brief in every prompt. A separate
+  // call rather than an extra paragraph asked of the first: the brief's own
+  // prompt is tuned, and a second output format is a good way to spoil it.
+  // It is cheap (a few hundred tokens in, one sentence out) and it fails
+  // softly — no summary means the index shows the brief's opening instead.
+  await writeSummary(domain, memberId, text, language);
   console.log(
     `[briefs] "${domain.name}" for ${name}: ${previous?.text.trim() ? "rewritten" : "written"} from ${material.length} conversation(s)` +
       (cost != null ? ` for $${cost.toFixed(4)}` : ""),
   );
   return { outcome: "written", brief: getBrief(domain.id, memberId), sources: material.length, cost_usd: cost };
+}
+
+/** The longest a one-liner may be before the index cuts it. */
+const SUMMARY_CHARS = 180;
+
+/**
+ * Write the sentence that stands for a brief in the everyday prompt.
+ *
+ * Never throws and never touches the brief: a summary that fails leaves the
+ * index falling back to the brief's opening sentences, which is worse but not
+ * wrong. What it costs is the household's, like the brief itself.
+ */
+export async function writeSummary(domain: Maurice, memberId: string, brief: string, language: string): Promise<void> {
+  try {
+    const result = await deps.write({
+      invocation: "domain_brief",
+      system:
+        `You write the one-line index entry for a domain of someone's life. ` +
+        `Given the brief Maurice keeps on that domain, answer with ONE sentence in ${language}, at most twenty-five words, ` +
+        `naming what the domain is about and what is currently live in it. ` +
+        `No preamble, no quotation marks, no full stop needed. Never invent anything the brief does not say.`,
+      prompt: `Domain: ${domain.name}\n\nBrief:\n${brief}`,
+      maxTokens: 200,
+      temperature: 0.2,
+    });
+    recordSpend(result.usage, SYSTEM_SPENDER);
+    const line = result.text.replace(/\s+/g, " ").trim().replace(/^["'«]|["'»]$/g, "");
+    if (!line) return;
+    storeSummary(domain.id, memberId, line.length > SUMMARY_CHARS ? line.slice(0, SUMMARY_CHARS).trimEnd() + "…" : line);
+  } catch (err) {
+    console.warn(`[briefs] "${domain.name}": no summary written (${(err as Error).message})`);
+  }
 }
 
 // ── The night ────────────────────────────────────────────────────────────────

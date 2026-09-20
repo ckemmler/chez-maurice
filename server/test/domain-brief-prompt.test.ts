@@ -24,8 +24,14 @@ function req(auth: string, path: string, init: RequestInit = {}) {
   return routes.request(path, { ...init, headers: { Authorization: auth, "Content-Type": "application/json", ...(init.headers ?? {}) } });
 }
 
-function brief(name: string, text: string, updated_at: string, model: string | null = "night"): briefs.PromptBrief {
-  return { name, text, updated_at, model };
+function brief(
+  name: string,
+  text: string,
+  updated_at: string,
+  model: string | null = "night",
+  summary: string | null = null,
+): briefs.PromptBrief {
+  return { name, text, updated_at, model, summary };
 }
 
 const para = (n: number, seed: string) => Array.from({ length: n }, (_, i) => `${seed} sentence ${i + 1} of the paragraph.`).join(" ");
@@ -48,46 +54,64 @@ beforeEach(() => {
 
 // ── The section ──────────────────────────────────────────────────────────────
 
-test("no brief, no section", () => {
+test("no domain, no section", () => {
   expect(briefs.briefsSection([], "Anna")).toBe("");
-  expect(briefs.briefsSection([brief("Empty", "   ", "2026-09-19 04:00:00")], "Anna")).toBe("");
 });
 
-test("the section names each domain, most recently rewritten first, with its date and the member's hand", () => {
+test("a domain with no brief yet is still named — knowing it exists is the point", () => {
+  const s = briefs.briefsSection([brief("Empty", "   ", "2026-09-19 04:00:00")], "Anna");
+  expect(s).toContain("**Empty**");
+  expect(s).toContain("(no brief yet)");
+});
+
+test("the index is one line per domain, most recently rewritten first", () => {
   const s = briefs.briefsSection(
     [
       brief("House", "The flat is quiet since the underlay.", "2026-09-10 04:00:00"),
-      brief("Health", "LDL at 160 on 10 September.", "2026-09-19 09:00:00", briefs.MEMBER_AUTHOR),
+      brief("Health", "LDL at 160 on 10 September.", "2026-09-19 09:00:00", briefs.MEMBER_AUTHOR, "Cholesterol and the statin decision"),
     ],
     "Anna",
   );
-  expect(s).toContain("## Your briefs on Anna's domains");
-  expect(s.indexOf("### Health")).toBeLessThan(s.indexOf("### House"));
-  expect(s).toContain("### Health (brief of 2026-09-19, in their own words)");
-  expect(s).toContain("### House (brief of 2026-09-10)");
-  expect(s).not.toContain("Not loaded in full");
+  expect(s).toContain("## Anna's domains");
+  expect(s.indexOf("**Health**")).toBeLessThan(s.indexOf("**House**"));
+  // The night's one-liner when there is one, the brief's opening otherwise.
+  expect(s).toContain("**Health** — Cholesterol and the statin decision");
+  expect(s).toContain("**House** — The flat is quiet since the underlay.");
+  // The brief itself does not ride: that is what the tool is for.
+  expect(s).not.toContain("LDL at 160");
+  expect(s).toContain("`domain_brief`");
+  expect(s).not.toContain("not listed for room");
 });
 
-test("the section stays under its budget, cuts one brief on a paragraph and names what it left out", () => {
-  const big = [para(40, "Health"), para(40, "Health again"), para(40, "Health once more")].join("\n\n");
-  const list = [
-    brief("Health", big, "2026-09-19 04:00:00"),
-    brief("House", para(40, "House"), "2026-09-18 04:00:00"),
-    brief("Money", para(40, "Money"), "2026-09-17 04:00:00"),
-  ];
-  const budget = 900;
-  const s = briefs.briefsSection(list, "Anna", budget);
-  expect(estimateText(s)).toBeLessThanOrEqual(budget + 40); // the "left out" line is the only thing past the budget
-  expect(s).toContain("### Health");
-  expect(s).toContain("(…cut short for room.)");
-  expect(s).not.toContain("Health once more"); // the last paragraph went
-  expect(s).not.toContain("### House");
-  expect(s).toContain("Not loaded in full, for room: Health, House, Money.");
-  // Whole briefs that fit all ride along untouched under the default budget.
-  const whole = briefs.briefsSection(list, "Anna");
-  expect(whole).toContain("Health once more");
-  expect(whole).toContain("### Money");
-  expect(whole).not.toContain("Not loaded in full");
+test("a long brief is reduced to its opening sentence, not carried", () => {
+  const long = [para(40, "Health"), para(40, "Health again")].join("\n\n");
+  const s = briefs.briefsSection([brief("Health", long, "2026-09-19 04:00:00")], "Anna");
+  expect(estimateText(s)).toBeLessThan(400);
+  expect(s).toContain("Health sentence 1 of the paragraph.");
+  expect(s).not.toContain("Health again");
+});
+
+test("eleven domains cost a fraction of what eleven briefs did", () => {
+  // The measurement that started this: eleven briefs came to about 4 900
+  // tokens and rode into every conversation, whatever it was about.
+  const many = Array.from({ length: 11 }, (_, i) =>
+    brief(`Domain ${i}`, para(40, `Body ${i}`), `2026-09-${String(10 + i).padStart(2, "0")} 04:00:00`, "night", `A sentence about domain ${i} and what is live in it`));
+  const s = briefs.briefsSection(many, "Anna");
+  expect(estimateText(s)).toBeLessThan(900);
+  for (let i = 0; i < 11; i++) expect(s).toContain(`**Domain ${i}**`);
+  expect(s).not.toContain("not listed for room");
+});
+
+test("past the budget, whole entries are dropped and still named", () => {
+  const many = Array.from({ length: 11 }, (_, i) =>
+    brief(`Domain ${i}`, "x", `2026-09-${String(10 + i).padStart(2, "0")} 04:00:00`, "night", para(6, `Long summary ${i}`)));
+  const budget = 400;
+  const s = briefs.briefsSection(many, "Anna", budget);
+  expect(estimateText(s)).toBeLessThanOrEqual(budget + 120); // the "also theirs" line is the only thing past it
+  expect(s).toContain("Also theirs, not listed for room:");
+  // Newest first, so the oldest are the ones that went.
+  expect(s).toContain("**Domain 10**");
+  expect(s).toContain("Domain 0");
 });
 
 test("a member's section holds their own domains' briefs and nobody else's", () => {

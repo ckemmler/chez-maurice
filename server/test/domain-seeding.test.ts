@@ -219,9 +219,11 @@ test("on the yes: the hub and its topics, marked unreviewed, with their provenan
   expect(requests[0]!.prompt).toContain("[5] — 2026-09-10 — \"Violin lesson 4\"");
   expect(requests[0]!.prompt).toContain("Your brief on it");
   // Charged to Anna, not to the night: the night's spender holds the mapping
-  // and the brief of the adoption (four calls), nothing of the seeding.
+  // and the briefs of the adoption, nothing of the seeding. Each brief now
+  // costs two calls, its own and the one-liner that stands for it in the
+  // everyday prompt (services/domainBriefs.ts, writeSummary).
   expect(budget.spentTodayUsd(ANNA)).toBeCloseTo(0.004, 6);
-  expect(budget.spentTodayUsd(budget.SYSTEM_SPENDER)).toBeCloseTo(0.016, 6);
+  expect(budget.spentTodayUsd(budget.SYSTEM_SPENDER)).toBeCloseTo(0.02, 6);
 
   // The hub: a MOC, the three sections, the topics as wiki-links, the mark and the provenance.
   const hub = fs.readFileSync(path.join(notesDir, "the-violin-2.md"), "utf-8");

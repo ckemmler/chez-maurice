@@ -86,6 +86,12 @@ beforeAll(() => {
   });
 });
 
+/** The brief's own call, not the one-liner's: every rewrite now makes two, the
+ *  second asking for the index entry that stands for the brief in the everyday
+ *  prompt (services/domainBriefs.ts, writeSummary). */
+const briefCalls = () => requests.filter((r) => !r.system.includes("one-line index entry"));
+const summaryCalls = () => requests.filter((r) => r.system.includes("one-line index entry"));
+
 beforeEach(() => {
   requests = [];
   reply = { text: "You had your LDL measured on 10 September: 160.\n\nYour ferritin is low; supplements were discussed.", stop: "end", cost: 0.002 };
@@ -110,8 +116,8 @@ test("a first brief reads the domain's conversations — bound and found — and
   db.run(`DELETE FROM domain_briefs`);
   const r = await briefs.refreshBrief(health(), ANNA);
   expect(r.outcome).toBe("written");
-  expect(requests.length).toBe(1);
-  const { system, prompt } = requests[0]!;
+  expect(briefCalls().length).toBe(1);
+  const { system, prompt } = briefCalls()[0]!;
   expect(system).toContain("Anna");
   expect(system).toContain(`${briefs.FIRST_WORDS} words at most`);
   expect(system).toContain("ask no question");
@@ -131,8 +137,8 @@ test("a first brief reads the domain's conversations — bound and found — and
   expect(b.read_until).toBe("2026-09-12 09:02:00");
   expect(b.model).toBe(NIGHT);
 
-  // Charged to the night, not to Anna.
-  expect(budget.usageFor(budget.SYSTEM_SPENDER).today_usd).toBeCloseTo(0.002, 6);
+  // Charged to the night, not to Anna — the brief and its one-liner both.
+  expect(budget.usageFor(budget.SYSTEM_SPENDER).today_usd).toBeCloseTo(0.004, 6);
   expect(budget.spentTodayUsd(ANNA)).toBe(0);
   const row = db.query(`SELECT user_id, model FROM spend_ledger ORDER BY id DESC LIMIT 1`).get() as any;
   expect(row).toEqual({ user_id: "system", model: NIGHT });
@@ -154,8 +160,8 @@ test("the incremental path reads only what came after, with the previous brief i
   reply.text = "On 15 September you were prescribed a statin at 10 mg; the check is in three months.\n\nFerritin: supplements discussed on 12 September.";
   const r = await briefs.refreshBrief(health(), ANNA);
   expect(r.outcome).toBe("written");
-  expect(requests.length).toBe(1);
-  const { system, prompt } = requests[0]!;
+  expect(briefCalls().length).toBe(1);
+  const { system, prompt } = briefCalls()[0]!;
   expect(system).toContain(`${briefs.INCREMENTAL_WORDS} words at most`);
   expect(prompt).toContain("Rewrite the brief");
   expect(prompt).toContain(previous);
@@ -192,8 +198,33 @@ test("the output is capped, and a brief cut by the token ceiling is not kept", a
   expect(r.outcome).toBe("failed");
   expect(r.error).toContain("token ceiling");
   expect(briefs.getBrief("dom-health", ANNA)).toEqual(kept);
-  // The failed call still cost money, and the ledger says so.
-  expect(budget.usageFor(budget.SYSTEM_SPENDER).today_usd).toBeCloseTo(0.005, 6);
+  // The failed call still cost money, and the ledger says so. Three calls in
+  // all: the brief that was written and its one-liner, then the brief that hit
+  // the ceiling — which fails before any summary is asked for.
+  expect(budget.usageFor(budget.SYSTEM_SPENDER).today_usd).toBeCloseTo(0.007, 6);
+});
+
+test("a written brief gets its one-liner, and a member's correction drops it", async () => {
+  db.run(`DELETE FROM domain_briefs`);
+  reply.text = "You had your LDL measured on 10 September: 160.\n\nFerritin is low.";
+  await briefs.refreshBrief(health(), ANNA);
+  expect(summaryCalls().length).toBe(1);
+  // It is asked for the brief that was just written, and in the member's language.
+  expect(summaryCalls()[0]!.prompt).toContain("Domain: Health");
+  expect(summaryCalls()[0]!.prompt).toContain("LDL measured on 10 September");
+  const stored = briefs.getBrief("dom-health", ANNA)!;
+  expect(stored.summary).toBeTruthy();
+  // The index shows the summary rather than the brief's opening.
+  const line = briefs.indexLine({ name: "Health", text: stored.text, updated_at: stored.updated_at, model: stored.model, summary: stored.summary });
+  expect(line).toBe(stored.summary);
+
+  // The member rewrites the brief by hand: the old one-liner described the old
+  // text, so it goes, and the index falls back to their own opening words.
+  briefs.setBriefText("dom-health", ANNA, "Actually the only thing that matters is the statin. Nothing else is live.");
+  const mine = briefs.getBrief("dom-health", ANNA)!;
+  expect(mine.summary).toBeNull();
+  expect(briefs.indexLine({ name: "Health", text: mine.text, updated_at: mine.updated_at, model: mine.model, summary: null }))
+    .toContain("Actually the only thing that matters is the statin.");
 });
 
 test("the night's allowance stops the call before it is made, and is nobody's cap", async () => {

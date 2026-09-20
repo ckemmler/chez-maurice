@@ -864,6 +864,14 @@ db.run(`
     PRIMARY KEY (maurice_id, member_id)
   )
 `);
+// The brief's own one-liner (20 September 2026). The everyday prompt carries an
+// *index* of the member's domains — a name and a sentence each — rather than
+// every brief in full, and loads a brief only when a question falls into it
+// (services/domainBriefs.ts). Written by the night beside the brief it
+// summarises; empty until that night runs, where the index falls back to the
+// brief's own opening sentences.
+try { db.run(`ALTER TABLE domain_briefs ADD COLUMN summary TEXT`); } catch {}
+
 // Who opened a conversation: a member, as always until now, or Maurice — the
 // conversation the night creates to propose domains (the design's 4b). Read by
 // nothing yet; the column exists so the proposal path has a place to land.

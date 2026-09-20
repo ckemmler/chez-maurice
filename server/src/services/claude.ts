@@ -11,6 +11,7 @@ import { resolveBookItem } from "./composer/weights";
 import { type FileAttachment } from "./composer/files";
 import { getConversationMaurice, resolveMauriceContext, resolveMauriceAttachments } from "./maurices";
 import { briefsForPrompt, memberLocale } from "./domainBriefs";
+import { domainBriefTool, isDomainBriefTool, runDomainBriefTool } from "./domainTools";
 import { importHintSection } from "./chatImport";
 import { MAURICE_DOCS_TOOL_NAME, askMauriceDocs, mauriceDocsTool } from "./mauriceDocsTool";
 import { domainToolsFor, isDomainTool, proposalPromptSection, runDomainTool } from "./domainProposals";
@@ -493,6 +494,12 @@ async function executeTool(
         // prose back, no data card.
         const a = await askMauriceDocs(input || {}, ctx.memberId);
         return { text: a.text, isError: a.isError };
+      }
+      // The index in the system prompt lists the member's domains; this reads
+      // the brief behind one of those lines (services/domainTools.ts). Native,
+      // and scoped to the member taking the turn.
+      if (isDomainBriefTool(name)) {
+        return runDomainBriefTool(input || {}, ctx.memberId ?? undefined);
       }
       // The domain proposal tools (services/domainProposals.ts) are native:
       // they exist only in the conversation Maurice opened to propose, and
@@ -1058,6 +1065,11 @@ function trackedBooks(
   return lines;
 }
 
+  // Does this turn carry the index of the member's domains? If it does, it
+  // also gets the tool that reads a brief behind one of those lines — the two
+  // are one feature and must not drift apart (services/domainTools.ts).
+  let carriesDomainIndex = false;
+
   // Specialized Maurice (persona): a named, hatted assistant with its own
   // behaviour, model preference, creativity, and baked-in context bundle.
   const maurice = getConversationMaurice(conversationId);
@@ -1115,13 +1127,14 @@ function trackedBooks(
           `If they do not say how far, ask for the chapter before writing anything.`;
       }
 
-      // The member's domain briefs (services/domainBriefs.ts): what Maurice
+      // The member's domain index (services/domainBriefs.ts): what Maurice
       // keeps on each part of their life, after the persona and the loaded
       // context so the cached prefix only moves when a brief does. Only in
       // the member's own conversation — never in a room, where another
       // participant would read them.
       if (countParticipants(conversationId) === 1) {
         systemPrompt += briefsForPrompt(memberId, userDisplayName);
+        carriesDomainIndex = true;
         // A member who never imported a history may hear of the import once,
         // when it is relevant (design 4f; services/chatImport.ts). "" after.
         systemPrompt += importHintSection(memberId, userDisplayName);
@@ -1232,6 +1245,8 @@ function trackedBooks(
   // ordinary conversation does not move.
   const domainTools: McpTool[] = memberId ? domainToolsFor(conversationId, memberId) : [];
   mcpTools = [...mcpTools, ...domainTools];
+  // And the one that reads a brief, wherever the index was carried.
+  if (carriesDomainIndex) mcpTools = [...mcpTools, domainBriefTool()];
 
   // Now that the roster is settled, tell the model what it really holds.
   systemPrompt += toolRosterNotice(mcpTools.map((t) => t.name), wantsWeb && hasWebSearch());
