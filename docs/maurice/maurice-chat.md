@@ -57,7 +57,7 @@ Who may receive one: never a child (`users.is_child`, a box in the console's mem
 
 ## Streaming
 
-The client reads the newline-delimited `StreamEvent`s and reacts per type: `text_delta` appends to the live text, `thinking` raises a "Thinking" activity label until the first visible word (reasoning models such as GLM go quiet for a while before answering — minutes on GLM-5.3-Flash, unless the persona turned the reasoning dial down, see [[maurice-personas-hats]]), `ping` is a server keepalive and shows nothing, `tool_call` raises a transient activity label ("Searching the web…"), `tool_data` appends a structured result, `usage` is kept for the cost meter, `done` captures the `message_id`, `error` surfaces a banner. Image generation shows a spinner while it runs, then drops the image inline.
+The client reads the newline-delimited `StreamEvent`s and reacts per type: `text_delta` appends to the live text, `thinking` raises a "Thinking" activity label until the first visible word (reasoning models such as GLM go quiet for a while before answering — minutes on GLM-5.3-Flash, unless the persona turned the reasoning dial down, see [[maurice-personas-hats]]), `ping` is a server keepalive and shows nothing, `tool_call` raises a transient activity label ("Searching the web…"), `tool_data` appends a structured result (rendered as a **source card** for a corpus or web search since 20 September 2026, see below), `usage` is kept for the cost meter, `done` captures the `message_id`, `error` surfaces a banner. Image generation shows a spinner while it runs, then drops the image inline.
 
 Two touches make it feel alive rather than mechanical:
 
@@ -115,3 +115,19 @@ The chat surface — streaming, data cards, math, markdown, images, dictation, m
 - **No cross-conversation cost view** — the summary is per thread; there is no household or monthly total anywhere in the app yet.
 - **The screen "flashing in dark tones" on the iPhone (20 September 2026)** while the owner read the opening message is diagnosed, not seen: the server log shows the app re-reading the list and the thread every ~150 s in front, which is both sockets dropping (a silent WebSocket closed on the path) and reconnecting, each time replacing `conversations` and `messages` wholesale — a full re-render of the split view and of a long markdown message under Liquid Glass. Two fixes shipped (the server's keepalive, the app's restraint on reassignment); whether the flash was that re-render or the glass sampling a rebuilt backdrop is to be seen on the phone.
 - **The details sheet does not say who opened a conversation** — only the sidebar caption does; and the user lead placed before Maurice's opener is one English sentence the model reads as the member's turn, to be watched on the first real exchanges.
+
+## Source cards — what a search found *(ships, 20 September 2026)*
+
+A search answers with a list of things to go and look at, and the app used to render that the way it rendered every other tool result: a folded disclosure triangle over a key/value dump, forty fields a row, three of them useful. The web search rendered as *nothing at all* — its result never became a data block (`executeTool` set no `data` on that branch), so the only trace of twenty-seven pages read was whatever the model chose to retype.
+
+Both now produce one payload, `card: "sources"` (`server/src/services/sourceCards.ts`), drawn by `SourcesCard.swift`: a horizontal row of small cards under the reply, one per source, each with a title, where it came from, and a cover when the garden has one. Tapping a web source opens it; tapping a garden source unfolds the passage that matched, since a note has nowhere to open to. The header says how many sources there were, and the query.
+
+Three things the first run against the real index taught, all of them now pinned by tests:
+
+- **The cover is stated more often than derived.** The garden's frontmatter names an image in four incompatible dialects — a local `image` on cards and article fiches, a Google Books `thumbnail`, a TMDB `poster_path`, a Wikimedia `image_filename` — and only the first resolves without inventing a CDN prefix. The first draft derived the path from `resource_collection` + `locale` + `resource_id` and found no cover at all, because a *card* says `translationKey`, not `resource_id` — and carries `image` outright anyway. So: the frontmatter first, the conventional name as fallback, and the file stat-ed either way. A card with a broken image is worse than a card with an icon in a box. The URL handed over is the open twin, `/api/garden-images/…`, since an `AsyncImage` sends no credentials and the authenticated `/images/…` would 403.
+- **A source is not a chunk.** One Guardian article came back four times, being four passages of the same file; a conversation came back three times under three chunk ids. Results are de-duplicated by `conversation_id`, else file path, keeping the best-scoring passage, and the count reported is of distinct sources.
+- **An article remembers where it was read.** A garden card keeps the `url` it came from, which becomes the card's link — the one kind of corpus hit that has somewhere to open.
+
+Tavily gives neither image nor favicon, so a web source shows its domain and the site's initial: what we actually know, and no request from the member's phone to twenty-seven third parties.
+
+The model sees none of this — it keeps receiving the tool's own text, the card rides the parallel `data` channel — but `TOOL_DATA_DIRECTIVE` was narrowed: the sources are shown, so it should not list them back, while what they *say* is still prose only it can convey. Naming a source in a sentence, to make clear where a fact came from, is not listing.
