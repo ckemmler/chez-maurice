@@ -328,6 +328,19 @@ struct ChatView: View {
                     .background(.red.opacity(0.85))
                     .contentShape(Rectangle())
                     .onTapGesture { chat.dismissError() }
+            } else if let notice = chat.notice {
+                // A network hiccup on a background load: a quiet line, not an
+                // alarm. It goes away on its own with the next request that
+                // succeeds, or on a tap.
+                Label(notice, systemImage: "wifi.exclamationmark")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+                    .background(.thinMaterial, in: Capsule())
+                    .padding(.bottom, 4)
+                    .contentShape(Rectangle())
+                    .onTapGesture { chat.dismissError() }
             }
         }
     }

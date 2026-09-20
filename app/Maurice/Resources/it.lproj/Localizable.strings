@@ -395,6 +395,7 @@
 /* A reply that could not be followed to its end */
 "chat.error.busy" = "Maurice sta già rispondendo in questa conversazione.";
 "chat.error.lost" = "La connessione con Maurice è stata persa. Se ha finito di rispondere, la sua risposta comparirà nel filo.";
+"chat.notice.network" = "La rete non ha risposto. Riprova tra un istante.";
 
 
 /* Reading progress: pause while you look ahead, and reset */

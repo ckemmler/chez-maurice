@@ -46,7 +46,17 @@ final class ChatService {
     var isGeneratingImage = false
     /// Human-readable label of the tool currently running (e.g. "Searching the web"), or nil.
     var toolActivity: String?
+    /// A refusal or a lost reply: stays until tapped or the next send.
     var error: String?
+    /// A network hiccup on a background load (list, thread, room action): shown
+    /// quietly, cleared by the next request that goes through.
+    var notice: String?
+
+    /// Route a failure to the right surface: the network not answering is a
+    /// notice, anything the server actually said is an error.
+    private func report(_ e: Error) {
+        if Self.isNetworkError(e) { notice = L("chat.notice.network") } else { error = e.localizedDescription }
+    }
 
     // ── Rooms ───────────────────────────────────────────────────
     /// Participants of the active room (the owner alone for a 1:1 chat).
@@ -160,12 +170,13 @@ final class ChatService {
             let page: [ServerConversation] = try await api.get(
                 "/api/conversations?limit=\(conversationsPageSize)", token: token)
             conversations = page
+            notice = nil
             hasMoreConversations = page.count >= conversationsPageSize
             // What the server says is unread (a conversation Maurice opened and
             // you have not opened yet) shows its dot from a cold start too.
             for c in page where c.unread == true { unread.insert(c.id) }
         } catch {
-            self.error = error.localizedDescription
+            report(error)
         }
         connectUserSocket()
     }
@@ -352,7 +363,7 @@ final class ChatService {
             }
             connectSocket(convo.id)
         } catch {
-            self.error = error.localizedDescription
+            report(error)
         }
     }
 
@@ -367,7 +378,7 @@ final class ChatService {
                 conversations[i].title = updated.title ?? title
             }
         } catch {
-            self.error = error.localizedDescription
+            report(error)
         }
     }
 
@@ -382,7 +393,7 @@ final class ChatService {
             try await api.delete("/api/conversations/\(id)", token: token)
             dropRoom(id)
         } catch {
-            self.error = error.localizedDescription
+            report(error)
         }
     }
 
@@ -474,6 +485,7 @@ final class ChatService {
                 token: token
             )
             messages = detail.messages
+            notice = nil
             participants = detail.participants ?? []
             knownIds = Set(messages.map { $0.id })
             messagesLoadedFor = conversationId
@@ -481,7 +493,7 @@ final class ChatService {
             connectSocket(conversationId)
         } catch {
             if Self.isVanished(error) { dropRoom(conversationId); return }
-            self.error = error.localizedDescription
+            report(error)
         }
     }
 
@@ -569,7 +581,7 @@ final class ChatService {
                 token: token
             )
         } catch {
-            self.error = error.localizedDescription
+            report(error)
         }
     }
 
@@ -581,7 +593,7 @@ final class ChatService {
             try await api.delete("/api/conversations/\(convoId)/participants/\(memberId)", token: token)
             participants.removeAll { $0.member_id == memberId }
         } catch {
-            self.error = error.localizedDescription
+            report(error)
         }
     }
 
@@ -598,7 +610,7 @@ final class ChatService {
                 token: token)
             return true
         } catch {
-            self.error = error.localizedDescription
+            report(error)
             return false
         }
     }
@@ -612,7 +624,7 @@ final class ChatService {
             // Drop their messages locally for an instant effect.
             messages.removeAll { $0.author_id == memberId }
         } catch {
-            self.error = error.localizedDescription
+            report(error)
         }
     }
 
@@ -631,7 +643,7 @@ final class ChatService {
             messages = []
             participants = []
         } catch {
-            self.error = error.localizedDescription
+            report(error)
         }
     }
 
@@ -648,14 +660,14 @@ final class ChatService {
             let _: ReportView = try await api.post(
                 "/api/reports/\(id)/action",
                 body: Body(remove_message: removeMessage, eject_member: ejectMember), token: token)
-        } catch { self.error = error.localizedDescription }
+        } catch { report(error) }
     }
 
     func dismissReport(_ id: String) async {
         guard let api, let token else { return }
         do {
             let _: ReportView = try await api.post("/api/reports/\(id)/dismiss", body: EmptyBody(), token: token)
-        } catch { self.error = error.localizedDescription }
+        } catch { report(error) }
     }
 
     // MARK: - Per-conversation tool families
@@ -781,6 +793,7 @@ final class ChatService {
     /// happens to succeed says nothing about the failure being shown.
     func dismissError() {
         error = nil
+        notice = nil
     }
 
     /// Re-answer the last user turn: drop the previous assistant message and

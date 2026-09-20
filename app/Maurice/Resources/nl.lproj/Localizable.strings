@@ -395,6 +395,7 @@
 /* A reply that could not be followed to its end */
 "chat.error.busy" = "Maurice is in dit gesprek al aan het antwoorden.";
 "chat.error.lost" = "De verbinding met Maurice is verbroken. Als hij klaar was met antwoorden, verschijnt zijn antwoord in de draad.";
+"chat.notice.network" = "Het netwerk gaf geen antwoord. Probeer het zo nog eens.";
 
 
 /* Reading progress: pause while you look ahead, and reset */
