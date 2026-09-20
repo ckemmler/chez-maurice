@@ -319,13 +319,17 @@ struct ChatView: View {
             // Stays until the member taps it or sends again: no refresh that
             // happens to succeed is allowed to wipe it (it used to flash).
             if let error = chat.error {
-                Text(error)
+                // Something the server said, or a reply that was lost: a warm
+                // capsule that stays put — never a red slab over the composer.
+                Label(error, systemImage: "exclamationmark.circle")
                     .font(.caption)
-                    .foregroundStyle(.white)
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 8)
-                    .frame(maxWidth: .infinity)
-                    .background(.red.opacity(0.85))
+                    .foregroundStyle(.orange)
+                    .multilineTextAlignment(.leading)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+                    .background(.thinMaterial, in: Capsule())
+                    .overlay(Capsule().strokeBorder(.orange.opacity(0.35), lineWidth: 1))
+                    .padding(.bottom, 4)
                     .contentShape(Rectangle())
                     .onTapGesture { chat.dismissError() }
             } else if let notice = chat.notice {
