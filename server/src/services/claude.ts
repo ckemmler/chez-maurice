@@ -4,6 +4,7 @@ import { getMessages, getParticipants, countParticipants, getContextFrom, setCon
 import { estimateText, planDrop, replyReserve } from "./contextWindow";
 import { resolveImagePath } from "./images";
 import { hasWebSearch, webSearch, formatWebSearch } from "./webSearch";
+import { corpusSourceCard, webSourceCard } from "./sourceCards";
 import { McpSession, type McpTool } from "./mcpClient";
 import { resolveToText, resolveAttachments, getSpec } from "./composer/specs";
 import { resolveBookItem } from "./composer/weights";
@@ -89,10 +90,17 @@ const IMAGE_DIRECTIVES =
 // When a tool returns structured data, the app renders the actual rows in a
 // table right next to your reply — so transcribing them back is redundant
 // noise. This nudges the model to interpret rather than re-list. It only
-// reduces the rate; the rendered table is the real ground truth. Note the
-// carve-out: web_search returns prose (no table), so it must still be conveyed.
+// reduces the rate; the rendered table is the real ground truth.
+//
+// The web-search carve-out narrowed on 20 September 2026. Its result used to
+// reach the client as nothing at all, so the model was the only way anything
+// from it was seen; now the sources are drawn as cards (services/sourceCards.ts)
+// while the findings themselves are still prose the model must convey. Same
+// for a corpus search: the cards say which note or conversation answered, the
+// reply says what it said. Naming a source in a sentence is not re-listing —
+// the briefs' instruction to say where something came from stands.
 const TOOL_DATA_DIRECTIVE =
-  `\n\nWhen a tool returns structured data (a list of records, an object — anything but plain prose), the app shows those exact rows and values to the user in a table right beside your reply. They can already see the data. So do NOT re-list, transcribe, or read back the rows, fields, or numbers. Instead interpret: answer the question, summarize the trend, highlight what's notable or surprising, flag anything missing or off — the things a table alone doesn't tell them. If a tool returned fewer rows than asked for, say so plainly rather than papering over it; never invent or estimate values that aren't in the result. (This applies only to structured results shown in a table. web_search and maurice_docs return prose with no table, so convey their findings normally.)`;
+  `\n\nWhen a tool returns structured data (a list of records, an object — anything but plain prose), the app shows those exact rows and values to the user in a table right beside your reply. They can already see the data. So do NOT re-list, transcribe, or read back the rows, fields, or numbers. Instead interpret: answer the question, summarize the trend, highlight what's notable or surprising, flag anything missing or off — the things a table alone doesn't tell them. If a tool returned fewer rows than asked for, say so plainly rather than papering over it; never invent or estimate values that aren't in the result. (This applies only to structured results shown in a table. maurice_docs returns prose with no table, so convey its findings normally. A web or corpus search is in between: its sources are shown beside your reply as cards carrying each title and where it came from, so do not list them back — but what they *say* is prose only you can convey, so say it. Naming a source in a sentence, to make clear where a fact came from, is not listing.)`;
 
 // Non-negotiable content-safety floor. Appended LAST to every system prompt
 // (after any persona instructions + loaded context), for every provider, so it
@@ -472,7 +480,13 @@ async function executeTool(
   const result = await (async (): Promise<{ text: string; isError: boolean; data?: unknown }> => {
     try {
       if (name === "web_search") {
-        return { text: formatWebSearch(await webSearch(input?.query || "")), isError: false };
+        // The prose goes to the model as before; the card goes to the client.
+        // Until now this branch set no `data` at all, so a turn that read
+        // twenty-seven pages showed the member nothing but whatever the model
+        // chose to retype (services/sourceCards.ts).
+        const query = input?.query || "";
+        const res = await webSearch(query);
+        return { text: formatWebSearch(res), isError: false, data: webSourceCard(res, query) };
       }
       if (name === MAURICE_DOCS_TOOL_NAME) {
         // A sub-turn on the member's behalf: charged to them in the ledger,
@@ -489,7 +503,15 @@ async function executeTool(
       if (mcp) {
         const r = await mcp.callTool(name, input || {});
         const text = compactToolText(r.text);
-        return { text, isError: r.isError, data: r.isError ? null : parseToolData(text) };
+        const data = r.isError ? null : parseToolData(text);
+        // A corpus search is a list of things to go and look at, so it gets
+        // the source card rather than the generic key/value dump — resolved
+        // here, where the garden is reachable and a cover can be checked for
+        // existence. An unrecognised shape falls back to the raw payload.
+        if (!r.isError && name === "corpus__search") {
+          return { text, isError: false, data: corpusSourceCard(data, input?.query) ?? data };
+        }
+        return { text, isError: r.isError, data };
       }
       return { text: `Tool ${name} is unavailable.`, isError: true };
     } catch (err: any) {
