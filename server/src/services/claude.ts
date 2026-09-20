@@ -18,7 +18,7 @@ import { resolveModelId, getModel } from "./models";
 import { resolveUsableModel, getEverydayModel } from "./modelAccess";
 import { ollamaTurn, OLLAMA_NUM_CTX, type OllamaToolCall } from "./ollama";
 import { openaiTurn, PROMPT_CACHE_KEY_PROVIDERS, type OpenAIToolCall } from "./openaiChat";
-import { resolveFamilies, toolInFamilies, canUseExperimental, isExperimentalTool, familyTitles } from "./toolFamilies";
+import { resolveFamilies, toolInFamilies, canUseExperimental, isExperimentalTool, isPrivateOnlyTool, familyTitles } from "./toolFamilies";
 import { t, userLocale } from "./i18n";
 import { newUsage, priceUsage, hasUsage, type TurnUsage } from "./pricing";
 import { verdict as budgetVerdict } from "./budget";
@@ -1150,8 +1150,13 @@ function trackedBooks(
       mcp = await McpSession.open(memberId);
       const all = await mcp.listTools();
       const expOK = canUseExperimental(memberId);
+      // A room withholds the member-private families whatever the selection
+      // says (toolFamilies.PRIVATE_ONLY): the corpus is one member's indexed
+      // life and the others in the room would read it. Same rule as the briefs.
+      const isRoom = countParticipants(conversationId) > 1;
       mcpTools = (families === "all" ? all : all.filter((t) => toolInFamilies(t.name, families as string[])))
         .filter((t) => expOK || !isExperimentalTool(t.name)) // never hand experimental tools to ungated members
+        .filter((t) => !isRoom || !isPrivateOnlyTool(t.name))
         // Tools render at the very front of the cached prefix, so their order has
         // to be stable: the MCP server makes no ordering promise, and a roster
         // that reshuffles between turns would invalidate the whole cache.

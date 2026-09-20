@@ -154,8 +154,15 @@ export function deleteBrief(domainId: string, memberId: string): boolean {
 // caller (services/claude.ts) holds those two rules; this side only knows
 // whose briefs to fetch.
 
-/** The global budget of the briefs section, in estimated tokens. */
-export const BRIEFS_BUDGET_TOKENS = 3000;
+/** The global budget of the briefs section, in estimated tokens. Raised from
+ *  3 000 on 20 September 2026: eleven domains came to about 4 850 tokens, so
+ *  five briefs rode and six were named only — and since the nightly rewrite
+ *  stamps them all in the same minute, the same five rode every night. The
+ *  extra ~1 850 tokens sit in the cached prefix and cost about a dollar a
+ *  month at the owner's rate. This is a ceiling, not a target: the section is
+ *  meant to be what Maurice holds top of mind, and a member with twenty
+ *  domains should get shorter briefs rather than a bigger budget. */
+export const BRIEFS_BUDGET_TOKENS = 5000;
 
 export interface PromptBrief {
   name: string;

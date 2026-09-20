@@ -19,7 +19,29 @@ export interface ToolFamily {
 
 // Always available, every turn, regardless of persona/conversation selection —
 // not shown as options in the picker.
-export const ALWAYS_ON = ["web", "signals"];
+//
+// `corpus` joined them on 20 September 2026. It is Maurice's memory of what the
+// member has already said and kept — the garden, the conversations, the books
+// and articles — and a memory you have to remember to switch on is not one:
+// until then it was experimental, off by default, and absent from every
+// conversation the owner held, so a question that fell squarely into a domain
+// could not be followed up even though the index held the answer. It is the
+// only always-on family that is private to the member, hence PRIVATE_ONLY
+// below.
+export const ALWAYS_ON = ["web", "signals", "corpus"];
+
+// Families withheld the moment a conversation has a second participant. The
+// corpus is one member's whole indexed life: in a room the turn is taken on
+// behalf of whoever spoke, so an unguarded search would read their private
+// conversations out to everyone else present. Same rule as the domain briefs
+// (services/claude.ts): never in a room, never for another member.
+export const PRIVATE_ONLY = ["corpus"];
+
+/** True for a tool whose family may not be handed to a turn with more than one
+ *  participant. */
+export function isPrivateOnlyTool(toolName: string): boolean {
+  return PRIVATE_ONLY.includes(familyOf(toolName));
+}
 
 // Only Notes + Journal are surfaced as everyday garden tools; everything else
 // (the rest of the garden, plus all non-garden families) is Experimental and
