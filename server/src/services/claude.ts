@@ -5,6 +5,7 @@ import { estimateText, planDrop, replyReserve } from "./contextWindow";
 import { resolveImagePath } from "./images";
 import { hasWebSearch, webSearch, formatWebSearch } from "./webSearch";
 import { corpusSourceCard, webSourceCard } from "./sourceCards";
+import { narrowCorpusResults } from "./corpusResults";
 import { McpSession, type McpTool } from "./mcpClient";
 import { resolveToText, resolveAttachments, getSpec } from "./composer/specs";
 import { resolveBookItem } from "./composer/weights";
@@ -511,12 +512,15 @@ async function executeTool(
         const r = await mcp.callTool(name, input || {});
         const text = compactToolText(r.text);
         const data = r.isError ? null : parseToolData(text);
-        // A corpus search is a list of things to go and look at, so it gets
-        // the source card rather than the generic key/value dump — resolved
-        // here, where the garden is reachable and a cover can be checked for
-        // existence. An unrecognised shape falls back to the raw payload.
+        // A corpus search is narrowed before the model reads it — its own
+        // conversation dropped, one entry per source, weak hits cut, and only
+        // the fields a reader can act on (services/corpusResults.ts). The
+        // cards the app draws are built from the same surviving rows, so what
+        // the member sees under the reply is what the model actually read.
         if (!r.isError && name === "corpus__search") {
-          return { text, isError: false, data: corpusSourceCard(data, input?.query) ?? data };
+          const narrowed = narrowCorpusResults(data, text, { conversationId: ctx.conversationId });
+          const card = narrowed.rows.length ? corpusSourceCard({ results: narrowed.rows }, input?.query) : null;
+          return { text: narrowed.text, isError: false, data: card ?? data };
         }
         return { text, isError: r.isError, data };
       }
