@@ -516,7 +516,7 @@ async function executeTool(
       // filling a form is not.
       if (isRememberFactTool(name)) {
         const outcome = await runRememberFactTool(input || {}, ctx.memberId ?? undefined, ctx.conversationId, ctx.factsProposed?.n ?? 0);
-        if (outcome.data && ctx.factsProposed) ctx.factsProposed.n += 1;
+        if (outcome.counted && ctx.factsProposed) ctx.factsProposed.n += 1;
         return outcome;
       }
       // The domain proposal tools (services/domainProposals.ts) are native:

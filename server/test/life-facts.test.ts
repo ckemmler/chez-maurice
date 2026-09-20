@@ -134,6 +134,22 @@ describe("the second opinion", () => {
     expect(judgeCalls).toBe(0);
   });
 
+  test("a refused fact still spends its share of the turn's quota", async () => {
+    // Otherwise a model on a roll could be turned down ten times in one turn
+    // and still have bought ten judgements.
+    judgeSays = "DROP a plan, not a fact";
+    const a = await facts.runRememberFactTool({ fact: "Il envisage un voyage." }, ANNA, "c1", 0);
+    expect(a.counted).toBe(true);
+    const b = await facts.runRememberFactTool({ fact: "Il envisage autre chose." }, ANNA, "c1", 1);
+    expect(b.counted).toBe(true);
+    // Third one in the same turn: turned away before the judge is paid again.
+    const before = judgeCalls;
+    const c = await facts.runRememberFactTool({ fact: "Et encore une idée." }, ANNA, "c1", 2);
+    expect(c.text).toContain("Two facts in one turn");
+    expect(judgeCalls).toBe(before);
+    expect(c.counted).toBeUndefined();
+  });
+
   test("a judge that breaks lets the fact through — the member is the real gate", async () => {
     facts.setFactJudge(async () => {
       throw new Error("provider down");

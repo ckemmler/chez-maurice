@@ -253,6 +253,10 @@ export interface FactToolOutcome {
   text: string;
   isError: boolean;
   data?: unknown;
+  /** True once the second opinion has been paid for. The per-turn cap counts
+   *  these, not the facts that came out of them: otherwise a model on a roll
+   *  could be turned down ten times and still have bought ten judgements. */
+  counted?: boolean;
 }
 
 /**
@@ -276,11 +280,13 @@ export async function runRememberFactTool(
     return {
       text: `Not written down: ${judged.why}. That belongs to a domain brief, or to nothing at all. Do not propose it again this turn.`,
       isError: false,
+      counted: true,
     };
   }
   const { fact, refused } = proposeFact(memberId, judged.text, conversationId, proposedThisTurn);
-  if (!fact) return refusal(refused);
+  if (!fact) return { ...refusal(refused), counted: true };
   return {
+    counted: true,
     text:
       `Proposed: "${fact.text}". They are being shown it now and will keep it or throw it away. ` +
       `Do not treat it as known yet, and mention it only in passing if at all — the card says it for you.`,
