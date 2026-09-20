@@ -1,14 +1,23 @@
 // The corpus is an always-on family, and a member-private one (20 September
-// 2026). Two things are nailed down here: it rides in every private turn
-// without anyone selecting it or being granted experimental access, and it is
+// 2026). Four things are nailed down here: it rides in every private turn
+// without anyone selecting it or being granted experimental access; it is
 // withheld the moment a conversation has a second participant — the same rule
-// the domain briefs follow, for the same reason: one member's indexed life
-// must not be read out to the others in a room.
+// the domain briefs follow, so one member's indexed life is not read out to
+// the others in a room; its writing tools are never handed to a model at all;
+// and a turn that did not ask for the family by name gets the two everyday
+// reading tools rather than the whole roster.
 
 import { expect, test } from "bun:test";
 
-const { ALWAYS_ON, PRIVATE_ONLY, isPrivateOnlyTool, isExperimentalTool, resolveFamilies } =
-  await import("../src/services/toolFamilies");
+const {
+  ALWAYS_ON,
+  PRIVATE_ONLY,
+  isPrivateOnlyTool,
+  isExperimentalTool,
+  resolveFamilies,
+  selectedFamilies,
+  corpusToolAllowed,
+} = await import("../src/services/toolFamilies");
 
 test("the corpus is always on and no longer experimental", () => {
   expect(ALWAYS_ON).toContain("corpus");
@@ -32,4 +41,33 @@ test("a turn with no selection at all still holds the corpus", () => {
   const families = resolveFamilies("no-such-conversation", false, undefined);
   expect(families).not.toBe("all");
   expect(families as string[]).toContain("corpus");
+});
+
+test("holding the family is not the same as having asked for it", () => {
+  // What the turn chose, before the always-on union: nothing.
+  expect(selectedFamilies("no-such-conversation")).toEqual([]);
+});
+
+test("the corpus tools that write are never offered, selection or not", () => {
+  for (const explicit of [false, true]) {
+    expect(corpusToolAllowed("corpus__prune", explicit)).toBe(false);
+    expect(corpusToolAllowed("corpus__reindex", explicit)).toBe(false);
+    expect(corpusToolAllowed("corpus__index_path", explicit)).toBe(false);
+    expect(corpusToolAllowed("corpus__index_conversation", explicit)).toBe(false);
+    expect(corpusToolAllowed("corpus__import_chat_export", explicit)).toBe(false);
+    expect(corpusToolAllowed("corpus__map_conversations", explicit)).toBe(false);
+  }
+});
+
+test("an unselected turn gets search and widening, a selected one gets the reading roster", () => {
+  // Always on: the two that remembering needs.
+  expect(corpusToolAllowed("corpus__search", false)).toBe(true);
+  expect(corpusToolAllowed("corpus__get_chunk_context", false)).toBe(true);
+  // The rest waits for a turn that asked for the family.
+  expect(corpusToolAllowed("corpus__search_in_book", false)).toBe(false);
+  expect(corpusToolAllowed("corpus__list_dossiers", false)).toBe(false);
+  expect(corpusToolAllowed("corpus__search_in_book", true)).toBe(true);
+  expect(corpusToolAllowed("corpus__list_dossiers", true)).toBe(true);
+  // Other families are none of this function's business.
+  expect(corpusToolAllowed("garden__list_notes", false)).toBe(true);
 });

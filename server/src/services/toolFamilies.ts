@@ -43,6 +43,42 @@ export function isPrivateOnlyTool(toolName: string): boolean {
   return PRIVATE_ONLY.includes(familyOf(toolName));
 }
 
+// ── Which corpus tools a turn may hold ──────────────────────────────────────
+//
+// The corpus server exposes nineteen tools, and most of them have no business
+// in a conversation. Nine of them write: they index a path, prune a source,
+// reindex it, import a chat export, map conversations into domains. The server
+// calls those itself (mcpClient.corpusCall) on its own schedule; handed to a
+// model they are a way to lose the index to a wrong guess. They are never
+// offered, whatever the selection says — not even under an explicit "all".
+const CORPUS_ADMIN = [
+  "corpus__index_path",
+  "corpus__index_conversation",
+  "corpus__prune",
+  "corpus__reindex",
+  "corpus__reconcile_status",
+  "corpus__map_conversations",
+  "corpus__import_chat_export",
+  "corpus__import_status",
+  "corpus__import_history",
+];
+
+// What "remembering" needs and no more: ask the index a question, then widen
+// around a passage that answered it. These two ride in every private turn now
+// that the family is always on, so they are also two more tool definitions in
+// every cached prefix — which is the reason the rest of the reading tools (the
+// per-book and per-dossier lookups) wait for a conversation that asks for the
+// family outright.
+const CORPUS_EVERYDAY = ["corpus__search", "corpus__get_chunk_context"];
+
+/** The corpus tools a turn may hold. `explicit` is true when the turn selected
+ *  the family itself rather than receiving it as an always-on one. */
+export function corpusToolAllowed(toolName: string, explicit: boolean): boolean {
+  if (familyOf(toolName) !== "corpus") return true;
+  if (CORPUS_ADMIN.includes(toolName)) return false;
+  return explicit || CORPUS_EVERYDAY.includes(toolName);
+}
+
 // Only Notes + Journal are surfaced as everyday garden tools; everything else
 // (the rest of the garden, plus all non-garden families) is Experimental and
 // hidden unless a member has been granted access in the admin page.
@@ -194,23 +230,29 @@ function parse(json: string | null | undefined): string[] | null {
  *  tools are opt-in per chat. Experimental families are dropped for members who
  *  lack access. `memberId` (the member taking the turn) gates that. */
 export function resolveFamilies(conversationId: string, isLocal: boolean, memberId?: string): "all" | string[] {
-  const tierDefault: string[] = []; // off by default; always-on is unioned below
   const expOK = memberId ? canUseExperimental(memberId) : true;
-  const finalize = (f: "all" | string[]): "all" | string[] => {
-    if (f === "all") return "all"; // an explicit household/persona "all" (member tools still gated downstream)
-    const withCore = [...new Set([...f, ...ALWAYS_ON])];
-    return expOK ? withCore : withCore.filter((id) => groupOf(id) !== "experimental");
-  };
+  const chosen = selectedFamilies(conversationId);
+  if (chosen === "all") return "all"; // an explicit household/persona "all" (member tools still gated downstream)
+  const withCore = [...new Set([...chosen, ...ALWAYS_ON])];
+  return expOK ? withCore : withCore.filter((id) => groupOf(id) !== "experimental");
+}
 
+/** The families this turn actually asked for — the conversation's own choice,
+ *  else its persona's, else the household's, else none — before the always-on
+ *  ones are unioned in. Kept apart from `resolveFamilies` because "the turn
+ *  chose this family" and "the turn holds this family" stopped meaning the
+ *  same thing when the corpus became always-on: a family nobody picked gets
+ *  its everyday tools, not its whole roster. */
+export function selectedFamilies(conversationId: string): "all" | string[] {
   const conv = db
     .query(`SELECT tool_families, maurice_id FROM conversations WHERE id = ?`)
     .get(conversationId) as { tool_families: string | null; maurice_id: string | null } | null;
-  if (conv?.tool_families != null) return finalize(parse(conv.tool_families) ?? tierDefault);
+  if (conv?.tool_families != null) return parse(conv.tool_families) ?? [];
   if (conv?.maurice_id) {
     const m = db.query(`SELECT tool_families FROM maurices WHERE id = ?`).get(conv.maurice_id) as { tool_families: string | null } | null;
-    if (m?.tool_families != null) return finalize(parse(m.tool_families) ?? tierDefault);
+    if (m?.tool_families != null) return parse(m.tool_families) ?? [];
   }
   const hh = db.query(`SELECT default_tool_families FROM households WHERE id = 'default'`).get() as { default_tool_families: string | null } | null;
-  if (hh?.default_tool_families != null) return finalize(parse(hh.default_tool_families) ?? tierDefault);
-  return finalize(tierDefault);
+  if (hh?.default_tool_families != null) return parse(hh.default_tool_families) ?? [];
+  return [];
 }

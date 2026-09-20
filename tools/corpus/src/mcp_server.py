@@ -68,19 +68,27 @@ class CorpusMCPServer:
                     description=(
                         "Semantic search across the indexed corpus: garden notes, fiches "
                         "(books, films, series, podcasts, articles, people) and the long "
-                        "text hanging off them, book chapters, thoughts, dossiers.\n\n"
+                        "text hanging off them, past conversations with Maurice, book "
+                        "chapters, thoughts, dossiers.\n\n"
                         "`filters` narrows by any metadata field a document carries, which "
                         "for a fiche is its whole frontmatter — flattened, so the nested "
                         "`meta:` block is reachable at the top level. A string matches as a "
                         "substring (case-insensitive), a list matches any of its values, a "
                         "number or boolean matches exactly.\n\n"
-                        "Useful keys: source_type (note | fiche | fragment | book | thought | "
-                        "dossier), collection (books | articles | movies | games | series | "
-                        "podcasts | people), author, publication, title, tags, year, "
-                        "published_at, status, locale.\n\n"
+                        "Useful keys: source_type (note | fiche | card | fragment | "
+                        "conversation | book | thought | dossier), collection (books | "
+                        "articles | movies | games | series | podcasts | people), author, "
+                        "publication, title, tags, year, published_at, status, locale. A "
+                        "conversation chunk also carries conversation_id, conversation_title, "
+                        "message_id, role and date.\n\n"
                         'Examples: {"source_type": "fiche", "collection": "books"} — only book '
                         'fiches. {"author": "Seth"} — anything by an author whose name contains '
-                        'Seth. {"collection": ["articles", "podcasts"], "publication": "Monde"}.'
+                        'Seth. {"collection": ["articles", "podcasts"], "publication": "Monde"}. '
+                        '{"source_type": ["note", "fiche", "card", "fragment"]} — only the '
+                        'garden, what they chose to keep, as against {"source_type": '
+                        '"conversation"}, what they have said. Conversations outnumber '
+                        'everything else, so an unfiltered search is usually a search of '
+                        'those: filter when you mean a particular kind of memory.'
                     ),
                     inputSchema={
                         "type": "object",

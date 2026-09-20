@@ -18,7 +18,7 @@ import { resolveModelId, getModel } from "./models";
 import { resolveUsableModel, getEverydayModel } from "./modelAccess";
 import { ollamaTurn, OLLAMA_NUM_CTX, type OllamaToolCall } from "./ollama";
 import { openaiTurn, PROMPT_CACHE_KEY_PROVIDERS, type OpenAIToolCall } from "./openaiChat";
-import { resolveFamilies, toolInFamilies, canUseExperimental, isExperimentalTool, isPrivateOnlyTool, familyTitles } from "./toolFamilies";
+import { resolveFamilies, toolInFamilies, canUseExperimental, isExperimentalTool, isPrivateOnlyTool, corpusToolAllowed, selectedFamilies, familyTitles } from "./toolFamilies";
 import { t, userLocale } from "./i18n";
 import { newUsage, priceUsage, hasUsage, type TurnUsage } from "./pricing";
 import { verdict as budgetVerdict } from "./budget";
@@ -175,6 +175,29 @@ function buildRoomSystemPrompt(conversationId: string, summonerName: string, ima
 // "tasks, calendar, contacts, notes, health, books" to a member who was granted
 // none of them makes the model answer "I'll check your calendar" with nothing
 // to call — and, asked what tools it has, recite the promise instead of looking.
+/** What to do with the corpus, when the turn holds it. The briefs above say
+ *  what matters to the member; this says where what they actually wrote is
+ *  kept, and in which order to look. The order is Maurice's promise back to
+ *  them: the garden first because it is what they decided was worth keeping on
+ *  a subject, then what they have said, then what they only read. Nothing in
+ *  the corpus ranks the sources — one unfiltered search returns whatever
+ *  scores highest, all sources mixed — so the order has to be walked here, one
+ *  filtered search at a time. */
+function corpusNotice(toolNames: string[]): string {
+  if (!toolNames.includes("corpus__search")) return "";
+  return (
+    `\n\n## Your memory of what they keep\n` +
+    `corpus__search reads everything of theirs that is indexed. Ask it a question the way they would put it, not in keywords. ` +
+    `Reach for it when a question falls into one of the domains above: the briefs say what matters to them, the corpus holds what they actually wrote. ` +
+    `Go in the order of what they chose to keep, one search per step, and stop as soon as you have enough: ` +
+    `their garden first (filters {"source_type": ["note", "fiche", "card", "fragment"]}) — what they decided was worth keeping on a subject; ` +
+    `then what they have already said (filters {"source_type": "conversation"}); ` +
+    `then what they have only read or gathered (filters {"source_type": ["book", "dossier", "thought"]}). ` +
+    `Nothing ranks those sources for you: an unfiltered search mixes them, and the conversations, being by far the most numerous, usually win. ` +
+    `Say where something came from when it matters — a note they wrote is not a passage from someone else's book.`
+  );
+}
+
 function toolRosterNotice(toolNames: string[], web: boolean): string {
   // The documentation tool is in every roster (services/mauriceDocsTool.ts):
   // a question about Maurice himself is answered from it, never from memory.
@@ -1154,9 +1177,16 @@ function trackedBooks(
       // says (toolFamilies.PRIVATE_ONLY): the corpus is one member's indexed
       // life and the others in the room would read it. Same rule as the briefs.
       const isRoom = countParticipants(conversationId) > 1;
+      // The corpus is always on, so "does this turn hold it" no longer says
+      // how much of it to hand over: its writing tools are never offered, and
+      // its reading tools beyond search wait for a turn that asked for the
+      // family by name (toolFamilies.corpusToolAllowed).
+      const chosen = selectedFamilies(conversationId);
+      const corpusExplicit = chosen === "all" || chosen.includes("corpus");
       mcpTools = (families === "all" ? all : all.filter((t) => toolInFamilies(t.name, families as string[])))
         .filter((t) => expOK || !isExperimentalTool(t.name)) // never hand experimental tools to ungated members
         .filter((t) => !isRoom || !isPrivateOnlyTool(t.name))
+        .filter((t) => corpusToolAllowed(t.name, corpusExplicit))
         // Tools render at the very front of the cached prefix, so their order has
         // to be stable: the MCP server makes no ordering promise, and a roster
         // that reshuffles between turns would invalidate the whole cache.
@@ -1177,6 +1207,7 @@ function trackedBooks(
 
   // Now that the roster is settled, tell the model what it really holds.
   systemPrompt += toolRosterNotice(mcpTools.map((t) => t.name), wantsWeb && hasWebSearch());
+  systemPrompt += corpusNotice(mcpTools.map((t) => t.name));
 
   // Fit the conversation to the model's window. `ctx` is what the roster says
   // (k tokens, admin-editable); Ollama is additionally capped by what we ask
