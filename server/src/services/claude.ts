@@ -515,7 +515,7 @@ async function executeTool(
       // conversation that genuinely taught Maurice two things is fine, a model
       // filling a form is not.
       if (isRememberFactTool(name)) {
-        const outcome = runRememberFactTool(input || {}, ctx.memberId ?? undefined, ctx.conversationId, ctx.factsProposed?.n ?? 0);
+        const outcome = await runRememberFactTool(input || {}, ctx.memberId ?? undefined, ctx.conversationId, ctx.factsProposed?.n ?? 0);
         if (outcome.data && ctx.factsProposed) ctx.factsProposed.n += 1;
         return outcome;
       }

@@ -116,6 +116,15 @@ export const ANCILLARY_INVOCATIONS: AncillaryInvocation[] = [
   { id: "domain_mapping", side: "server", tier: "standard", label: "Domain mapping",
     blurb: "Naming and describing the groups of conversations the night finds, to propose them as domains.",
     prefer: NIGHT_MODELS },
+  // The second opinion on a fact (services/lifeFacts.ts). The tool is called
+  // by whichever model is holding the conversation, which on a given turn may
+  // be the cheapest in the house; whether a sentence is a lasting fact or this
+  // week's project is a judgement, and it should not depend on that. So the
+  // proposal is judged once more here, by one pinned model, before the member
+  // is shown anything. In their turn, charged to them.
+  { id: "life_fact", side: "server", tier: "standard", label: "Fact check",
+    blurb: "A fact Maurice wants to write down about a member, judged once more before it is proposed to them.",
+    prefer: NIGHT_MODELS },
   // Seeding the garden (services/domainSeeding.ts): on the member's yes, in
   // their own turn, charged to them — the night's model, not the night's purse.
   { id: "domain_seed", side: "server", tier: "standard", label: "Domain notes",

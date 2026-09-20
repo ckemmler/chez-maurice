@@ -1,4 +1,6 @@
 import db from "../db";
+import { ancillaryComplete, type AncillaryRequest, type AncillaryResult } from "./ancillary";
+import { recordSpend } from "./budget";
 import type { McpTool } from "./mcpClient";
 
 // ── Facts of a life ──────────────────────────────────────────────────────────
@@ -84,7 +86,13 @@ export interface ProposeResult {
  * Record a proposed fact. Refusals are ordinary answers, not errors: the model
  * should learn from them within the turn rather than retry.
  */
-export function proposeFact(memberId: string, text: string, conversationId: string | null, proposedThisTurn = 0): ProposeResult {
+export function proposeFact(
+  memberId: string,
+  text: string,
+  conversationId: string | null,
+  proposedThisTurn = 0,
+  opts: { dryRun?: boolean } = {},
+): ProposeResult {
   const clean = text.replace(/\s+/g, " ").trim();
   if (!clean) return { fact: null, refused: "empty" };
   if (clean.length > FACT_MAX_CHARS) return { fact: null, refused: "too long" };
@@ -94,6 +102,7 @@ export function proposeFact(memberId: string, text: string, conversationId: stri
     if (normal(f.text) !== wanted) continue;
     return { fact: null, refused: f.state === "kept" ? "already known" : "already proposed" };
   }
+  if (opts.dryRun) return { fact: null };
   const id = crypto.randomUUID();
   db.run(
     `INSERT INTO life_facts (id, member_id, text, state, conversation_id) VALUES (?, ?, ?, 'proposed', ?)`,
@@ -135,6 +144,71 @@ export function factsForPrompt(memberId: string): string {
   const facts = keptFacts(memberId);
   if (!facts.length) return "";
   return `\n\nAlso true of them, and confirmed by them:\n${facts.map((f) => `- ${f.text}`).join("\n")}`;
+}
+
+// ── The second opinion ───────────────────────────────────────────────────────
+//
+// The tool is called by whichever model is holding the conversation, and on a
+// given turn that may be the cheapest model in the house. Whether a sentence
+// is a lasting fact or this week's project is a judgement, and it should not
+// depend on which model happens to be speaking. So every proposal is judged
+// once more, by the model pinned to the `life_fact` invocation
+// (services/ancillary.ts), before the member is shown anything.
+//
+// It fails open: a judge that errors or answers nothing lets the proposal
+// through. The member is the real gate, and a second opinion that goes down
+// must not silently stop Maurice from learning.
+
+export interface FactJudgement {
+  ok: boolean;
+  /** The judge's own wording when it kept the fact but said it better. */
+  text: string;
+  /** Why not, in one clause, for the model that proposed it. */
+  why?: string;
+}
+
+/** Swappable for tests, like the briefs' own model call. */
+let judgeWith: (req: AncillaryRequest) => Promise<AncillaryResult> = ancillaryComplete;
+export function setFactJudge(fn: ((req: AncillaryRequest) => Promise<AncillaryResult>) | null): void {
+  judgeWith = fn ?? ancillaryComplete;
+}
+
+const JUDGE_SYSTEM =
+  "You are deciding whether one sentence is a lasting fact about a person, worth remembering for years.\n\n" +
+  "THE TEST: would it still be true in a year if nobody ever mentioned it again? A fact needs no tending. " +
+  "A project, a plan, an idea, an opinion, a decision being weighed, something being read or built — all of those change by being lived, " +
+  "and belong elsewhere.\n\n" +
+  "Facts: a child's age, where someone lives, an allergy, an instrument they play, a recurring date, a diet they hold.\n" +
+  "Not facts: wanting to learn a language, considering a trip, reading a book, working on something this week, finding a thing disappointing.\n\n" +
+  "Answer with one line and nothing else:\n" +
+  "  KEEP <the sentence, in its own language, corrected only if it is clumsy or not a statement about the person>\n" +
+  "  DROP <three or four words saying why not>";
+
+export async function judgeFact(text: string, memberId: string | null): Promise<FactJudgement> {
+  try {
+    const result = await judgeWith({
+      invocation: "life_fact",
+      system: JUDGE_SYSTEM,
+      prompt: text,
+      maxTokens: 300,
+      temperature: 0,
+    });
+    recordSpend(result.usage, memberId);
+    const line = result.text.replace(/\s+/g, " ").trim();
+    const drop = /^\s*DROP\b[:\-\s]*/i.exec(line);
+    if (drop) return { ok: false, text, why: line.slice(drop[0].length).trim() || "not a lasting fact" };
+    const keep = /^\s*KEEP\b[:\-\s]*/i.exec(line);
+    if (keep) {
+      const said = keep.input.slice(keep[0].length).trim().replace(/^["'«]|["'»]$/g, "");
+      return { ok: true, text: said.slice(0, FACT_MAX_CHARS) || text };
+    }
+    // Neither word: the judge did not answer the question asked, so it does
+    // not get to decide.
+    return { ok: true, text };
+  } catch (err) {
+    console.warn(`[facts] no second opinion (${(err as Error).message})`);
+    return { ok: true, text };
+  }
 }
 
 // ── The tool ─────────────────────────────────────────────────────────────────
@@ -185,16 +259,39 @@ export interface FactToolOutcome {
  * Run it. The card the client draws (`card: "fact"`) is what tells the member;
  * the text tells the model what happened to its proposal.
  */
-export function runRememberFactTool(
+export async function runRememberFactTool(
   input: any,
   memberId: string | undefined,
   conversationId: string,
   proposedThisTurn: number,
-): FactToolOutcome {
+): Promise<FactToolOutcome> {
   if (!memberId) return { text: "Tool error: no member on this turn", isError: true };
-  const { fact, refused } = proposeFact(memberId, typeof input?.fact === "string" ? input.fact : "", conversationId, proposedThisTurn);
-  if (!fact) {
-    const why =
+  const said = typeof input?.fact === "string" ? input.fact : "";
+  // Cheap refusals first: there is no point paying a judge to read an empty
+  // string, an essay, or something already known.
+  const dry = proposeFact(memberId, said, conversationId, proposedThisTurn, { dryRun: true });
+  if (dry.refused) return refusal(dry.refused);
+  const judged = await judgeFact(said, memberId);
+  if (!judged.ok) {
+    return {
+      text: `Not written down: ${judged.why}. That belongs to a domain brief, or to nothing at all. Do not propose it again this turn.`,
+      isError: false,
+    };
+  }
+  const { fact, refused } = proposeFact(memberId, judged.text, conversationId, proposedThisTurn);
+  if (!fact) return refusal(refused);
+  return {
+    text:
+      `Proposed: "${fact.text}". They are being shown it now and will keep it or throw it away. ` +
+      `Do not treat it as known yet, and mention it only in passing if at all — the card says it for you.`,
+    isError: false,
+    data: { card: "fact", id: fact.id, text: fact.text, state: fact.state },
+  };
+}
+
+/** What the model is told when nothing was written. */
+function refusal(refused: ProposeResult["refused"]): FactToolOutcome {
+  const why =
       refused === "already known"
         ? "You already know that, and they confirmed it. Nothing was written."
         : refused === "already proposed"
@@ -204,13 +301,5 @@ export function runRememberFactTool(
             : refused === "too many this turn"
               ? `Two facts in one turn is the limit. Keep the rest for when they come up.`
               : "Nothing to write.";
-    return { text: why, isError: false };
-  }
-  return {
-    text:
-      `Proposed: "${fact.text}". They are being shown it now and will keep it or throw it away. ` +
-      `Do not treat it as known yet, and mention it only in passing if at all — the card says it for you.`,
-    isError: false,
-    data: { card: "fact", id: fact.id, text: fact.text, state: fact.state },
-  };
+  return { text: why, isError: false };
 }

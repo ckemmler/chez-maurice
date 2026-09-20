@@ -31,8 +31,22 @@ beforeAll(() => {
   benAuth = `Bearer ${createSession(BEN).token}`;
 });
 
+/** What the second opinion answers. Tests set it; nothing here calls a model. */
+let judgeSays = "KEEP";
+let judgeCalls = 0;
+
+beforeAll(() => {
+  facts.setFactJudge(async (req) => {
+    judgeCalls++;
+    const text = judgeSays === "KEEP" ? `KEEP ${req.prompt}` : judgeSays;
+    return { text, model: "test-judge", provider: "test", stop: "end", usage: null };
+  });
+});
+
 beforeEach(() => {
   db.run(`DELETE FROM life_facts WHERE member_id IN (?, ?)`, [ANNA, BEN]);
+  judgeSays = "KEEP";
+  judgeCalls = 0;
 });
 
 describe("proposing", () => {
@@ -73,8 +87,8 @@ describe("proposing", () => {
 });
 
 describe("the tool", () => {
-  test("it proposes, and says plainly that nothing is known yet", () => {
-    const r = facts.runRememberFactTool({ fact: "Emilio a onze ans." }, ANNA, "c1", 0);
+  test("it proposes, and says plainly that nothing is known yet", async () => {
+    const r = await facts.runRememberFactTool({ fact: "Emilio a onze ans." }, ANNA, "c1", 0);
     expect(r.isError).toBe(false);
     expect(r.text).toContain("Proposed");
     expect(r.text).toContain("not treat it as known");
@@ -83,16 +97,56 @@ describe("the tool", () => {
     expect((r.data as any).text).toBe("Emilio a onze ans.");
   });
 
-  test("a refusal is an ordinary answer, not an error to retry", () => {
-    facts.runRememberFactTool({ fact: "Emilio a onze ans." }, ANNA, "c1", 0);
-    const again = facts.runRememberFactTool({ fact: "Emilio a onze ans." }, ANNA, "c1", 1);
+  test("a refusal is an ordinary answer, not an error to retry", async () => {
+    await facts.runRememberFactTool({ fact: "Emilio a onze ans." }, ANNA, "c1", 0);
+    const again = await facts.runRememberFactTool({ fact: "Emilio a onze ans." }, ANNA, "c1", 1);
     expect(again.isError).toBe(false);
     expect(again.data).toBeUndefined(); // nothing to show her
     expect(again.text).toContain("already proposed");
   });
 
-  test("no member, no writing", () => {
-    expect(facts.runRememberFactTool({ fact: "x" }, undefined, "c1", 0).isError).toBe(true);
+  test("no member, no writing", async () => {
+    expect((await facts.runRememberFactTool({ fact: "x" }, undefined, "c1", 0)).isError).toBe(true);
+  });
+});
+
+describe("the second opinion", () => {
+  test("a project is refused, and nothing is written", async () => {
+    judgeSays = "DROP a plan, not a fact";
+    const r = await facts.runRememberFactTool({ fact: "Il envisage un voyage aux Galápagos." }, ANNA, "c1", 0);
+    expect(r.isError).toBe(false);
+    expect(r.data).toBeUndefined();
+    expect(r.text).toContain("a plan, not a fact");
+    expect(facts.allFacts(ANNA)).toHaveLength(0);
+  });
+
+  test("it may reword a clumsy fact, and that wording is what is proposed", async () => {
+    judgeSays = "KEEP Emilio a onze ans.";
+    const r = await facts.runRememberFactTool({ fact: "emilio, il a 11 ans je crois" }, ANNA, "c1", 0);
+    expect((r.data as any).text).toBe("Emilio a onze ans.");
+  });
+
+  test("it is not paid to read what would be refused anyway", async () => {
+    // Empty, too long, already known: turned away before the judge is called.
+    await facts.runRememberFactTool({ fact: "   " }, ANNA, "c1", 0);
+    await facts.runRememberFactTool({ fact: "x".repeat(300) }, ANNA, "c1", 0);
+    await facts.runRememberFactTool({ fact: "Un." }, ANNA, "c1", 2); // over the per-turn cap
+    expect(judgeCalls).toBe(0);
+  });
+
+  test("a judge that breaks lets the fact through — the member is the real gate", async () => {
+    facts.setFactJudge(async () => {
+      throw new Error("provider down");
+    });
+    const r = await facts.runRememberFactTool({ fact: "Elle vit à Bruxelles." }, ANNA, "c1", 0);
+    expect((r.data as any).text).toBe("Elle vit à Bruxelles.");
+    facts.setFactJudge(async (req) => ({ text: `KEEP ${req.prompt}`, model: "t", provider: "t", stop: "end", usage: null }));
+  });
+
+  test("an answer that is neither KEEP nor DROP does not get to decide", async () => {
+    judgeSays = "I think that is probably fine?";
+    const r = await facts.runRememberFactTool({ fact: "Elle joue du violon." }, ANNA, "c1", 0);
+    expect((r.data as any).text).toBe("Elle joue du violon.");
   });
 });
 
