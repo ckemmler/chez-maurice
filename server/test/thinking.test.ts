@@ -94,9 +94,10 @@ describe("a persona records its choice", () => {
 });
 
 describe("what reaches the provider", () => {
-  test("Z.ai gets its `thinking` field; nobody else gets anything", () => {
-    expect(thinkingBody("zai", false)).toEqual({ thinking: { type: "disabled" } });
-    expect(thinkingBody("zai", true)).toEqual({ thinking: { type: "enabled" } });
+  test("Z.ai gets `reasoning_effort`; nobody else gets anything", () => {
+    // GLM cannot be told not to think at all: the dial takes low | high | max.
+    expect(thinkingBody("zai", false)).toEqual({ reasoning_effort: "low" });
+    expect(thinkingBody("zai", true)).toEqual({ reasoning_effort: "high" });
     expect(thinkingBody("zai", undefined)).toBeUndefined();
     expect(thinkingBody("scaleway", false)).toBeUndefined();
     expect(thinkingBody("mistral", true)).toBeUndefined();
@@ -114,12 +115,12 @@ describe("what reaches the provider", () => {
     try {
       const events: any[] = [];
       for await (const ev of openaiTurn("https://example.invalid/v1", "k", "glm-5.3-flash", [], [], undefined,
-        { extraBody: { thinking: { type: "disabled" } } })) events.push(ev);
-      expect(sent.thinking).toEqual({ type: "disabled" });
+        { extraBody: { reasoning_effort: "low" } })) events.push(ev);
+      expect(sent.reasoning_effort).toBe("low");
       expect(events.at(-1).type).toBe("turn_end");
       // And nothing when there is nothing to say.
       for await (const _ of openaiTurn("https://example.invalid/v1", "k", "glm-5.3-flash", [], [], undefined)) {}
-      expect(sent.thinking).toBeUndefined();
+      expect(sent.reasoning_effort).toBeUndefined();
     } finally {
       globalThis.fetch = realFetch;
     }

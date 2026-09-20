@@ -1043,10 +1043,10 @@ try {
 // The reasoning capability of the seeded roster, on the same generation-counter
 // pattern. Anthropic: every 4.6+ model takes `thinking` (Haiku 4.5 still wants
 // the old budget form, which Maurice does not send, so it stays `none`). Z.ai:
-// both GLM-5.3 models think by default and accept `thinking.type = disabled` —
-// this is the switch that turns a three-minute Flash answer into a thirty-second
-// one. Scaleway: the models that stream a `reasoning` delta do so with no
-// documented switch, so they are `always`. Local models are set by discovery
+// both GLM-5.3 models always think, but take a `reasoning_effort` of low | high
+// | max — turning that dial down to `low` is what makes a three-minute Flash
+// answer a thirty-second one. Scaleway: the models that stream a `reasoning`
+// delta do so with no documented switch, so they are `always`. Local models are set by discovery
 // (Ollama reports a `thinking` capability), not here.
 const THINKING_SEED_GENERATION = 1;
 try {

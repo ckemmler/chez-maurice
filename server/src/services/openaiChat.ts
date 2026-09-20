@@ -101,7 +101,7 @@ export interface OpenAITurnOptions {
   idleTimeoutMs?: number;
   /** Provider-specific fields merged into the request body as they are — the
    *  caller knows which provider it is talking to and what it accepts (Z.ai's
-   *  `thinking`, say); this client stays provider-neutral. */
+   *  `reasoning_effort`, say); this client stays provider-neutral. */
   extraBody?: Record<string, unknown>;
 }
 

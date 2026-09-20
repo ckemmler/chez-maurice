@@ -600,15 +600,20 @@ export function openaiStyleKey(
 }
 
 /** The request field that turns a reasoning phase on or off, per provider.
- *  Z.ai's GLM models think unless told not to — `thinking.type = disabled` is
- *  what makes GLM-5.3-Flash answer in seconds rather than minutes. No other
- *  OpenAI-style provider here documents a switch (Mistral and OpenAI's models
- *  on the roster do not reason; Scaleway's reasoning models are `always`), so
- *  nothing is sent to them: an unknown field is a 422 on a strict server.
- *  Exported for tests. */
+ *  Z.ai's GLM models always think: since September 2026 `thinking.type =
+ *  disabled` is refused outright ("This model always engages in thinking and
+ *  cannot be disabled; please use low, high, or max", code 1210) and the dial
+ *  is `reasoning_effort`, which takes exactly `low`, `high` or `max` —
+ *  `minimal`, `none` and `medium` are refused with the same code. `low` is as
+ *  close to off as the model goes (a couple of dozen reasoning tokens on an
+ *  easy turn against a thousand and more on `max`), and it is what makes
+ *  GLM-5.3-Flash answer in seconds rather than minutes. No other OpenAI-style
+ *  provider here documents a switch (Mistral and OpenAI's models on the roster
+ *  do not reason; Scaleway's reasoning models are `always`), so nothing is sent
+ *  to them: an unknown field is a 422 on a strict server. Exported for tests. */
 export function thinkingBody(provider: string, thinking: boolean | undefined): Record<string, unknown> | undefined {
   if (thinking === undefined) return undefined;
-  if (provider === "zai") return { thinking: { type: thinking ? "enabled" : "disabled" } };
+  if (provider === "zai") return { reasoning_effort: thinking ? "high" : "low" };
   return undefined;
 }
 
