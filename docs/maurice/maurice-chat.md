@@ -120,7 +120,7 @@ The chat surface — streaming, data cards, math, markdown, images, dictation, m
 
 A search answers with a list of things to go and look at, and the app used to render that the way it rendered every other tool result: a folded disclosure triangle over a key/value dump, forty fields a row, three of them useful. The web search rendered as *nothing at all* — its result never became a data block (`executeTool` set no `data` on that branch), so the only trace of twenty-seven pages read was whatever the model chose to retype.
 
-Both now produce one payload, `card: "sources"` (`server/src/services/sourceCards.ts`), drawn by `SourcesCard.swift`: a horizontal row of small cards under the reply, one per source, each with a title, where it came from, and a cover when the garden has one. Tapping a web source opens it; tapping a garden source unfolds the passage that matched, since a note has nowhere to open to. The header says how many sources there were, and the query.
+Both now produce one payload, `card: "sources"` (`server/src/services/sourceCards.ts`), drawn by `SourcesCard.swift`. What stays in the transcript is a **line of pills**: four overlapping 20-point thumbnails and a count, the height of a line of text. Tapping it opens a **drawer** holding every source at a readable size — cover, title, where it came from, and the passage that matched — where a web source is a link and a garden one is not, having nowhere to open to. The first version drew the cards inline, in a scrolling row, and took more room under every reply than the reply itself: evidence should be at hand, not in the way.
 
 Three things the first run against the real index taught, all of them now pinned by tests:
 

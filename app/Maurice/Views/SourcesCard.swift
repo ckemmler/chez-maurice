@@ -1,92 +1,121 @@
 import SwiftUI
 
-/// What a search found, drawn rather than dumped.
+/// What a search found — a line of pills under the reply, and the sources
+/// themselves in a drawer when you tap it.
 ///
-/// Both searches — the corpus and the web — send the same payload
+/// Both searches, the corpus and the web, send the same payload
 /// (`card: "sources"`, built in `server/src/services/sourceCards.ts`): a title,
-/// where it came from, an optional cover, and the passage that matched. Before
-/// this, a corpus search rendered as a folded key/value dump of forty fields a
-/// row, and a web search rendered as nothing at all.
+/// where it came from, an optional cover, and the passage that matched.
 ///
-/// The row scrolls sideways and the cards are deliberately small: this is
-/// evidence beside the reply, not the reply. Tapping a web source opens it;
-/// tapping anything else shows the passage that matched, since a note in a
-/// garden has nowhere to open to.
+/// The first version drew that as a scrolling row of cards, which took more
+/// room under every reply than the reply itself. Evidence should be *at hand*,
+/// not in the way: what stays in the transcript is now a stack of thumbnails
+/// and a count, the size of a line of text, and the cards live one tap away.
 struct SourcesCard: View {
     @Environment(\.mauriceTheme) private var theme
     let data: JSONValue
 
-    @State private var shown: Int?
+    @State private var open = false
 
-    private var origin: String { data.string("origin") }
-    private var isWeb: Bool { origin == "web" }
+    private var isWeb: Bool { data.string("origin") == "web" }
     private var results: [JSONValue] { data["results"]?.arrayValue ?? [] }
-
     /// The server caps the cards it sends but reports the true total, so the
-    /// header can say "12 of 30" honestly rather than quietly losing eighteen.
-    private var total: Int { data.int("count") }
+    /// count is honest rather than quietly eighteen short.
+    private var total: Int { max(data.int("count"), results.count) }
 
-    private var headline: String {
-        let n = results.count
-        let key = isWeb ? "sources.web" : "sources.corpus"
-        return total > n ? L("sources.more", L(key, n), total) : L(key, n)
-    }
+    /// How many thumbnails the stack shows before it is just a count.
+    private static let shown = 4
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            header
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(alignment: .top, spacing: 8) {
-                    ForEach(Array(results.enumerated()), id: \.offset) { index, item in
-                        SourceCardCell(item: item, isWeb: isWeb, showing: shown == index) {
-                            withAnimation(.easeOut(duration: 0.15)) {
-                                shown = shown == index ? nil : index
-                            }
-                        }
-                    }
+        if !results.isEmpty {
+            Button { open = true } label: { pills }
+                .buttonStyle(.plain)
+                .sheet(isPresented: $open) {
+                    SourcesDrawer(data: data)
+                    #if os(iOS)
+                        .presentationDetents([.medium, .large])
+                        .presentationDragIndicator(.visible)
+                    #endif
                 }
-                .padding(.horizontal, 2)
-            }
-            if let shown, shown < results.count { passage(results[shown]) }
         }
-        .padding(.vertical, 2)
     }
 
-    private var header: some View {
+    private var pills: some View {
         HStack(spacing: 6) {
-            Image(systemName: isWeb ? "globe" : "tray.full")
-                .font(.system(size: 11))
-            Text(headline)
-                .font(.system(size: 12, weight: .medium))
-            if !data.string("query").isEmpty {
-                Text("« \(data.string("query")) »")
-                    .font(.system(size: 11))
-                    .lineLimit(1)
-                    .foregroundStyle(theme.inkMute)
+            HStack(spacing: -7) {
+                ForEach(Array(results.prefix(Self.shown).enumerated()), id: \.offset) { _, item in
+                    SourceThumb(item: item, isWeb: isWeb, side: 20)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 5)
+                                .strokeBorder(theme.surface, lineWidth: 1.5)
+                        )
+                }
             }
+            Text(L("sources.count", total))
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(theme.inkSoft)
+            Image(systemName: "chevron.right")
+                .font(.system(size: 9, weight: .semibold))
+                .foregroundStyle(theme.inkMute)
         }
-        .foregroundStyle(theme.inkSoft)
-    }
-
-    /// The matching passage, under the row, for a source with nowhere to open.
-    private func passage(_ item: JSONValue) -> some View {
-        Text(item.string("snippet"))
-            .font(.system(size: 12))
-            .foregroundStyle(theme.inkSoft)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(10)
-            .background(RoundedRectangle(cornerRadius: 6).fill(theme.inkMute.opacity(0.06)))
+        .padding(.vertical, 4)
+        .contentShape(Rectangle())
     }
 }
 
-/// One card. A web result is a link; everything else toggles its passage.
-private struct SourceCardCell: View {
+/// The drawer: every source the search returned, at a size where the cover and
+/// the matching passage are actually readable.
+private struct SourcesDrawer: View {
     @Environment(\.mauriceTheme) private var theme
-    @Environment(SessionStore.self) private var session
+    @Environment(\.dismiss) private var dismiss
+    let data: JSONValue
+
+    private var isWeb: Bool { data.string("origin") == "web" }
+    private var results: [JSONValue] { data["results"]?.arrayValue ?? [] }
+    private var total: Int { max(data.int("count"), results.count) }
+
+    private var headline: String {
+        let key = isWeb ? "sources.web" : "sources.corpus"
+        return total > results.count ? L("sources.more", L(key, results.count), total) : L(key, total)
+    }
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 10) {
+                    if !data.string("query").isEmpty {
+                        Text("« \(data.string("query")) »")
+                            .font(.system(size: 13))
+                            .foregroundStyle(theme.inkMute)
+                            .padding(.bottom, 2)
+                    }
+                    ForEach(Array(results.enumerated()), id: \.offset) { _, item in
+                        SourceRow(item: item, isWeb: isWeb)
+                    }
+                }
+                .padding(14)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .background(theme.surface)
+            .navigationTitle(headline)
+            #if os(iOS)
+            .navigationBarTitleDisplayMode(.inline)
+            #endif
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button(L("common.done")) { dismiss() }.tint(theme.ink)
+                }
+            }
+        }
+    }
+}
+
+/// One source, full size. A web result is a link; a garden one shows the
+/// passage that answered, having nowhere to open to.
+private struct SourceRow: View {
+    @Environment(\.mauriceTheme) private var theme
     let item: JSONValue
     let isWeb: Bool
-    let showing: Bool
-    let tapped: () -> Void
 
     private var url: URL? {
         let raw = item.string("url")
@@ -95,38 +124,46 @@ private struct SourceCardCell: View {
     }
 
     var body: some View {
-        if let url, isWeb {
-            Link(destination: url) { card }.buttonStyle(.plain)
+        if let url {
+            Link(destination: url) { row }.buttonStyle(.plain)
         } else {
-            Button(action: tapped) { card }.buttonStyle(.plain)
+            row
         }
     }
 
-    private var card: some View {
-        HStack(alignment: .top, spacing: 8) {
-            SourceThumb(item: item, isWeb: isWeb)
-            VStack(alignment: .leading, spacing: 3) {
+    private var row: some View {
+        HStack(alignment: .top, spacing: 10) {
+            SourceThumb(item: item, isWeb: isWeb, side: 44)
+            VStack(alignment: .leading, spacing: 4) {
                 Text(item.string("title"))
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(.system(size: 14, weight: .semibold))
                     .foregroundStyle(theme.ink)
                     .lineLimit(2)
                     .multilineTextAlignment(.leading)
                 if !subtitle.isEmpty {
-                    Text(subtitle)
-                        .font(.system(size: 11))
-                        .foregroundStyle(theme.inkMute)
-                        .lineLimit(1)
+                    HStack(spacing: 4) {
+                        Text(subtitle)
+                        if url != nil {
+                            Image(systemName: "arrow.up.forward.square").font(.system(size: 9))
+                        }
+                    }
+                    .font(.system(size: 11))
+                    .foregroundStyle(theme.inkMute)
                 }
-                Spacer(minLength: 0)
+                if !item.string("snippet").isEmpty {
+                    Text(item.string("snippet"))
+                        .font(.system(size: 12))
+                        .foregroundStyle(theme.inkSoft)
+                        .lineLimit(4)
+                        .multilineTextAlignment(.leading)
+                        .padding(.top, 1)
+                }
             }
             Spacer(minLength: 0)
         }
-        .padding(8)
-        .frame(width: 208, height: 74, alignment: .topLeading)
-        .background(
-            RoundedRectangle(cornerRadius: 8)
-                .fill(theme.inkMute.opacity(showing ? 0.12 : 0.06))
-        )
+        .padding(10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(RoundedRectangle(cornerRadius: 8).fill(theme.inkMute.opacity(0.06)))
     }
 
     /// Where it came from: the domain on the web, and in the garden the nature
@@ -141,12 +178,14 @@ private struct SourceCardCell: View {
 }
 
 /// The cover when the garden has one, else the mark of what this is: a site's
-/// initial for the web, the icon of its nature for everything else.
+/// initial for the web, the icon of its nature for everything else. Square, so
+/// the same view works as a 20-point pill and a 44-point thumbnail.
 private struct SourceThumb: View {
     @Environment(\.mauriceTheme) private var theme
     @Environment(SessionStore.self) private var session
     let item: JSONValue
     let isWeb: Bool
+    var side: CGFloat = 44
 
     private static let icons: [String: String] = [
         "note": "note.text",
@@ -181,22 +220,22 @@ private struct SourceThumb: View {
                 mark
             }
         }
-        .frame(width: 40, height: 58)
-        .clipShape(RoundedRectangle(cornerRadius: 4))
+        .frame(width: side, height: side)
+        .clipShape(RoundedRectangle(cornerRadius: side > 28 ? 6 : 5))
     }
 
     /// No cover: a letter for a site, an icon for a kind of memory. Both beat
     /// an empty grey box at saying what you are about to open.
     private var mark: some View {
         ZStack {
-            RoundedRectangle(cornerRadius: 4).fill(theme.inkMute.opacity(0.15))
+            RoundedRectangle(cornerRadius: side > 28 ? 6 : 5).fill(theme.inkMute.opacity(0.15))
             if isWeb, let initial = item.string("subtitle").first {
                 Text(String(initial).uppercased())
-                    .font(.system(size: 17, weight: .semibold, design: .serif))
+                    .font(.system(size: side * 0.5, weight: .semibold, design: .serif))
                     .foregroundStyle(theme.inkMute)
             } else {
                 Image(systemName: Self.icons[item.string("kind")] ?? "doc")
-                    .font(.system(size: 14))
+                    .font(.system(size: side * 0.42))
                     .foregroundStyle(theme.inkMute)
             }
         }

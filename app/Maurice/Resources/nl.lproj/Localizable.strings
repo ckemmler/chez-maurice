@@ -357,6 +357,7 @@
 "fiche.counts" = "voorkant %1$d · achterkant %2$d tekens";
 
 /* Source cards: what a corpus or web search found. */
+"sources.count" = "%d bronnen";
 "sources.corpus" = "%d bronnen in je geheugen";
 "sources.web" = "%d bronnen op het web";
 "sources.more" = "%1$@ van %2$d";

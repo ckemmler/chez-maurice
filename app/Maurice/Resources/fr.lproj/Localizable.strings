@@ -357,6 +357,7 @@
 "fiche.counts" = "recto %1$d · verso %2$d caractères";
 
 /* Source cards: what a corpus or web search found. */
+"sources.count" = "%d sources";
 "sources.corpus" = "%d sources dans ta mémoire";
 "sources.web" = "%d sources sur le web";
 "sources.more" = "%1$@ sur %2$d";
