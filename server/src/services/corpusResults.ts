@@ -25,8 +25,34 @@
 // differently, and that is on purpose.
 
 /** Below this, a hit is not an answer but the least distant thing in an index
- *  that does not hold the question. */
-const SCORE_FLOOR = 0.35;
+ *  that does not hold the question.
+ *
+ *  Measured, not guessed — `server/scripts/corpus-floor.ts` replays sixteen
+ *  questions against Candide's index through the gateway, eight the corpus
+ *  holds an answer to and eight it does not, each against both layers, and
+ *  every pair is labelled on the title of its best hit rather than on the
+ *  question. On Qwen3-Embedding 0.6B at 1024 dimensions, the two families do
+ *  not overlap:
+ *
+ *    a real answer  0.540 … 0.782   (lowest: "US Politics and Corruption",
+ *                                    asked which books on American democracy)
+ *    nothing to say 0.389 … 0.516   (highest: "Itinéraire du voyage en Chine",
+ *                                    asked how to change a timing belt)
+ *
+ *  0.35 sat far below both, so a question the index knew nothing about still
+ *  came back with five sources: asked about Scoodle and Plantyn on 21 September
+ *  2026, it answered with April's agendas and a conversation about dreams, all
+ *  between 0.411 and 0.514. The floor now sits in the gap.
+ *
+ *  The gap is 0.024 wide on this sample and on one member's index. It is the
+ *  measurement that matters, not the number: re-run the script after an
+ *  embedding-model change — the scale moves with the model — and after the
+ *  index grows enough to be a different thing.
+ *
+ *  The conversation layer scores systematically higher than the garden, noise
+ *  included (0.46–0.52 against 0.39–0.45), which is why a floor per layer was
+ *  considered. It buys nothing: one floor above both separates them already. */
+const SCORE_FLOOR = 0.53;
 
 /** And no further than this below the best hit: a search that found something
  *  good should not also carry what it merely brushed against. */
@@ -119,10 +145,12 @@ export function narrowCorpusResults(data: unknown, raw: string, opts: NarrowOpti
   let rows = [...kept.values()];
   const best = rows.reduce((m, r) => Math.max(m, Number(r?.score ?? 0)), 0);
   const cut = Math.max(SCORE_FLOOR, best - SCORE_SPREAD);
-  const strong = rows.filter((r) => Number(r?.score ?? 0) >= cut);
-  // Unless that leaves nothing: a search whose every hit is weak should say so
-  // with its best hit rather than with an empty list the model cannot read.
-  rows = strong.length ? strong : rows.slice(0, 1);
+  // And when that leaves nothing, nothing is the answer. This used to keep the
+  // best hit regardless — "an empty list the model cannot read" — which is
+  // exactly backwards: the model reads an empty list fine, it is the one false
+  // source that it then has to explain away, and that the member sees drawn as
+  // a card under the reply. `note` below says it in words.
+  rows = rows.filter((r) => Number(r?.score ?? 0) >= cut);
 
   const total = rows.length;
   rows = rows.slice(0, opts.maxHits ?? MAX_HITS);

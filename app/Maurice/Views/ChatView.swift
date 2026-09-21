@@ -1205,6 +1205,47 @@ private struct DataCardStack: View {
     private var typedBlocks: [DataBlock] { blocks.filter { $0.data.cardKind != nil } }
     private var plainBlocks: [DataBlock] { blocks.filter { $0.data.cardKind == nil } }
 
+    /// A turn's searches, folded together.
+    ///
+    /// One search sends one `sources` payload, and a turn may run several: on
+    /// 21 September 2026 a question about three school apps ran six web
+    /// searches and two corpus ones, and the reply arrived under eight rows of
+    /// pills. The budget in `server/src/services/searchBudget.ts` caps how many
+    /// a turn may run; this is the other half — however many it ran, the
+    /// member sees one row per place searched, at the point where the first of
+    /// them appeared, with the same page found twice counted once.
+    private enum TypedItem: Identifiable {
+        case card(Int, DataBlock)
+        case sources(String, [JSONValue])
+
+        var id: String {
+            switch self {
+            case .card(let i, _): return "card-\(i)"
+            case .sources(let origin, _): return "sources-\(origin)"
+            }
+        }
+    }
+
+    private var typedItems: [TypedItem] {
+        var out: [TypedItem] = []
+        var rowOfOrigin: [String: Int] = [:]
+        for (i, block) in typedBlocks.enumerated() {
+            guard block.data.cardKind == "sources" else {
+                out.append(.card(i, block))
+                continue
+            }
+            let origin = block.data.string("origin")
+            if let at = rowOfOrigin[origin], case .sources(let o, var payloads) = out[at] {
+                payloads.append(block.data)
+                out[at] = .sources(o, payloads)
+            } else {
+                rowOfOrigin[origin] = out.count
+                out.append(.sources(origin, [block.data]))
+            }
+        }
+        return out
+    }
+
     private var label: String {
         if plainBlocks.count == 1 { return blockTitle(plainBlocks[0]) }
         let names = plainBlocks.map(serverName)
@@ -1216,13 +1257,17 @@ private struct DataCardStack: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            ForEach(Array(typedBlocks.enumerated()), id: \.offset) { _, block in
-                switch block.data.cardKind {
-                case "candidates": CandidatePickerCard(data: block.data)
-                case "media": MediaFicheCard(data: block.data)
-                case "sources": SourcesCard(data: block.data)
-                case "fact": LifeFactCard(data: block.data)
-                default: EmptyView()
+            ForEach(typedItems) { item in
+                switch item {
+                case .sources(_, let payloads):
+                    SourcesCard(cards: payloads)
+                case .card(_, let block):
+                    switch block.data.cardKind {
+                    case "candidates": CandidatePickerCard(data: block.data)
+                    case "media": MediaFicheCard(data: block.data)
+                    case "fact": LifeFactCard(data: block.data)
+                    default: EmptyView()
+                    }
                 }
             }
             if !plainBlocks.isEmpty { genericStack }

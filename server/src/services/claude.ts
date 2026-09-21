@@ -6,6 +6,7 @@ import { resolveImagePath } from "./images";
 import { hasWebSearch, webSearch, formatWebSearch } from "./webSearch";
 import { corpusSourceCard, webSourceCard } from "./sourceCards";
 import { narrowCorpusResults } from "./corpusResults";
+import { newSearchLedger, allowSearch, recordSearch, type SearchLedger } from "./searchBudget";
 import { McpSession, type McpTool } from "./mcpClient";
 import { resolveToText, resolveAttachments, getSpec } from "./composer/specs";
 import { resolveBookItem } from "./composer/weights";
@@ -211,7 +212,11 @@ function corpusNotice(toolNames: string[]): string {
     `- what they have already said to you: filters {"source_type": "conversation"}\n` +
     `- what they have only read or gathered, and rarely needs asking: filters {"source_type": ["book", "dossier", "thought"]}\n` +
     `The first two are the usual pair. Weigh what comes back in that same order — what they wrote down themselves outranks what they once said in passing, which outranks a page from someone else's book. ` +
-    `Say where something came from when it matters, and say when something comes from a brief rather than from a search you just ran.`
+    `Say where something came from when it matters, and say when something comes from a brief rather than from a search you just ran.\n` +
+    `Two things it is not. It is not a way to check an outside fact — what a school's app is, what an error code means, what something costs — which the web answers and their own writing does not; ` +
+    `search it for what touches them: their life, their people, their projects, what they have decided or said before. ` +
+    `And it is not an afterthought: search it in your first round, while it can still shape the answer. ` +
+    `A search run once the reply is written adds nothing but a row of sources under it, and "I checked and found nothing" is not worth a paragraph — if it found nothing, say nothing about it.`
   );
 }
 
@@ -223,7 +228,7 @@ function toolRosterNotice(toolNames: string[], web: boolean): string {
   if (names.length === 0) {
     return `\n\n## Your tools\nYou have no tools this turn but one, maurice_docs, Maurice's own documentation: no web search, and none of the household's personal tools. Answer from what you know and from this conversation. Anything that would need a tool — the calendar, tasks, contacts, health data, the garden, the library — you cannot reach: say so plainly rather than guessing or describing a lookup you didn't make. ${docs}`;
   }
-  return `\n\n## Your tools\nThis turn you have exactly these, and nothing else: ${names.join(", ")}, and maurice_docs, Maurice's own documentation. Use them when they help, and prefer them over guessing for anything about the people here. Every other capability — whatever isn't in that list — is unavailable to you right now, whether or not it exists elsewhere in the household: if asked for it, say you don't have it here rather than pretending to look. When asked what you can do, answer from this list, not from what an assistant like you usually has. ${docs}`;
+  return `\n\n## Your tools\nThis turn you have exactly these, and nothing else: ${names.join(", ")}, and maurice_docs, Maurice's own documentation. Use them when they help, and prefer them over guessing for anything about the people here. Every other capability — whatever isn't in that list — is unavailable to you right now, whether or not it exists elsewhere in the household: if asked for it, say you don't have it here rather than pretending to look. When asked what you can do, answer from this list, not from what an assistant like you usually has. Use them quietly: the app shows the member every search you run, so "let me check", "I'm looking into this" and "one more search to be sure" are lines they read between the question and the answer, and a turn of several rounds accumulates them into a running commentary. Say what you found, not that you are about to look. ${docs}`;
 }
 
 // Anthropic tool definition for our self-hosted web search.
@@ -484,6 +489,9 @@ async function executeTool(
     memberId?: string | null;
     /** Shared across the turn's rounds: how many facts have been proposed. */
     factsProposed?: { n: number };
+    /** Shared across the turn's rounds: what has already been looked up, and
+     *  how much of the turn's search budget is left (services/searchBudget.ts). */
+    searches?: SearchLedger;
   },
 ): Promise<{ text: string; isError: boolean; data?: unknown }> {
   const start = performance.now();
@@ -495,7 +503,15 @@ async function executeTool(
         // twenty-seven pages showed the member nothing but whatever the model
         // chose to retype (services/sourceCards.ts).
         const query = input?.query || "";
+        // Budgeted: six near-identical searches in one turn is what this is
+        // for (services/searchBudget.ts). A refusal carries no card — the
+        // member should not see a row of sources for a search never run.
+        if (ctx.searches) {
+          const verdict = allowSearch(ctx.searches, "web", query);
+          if (!verdict.run) return { text: verdict.text, isError: false };
+        }
         const res = await webSearch(query);
+        ctx.searches && recordSearch(ctx.searches, "web", query);
         return { text: formatWebSearch(res), isError: false, data: webSourceCard(res, query) };
       }
       if (name === MAURICE_DOCS_TOOL_NAME) {
@@ -526,6 +542,12 @@ async function executeTool(
         return await runDomainTool(name, input || {}, ctx.conversationId);
       }
       if (mcp) {
+        // Same budget on the other side: three layers is three searches, and
+        // a fourth is the model going round again (services/searchBudget.ts).
+        if (name === "corpus__search" && ctx.searches) {
+          const verdict = allowSearch(ctx.searches, "corpus", input?.query || "");
+          if (!verdict.run) return { text: verdict.text, isError: false };
+        }
         const r = await mcp.callTool(name, input || {});
         const text = compactToolText(r.text);
         const data = r.isError ? null : parseToolData(text);
@@ -535,6 +557,7 @@ async function executeTool(
         // cards the app draws are built from the same surviving rows, so what
         // the member sees under the reply is what the model actually read.
         if (!r.isError && name === "corpus__search") {
+          ctx.searches && recordSearch(ctx.searches, "corpus", input?.query || "");
           const narrowed = narrowCorpusResults(data, text, { conversationId: ctx.conversationId });
           const card = narrowed.rows.length ? corpusSourceCard({ results: narrowed.rows }, input?.query) : null;
           return { text: narrowed.text, isError: false, data: card ?? data };
@@ -570,6 +593,9 @@ async function* runOllamaAgentic(
   const calls: ToolCallLog[] = [];
   // Counted for the whole turn, across its rounds (services/lifeFacts.ts).
   const factsProposed = { n: 0 };
+  // Likewise the turn's, not the round's: what it has already looked up, and
+  // what is left of its search budget (services/searchBudget.ts).
+  const searches = newSearchLedger();
 
   let useTools = tools.length > 0;
   for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
@@ -613,7 +639,7 @@ async function* runOllamaAgentic(
       if (signal?.aborted) return;
       const name = tc.function?.name || "";
       yield { type: "tool_call", tool: name, status: "start" };
-      const r = await executeTool(name, tc.function?.arguments || {}, mcp, { conversationId, provider: "ollama", round, memberId });
+      const r = await executeTool(name, tc.function?.arguments || {}, mcp, { conversationId, provider: "ollama", round, memberId, factsProposed, searches });
       yield { type: "tool_call", tool: name, status: "end" };
       calls.push({ tool: name, ok: !toolFailed(r) });
       if (r.data != null) yield { type: "tool_data", tool: name, data: r.data };
@@ -722,6 +748,9 @@ async function* runOpenAIAgentic(
   const calls: ToolCallLog[] = [];
   // Counted for the whole turn, across its rounds (services/lifeFacts.ts).
   const factsProposed = { n: 0 };
+  // Likewise the turn's, not the round's: what it has already looked up, and
+  // what is left of its search budget (services/searchBudget.ts).
+  const searches = newSearchLedger();
 
   const usage = newUsage(provider, model);
   function* reportUsage(): Generator<StreamEvent> {
@@ -801,7 +830,7 @@ async function* runOpenAIAgentic(
       let args: any = {};
       try { args = JSON.parse(tc.function.arguments || "{}"); } catch {}
       yield { type: "tool_call", tool: name, status: "start" };
-      const r = await executeTool(name, args, mcp, { conversationId, provider, round, memberId });
+      const r = await executeTool(name, args, mcp, { conversationId, provider, round, memberId, factsProposed, searches });
       yield { type: "tool_call", tool: name, status: "end" };
       calls.push({ tool: name, ok: !toolFailed(r) });
       if (r.data != null) yield { type: "tool_data", tool: name, data: r.data };
@@ -1376,6 +1405,9 @@ function trackedBooks(
   const calls: ToolCallLog[] = [];
   // Counted for the whole turn, across its rounds (services/lifeFacts.ts).
   const factsProposed = { n: 0 };
+  // Likewise the turn's, not the round's: what it has already looked up, and
+  // what is left of its search budget (services/searchBudget.ts).
+  const searches = newSearchLedger();
 
   function* reportUsage(): Generator<StreamEvent> {
     if (hasUsage(usage)) yield { type: "usage", usage: priceUsage(usage) };
@@ -1582,7 +1614,7 @@ function trackedBooks(
       const toolResults: any[] = [];
       for (const tu of toolUses) {
         yield { type: "tool_call", tool: tu.name, status: "start" };
-        const r = await executeTool(tu.name, tu.input || {}, mcp, { conversationId, provider: "anthropic", round, memberId });
+        const r = await executeTool(tu.name, tu.input || {}, mcp, { conversationId, provider: "anthropic", round, memberId, factsProposed, searches });
         yield { type: "tool_call", tool: tu.name, status: "end" };
         calls.push({ tool: tu.name, ok: !toolFailed(r) });
         // Surface the structured result on a model-untouched channel so the

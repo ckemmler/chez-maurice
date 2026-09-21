@@ -63,8 +63,8 @@ describe("what is dropped", () => {
     const n = narrowCorpusResults(
       {
         results: [
-          hit({ conversation_id: "here", file_path: "", source_type: "conversation", conversation_title: "Galápagos", score: 0.46 }),
-          hit({ conversation_id: "elsewhere", file_path: "", source_type: "conversation", conversation_title: "Malgas", score: 0.44 }),
+          hit({ conversation_id: "here", file_path: "", source_type: "conversation", conversation_title: "Galápagos", score: 0.72 }),
+          hit({ conversation_id: "elsewhere", file_path: "", source_type: "conversation", conversation_title: "Malgas", score: 0.69 }),
         ],
       },
       "raw",
@@ -77,7 +77,7 @@ describe("what is dropped", () => {
 
   test("passages of a document already listed", () => {
     const chunks = [0, 1, 2, 3].map((i) => hit({ chunk_id: `c${i}`, chunk_index: i, score: 0.61 - i / 100, text: `passage ${i}` }));
-    const other = hit({ file_path: "/gardens/anna/notes/fr/autre.md", title: "Autre", score: 0.5 });
+    const other = hit({ file_path: "/gardens/anna/notes/fr/autre.md", title: "Autre", score: 0.56 });
     const n = narrowCorpusResults({ results: [...chunks, other] }, "raw");
     const rows = parse(n.text).results;
     expect(rows).toHaveLength(2);
@@ -90,10 +90,10 @@ describe("what is dropped", () => {
       narrowCorpusResults(
         {
           results: [
-            hit({ chunk_id: "a", file_path: "/a", title: "Fort", score: 0.62 }),
-            hit({ chunk_id: "b", file_path: "/b", title: "Proche", score: 0.55 }),
-            hit({ chunk_id: "c", file_path: "/c", title: "Loin", score: 0.44 }), // > floor, but far below the best
-            hit({ chunk_id: "d", file_path: "/d", title: "Bruit", score: 0.31 }), // below the floor
+            hit({ chunk_id: "a", file_path: "/a", title: "Fort", score: 0.78 }),
+            hit({ chunk_id: "b", file_path: "/b", title: "Proche", score: 0.71 }),
+            hit({ chunk_id: "c", file_path: "/c", title: "Loin", score: 0.60 }), // > floor, but far below the best
+            hit({ chunk_id: "d", file_path: "/d", title: "Bruit", score: 0.48 }), // below the floor
           ],
         },
         "raw",
@@ -102,27 +102,31 @@ describe("what is dropped", () => {
     expect(rows.map((r: any) => r.source)).toEqual(["Fort", "Proche"]);
   });
 
-  test("a search that found only weak things keeps its best, and says so", () => {
-    // What "Galápagos" did: nothing in the corpus answers it, and ten hits
-    // came back anyway, the last of them about Claude model ids.
+  test("a search that found only weak things comes back empty", () => {
+    // What "Scoodle Plantyn Capture" did on 21 September 2026: nothing in the
+    // corpus answers it, and five sources came back anyway — April's agendas,
+    // a conversation about dreams — every one of them between 0.411 and 0.514,
+    // drawn as cards under the reply. Below the floor there is no best hit,
+    // only the least distant one, and the reply is better off without it.
     const n = narrowCorpusResults(
       {
         results: [
-          hit({ chunk_id: "a", file_path: "/a", title: "Malgas", score: 0.33 }),
-          hit({ chunk_id: "b", file_path: "/b", title: "EU LLM Providers", score: 0.32 }),
-          hit({ chunk_id: "c", file_path: "/c", title: "Claude model ids", score: 0.31 }),
+          hit({ chunk_id: "a", file_path: "/a", title: "Lundi 20 avril 2026", score: 0.427 }),
+          hit({ chunk_id: "b", file_path: "/b", title: "Jeudi 16 avril 2026", score: 0.423 }),
+          hit({ chunk_id: "c", file_path: "/c", title: "Récits de rêves récents", score: 0.411 }),
         ],
       },
       "raw",
     );
-    const rows = parse(n.text).results;
-    expect(rows).toHaveLength(1);
-    expect(rows[0].source).toBe("Malgas");
+    const out = parse(n.text);
+    expect(out.results).toEqual([]);
+    expect(out.note).toContain("nothing in the corpus");
+    expect(n.rows).toEqual([]); // and no card is drawn either
   });
 
   test("five sources at most, and it says how many more there were", () => {
     const many = Array.from({ length: 9 }, (_, i) =>
-      hit({ chunk_id: `k${i}`, file_path: `/f${i}`, title: `Doc ${i}`, score: 0.62 - i / 1000 }));
+      hit({ chunk_id: `k${i}`, file_path: `/f${i}`, title: `Doc ${i}`, score: 0.72 - i / 1000 }));
     const n = narrowCorpusResults({ results: many }, "raw");
     const out = parse(n.text);
     expect(out.results).toHaveLength(5);

@@ -13,15 +13,54 @@ import SwiftUI
 /// and a count, the size of a line of text, and the cards live one tap away.
 struct SourcesCard: View {
     @Environment(\.mauriceTheme) private var theme
-    let data: JSONValue
+    /// Every search of one origin made on this turn, in the order it ran them.
+    /// Usually one; a turn that searched four times hands over four, and they
+    /// are drawn as a single row (see `DataCardStack.typedItems`).
+    let cards: [JSONValue]
 
     @State private var open = false
 
-    private var isWeb: Bool { data.string("origin") == "web" }
-    private var results: [JSONValue] { data["results"]?.arrayValue ?? [] }
+    private var isWeb: Bool { cards.first?.string("origin") == "web" }
+    private var results: [JSONValue] { SourcesCard.distinct(cards) }
     /// The server caps the cards it sends but reports the true total, so the
-    /// count is honest rather than quietly eighteen short.
-    private var total: Int { max(data.int("count"), results.count) }
+    /// count is honest rather than quietly eighteen short. Across several
+    /// searches: the distinct sources at hand, plus what each search said it
+    /// had found and did not carry.
+    private var total: Int {
+        let uncarried = cards.reduce(0) { $0 + max(0, $1.int("count") - ($1["results"]?.arrayValue ?? []).count) }
+        return results.count + uncarried
+    }
+
+    /// The same page found by two searches is one source. A web result is its
+    /// URL, bare of the differences that are not ones; anything else is what
+    /// it is called and where it comes from — a note has no address.
+    static func key(_ item: JSONValue, isWeb: Bool) -> String {
+        if isWeb {
+            let url = item.string("url").lowercased()
+            if !url.isEmpty {
+                return url
+                    .replacingOccurrences(of: "https://", with: "")
+                    .replacingOccurrences(of: "http://", with: "")
+                    .replacingOccurrences(of: "www.", with: "")
+                    .trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+            }
+        }
+        return item.string("title") + "|" + item.string("subtitle")
+    }
+
+    /// The sources of every search, in order, each one kept the first time it
+    /// appears.
+    static func distinct(_ cards: [JSONValue]) -> [JSONValue] {
+        let isWeb = cards.first?.string("origin") == "web"
+        var seen = Set<String>()
+        var out: [JSONValue] = []
+        for card in cards {
+            for item in card["results"]?.arrayValue ?? [] where seen.insert(key(item, isWeb: isWeb)).inserted {
+                out.append(item)
+            }
+        }
+        return out
+    }
 
     /// How many thumbnails the stack shows before it is just a count.
     private static let shown = 4
@@ -31,7 +70,7 @@ struct SourcesCard: View {
             Button { open = true } label: { pills }
                 .buttonStyle(.plain)
                 .sheet(isPresented: $open) {
-                    SourcesDrawer(data: data)
+                    SourcesDrawer(cards: cards)
                     #if os(iOS)
                         .presentationDetents([.medium, .large])
                         .presentationDragIndicator(.visible)
@@ -68,11 +107,22 @@ struct SourcesCard: View {
 private struct SourcesDrawer: View {
     @Environment(\.mauriceTheme) private var theme
     @Environment(\.dismiss) private var dismiss
-    let data: JSONValue
+    let cards: [JSONValue]
 
-    private var isWeb: Bool { data.string("origin") == "web" }
-    private var results: [JSONValue] { data["results"]?.arrayValue ?? [] }
-    private var total: Int { max(data.int("count"), results.count) }
+    private var isWeb: Bool { cards.first?.string("origin") == "web" }
+    private var results: [JSONValue] { SourcesCard.distinct(cards) }
+    private var total: Int {
+        let uncarried = cards.reduce(0) { $0 + max(0, $1.int("count") - ($1["results"]?.arrayValue ?? []).count) }
+        return results.count + uncarried
+    }
+
+    /// What was actually asked. Several searches means several questions, and
+    /// they are the honest account of how the answer was arrived at — worth a
+    /// line each in the drawer, where there is room, and nowhere else.
+    private var queries: [String] {
+        var seen = Set<String>()
+        return cards.map { $0.string("query") }.filter { !$0.isEmpty && seen.insert($0).inserted }
+    }
 
     private var headline: String {
         let key = isWeb ? "sources.web" : "sources.corpus"
@@ -83,11 +133,15 @@ private struct SourcesDrawer: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 10) {
-                    if !data.string("query").isEmpty {
-                        Text("« \(data.string("query")) »")
-                            .font(.system(size: 13))
-                            .foregroundStyle(theme.inkMute)
-                            .padding(.bottom, 2)
+                    if !queries.isEmpty {
+                        VStack(alignment: .leading, spacing: 2) {
+                            ForEach(queries, id: \.self) { query in
+                                Text("« \(query) »")
+                                    .font(.system(size: 13))
+                                    .foregroundStyle(theme.inkMute)
+                            }
+                        }
+                        .padding(.bottom, 2)
                     }
                     ForEach(Array(results.enumerated()), id: \.offset) { _, item in
                         SourceRow(item: item, isWeb: isWeb)
