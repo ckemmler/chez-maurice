@@ -1,6 +1,6 @@
 ---
 title: The chat experience
-date: '2026-09-20'
+date: '2026-09-21'
 flags: []
 locale: en
 description: Streaming render, tool-result data cards, math, markdown, images, dictation,
@@ -131,3 +131,10 @@ Three things the first run against the real index taught, all of them now pinned
 Tavily gives neither image nor favicon, so a web source shows its domain and the site's initial: what we actually know, and no request from the member's phone to twenty-seven third parties.
 
 The model sees none of this — it keeps receiving the tool's own text, the card rides the parallel `data` channel — but `TOOL_DATA_DIRECTIVE` was narrowed: the sources are shown, so it should not list them back, while what they *say* is still prose only it can convey. Naming a source in a sentence, to make clear where a fact came from, is not listing.
+
+**One row per place searched, and a budget on the searching, 21 September 2026.** A card is drawn per *search*, and nothing capped how many a turn could run: asked what Scoodle, Plantyn and Capture were, a turn ran **six web searches and two corpus ones over five rounds** — three of the six about the word *Capture* alone — and the answer, which was good, arrived under eight rows of pills and forty sources, ten of them noise from the corpus. `MAX_TOOL_ROUNDS` (six) was the only guard, and a round may hold any number of calls, so the real ceiling was none. Two halves fix it, one on each side:
+
+- **A budget per turn**, in `server/src/services/searchBudget.ts`: **four web searches, three corpus ones** — one per layer the prompt asks for — and a **repeat check** on the query itself, which answers a reworded search from the one already run. The threshold is the content-word overlap: of the fifteen pairs that turn produced, 0.56 for the pair that is the same search reworded, then 0.42 and down, so it sits at **0.55**, in the gap. A first pass put it at 0.6 and caught nothing at all. Neither refusal is an **error** — a model told "error" here reaches for the other search tool, or rewords again — both come back as an ordinary result saying the budget is spent and to answer with what it has.
+- **One row per origin** in the app (`DataCardStack.typedItems`): however many searches a turn ran, the member sees one line of pills for the web and one for the corpus, at the point where the first of them appeared, the same page found twice counted once (by URL for the web, by title and source otherwise). The drawer lists **every query that was asked**, which is the honest account of how the answer was arrived at, and the only place with room for it.
+
+Two prompt lines came with it, both about the same habit. The corpus is **not** a way to check an outside fact — what a school's app is, what an error code means — which the web answers and a member's own writing does not, and it is **not an afterthought**: search it in the first round, while it can still shape the reply, since a search run after the answer is written adds nothing but a row of sources under it. And the tools are to be used *quietly*: the app shows the member every search, so "let me check", "I'm looking into this" and "one more search to be sure" are lines they read between their question and the answer — over five rounds they accumulate into a running commentary, which is what that turn actually shipped.
