@@ -1,6 +1,6 @@
 ---
 title: The MCP tool ecosystem
-date: '2026-09-20'
+date: '2026-09-21'
 flags: []
 locale: en
 description: 'The gateway that gives Maurice his capabilities: discovery, per-member
@@ -143,9 +143,35 @@ the password Bridge generates) and iCloud over TLS with an app-specific password
 - **One member, no override.** The config must name exactly one member's
   accounts or the tool refuses to load — v1 declines to ship a weak version of
   the isolation promise rather than fake a partition. The gateway's member
-  contextvar is checked on every call.
-- **Read-only for now.** `write_enabled = false`; what ships is a nightly
-  launchd job (`com.maurice.mail-proposal`) that produces a *triage proposal* —
+  contextvar is checked on every call. **That check was comparing two different
+  namings** until 21 September 2026: the contextvar carries a member *id*
+  (`c7267630-…`), `owner_member` in `~/.maurice/mail.toml` is a *username*
+  (`candide`), so every call made from the chat was refused — including the
+  owner's own, which is the only kind there is. The tool looked alive (it is in
+  the roster, Maurice describes it correctly from its schemas) and had never
+  once run from a conversation; the CLI and the nightly pass, which have no
+  member context at all, went straight through and reported nothing. The name is
+  now resolved against `users` in `maurice.db` at load time and the resolved id
+  is what the guard compares; `mail.cli validate` prints it beside the name. An
+  unreachable registry leaves it unresolved and denies every id-shaped caller —
+  the guard fails closed. The lesson is the one the tool families already teach:
+  a tool that is *listed* is not a tool that *works*, and nothing between the
+  roster and the mailbox was exercising the gateway's own header.
+- **Nightly, at 03:30, since 21 September 2026.** The launchd job
+  (`com.maurice.mail-proposal`) had been written, documented and never
+  *installed*: no plist, nothing loaded, and the last proposal on disk dated
+  from the 16th — the same failure shape as the guard above, a piece described
+  in the present tense that no machine was running. It is in `launchctl` now,
+  every night at **03:30** for the inbox's next 100 messages (~4 minutes at 2.3
+  s a message). The half hour is not cosmetic: the server's own passes are on
+  the hour — corpus 03:00, briefs 04:00, mapping 05:00 — and share this
+  machine's Ollama, so a job on the hour means two local models competing for
+  it. And `propose` now **exits non-zero** when every account was skipped for a
+  fault and nothing was classified: a night that reached no mailbox used to
+  write an empty proposal and return success, which reads exactly like a quiet
+  night with no mail to sort.
+- **The write path.** `write_enabled` started at `false`; what ships is that
+  nightly job producing a *triage proposal* —
   message, suggested action, one-line reason — classified by the local
   `qwen3.6:35b-a3b` through Ollama, with escalation to a larger model opt-in and
   flagged per line. Reasoning is switched **off** in the request (`think:
