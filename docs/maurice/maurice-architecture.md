@@ -1,6 +1,6 @@
 ---
 title: Maurice — architecture overview
-date: '2026-09-19'
+date: '2026-09-22'
 flags: []
 locale: en
 description: The five cooperating parts of Maurice, how a message flows end-to-end,
@@ -134,6 +134,70 @@ It is **one container, not four services**, because the Bun server reverse-proxi
 **A deployable artefact, from 10 September.** Until then the container was a *development* image: `/app` was empty and the sources arrived through a bind mount, so it ran nowhere but the Mac. The Dockerfile now has two targets. `dev` is the everyday container — bind-mounted sources, hot reload, Calibre, the private overlays. `production` is the deliverable: sources COPYed in, dependencies installed in place, **2 MCP tools instead of 14** (`garden`, `corpus` — the same public surface `infra/installer/build.sh --public` ships), no Calibre, 2.03 GB against 3.15, behind Caddy with a Let's Encrypt certificate. The build **fails** on a dangling symlink rather than quietly including a private repo. `scripts/deploy.sh` ships it; `infra/cloud-init/maurice.yaml` prepares the machine and is plain cloud-init with no provider metadata, so it runs on Scaleway, on a client's server, or in a Linux VM on a Mac mini — which is what keeps that option open for free.
 
 Two things production had to fix that development never noticed. **Repo-relative state**: `data/`, `logs/` and `tools/corpus/data` are paths the app writes to inside the repo, which in production is an image layer — discarded when the container is replaced. The entrypoint symlinks all three into the data volume; without it every deploy would silently drop the vector index. And **the corpus config**, which is gitignored because it names absolute paths, so it is not in the image — and corpus does not merely fail to load without it, it takes the whole MCP gateway down at startup, `garden` included. That fragility (one tool's failure costing every tool) is worth remembering: it is why a missing embedding key now makes the container refuse to start with one line instead of crash-looping.
+
+## Calibre-Web — a real library, in a browser
+
+Added 22 September 2026, and it settles a question the Calibre port had left
+open. Maurice could *read* a Calibre library on a hosted install, but nobody
+could *manage* one: the library sat in a volume no desktop Calibre could open,
+so a household that was not Candide's Mac had a reading companion with nothing
+to read and no way to add anything.
+
+The obvious answer was Calibre's own Content Server, and it is the wrong one.
+The apt package is monolithic — one `calibre` delivers the GUI, the viewer,
+`ebook-convert`, `calibredb` and `calibre-server` alike, so the dependencies of
+the heaviest part are imposed on all of them. Measured on ubuntu:26.04/arm64:
+**386 packages, 1 071 MB**, of which 602 MB is Qt, GPU and audio-video — a whole
+Chromium (`libqt6webenginecore6`, 186 MB) plus a software OpenGL stack
+(`libllvm21` + `mesa-libgallium`, 178 MB), to list books. `calibre-server` does
+not need any of it; the packaging does.
+
+**Calibre-Web** is `pip install calibreweb`: **196 MB, 47 packages, no Qt**. It
+reads and writes the Calibre library format directly — upload, metadata
+editing, shelves, OPDS (so KOReader and friends), the built-in reader, sending
+to a Kindle. What it gives up with Qt is format conversion (`ebook-convert`),
+the news recipes, and Calibre's plugin ecosystem. What it keeps is the part that
+matters: the library stays a *genuine* Calibre library, so anyone who syncs it
+to a Mac opens it with the real application and finds everything, including what
+they did from the web.
+
+It is the fourth service, in the container (`supervisord`) and on the Mac
+(`service.sh`), running the same `scripts/start-calibre-web.sh` — the rule the
+container already imposes on itself. Loopback on 8083, reached through the Bun
+server's **`/calibre`** proxy, which is where authentication happens, exactly
+like the MCP gateway and the Astro instances.
+
+**Nobody logs in twice.** Calibre-Web has reverse-proxy header login: the proxy
+names the authenticated member in `X-Maurice-Member`, and Calibre-Web trusts it
+from `127.0.0.1` alone. Its own user table is reconciled from `users` on every
+start (`server/scripts/configure-calibre-web.ts`) — a Maurice admin is an admin
+there, a member can upload and edit, and passwords are random values nobody is
+told, because the proxy is the way in. Calibre-Web authenticates that header
+only against a user it already has, so a member who was never provisioned would
+meet a login form inside an app they are already signed into; reconciling on
+every start is what prevents that. There is deliberately **no shared secret**:
+it guards against a *client* forging the header, and no client can reach a
+loopback port.
+
+**A fresh install has no library, and Calibre-Web does not make one** — it
+redirects to `/admin/dbconfig` and waits to be shown one, which on a hosted
+household is a dead end. So Calibre's own `metadata_sqlite.sql` is vendored
+(`server/vendor/calibre/`, GPL v3, unmodified, compatible with this project's
+AGPL v3) and `ensure-calibre-library.ts` creates an empty **genuine** library
+from it before the service starts — verified by having Calibre 9.5 itself open
+it, list it and add a book to it. Writing a "compatible" schema by hand was the
+alternative, and the triggers alone say why not.
+
+One consequence worth knowing: those triggers call `title_sort()`, a function
+Calibre and Calibre-Web register on their own SQLite connections. `bun:sqlite`
+does not have it, so the Bun server *cannot* write to `metadata.db` even if it
+tried — which is the contract anyway, and now an enforced one.
+
+Still open: `MAURICE_CALIBRE_DISABLED` stays set on the production image. The
+`/api/v1/calibre/*` read paths need chapters, and extracting them still depends
+on `tools/calibre` in the private overlay — a separate piece of work. So a
+hosted household gets its library and its reader; the reading companion follows
+when that moves.
 
 **And a primitive that was simply missing.** `createUser` creates a row in `maurice.db` and stops: no garden directory, no `gardens.json` entry — and *nothing in the repo writes that manifest*, it is read by three places and maintained by hand. So on a fresh install a member exists, can log in, and `/g/<them>` answers "Garden not available". `scripts/provision-member.ts` is the missing half. Related: `start-web.sh` hardcoded `candide` as the garden it serves, which is correct on exactly one machine in the world; it now reads `MAURICE_DEFAULT_GARDEN`.
 
