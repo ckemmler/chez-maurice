@@ -28,7 +28,24 @@ DATA_DIR="${MAURICE_DATA_DIR:-$HOME/.maurice/data}"
 CW_DIR="${MAURICE_CALIBRE_WEB_DIR:-$DATA_DIR/calibre/web}"
 APP_DB="$CW_DIR/app.db"
 
-CPS="${MAURICE_CALIBRE_WEB_BIN:-$(command -v cps || true)}"
+# Look where it actually is before trusting PATH: launchd starts this with a
+# bare environment, so the repo venv is not on it, and `command -v cps` finds
+# nothing on a machine where Calibre-Web is correctly installed. Same order
+# find_python uses, and for the same reason.
+find_cps() {
+  local candidates=(
+    "${MAURICE_CALIBRE_WEB_BIN:-}"
+    "$REPO/.venv/bin/cps"
+    "/opt/venv/bin/cps"
+    "$(command -v cps || true)"
+  )
+  for c in "${candidates[@]}"; do
+    [[ -n "$c" && -x "$c" ]] && { echo "$c"; return 0; }
+  done
+  return 1
+}
+
+CPS="$(find_cps || true)"
 if [[ -z "$CPS" ]]; then
   echo "✗ Calibre-Web (cps) not found."
   echo "  Install it into the repo venv:  .venv/bin/pip install calibreweb"
