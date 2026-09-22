@@ -2,6 +2,12 @@ import { Database } from "bun:sqlite";
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import { getMauriceDbPath } from "../lib/config";
+import {
+  CHAPTERS_DIR,
+  SUMMARIES_DIR,
+  artifactsDirForBookPath,
+  invalidateBookIdentities,
+} from "./calibreArtifacts";
 
 export interface BookMetadata {
   id: number;
@@ -90,6 +96,11 @@ export function getLibraryRoot(): string {
 /** Drop the cached root so the next call re-reads it. Call after writing library_root. */
 export function invalidateLibraryRoot(): void {
   cachedRoot = null;
+  // The identity cache is keyed by root *and* path, so a stale entry cannot be
+  // served for the new library — but the old library's entries would sit there
+  // for the life of the process. Pointing at another library is rare enough to
+  // pay for a cold cache.
+  invalidateBookIdentities();
 }
 
 let db: Database | null = null;
@@ -263,9 +274,9 @@ function countIndexedSummaries(summaryDir: string, summaryFiles: string[]): numb
 }
 
 export async function getChapterStats(bookPath: string): Promise<{ chapters: number; summarized: number; indexed: number }> {
-  const bookDir = path.join(getLibraryRoot(), bookPath);
-  const chapterDir = path.join(bookDir, "chapters");
-  const summaryDir = path.join(bookDir, "chapter_summaries");
+  const bookDir = artifactsDirForBookPath(getLibraryRoot(), bookPath);
+  const chapterDir = path.join(bookDir, CHAPTERS_DIR);
+  const summaryDir = path.join(bookDir, SUMMARIES_DIR);
 
   let chapters = 0;
   let summarized = 0;
@@ -407,9 +418,9 @@ async function fileExists(target: string) {
 }
 
 async function loadChapterEntries(book: BookMetadata) {
-  const bookDir = path.join(getLibraryRoot(), book.bookPath);
-  const chapterDir = path.join(bookDir, "chapters");
-  const summaryDir = path.join(bookDir, "chapter_summaries");
+  const bookDir = artifactsDirForBookPath(getLibraryRoot(), book.bookPath);
+  const chapterDir = path.join(bookDir, CHAPTERS_DIR);
+  const summaryDir = path.join(bookDir, SUMMARIES_DIR);
 
   const entries: Array<{
     index: number;

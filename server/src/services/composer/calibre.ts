@@ -2,6 +2,13 @@ import { Database } from "bun:sqlite";
 import fs from "node:fs";
 import path from "node:path";
 import { getDefaultLibrary } from "../calibreLibraries";
+import {
+  CHAPTERS_DIR,
+  SUMMARIES_DIR,
+  artifactsDirForBookPath,
+  bookArtifactsDir,
+  readArtifactTexts,
+} from "../../../data-api/services/calibreArtifacts";
 
 // Bun-side, read-only Calibre reader for the composer. Resolves the account's
 // library (Phase A calibre_libraries), opens metadata.db read-only, and reads
@@ -197,26 +204,28 @@ export function listChapters(memberId: string, bookId: number): BookChapters | n
   if (!root) return null;
   const db = openMeta(root);
   if (!db) return null;
-  let bookPath: string, title: string, authors: string[];
+  let bookPath: string, title: string, authors: string[], uuid: string | null;
   try {
+    const uuidCol = hasColumn(db, "books", "uuid") ? "b.uuid" : "NULL";
     const row = db
       .query(
-        `SELECT b.title, b.path, GROUP_CONCAT(DISTINCT a.name) AS authors
+        `SELECT b.title, b.path, ${uuidCol} AS uuid, GROUP_CONCAT(DISTINCT a.name) AS authors
          FROM books b LEFT JOIN books_authors_link bal ON b.id = bal.book
          LEFT JOIN authors a ON bal.author = a.id WHERE b.id = ? GROUP BY b.id`,
       )
-      .get(bookId) as { title: string; path: string; authors: string | null } | null;
+      .get(bookId) as { title: string; path: string; uuid: string | null; authors: string | null } | null;
     if (!row) return null;
     bookPath = row.path;
     title = row.title;
+    uuid = row.uuid;
     authors = row.authors ? row.authors.split(",") : [];
   } finally {
     db.close();
   }
 
-  const base = path.join(root, bookPath);
-  const chaptersDir = path.join(base, "chapters");
-  const summariesDir = path.join(base, "chapter_summaries");
+  const base = bookArtifactsDir({ libraryRoot: root, bookPath, uuid, title });
+  const chaptersDir = path.join(base, CHAPTERS_DIR);
+  const summariesDir = path.join(base, SUMMARIES_DIR);
   let files: string[];
   try {
     files = fs.readdirSync(chaptersDir).filter((f) => f.endsWith(".txt")).sort();
@@ -276,28 +285,30 @@ export function readChapters(
   if (!root) return [];
   const db = openMeta(root);
   if (!db) return [];
-  let bookPath: string;
+  let bookPath: string, title: string, uuid: string | null;
   try {
-    const row = db.query(`SELECT path FROM books WHERE id = ?`).get(bookId) as { path: string } | null;
+    const uuidCol = hasColumn(db, "books", "uuid") ? "uuid" : "NULL";
+    const row = db
+      .query(`SELECT path, title, ${uuidCol} AS uuid FROM books WHERE id = ?`)
+      .get(bookId) as { path: string; title: string; uuid: string | null } | null;
     if (!row) return [];
     bookPath = row.path;
+    title = row.title;
+    uuid = row.uuid;
   } finally {
     db.close();
   }
-  const dir = path.join(root, bookPath, rep === "full" ? "chapters" : "chapter_summaries");
+  const base = bookArtifactsDir({ libraryRoot: root, bookPath, uuid, title });
+  const dir = path.join(base, rep === "full" ? CHAPTERS_DIR : SUMMARIES_DIR);
   const suffix = rep === "full" ? ".txt" : ".summary.txt";
-  return refs.map((ref) => {
-    let text = "";
-    try {
-      text = fs.readFileSync(path.join(dir, ref + suffix), "utf8");
-    } catch {}
-    return { ref, text };
-  });
+  // `refs` comes off the request body, so it never touches a path — see
+  // readArtifactTexts.
+  return readArtifactTexts(dir, refs, suffix);
 }
 
 /** Summary coverage for one book, read from its on-disk artifact dirs. */
 export function bookCoverage(root: string, bookPath: string): BookCoverage {
-  const base = path.join(root, bookPath);
+  const base = artifactsDirForBookPath(root, bookPath);
   const count = (dir: string, suffix: string) => {
     try {
       return fs.readdirSync(path.join(base, dir)).filter((f) => f.endsWith(suffix)).length;
@@ -306,7 +317,7 @@ export function bookCoverage(root: string, bookPath: string): BookCoverage {
     }
   };
   return {
-    chaptersExtracted: count("chapters", ".txt"),
-    chaptersWithSummary: count("chapter_summaries", ".summary.txt"),
+    chaptersExtracted: count(CHAPTERS_DIR, ".txt"),
+    chaptersWithSummary: count(SUMMARIES_DIR, ".summary.txt"),
   };
 }

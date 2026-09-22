@@ -53,8 +53,19 @@ watcher:
     - "__pycache__"
 
 sources:
+  # Chapters and summaries no longer live inside the Calibre library: Calibre
+  # renames a book's directory on every title or author edit, which lost every
+  # artifact under it. They sit under the data dir instead, in a directory named
+  # `<uuid>-<title>` — see server/data-api/services/calibreArtifacts.ts. The uuid
+  # is the identity, the title is there so `book_title` (the filter
+  # `search_in_book` takes) can still be read off the path.
+  #
+  # A library whose artifacts have not been migrated still has them in place;
+  # point these two at the library root until you have run
+  # `bun run server/scripts/migrate-calibre-artifacts.ts --apply`, then reindex —
+  # the paths change, so every chapter is re-embedded once.
   calibre-summaries:
-    path: ${CALIBRE_LIBRARY:-~/media/Books}
+    path: ${MAURICE_CALIBRE_ARTIFACTS_DIR:-~/.maurice/calibre/artifacts}
     pattern: "**/chapter_summaries/*.txt"
     recursive: true
     chunking:
@@ -64,12 +75,12 @@ sources:
     metadata:
       source_type: book
       extract_from_path:
-        book_title: parent.parent.name
-        book_id: "parent.parent.name.re:\\((\\d+)\\)$"
+        book_title: "parent.parent.name.re:^[0-9a-fA-F-]{36}-(.+)$"
+        book_uuid: "parent.parent.name.re:^([0-9a-fA-F-]{36})-"
         chapter: stem
 
   calibre-chapters:
-    path: ${CALIBRE_LIBRARY:-~/media/Books}
+    path: ${MAURICE_CALIBRE_ARTIFACTS_DIR:-~/.maurice/calibre/artifacts}
     pattern: "**/chapters/*.txt"
     recursive: true
     chunking:
@@ -79,8 +90,8 @@ sources:
     metadata:
       source_type: book
       extract_from_path:
-        book_title: parent.parent.name
-        book_id: "parent.parent.name.re:\\((\\d+)\\)$"
+        book_title: "parent.parent.name.re:^[0-9a-fA-F-]{36}-(.+)$"
+        book_uuid: "parent.parent.name.re:^([0-9a-fA-F-]{36})-"
         chapter: stem
 
   journal-thoughts:
