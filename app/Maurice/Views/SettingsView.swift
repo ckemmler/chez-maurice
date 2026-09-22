@@ -13,7 +13,7 @@ struct SettingsView: View {
     @Environment(\.mauriceTheme) private var theme
     @Environment(\.dismiss) private var dismiss
 
-    enum Pane: Hashable { case appearance, language, garden, token, files, importChats }
+    enum Pane: Hashable { case appearance, language, household, garden, token, files, importChats }
     @State private var pane: Pane? = nil
 
     // MCP token (loaded once; the root row copies, the token pane manages).
@@ -36,6 +36,9 @@ struct SettingsView: View {
     @AppStorage(ServerDictationPref.key) private var allowServerDictation = false
     @State private var showCamera = false
     @State private var showLibrary = false
+    /// Pairing another household — reached from the household pane (the foyer
+    /// switcher used to hang off the sidebar; it lives here now).
+    @State private var showAddHousehold = false
 
     // Web themes (themes/<id> on the web), fetched from /api/web-themes; the
     // default is shown until the list loads / if offline.
@@ -61,9 +64,12 @@ struct SettingsView: View {
             }
         }
         .animation(.easeInOut(duration: 0.22), value: pane)
-        .frame(minWidth: 320, idealWidth: 360, maxWidth: 400, minHeight: 440, idealHeight: 560)
+        .frame(minWidth: 320, idealWidth: 380, maxWidth: 420, minHeight: 440, idealHeight: 620)
         .background(theme.surface)
         .presentationBackground(theme.surface)
+        // The sheet hugs the card instead of the iPad's 540pt form sheet, which
+        // left ~80pt of empty surface on either side of the content.
+        .fittedPresentation()
         .task { await loadToken() }
         .task { await loadWebThemes() }
         .task { await loadFiles() }
@@ -90,6 +96,10 @@ struct SettingsView: View {
             }
         }
         .sheet(isPresented: $showSafety) { SafetySettingsView() }
+        .sheet(isPresented: $showAddHousehold) {
+            PairingView(onPaired: { showAddHousehold = false })
+                .environment(session)
+        }
     }
 
     // MARK: - Root (the index)
@@ -100,6 +110,19 @@ struct SettingsView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
                     identity
+
+                    // Which foyer this device is talking to — right under the
+                    // profile switch, the two "who/where am I" controls together.
+                    if !session.households.isEmpty {
+                        SetGroup(session.localized("foyer.switch_overline")) {
+                            SetCard {
+                                IndexRow(icon: session.currentHousehold?.foyerIcon ?? "house",
+                                         label: session.localized("foyer.switch_title"),
+                                         value: session.currentHousehold?.name,
+                                         accent: accent) { pane = .household }
+                            }
+                        }
+                    }
 
                     SetCard {
                         IndexRow(icon: "globe", label: session.localized("settings.locale.title"),
@@ -257,6 +280,7 @@ struct SettingsView: View {
                     switch p {
                     case .appearance: appearancePane
                     case .language:   languagePane
+                    case .household:  householdPane
                     case .garden:     gardenPane
                     case .token:      tokenPane
                     case .files:      FilesLibraryView(accent: accent, library: $filesLibrary)
@@ -273,6 +297,7 @@ struct SettingsView: View {
         switch p {
         case .appearance: return session.localized("settings.palette.title")
         case .language:   return session.localized("settings.locale.title")
+        case .household:  return session.localized("foyer.switch_title")
         case .garden:     return session.localized("settings.garden.title")
         case .token:      return session.localized("settings.mcp.title")
         case .files:      return session.localized("settings.files.title")
@@ -321,6 +346,25 @@ struct SettingsView: View {
                 if i < locales.count - 1 { SetDivider() }
             }
         }
+    }
+
+    /// Every paired foyer, with the active one checked, plus the way to pair
+    /// another. (The sidebar's foyer pill and its sheet/popover are gone.)
+    private var householdPane: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            SetCard {
+                ForEach(Array(session.households.enumerated()), id: \.element.id) { i, h in
+                    HouseholdRow(household: h, active: h.id == session.currentHouseholdId, accent: accent) {
+                        guard h.id != session.currentHouseholdId else { dismiss(); return }
+                        dismiss()
+                        session.switchHousehold(h.id)
+                    }
+                    SetDivider()
+                }
+                AddHouseholdRow(label: session.localized("household.add")) { showAddHousehold = true }
+            }
+        }
+        .task { await session.refreshFoyers() }
     }
 
     private var gardenPane: some View {
@@ -700,6 +744,68 @@ private struct IndexRow: View {
                 }
                 if let trailing { trailing }
                 else { Image(systemName: "chevron.right").font(.system(size: 11, weight: .semibold)).foregroundStyle(theme.inkMute.opacity(0.6)) }
+            }
+            .padding(.horizontal, 13).frame(minHeight: 46).contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+/// One paired foyer in the household pane: its badge, name, host and a check
+/// when it's the one this device is on.
+private struct HouseholdRow: View {
+    @Environment(\.mauriceTheme) private var theme
+    let household: Household
+    let active: Bool
+    let accent: Color
+    let action: () -> Void
+
+    private var host: String? { URL(string: household.serverURL)?.host }
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 11) {
+                FoyerBadge(household: household, size: 30, radius: 9)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(household.name).font(.system(size: 13.5)).foregroundStyle(theme.ink).lineLimit(1)
+                    if let host {
+                        Text(host).font(.system(size: 10.5, design: .monospaced))
+                            .foregroundStyle(theme.inkMute).lineLimit(1).truncationMode(.middle)
+                    }
+                }
+                Spacer(minLength: 8)
+                if let u = household.unread, u > 0 {
+                    Text("\(u)").font(.system(size: 10, design: .monospaced)).foregroundStyle(.white)
+                        .padding(.horizontal, 5).frame(minWidth: 17, minHeight: 17)
+                        .background(household.foyerColor, in: Capsule())
+                }
+                if active {
+                    Image(systemName: "checkmark").font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(accent.legible(onDark: theme.isDark))
+                }
+            }
+            .padding(.horizontal, 13).frame(minHeight: 46)
+            .background(active ? accent.opacity(0.08) : .clear)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+private struct AddHouseholdRow: View {
+    @Environment(\.mauriceTheme) private var theme
+    let label: String
+    let action: () -> Void
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 11) {
+                RoundedRectangle(cornerRadius: 9, style: .continuous)
+                    .strokeBorder(theme.ruleHard, style: StrokeStyle(lineWidth: 1, dash: [3]))
+                    .frame(width: 30, height: 30)
+                    .overlay(Image(systemName: "plus").font(.system(size: 13, weight: .medium))
+                        .foregroundStyle(theme.inkSoft))
+                Text(label).font(.system(size: 13.5)).foregroundStyle(theme.ink)
+                Spacer(minLength: 8)
             }
             .padding(.horizontal, 13).frame(minHeight: 46).contentShape(Rectangle())
         }

@@ -273,7 +273,13 @@ struct ChatView: View {
                                     )
                                 })
                         }
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                        // Pad FIRST, then claim the width: the other way round
+                        // the stack takes the whole viewport and the padding
+                        // pushes the content 32pt (72 on macOS) past it. A
+                        // scroll view whose content is wider than its bounds can
+                        // hold a horizontal offset — which is how the thread
+                        // came back from the app switcher shoved off to the
+                        // right, needing a tap to settle.
                         #if os(iOS)
                         .padding(.top, 6)
                         .padding(.bottom, 10)
@@ -282,6 +288,7 @@ struct ChatView: View {
                         .padding(.vertical, 26)
                         .padding(.horizontal, 36)
                         #endif
+                        .frame(maxWidth: .infinity, alignment: .leading)
                     }
                     .coordinateSpace(name: "chatScroll")
                     // Any scroll hides the keyboard; tokens only auto-follow while
@@ -291,7 +298,7 @@ struct ChatView: View {
                     .onAppear {
                         // Land at the bottom when the thread first appears (the
                         // view may mount with messages already loaded).
-                        DispatchQueue.main.async { proxy.scrollTo("bottom", anchor: .bottom) }
+                        DispatchQueue.main.async { proxy.scrollTo("bottom", anchor: UnitPoint(x: 0, y: 1)) }
                     }
                     .onPreferenceChange(ChatBottomAnchorKey.self) { minY in
                         isNearBottom = (minY - outer.size.height) < 120
@@ -439,7 +446,11 @@ struct ChatView: View {
 
     private func scrollToBottom(_ proxy: ScrollViewProxy) {
         withAnimation(.easeOut(duration: 0.2)) {
-            proxy.scrollTo("bottom", anchor: .bottom)
+            // x: 0, not `.bottom`'s 0.5 — a 2D anchor scrolls both axes, so a
+            // centred one would re-centre the content horizontally too. Here
+            // there is nothing to scroll sideways, and pinning x keeps it that
+            // way even if a transient relayout reports a mismatched width.
+            proxy.scrollTo("bottom", anchor: UnitPoint(x: 0, y: 1))
         }
     }
 }

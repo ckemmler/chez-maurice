@@ -18,8 +18,9 @@ func isSystemSymbol(_ name: String) -> Bool {
     #endif
 }
 
-/// Sidebar: wordmark, conversation list, and a pinned bottom bar carrying the
-/// identity chip (→ Settings) and the foyer pill (→ switcher).
+/// Sidebar: wordmark, conversation list, and two glass buttons floating over
+/// the list — the identity chip (→ Settings) and search. Foyer switching lives
+/// in Settings now, under the profile.
 struct SidebarView: View {
     @Environment(ChatService.self) private var chat
     @Environment(SessionStore.self) private var session
@@ -28,12 +29,9 @@ struct SidebarView: View {
     @Environment(GardensStore.self) private var gardens
     @Environment(\.mauriceTheme) private var theme
     @State private var showSettings = false
-    @State private var showAddHousehold = false
-    @State private var showFoyerSwitcher = false
-    @State private var pendingAdd = false
     @State private var gardensExpanded = true
-    /// The bottom-bar search: a magnifier button that opens into a full-width
-    /// field (the iOS 26 minimized-search idiom, drawn in our own bar).
+    /// The floating search: a magnifier button that opens into a full-width
+    /// field (the iOS 26 minimized-search idiom, drawn ourselves).
     @State private var searchOpen = false
     @FocusState private var searchFocused: Bool
     @Namespace private var glassNS
@@ -54,18 +52,17 @@ struct SidebarView: View {
     private let wordmarkMark: CGFloat = 22
     #endif
 
-    // Bottom-bar metrics — the phone gets slightly larger touch targets.
+    // Floating-control metrics — the phone gets slightly larger touch targets.
     #if os(macOS)
-    private let chipAvatarSize: CGFloat = 28
+    private let chipAvatarSize: CGFloat = 22
     private let chipNameSize: CGFloat = 13
-    private let pillBadgeSize: CGFloat = 22
-    private let pillNameSize: CGFloat = 13
     #else
-    private let chipAvatarSize: CGFloat = 44
-    private let chipNameSize: CGFloat = 16   // matches the household name
-    private let pillBadgeSize: CGFloat = 26
-    private let pillNameSize: CGFloat = 16   // matches conversation titles
+    private let chipAvatarSize: CGFloat = 34
+    private let chipNameSize: CGFloat = 15
     #endif
+
+    /// New conversation and the domains button read as one row: same height.
+    private let actionHeight: CGFloat = 50
 
     /// Every conversation, always — the specialist list filter is gone.
     // Content-first: the list is no longer filtered by a pre-selected specialist
@@ -97,12 +94,7 @@ struct SidebarView: View {
                         .foregroundStyle(theme.ink)
                         .lineLimit(1)
                         .fixedSize(horizontal: true, vertical: false)
-                    #if os(iOS)
-                    // The foyer switcher rides in the top-right, centered against
-                    // the wordmark (it used to live in the bottom bar).
                     Spacer(minLength: 8)
-                    foyerPill
-                    #endif
                 }
                 .padding(.horizontal, 14)
                 .padding(.top, 8)
@@ -132,8 +124,8 @@ struct SidebarView: View {
                             .foregroundStyle(disabled ? theme.inkMute : theme.ink)
                         Spacer(minLength: 4)
                     }
-                    .padding(.vertical, 12).padding(.horizontal, 14)
-                    .frame(maxWidth: .infinity)
+                    .padding(.horizontal, 14)
+                    .frame(maxWidth: .infinity, minHeight: actionHeight, maxHeight: actionHeight)
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
@@ -144,7 +136,7 @@ struct SidebarView: View {
                     Image(systemName: "books.vertical")
                         .font(.system(size: 15, weight: .medium))
                         .foregroundStyle(theme.inkSoft)
-                        .frame(width: 44, height: 44)
+                        .frame(width: actionHeight, height: actionHeight)
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
@@ -236,42 +228,26 @@ struct SidebarView: View {
                     }
                 }
                 .padding(.horizontal, 10)
-                .padding(.bottom, 16)
+                // Room for the floating controls to hover clear of the last row.
+                .padding(.bottom, floatingClearance)
             }
             .mask(
                 LinearGradient(
                     stops: [
                         .init(color: .black, location: 0),
-                        .init(color: .black, location: 0.93),
+                        .init(color: .black, location: 0.90),
                         .init(color: .clear, location: 1.0),
                     ],
                     startPoint: .top, endPoint: .bottom
                 )
             )
-
-            bottomBar
+            .overlay(alignment: .bottom) { floatingControls }
         }
         .glassSidebarBackground(theme)
         .sheet(isPresented: $showSettings) {
             SettingsView()
                 .environment(session)
         }
-        .sheet(isPresented: $showAddHousehold) {
-            PairingView(onPaired: { showAddHousehold = false })
-                .environment(session)
-        }
-        #if os(iOS)
-        .sheet(isPresented: $showFoyerSwitcher, onDismiss: addIfPending) {
-            FoyerSwitcherView(onPick: switchTo, onAdd: requestAdd, onDismiss: { showFoyerSwitcher = false })
-                .environment(session)
-                .environment(\.mauriceTheme, theme)
-                .presentationDetents([.medium, .large])
-                .presentationDragIndicator(.visible)
-        }
-        #else
-        // (The foyer popover is anchored to the pill in the bottom bar.)
-        .onChange(of: showFoyerSwitcher) { if !showFoyerSwitcher { addIfPending() } }
-        #endif
         .navigationTitle("")
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
@@ -302,45 +278,32 @@ struct SidebarView: View {
     }
     #endif
 
-    // MARK: Bottom bar
+    // MARK: Floating controls
 
-    /// Pinned, hairline-separated: the identity chip on the left (avatar +
-    /// name + muted cog — ONE tap target → Settings) and the compact foyer
-    /// pill on the right, whose switcher opens upward from the bar.
-    private var bottomBar: some View {
+    /// Two glass buttons hovering over the conversation list instead of an
+    /// opaque, hairline-separated bar: the identity chip (avatar + name + muted
+    /// cog — ONE tap target → Settings) and the search magnifier, which opens
+    /// into a full-width field. The foyer switcher moved into Settings.
+    private var floatingControls: some View {
         GlassGroup(spacing: 10) {
             HStack(spacing: 8) {
                 if searchOpen {
                     searchField
                 } else {
-                    #if os(iOS)
-                    if Platform.isPad {
-                        // iPad keeps both in the bar (the wordmark is in the toolbar).
-                        userChip
-                        Spacer(minLength: 8)
-                        foyerPill
-                    } else {
-                        // iPhone: the foyer pill moved to the header — the identity chip
-                        // sits on the left edge on its own.
-                        userChip
-                        Spacer(minLength: 8)
-                    }
-                    #else
                     userChip
                     Spacer(minLength: 8)
-                    foyerPill
-                    #endif
                     searchButton
                 }
             }
         }
         .padding(.horizontal, 10)
-        .padding(.vertical, 8)
-        .overlay(alignment: .top) {
-            Rectangle().fill(theme.rule).frame(height: 0.5)
-        }
+        .padding(.bottom, 10)
         .animation(.spring(duration: 0.35, bounce: 0.15), value: searchOpen)
     }
+
+    /// How far the list scrolls past its last row so nothing hides for good
+    /// under the floating controls.
+    private var floatingClearance: CGFloat { searchControlSize + 26 }
 
     // The magnifier and the open field share one glass identity, so on OS 26
     // the button morphs into the field instead of being swapped out.
@@ -411,10 +374,13 @@ struct SidebarView: View {
                 chipName
                 chipCog
             }
-            .padding(.vertical, 4)
-            .contentShape(Rectangle())
+            .padding(.leading, 5)
+            .padding(.trailing, 12)
+            .frame(height: searchControlSize)
+            .contentShape(Capsule())
         }
         .buttonStyle(.plain)
+        .glassControl(theme, in: Capsule())
         .help(session.localized("settings.title"))
     }
 
@@ -439,59 +405,6 @@ struct SidebarView: View {
             .foregroundStyle(theme.inkMute)
     }
 
-    @ViewBuilder
-    private var foyerPill: some View {
-        let pill = Button { showFoyerSwitcher = true; Task { await session.refreshFoyers() } } label: {
-            HStack(spacing: 8) {
-                Text(session.currentHousehold?.name ?? session.localized("app.tagline"))
-                    .font(.system(size: pillNameSize, weight: .medium))
-                    .foregroundStyle(theme.ink)
-                    .lineLimit(1)
-                if let h = session.currentHousehold {
-                    FoyerBadge(household: h, size: pillBadgeSize, radius: 7)
-                }
-                #if os(iOS)
-                Image(systemName: "chevron.down")   // header pill → sheet opens below
-                    .font(.system(size: 10, weight: .semibold))
-                    .foregroundStyle(theme.inkMute)
-                #else
-                Image(systemName: "chevron.up")
-                    .font(.system(size: 9, weight: .semibold))
-                    .foregroundStyle(theme.inkMute)
-                #endif
-            }
-            .padding(.leading, 5)
-            .padding(.trailing, 10)
-            .padding(.vertical, 5)
-            #if os(macOS)
-            .glassControl(theme, in: Capsule())
-            #endif
-            // iOS header lockup: fully transparent — no fill, no outline.
-            .contentShape(Capsule())
-        }
-        .buttonStyle(.plain)
-
-        #if os(iOS)
-        pill
-        #else
-        pill.popover(isPresented: $showFoyerSwitcher, arrowEdge: .top) {
-            FoyerSwitcherView(showHeader: false, compact: true,
-                              onPick: switchTo, onAdd: requestAdd, onDismiss: { showFoyerSwitcher = false })
-                .environment(session)
-                .environment(\.mauriceTheme, theme)
-                .frame(width: 300, height: 440)
-        }
-        #endif
-    }
-
-    private func switchTo(_ id: String) {
-        showFoyerSwitcher = false
-        if id != session.currentHouseholdId { session.switchHousehold(id) }
-    }
-    private func requestAdd() { pendingAdd = true; showFoyerSwitcher = false }
-    private func addIfPending() {
-        if pendingAdd { pendingAdd = false; showAddHousehold = true }
-    }
 }
 
 // MARK: - Conversation Row
@@ -641,13 +554,11 @@ private struct ConversationRow: View {
     }
 }
 
-// MARK: - Foyer (household) switcher
-// Implements "Foyer Switcher — Proposition A" (rev 2, bottom bar) from the
-// Claude Design handoff: the foyer pill in the pinned bottom bar opens a sheet
-// (phone) / an upward popover (desktop) listing every foyer with a coloured
-// icon badge, name, members and an active check. Each foyer owns a colour +
-// icon; the app doesn't persist those yet, so they're derived deterministically
-// from the foyer id (stable across launches).
+// MARK: - Foyer (household) identity
+// Each foyer owns a colour + icon, used by its badge wherever a foyer is named
+// (the household section of Settings, which is where switching now lives). The
+// app doesn't persist those yet, so they're derived deterministically from the
+// foyer id (stable across launches).
 
 private let foyerPalette = ["#a6452e", "#3d6b4f", "#2c5aa0", "#7a4f6e",
                             "#2f6f6a", "#9c6b4a", "#b97a1e", "#44504f"]
@@ -695,86 +606,6 @@ struct FoyerBadge: View {
                         .padding(-2)
                 }
             }
-    }
-}
-
-/// Overlapping stack of the foyer's known members (device users).
-private struct FoyerAvatars: View {
-    let users: [DeviceUser]
-    var serverURL: String? = nil
-    var size: CGFloat = 21
-    var maxShown: Int = 3
-    var ring: Color = .white
-
-    var body: some View {
-        let show = Array(users.prefix(maxShown))
-        HStack(spacing: -size * 0.34) {
-            ForEach(Array(show.enumerated()), id: \.element.id) { i, u in
-                UserAvatar(avatarURL: u.avatarURL, serverURL: serverURL, initial: u.initial, color: u.color, size: size)
-                    .overlay(Circle().strokeBorder(ring, lineWidth: 2))
-                    .zIndex(Double(show.count - i))
-            }
-        }
-    }
-}
-
-/// One foyer in the switcher list.
-private struct FoyerRow: View {
-    @Environment(\.mauriceTheme) private var theme
-    let household: Household
-    let active: Bool
-    var compact: Bool = false
-    let onPick: () -> Void
-
-    private var host: String? { URL(string: household.serverURL)?.host }
-
-    var body: some View {
-        Button(action: onPick) {
-            HStack(spacing: 12) {
-                FoyerBadge(household: household,
-                           size: compact ? 30 : 38, radius: compact ? 9 : 11,
-                           ring: active ? theme.surface : nil)
-                VStack(alignment: .leading, spacing: 1) {
-                    HStack(spacing: 7) {
-                        Text(household.name)
-                            .font(.system(size: compact ? 15 : 16.5, design: .serif))
-                            .foregroundStyle(theme.ink)
-                            .lineLimit(1)
-                        if let u = household.unread, u > 0 {
-                            Text("\(u)")
-                                .font(.system(size: 10, design: .monospaced))
-                                .foregroundStyle(.white)
-                                .padding(.horizontal, 5)
-                                .frame(minWidth: 17, minHeight: 17)
-                                .background(household.foyerColor, in: Capsule())
-                        }
-                    }
-                    if let host {
-                        Text(host)
-                            .font(.system(size: 11.5))
-                            .foregroundStyle(theme.inkSoft)
-                            .lineLimit(1)
-                    }
-                }
-                Spacer(minLength: 8)
-                if !household.deviceUsers.isEmpty {
-                    FoyerAvatars(users: household.deviceUsers, serverURL: household.serverURL,
-                                 size: compact ? 18 : 21, maxShown: 3,
-                                 ring: active ? household.foyerColor.opacity(0.12) : theme.surface)
-                }
-                if active {
-                    Image(systemName: "checkmark")
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(household.foyerColor)
-                }
-            }
-            .padding(.vertical, compact ? 7 : 9)
-            .padding(.horizontal, compact ? 10 : 12)
-            .background(active ? household.foyerColor.opacity(0.12) : Color.clear,
-                        in: RoundedRectangle(cornerRadius: 11, style: .continuous))
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
     }
 }
 
@@ -1838,75 +1669,5 @@ private struct NoteAccessSheet: View {
                 Rectangle().fill(theme.rule).frame(height: 0.5).padding(.leading, 13)
             }
         }
-    }
-}
-
-/// The foyer list — sheet body on phone, popover body on desktop.
-struct FoyerSwitcherView: View {
-    @Environment(SessionStore.self) private var session
-    @Environment(\.mauriceTheme) private var theme
-    var showHeader: Bool = true
-    var compact: Bool = false
-    let onPick: (String) -> Void
-    let onAdd: () -> Void
-    let onDismiss: () -> Void
-
-    private var accent: Color { session.currentHousehold?.foyerColor ?? theme.ink }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            if showHeader {
-                HStack(alignment: .bottom) {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("\(session.localized("foyer.switch_overline")) · \(session.households.count)")
-                            .font(.system(size: 9.5, design: .monospaced))
-                            .tracking(1.2)
-                            .textCase(.uppercase)
-                            .foregroundStyle(theme.inkMute)
-                        Text(session.localized("foyer.switch_title"))
-                            .font(.system(size: 22, design: .serif))
-                            .foregroundStyle(theme.ink)
-                    }
-                    Spacer()
-                    Button(action: onDismiss) {
-                        Text("OK").font(.system(size: 15, weight: .semibold)).foregroundStyle(accent.legible(onDark: theme.isDark))
-                    }
-                    .buttonStyle(.plain)
-                }
-                .padding(.horizontal, 18)
-                .padding(.top, 8)
-                .padding(.bottom, 14)
-            }
-            ScrollView {
-                VStack(spacing: 2) {
-                    ForEach(session.households) { h in
-                        FoyerRow(household: h, active: h.id == session.currentHouseholdId, compact: compact) {
-                            onPick(h.id)
-                        }
-                    }
-                    Button(action: onAdd) {
-                        HStack(spacing: 12) {
-                            RoundedRectangle(cornerRadius: compact ? 9 : 11, style: .continuous)
-                                .strokeBorder(theme.ruleHard, style: StrokeStyle(lineWidth: 1, dash: [3]))
-                                .frame(width: compact ? 30 : 38, height: compact ? 30 : 38)
-                                .overlay(Image(systemName: "plus")
-                                    .font(.system(size: 13, weight: .medium))
-                                    .foregroundStyle(theme.inkSoft))
-                            Text(session.localized("household.add"))
-                                .font(.system(size: compact ? 13.5 : 15))
-                                .foregroundStyle(theme.ink)
-                            Spacer()
-                        }
-                        .padding(.vertical, compact ? 8 : 11)
-                        .padding(.horizontal, 12)
-                        .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                }
-                .padding(.horizontal, 12)
-                .padding(.bottom, 16)
-            }
-        }
-        .background(theme.surface)
     }
 }

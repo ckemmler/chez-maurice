@@ -44,6 +44,11 @@ extension View {
                               morph: morph, namespace: namespace))
     }
 
+    /// A sheet whose presentation hugs its content's ideal size instead of the
+    /// platform's fixed form-sheet box (iPad: 540×620, which strands the card
+    /// in a wide empty surface). No-op before iOS 18 / macOS 15.
+    func fittedPresentation() -> some View { modifier(FittedPresentation()) }
+
     /// `.buttonStyle(.bordered)` that turns to the system's glass style on 26+.
     func glassBorderedButton() -> some View { modifier(GlassBorderedButton(prominent: false)) }
     /// `.buttonStyle(.borderedProminent)` that turns to glass on 26+.
@@ -154,6 +159,16 @@ private struct GlassSidebarBackground: ViewModifier {
             content
         } else {
             content.background(theme.surfaceAlt)
+        }
+    }
+}
+
+private struct FittedPresentation: ViewModifier {
+    func body(content: Content) -> some View {
+        if #available(iOS 18.0, macOS 15.0, *) {
+            content.presentationSizing(.fitted)
+        } else {
+            content
         }
     }
 }
