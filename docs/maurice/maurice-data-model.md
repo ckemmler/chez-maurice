@@ -1,6 +1,6 @@
 ---
 title: The data model
-date: '2026-09-19'
+date: '2026-09-22'
 flags: []
 locale: en
 description: 'The SQLite schema behind the chat engine: identity, conversations, files,
@@ -122,6 +122,46 @@ Under `~/.maurice/data/` (`MAURICE_DATA_DIR`):
 | `recommendations.db` | Reading recommendations. |
 
 Plus the corpus's vector store (see [[maurice-knowledge]]) and, elsewhere, the Calibre library itself.
+
+### Book artifacts are keyed by uuid, and live outside the library
+
+The chapters Maurice extracts from an EPUB and the summaries he writes for them
+are *his* state, not Calibre's. They were nonetheless written inside the Calibre
+library, in the book's own directory, and found again by `books.path` — which
+holds only as long as nothing else touches the library. Calibre rewrites `path`
+on every title or author edit, renaming the directory on disk, and every
+extracted chapter silently stops being found. Latent at home, where the library
+is only ever edited by hand; routine on a hosted library, where the whole point
+of serving it over the web is that people edit metadata there.
+
+Since 22 September 2026 they live under the data dir instead, keyed by
+`books.uuid` — the one identifier Calibre never rewrites:
+
+```
+~/.maurice/data/calibre/artifacts/<uuid>-<title>/chapters/
+                                                /chapter_summaries/
+```
+
+The title is decoration, not identity: it is in the path because corpus reads a
+chunk's `book_title` off its directory name (`extract_from_path` is corpus's
+only metadata source, and `book_title` is the filter `search_in_book` takes),
+and it is never renamed afterwards — a stale label costs a slightly wrong
+heading, a rename costs a full reindex of the book. Lookup matches on the uuid
+prefix, so a stale label is still found. A side benefit: that segment carries
+the real title, accents and all, where Calibre's directory name is its own
+transliterated version of it.
+
+Two implementations have to agree byte for byte, since the Python tools write
+what the Bun server reads: `server/data-api/services/calibreArtifacts.ts` and
+`maurice-tools/calibre/artifacts.py`.
+
+A library that predates the change keeps its artifacts where they are — reads
+*and* writes, so a half-summarized book is never split across the two layouts —
+until `bun run server/scripts/migrate-calibre-artifacts.ts --apply` moves them.
+A library with no `books.uuid` column (hand-built, or very old) has nothing
+stable to key on and stays on the old layout for good. Because corpus indexes by
+absolute path, migrating makes every chapter look new to it: point `corpus.yaml`
+at the new root and reindex, once.
 
 ## Ships vs. exists
 

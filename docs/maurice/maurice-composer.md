@@ -1,6 +1,6 @@
 ---
 title: The context composer
-date: '2026-09-19'
+date: '2026-09-22'
 flags: []
 locale: en
 description: Loading notes, books, files, and past conversations into a chat under
@@ -115,6 +115,21 @@ A third layer rides beside them since 19 September 2026, invisible in the tray: 
 ## Frozen snapshots
 
 When the context is saved (`composer/specs.ts`), each item's **resolved set is frozen** — the exact note slugs, chapter refs, file ids at that moment — as a `SpecItemSnapshot`. The *content* stays live (text is re-read from those ids when Maurice loads), but the *scope* is fixed: adding a child note later won't silently grow an existing context until you explicitly **refresh**. The one deliberate exception is a book on the `progress` scope, whose chapter set is recomputed at every turn — following the reader is the entire point of it, and a companion you had to refresh by hand would be worse than none. Binary attachments are de-duplicated by id across the whole spec. This is the same snapshot shape personas use (see [[maurice-data-model]]).
+
+### A chapter ref is a name, not a path
+
+A book item carries chapter `refs`, and they come off the request body. Loading
+them used to join the ref to the artifact directory and read the result, so a
+`../` in a ref read any file the server could reach — an authenticated member's
+own request, but a member should not be able to read the server's `.env` through
+a reading companion. Closed on 22 September 2026. The fix is not to validate the
+ref: separators, encodings and absolute paths all have to be caught and one miss
+is the whole bug. The directory is listed instead, and a ref is served only if
+the filename it asks for is one of the entries that came back — `readdir` yields
+bare names, so nothing with a separator in it can ever match
+(`readArtifactTexts`, in `data-api/services/calibreArtifacts.ts`). It is the
+defence `getChapterBySlug` already used in the data-api, made reusable. An
+unknown ref reads as empty text, exactly as a missing chapter did.
 
 ## Ships vs. exists
 
