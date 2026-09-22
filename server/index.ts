@@ -616,6 +616,63 @@ for (const p of GW_PATHS) {
   app.all(p, (c) => proxyToGateway(c, c.req.path));
 }
 
+// ── Reverse proxy: Calibre-Web ─────────────────────────────────────
+// /calibre/*  →  Calibre-Web (prefix stripped, announced via X-Script-Name)
+//
+// This is the household's *real* Calibre: upload, metadata editing, shelves,
+// OPDS, the built-in reader — the things Maurice has no business
+// reimplementing, on the same library he reads from the other side.
+//
+// Calibre-Web binds loopback and has reverse-proxy header login turned on
+// (server/scripts/configure-calibre-web.ts), trusting 127.0.0.1 alone. So this
+// proxy is the authentication: it refuses anyone Maurice has not identified,
+// and only then names the member in the header Calibre-Web reads. Nothing a
+// client sends can reach that header — it is set here, after `Headers` is
+// rebuilt, so an inbound X-Maurice-Member is overwritten rather than trusted.
+
+const calibreWebPort = getPort("calibre-web");
+
+app.all("/calibre", (c) => c.redirect("/calibre/"));
+app.all("/calibre/*", async (c) => {
+  // Unauthenticated requests never get here: the global gate above (the one
+  // that serves privatePage() to browsers) already refused them, and /calibre
+  // is deliberately not on its open list. This is the residue — a session whose
+  // user row has since gone — and it is a 401, not a redirect: there is no
+  // remote login form to redirect to.
+  const me = c.get("userId") ? getUser(c.get("userId")) : null;
+  if (!me) return c.json({ error: "Authentication required" }, 401);
+
+  const url = new URL(c.req.url);
+  const target = new URL(c.req.url);
+  target.protocol = "http:";
+  target.hostname = "127.0.0.1";
+  target.port = String(calibreWebPort);
+  // Calibre-Web serves from its root and builds its own links from
+  // X-Script-Name, so it must receive the path WITHOUT our prefix.
+  target.pathname = url.pathname.slice("/calibre".length) || "/";
+
+  const headers = new Headers(c.req.raw.headers);
+  headers.set("host", `127.0.0.1:${calibreWebPort}`);
+  headers.set("X-Script-Name", "/calibre");
+  headers.set("X-Scheme", c.req.header("x-forwarded-proto") || "https");
+  headers.set("X-Maurice-Member", me.username);
+
+  const resp = await fetch(
+    new Request(target.toString(), {
+      method: c.req.method,
+      headers,
+      body: c.req.raw.body,
+      // Calibre-Web redirects constantly (after an upload, after a metadata
+      // edit). Hand them back so the browser follows them at /calibre/…
+      // rather than resolving them here against 127.0.0.1.
+      redirect: "manual",
+      // @ts-ignore — Bun supports duplex streaming
+      duplex: "half",
+    }),
+  );
+  return new Response(resp.body, { status: resp.status, headers: resp.headers });
+});
+
 // ── Health / status ─────────────────────────────────────────────
 
 app.get("/api/health", (c) => {

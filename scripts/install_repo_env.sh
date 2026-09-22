@@ -20,6 +20,14 @@ pip install -r "$ROOT/tools/mcp_gateway/requirements.txt"
 echo "[setup] Installing gateway sub-tool deps"
 pip install -r "$ROOT/tools/mcp_gateway/requirements-tools.txt"
 
+# Calibre-Web, the library in a browser (scripts/start-calibre-web.sh). Not a
+# gateway dependency — a separate service — but it lives in this venv so the
+# Mac install has one Python environment, the way the container does. Pinned to
+# the same version infra/container/requirements.txt installs, so the service is
+# the same one in both places.
+echo "[setup] Installing Calibre-Web"
+pip install calibreweb==0.6.27
+
 # The MCP gateway imports every sub-tool server at startup, so install every
 # tool that ships a pyproject.toml (editable). Discover them rather than
 # hardcoding, so new tools are picked up automatically.

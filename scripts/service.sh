@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
-# Run Maurice's core services (API, MCP gateway, web) as macOS launchd agents —
+# Run Maurice's core services (API, MCP gateway, web, Calibre-Web) as macOS
+# launchd agents —
 # the one blessed way to run it. Installed once, they start on login and restart
 # on crash; you never hand-start or hunt for a process again.
 #
 #   scripts/service.sh install        create + load the agents (idempotent)
 #   scripts/service.sh uninstall      unload + remove them (falls back to manual)
-#   scripts/service.sh restart [name] restart all, or one (api|mcp-gateway|web)
+#   scripts/service.sh restart [name] restart all, or one (api|mcp-gateway|web|calibre-web)
 #   scripts/service.sh stop [name]     stop all, or one (stays stopped)
 #   scripts/service.sh status          what's running
 #   scripts/service.sh logs [name]     tail a service's log
@@ -26,6 +27,9 @@ SERVICES=(
   "api|3001|start-api.sh"
   "mcp-gateway|8710|start-mcp-gateway.sh"
   "web|4321|start-web.sh"
+  # Calibre-Web: the library in a browser, reached through the API's
+  # /calibre proxy. Loopback only, like every other service here.
+  "calibre-web|8083|start-calibre-web.sh"
 )
 
 label_of() { echo "com.maurice.$1"; }

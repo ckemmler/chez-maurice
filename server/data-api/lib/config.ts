@@ -123,6 +123,9 @@ export function getPort(service: string): number {
     "mcp-gateway": 8710,
     qdrant: 6333,
     web: 4321,
+    // Calibre-Web's own default, kept: one less thing that differs between a
+    // Maurice install and every guide written about it.
+    "calibre-web": 8083,
   };
   return defaults[service] ?? 3000;
 }

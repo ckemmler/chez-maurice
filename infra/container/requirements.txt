@@ -40,3 +40,17 @@ PyYAML>=6.0
 # supervisord runs as the container's init; it is the one process the image
 # needs that no repo requirements file mentions. (Installed via apt, not here —
 # listed for the reader who wonders where it comes from.)
+
+# Calibre-Web — the library in a browser: upload, metadata, shelves, OPDS, a
+# reader. This is what gives a hosted household a real Calibre without the
+# desktop application: `calibre` the apt package costs 1 071 MB and 386
+# packages, nearly all of it QtWebEngine (a whole Chromium) plus a software
+# OpenGL stack, because the distro ships one monolithic package for the GUI,
+# the viewer, ebook-convert and calibredb alike. This is ~176 MB of pure
+# Python and no Qt at all.
+#
+# What it gives up with Qt: format conversion (ebook-convert), the news
+# recipes, and Calibre's plugin ecosystem. What it keeps is the thing that
+# matters — the library stays a genuine Calibre library, openable by the
+# desktop application, so nobody is locked into our choice.
+calibreweb==0.6.27
