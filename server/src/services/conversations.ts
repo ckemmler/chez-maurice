@@ -397,20 +397,24 @@ export function addMessage(
 }
 
 /**
- * Delete the most recent assistant message in a conversation.
+ * Delete the assistant message that ends a conversation, if one does.
  * Used by regenerate, which then re-streams a fresh answer from the same
- * history (which now ends at the last user message). Returns false if there
- * is no assistant message to drop.
+ * history (which now ends at the last user message). Returns false when the
+ * thread ends on something else — a member's message whose reply never came
+ * (an error, a refusal, a lost connection): then there is nothing to drop,
+ * and regenerate simply answers it. Until 24 September 2026 this took the
+ * most recent assistant message wherever it stood, so a retry after a failed
+ * reply erased the answer before it.
  */
 export function deleteLastAssistantMessage(conversationId: string): boolean {
   const row = db
     .query(
-      `SELECT id FROM messages
-       WHERE conversation_id = ? AND role = 'assistant'
+      `SELECT id, role FROM messages
+       WHERE conversation_id = ?
        ORDER BY rowid DESC LIMIT 1`
     )
-    .get(conversationId) as { id: string } | undefined;
-  if (!row) return false;
+    .get(conversationId) as { id: string; role: string } | undefined;
+  if (!row || row.role !== "assistant") return false;
   db.run(`DELETE FROM messages WHERE id = ?`, [row.id]);
   return true;
 }

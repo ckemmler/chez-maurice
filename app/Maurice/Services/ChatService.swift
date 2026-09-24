@@ -962,13 +962,23 @@ final class ChatService {
         notice = nil
     }
 
-    /// Re-answer the last user turn: drop the previous assistant message and
-    /// stream a fresh response. No-op while streaming or with no answer to redo.
+    /// Re-answer the last user turn: drop the previous assistant message, if
+    /// the thread ends on one, and stream a fresh response. A thread that ends
+    /// on the member's own message — the reply failed, was refused, or was
+    /// lost — has nothing to drop and is simply answered. No-op while
+    /// streaming. Switch the model in the composer pill first to play the
+    /// turn again on another one.
     func regenerate() async {
-        guard !isStreaming, let convoId = activeConversationId else { return }
-        guard messages.last?.role == "assistant" else { return }
-        messages.removeLast()
+        guard !isStreaming, let convoId = activeConversationId, let last = messages.last else { return }
+        if last.role == "assistant" { messages.removeLast() }
         await runAssistantStream(convoId: convoId, content: "", imageDataUri: nil, regenerate: true)
+    }
+
+    /// The thread ends on a member's message with no reply, and Maurice is not
+    /// writing one: the turn can be played again (see `regenerate`). Only in
+    /// a 1:1 — in a room, a human message last is the ordinary state.
+    var lastTurnUnanswered: Bool {
+        !isRoom && !isStreaming && !pendingSummon && messages.last?.role == "user"
     }
 
     /// Shared streaming pipeline for both send and regenerate.

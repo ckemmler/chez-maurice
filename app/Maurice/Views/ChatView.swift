@@ -1101,6 +1101,7 @@ private struct MessageRow: View {
                 nameRow
                 messageContent
                 if message.role == "assistant" { actionRow }
+                if isLast, message.role == "user", chat.lastTurnUnanswered { replayRow }
             }
         }
     }
@@ -1124,6 +1125,9 @@ private struct MessageRow: View {
                     .padding(.horizontal, 15)
                     .padding(.vertical, 11)
                     .background(RoundedRectangle(cornerRadius: 18).fill(theme.surfaceAlt))
+                }
+                if isLast, chat.lastTurnUnanswered {
+                    replayRow.frame(maxWidth: .infinity, alignment: .trailing)
                 }
             } else {
                 VStack(alignment: .leading, spacing: 6) {
@@ -1186,6 +1190,27 @@ private struct MessageRow: View {
 
     private var userDisplayName: String? {
         authorParticipant?.display_name ?? session.activeDeviceUser?.displayName
+    }
+
+    /// Under the member's last message when no reply followed it — an error,
+    /// a refusal, a lost connection: the turn can be played again, on another
+    /// model if the composer's pill was switched meanwhile. The same arrow
+    /// as under a reply, so a retry and a redo are one gesture.
+    private var replayRow: some View {
+        Button {
+            Task { await chat.regenerate() }
+        } label: {
+            HStack(spacing: 5) {
+                Image(systemName: "arrow.clockwise")
+                    .font(.system(size: 12))
+                Text(session.localized("chat.regenerate"))
+                    .font(.system(size: 12))
+            }
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(theme.inkMute)
+        .help(session.localized("chat.regenerate"))
+        .padding(.top, 4)
     }
 
     /// Copy + regenerate controls shown under each Maurice response, plus the

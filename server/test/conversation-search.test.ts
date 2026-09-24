@@ -94,6 +94,18 @@ describe("searchConversations", () => {
     }
   });
 
+  it("leaves an earlier answer alone when the thread ends on a member's message", () => {
+    // A reply that never came: regenerate must answer the last message, not
+    // erase the answer before it.
+    const m = addMessage("c1", "user", "et la crypte ?", { authorId: "s-alice" });
+    try {
+      expect(deleteLastAssistantMessage("c1")).toBe(false);
+      expect(searchConversations("s-alice", "cathédrale").length).toBe(1);
+    } finally {
+      db.run(`DELETE FROM messages WHERE id = ?`, [m.id]);
+    }
+  });
+
   it("keeps the index in step with deletes", () => {
     expect(searchConversations("s-alice", "cathédrale").length).toBe(1);
     deleteLastAssistantMessage("c1");
