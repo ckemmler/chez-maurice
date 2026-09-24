@@ -1,6 +1,6 @@
 ---
 title: The chat experience
-date: '2026-09-21'
+date: '2026-09-24'
 flags: []
 locale: en
 description: Streaming render, tool-result data cards, math, markdown, images, dictation,
@@ -57,12 +57,14 @@ Who may receive one: never a child (`users.is_child`, a box in the console's mem
 
 ## Streaming
 
-The client reads the newline-delimited `StreamEvent`s and reacts per type: `text_delta` appends to the live text, `thinking` raises a "Thinking" activity label until the first visible word (reasoning models such as GLM go quiet for a while before answering — minutes on GLM-5.3-Flash, unless the persona turned the reasoning dial down, see [[maurice-personas-hats]]), `ping` is a server keepalive and shows nothing, `tool_call` raises a transient activity label ("Searching the web…"), `tool_data` appends a structured result (rendered as a **source card** for a corpus or web search since 20 September 2026, see below), `usage` is kept for the cost meter, `done` captures the `message_id`, `error` surfaces a banner. Image generation shows a spinner while it runs, then drops the image inline.
+The client reads the newline-delimited `StreamEvent`s and reacts per type: `text_delta` appends to the live text, `thinking` raises a "Thinking" activity label until the first visible word (reasoning models such as GLM go quiet for a while before answering, see [[maurice-personas-hats]] for the dial — since 24 September 2026 a turn that made no choice is sent `reasoning_effort: low` on Z.ai rather than nothing at all, because GLM cannot be told not to reason and its own default is a minute of it: a seeded domain, which carries no choice, was answering in two minutes on GLM-5.3-Flash where the same model answers in ten seconds), `ping` is a server keepalive and shows nothing, `tool_call` feeds the turn's activity line (below), `tool_data` appends a structured result (rendered as a **source card** for a corpus or web search since 20 September 2026, see below), `usage` is kept for the cost meter, `done` captures the `message_id`, `error` surfaces a banner. Image generation shows a spinner while it runs, then drops the image inline.
 
 Two touches make it feel alive rather than mechanical:
 
 - **Variable-speed reveal** (`StreamingRow`): a 0.01s timer advances the visible text by 1–3 characters a tick, faster when the buffer is deep — roughly 100–300 chars/sec, so it reads like typing, not like a progress bar.
 - **Respectful auto-scroll**: the view follows the bottom only while you're near it (within ~120pt); scroll up to re-read mid-answer and it won't yank you back; scroll back down to re-engage.
+
+**One line for what the turn is doing, 23 September 2026.** Each call used to set an activity label and clear it on the way out, so a turn that searched three times and read the corpus once flashed four labels under the answer, one after another, while the source pills landed live underneath them: the work Maurice was doing read as agitation. What a turn does now folds into **one row** (`TurnActivity` in `ChatService`, `TurnActivityRow` in the view): the tools it ran in the order they first ran, the same tool twice counted rather than repeated — *Recherche web ×3* — and a seconds counter running from the start of the turn. The row appears once and grows in place instead of blinking; past three distinct tools the tail becomes "+2" and a tap opens the full list. Two things move with it: the **source pills wait for the end of the turn** (they are what the line is already about, and they arrive with the finished message), and when the turn ends the row **stays under the reply**, collapsed, spinner and counter frozen — the record of what the answer took. That recap is session-lived: the server persists data blocks, not the tool trail, so a thread reloaded from scratch shows its sources and no recap. The names are tensed — *Recherche sur le web* while it runs, *Recherche web* once done — and an MCP tool is named by its server segment (*Outil corpus*).
 
 Two failure modes fixed in September 2026: deleting a thread while Maurice was still answering left the [[maurice-server|server]] running its tools for a room that no longer existed (a fragment landed in a garden fiche a minute after the delete), so the app now stops the stream before deleting; and a room that answers 404 — deleted here, or from another device — is dropped along with its socket, where before the socket reconnected with backoff forever and refetched the vanished conversation for hours.
 
