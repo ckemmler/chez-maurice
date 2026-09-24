@@ -98,10 +98,18 @@ describe("what reaches the provider", () => {
     // GLM cannot be told not to think at all: the dial takes low | high | max.
     expect(thinkingBody("zai", false)).toEqual({ reasoning_effort: "low" });
     expect(thinkingBody("zai", true)).toEqual({ reasoning_effort: "high" });
-    expect(thinkingBody("zai", undefined)).toBeUndefined();
     expect(thinkingBody("scaleway", false)).toBeUndefined();
     expect(thinkingBody("mistral", true)).toBeUndefined();
     expect(thinkingBody("openai", false)).toBeUndefined();
+  });
+
+  test("no choice on Z.ai is `low`, not the provider's own default", () => {
+    // Where the phase can be turned off, saying nothing is fine. On GLM it is
+    // not: the default effort is a minute of reasoning a turn, which is what a
+    // persona with no recorded choice used to get.
+    expect(thinkingBody("zai", undefined)).toEqual({ reasoning_effort: "low" });
+    expect(thinkingBody("anthropic", undefined)).toBeUndefined();
+    expect(thinkingBody("scaleway", undefined)).toBeUndefined();
   });
 
   test("the Chat Completions client sends the extra field as it is", async () => {

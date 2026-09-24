@@ -715,12 +715,17 @@ export function openaiStyleKey(
  *  `minimal`, `none` and `medium` are refused with the same code. `low` is as
  *  close to off as the model goes (a couple of dozen reasoning tokens on an
  *  easy turn against a thousand and more on `max`), and it is what makes
- *  GLM-5.3-Flash answer in seconds rather than minutes. No other OpenAI-style
+ *  GLM-5.3-Flash answer in seconds rather than minutes — so it is also what a
+ *  turn that made no choice gets. Sending nothing leaves Z.ai on its own
+ *  default effort, and because the phase cannot be turned off that default is
+ *  not "answer directly" but a minute of reasoning: on a long thread, round 0
+ *  took 60 to 80 seconds and burned some 2500 reasoning tokens where `low`
+ *  answers in 5 to 8. A seeded persona carries `thinking = null` and every one
+ *  of them did that, which is not a choice anybody made. No other OpenAI-style
  *  provider here documents a switch (Mistral and OpenAI's models on the roster
  *  do not reason; Scaleway's reasoning models are `always`), so nothing is sent
  *  to them: an unknown field is a 422 on a strict server. Exported for tests. */
 export function thinkingBody(provider: string, thinking: boolean | undefined): Record<string, unknown> | undefined {
-  if (thinking === undefined) return undefined;
   if (provider === "zai") return { reasoning_effort: thinking ? "high" : "low" };
   return undefined;
 }
