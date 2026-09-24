@@ -75,6 +75,12 @@ struct ChatView: View {
                 }
             }
             .safeAreaInset(edge: .bottom, spacing: 0) { composerDock }
+            // iPad: the sidebar's floating controls hover 10pt off the screen's
+            // edge, under the home indicator (an overlay on a scroll view sits
+            // below the safe area). Letting this column reach the edge too —
+            // the container's inset only, never the keyboard's — puts the
+            // field level with them instead of 14pt higher.
+            .ignoresSafeArea(.container, edges: Platform.isPad ? .bottom : [])
             #else
             // Mac: the stream fills the pane, the composer floats over its foot;
             // the conversation actions sit in the window's toolbar (macToolbar),
@@ -185,32 +191,22 @@ struct ChatView: View {
     @ToolbarContentBuilder
     private var chatToolbar: some ToolbarContent {
         if Platform.isPad {
-            // Sidebar toggle + conversation title, as one plain item (no glass
-            // capsule) — replaces both the custom header row and the collapsed
-            // back chevron (which we hide via navigationBarBackButtonHidden).
-            // One Maurice: no badge, whatever the conversation is bound to.
-            ToolbarItem(placement: .topBarLeading) {
-                HStack(spacing: 9) {
-                    // Only when the split has collapsed to a stack (a narrow
-                    // window): the system then offers a back chevron we hide.
-                    // With the sidebar column in play the system's own toggle
-                    // is there, and a second one read as two of the same.
-                    if hSize == .compact {
-                        Button { onToggleSidebar() } label: {
-                            Image(systemName: "sidebar.leading")
-                                .foregroundStyle(theme.inkSoft)
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel(session.localized("chat.back_to_conversations"))
+            // Leading: nothing, as a rule — the sidebar column carries the
+            // system's toggle, and the conversation's title lives in the "…"
+            // details sheet, not in the bar. The one exception is a split
+            // collapsed to a stack (a narrow window), where the system offers
+            // only a back chevron we hide: then our toggle is the way back.
+            if hSize == .compact {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button { onToggleSidebar() } label: {
+                        Image(systemName: "sidebar.leading")
+                            .foregroundStyle(theme.inkSoft)
                     }
-                    Text(chat.activeConversation?.title ?? session.localized("chat.new_conversation"))
-                        .font(.system(size: 17, design: .serif))
-                        .foregroundStyle(theme.ink)
-                        .lineLimit(1)
-                        .truncationMode(.tail)
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(session.localized("chat.back_to_conversations"))
                 }
+                .plainGlass()
             }
-            .plainGlass()
             ToolbarItemGroup(placement: .topBarTrailing) {
                 if isMulti {
                     AvatarStack(participants: chat.participants, serverBase: session.serverURL,
@@ -437,11 +433,9 @@ struct ChatView: View {
             }
         }
         .padding(.horizontal, 12)
-        // iPad: level with the sidebar's floating controls, which hover 10pt
-        // off the screen's edge (an overlay on a scroll view sits under the
-        // safe area); the field would otherwise float 14pt higher than them.
+        // iPad: 10pt off the screen's edge, like the sidebar's controls (the
+        // column reaches the edge, see body).
         .padding(.bottom, Platform.isPad ? 10 : 4)
-        .ignoresSafeArea(.container, edges: Platform.isPad ? .bottom : [])
         #else
         // Mac: like iOS, the tray is hidden during chat and toggled from the ctx
         // pill in the input row — so it doesn't sit on top of the field — and
