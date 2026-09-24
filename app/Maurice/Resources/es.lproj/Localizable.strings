@@ -340,6 +340,12 @@
 "dictation.consent.title" = "¿Dictar en %@?";
 "dictation.consent.body" = "Este dispositivo no tiene un modelo de dictado sin conexión para %@, así que Maurice solo puede transcribirlo enviando el audio a Apple. Nada más cambia: tus conversaciones siguen en tu servidor. Puedes desactivarlo de nuevo en Ajustes.";
 "dictation.consent.allow" = "Enviar el audio a Apple";
+"settings.pulse.group" = "ACTIVIDAD";
+"settings.pulse.halo" = "Halo";
+"settings.pulse.orbit" = "Órbita";
+"settings.pulse.stroke" = "Trazo";
+"settings.pulse.hat" = "El sombrero";
+"settings.pulse.caption" = "La marca que muestra a Maurice trabajando, en la línea que reúne lo que una respuesta ya ha hecho. Pruébelas en una conversación.";
 "settings.dictation.group" = "DICTADO";
 "settings.dictation.allow_server" = "Permitir la transcripción de Apple";
 "settings.dictation.caption" = "El dictado se queda en este dispositivo siempre que el idioma tenga un modelo sin conexión. Si lo permites, los idiomas que no lo tengan los transcribirá Apple, lo que significa que el audio sale de tu dispositivo. Mientras ocurre, el micrófono muestra una nube.";
@@ -414,6 +420,10 @@
 "chat.activity.webSearch" = "Buscando en la web";
 "chat.activity.usingTool" = "Usando %@";
 "chat.activity.reconnecting" = "Conexión perdida, Maurice continúa…";
+"chat.activity.webSearchDone" = "Búsqueda web";
+"chat.activity.usedTool" = "Herramienta %@";
+"chat.activity.secs" = "%d s";
+"chat.activity.mins" = "%d min %02d s";
 
 /* A reply that could not be followed to its end */
 "chat.error.busy" = "Maurice ya está respondiendo en esta conversación.";

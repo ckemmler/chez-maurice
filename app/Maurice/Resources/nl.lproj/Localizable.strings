@@ -340,6 +340,12 @@
 "dictation.consent.title" = "Dicteren in het %@?";
 "dictation.consent.body" = "Dit apparaat heeft geen offline dicteermodel voor het %@, dus Maurice kan het alleen transcriberen door de audio naar Apple te sturen. Verder verandert er niets — je gesprekken blijven op je eigen server. Je kunt dit weer uitzetten in de instellingen.";
 "dictation.consent.allow" = "Audio naar Apple sturen";
+"settings.pulse.group" = "ACTIVITEIT";
+"settings.pulse.halo" = "Halo";
+"settings.pulse.orbit" = "Baan";
+"settings.pulse.stroke" = "Streep";
+"settings.pulse.hat" = "De hoed";
+"settings.pulse.caption" = "Het teken dat Maurice aan het werk toont, op de regel die verzamelt wat een antwoord al gedaan heeft. Probeer ze in een gesprek.";
 "settings.dictation.group" = "DICTEREN";
 "settings.dictation.allow_server" = "Transcriptie door Apple toestaan";
 "settings.dictation.caption" = "Dicteren blijft op dit apparaat zolang de taal een offline model heeft. Sta je dit toe, dan worden talen zonder model door Apple getranscribeerd, wat betekent dat de audio je apparaat verlaat. Zolang dat gebeurt, toont de microfoon een wolkje.";
@@ -414,6 +420,10 @@
 "chat.activity.webSearch" = "Zoekt op het web";
 "chat.activity.usingTool" = "Gebruikt %@";
 "chat.activity.reconnecting" = "Verbinding verbroken, Maurice gaat door…";
+"chat.activity.webSearchDone" = "Webzoekopdracht";
+"chat.activity.usedTool" = "Gereedschap %@";
+"chat.activity.secs" = "%d s";
+"chat.activity.mins" = "%d min %02d s";
 
 /* A reply that could not be followed to its end */
 "chat.error.busy" = "Maurice is in dit gesprek al aan het antwoorden.";

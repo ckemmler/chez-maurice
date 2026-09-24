@@ -34,6 +34,8 @@ struct SettingsView: View {
     @AppStorage(TurnCostPref.key) private var showTurnCost = false
     /// Dictation may use Apple's servers for languages with no local model.
     @AppStorage(ServerDictationPref.key) private var allowServerDictation = false
+    /// The progress mark on the chat's activity line — see ThinkingPulse.
+    @AppStorage(ThinkingPulse.prefKey) private var pulseRaw = ThinkingPulse.Style.defaultChoice.rawValue
     @State private var showCamera = false
     @State private var showLibrary = false
     /// Pairing another household — reached from the household pane (the foyer
@@ -187,6 +189,21 @@ struct SettingsView: View {
                             }
                         }
                         SetCaption("Adds a small line under each of Maurice's replies with the cost of that turn and how much of the prompt was served from cache. Local models are free; cloud models show a figure when their price is on file.")
+                    }
+
+                    SetGroup(session.localized("settings.pulse.group")) {
+                        SetCard {
+                            ForEach(ThinkingPulse.Style.allCases) { style in
+                                HStack(spacing: 0) {
+                                    SetCheckRow(label: style.label, on: pulseRaw == style.rawValue, accent: accent) {
+                                        pulseRaw = style.rawValue
+                                    }
+                                    ThinkingPulse(style: style, color: theme.inkSoft)
+                                        .padding(.trailing, 14)
+                                }
+                            }
+                        }
+                        SetCaption(session.localized("settings.pulse.caption"))
                     }
 
                     SetGroup(session.localized("settings.dictation.group")) {

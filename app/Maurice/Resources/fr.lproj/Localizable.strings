@@ -340,6 +340,12 @@
 "dictation.consent.title" = "Dicter en %@ ?";
 "dictation.consent.body" = "Cet appareil n'a pas de modèle de dictée hors ligne pour le %@ : Maurice ne peut le transcrire qu'en envoyant l'audio à Apple. Rien d'autre ne change — vos conversations restent sur votre serveur. Vous pourrez le désactiver dans les Réglages.";
 "dictation.consent.allow" = "Envoyer l'audio à Apple";
+"settings.pulse.group" = "ACTIVITÉ";
+"settings.pulse.halo" = "Halo";
+"settings.pulse.orbit" = "Orbite";
+"settings.pulse.stroke" = "Trait";
+"settings.pulse.hat" = "Le canotier";
+"settings.pulse.caption" = "Le signe qui montre Maurice au travail, sur la ligne qui rassemble ce qu'une réponse a déjà fait. Essayez-les en conversation.";
 "settings.dictation.group" = "DICTÉE";
 "settings.dictation.allow_server" = "Autoriser la transcription par Apple";
 "settings.dictation.caption" = "La dictée reste sur cet appareil dès que la langue dispose d'un modèle hors ligne. En autorisant ceci, les langues qui n'en ont pas sont transcrites par Apple, ce qui veut dire que l'audio quitte votre appareil. Le micro affiche un nuage pendant ce temps-là.";
@@ -414,6 +420,10 @@
 "chat.activity.webSearch" = "Recherche sur le web";
 "chat.activity.usingTool" = "Utilise %@";
 "chat.activity.reconnecting" = "Connexion perdue, Maurice continue…";
+"chat.activity.webSearchDone" = "Recherche web";
+"chat.activity.usedTool" = "Outil %@";
+"chat.activity.secs" = "%d s";
+"chat.activity.mins" = "%d min %02d s";
 
 /* A reply that could not be followed to its end */
 "chat.error.busy" = "Maurice est déjà en train de répondre dans cette conversation.";

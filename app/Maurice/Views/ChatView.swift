@@ -20,9 +20,17 @@ struct ChatView: View {
     /// Maurice opened the conversation with, while proposals are open.
     @State private var showProposals = false
     @State private var trayOpen = false
-    /// Whether the stream is "following" the bottom. Goes false when the user
-    /// scrolls up mid-answer, so tokens don't yank them back down.
+    /// Whether the thread follows its bottom as tokens arrive.
+    ///
+    /// Only the member's own hand turns it off — a scroll up, by finger or
+    /// wheel — and only reaching the bottom again turns it back on. It used to
+    /// be read off the bottom anchor's position, which also moves when the
+    /// content grows: a card landing, the streamed row swapped for the final
+    /// message, the clock going — so the follow dropped or came back on its
+    /// own, and the end of a reply could yank a reader who had scrolled up.
     @State private var isNearBottom = true
+    /// The bottom anchor is within the viewport: the reader is at the end.
+    @State private var atBottom = true
     /// Force one scroll-to-bottom after a (re)load, regardless of scroll state.
     @State private var pendingScrollToBottom = true
     @FocusState private var isInputFocused: Bool
@@ -241,26 +249,30 @@ struct ChatView: View {
                                 if chat.isGeneratingImage {
                                     ImageGeneratingIndicator()
                                 } else {
-                                    if let activity = chat.toolActivity {
-                                        ToolActivityIndicator(label: activity)
+                                    // The one line for the turn's progress —
+                                    // the sources found so far, what is done,
+                                    // what is running, the pulse, the clock.
+                                    // It is also the wait for the first word:
+                                    // there is never a second indicator beside
+                                    // it. Gone once a plain answer streams.
+                                    if chat.streamingText.isEmpty || chat.activity.isVisible {
+                                        TurnActivityRow(activity: chat.activity, blocks: chat.streamingData,
+                                                        live: true, withHat: chat.streamingText.isEmpty)
                                     }
                                     // Structured tool results stream in (often
-                                    // before the prose) — show them live.
+                                    // before the prose) — show them live; the
+                                    // sources are on the line above.
                                     if !chat.streamingData.isEmpty {
-                                        DataCardStack(blocks: chat.streamingData)
+                                        DataCardStack(blocks: chat.streamingData, includeSources: false)
                                     }
-                                    if chat.streamingText.isEmpty {
-                                        if chat.toolActivity == nil && chat.streamingData.isEmpty {
-                                            StreamingIndicator()
-                                        }
-                                    } else {
+                                    if !chat.streamingText.isEmpty {
                                         StreamingRow(text: chat.streamingText, serverBaseURL: session.serverURL ?? "")
                                     }
                                 }
                             } else if chat.pendingSummon {
                                 // Observer's view: someone else summoned Maurice
                                 // and his reply hasn't arrived over the socket yet.
-                                StreamingIndicator()
+                                TurnActivityRow(activity: TurnActivity(), live: true, withHat: true)
                             }
 
                             // Permanent bottom anchor: the scroll target AND the
@@ -301,7 +313,13 @@ struct ChatView: View {
                         DispatchQueue.main.async { proxy.scrollTo("bottom", anchor: UnitPoint(x: 0, y: 1)) }
                     }
                     .onPreferenceChange(ChatBottomAnchorKey.self) { minY in
-                        isNearBottom = (minY - outer.size.height) < 120
+                        atBottom = (minY - outer.size.height) < 24
+                        // Back at the end: follow again. Never the reverse —
+                        // content growing under the viewport is not a scroll.
+                        if atBottom { isNearBottom = true }
+                    }
+                    .userScroll { up in
+                        if up && !atBottom { isNearBottom = false }
                     }
                     .onChange(of: chat.activeConversationId) {
                         // Opening/switching a thread: snap to the latest, follow.
@@ -309,16 +327,29 @@ struct ChatView: View {
                         pendingScrollToBottom = true
                     }
                     .onChange(of: chat.streamingText.count) {
-                        if isNearBottom { scrollToBottom(proxy) }
+                        // Unanimated: an eased hop per token stutters, and a
+                        // hop still in flight when the next one starts is what
+                        // made the follow feel loose.
+                        if isNearBottom { scrollToBottom(proxy, animated: false) }
+                    }
+                    .onChange(of: chat.isStreaming) {
+                        // The streamed row becomes the final message (and its
+                        // footer, cards, recap): keep the end in view for a
+                        // reader who was following, leave one who was not.
+                        if !chat.isStreaming && isNearBottom { scrollToBottom(proxy) }
                     }
                     .onChange(of: chat.messages.count) {
                         if pendingScrollToBottom {
                             // First population after a (re)load — always snap.
                             pendingScrollToBottom = false
                             scrollToBottom(proxy)
-                        } else if chat.messages.last?.role == "user" || isNearBottom {
-                            // Snap for a message the user just sent; otherwise only
-                            // follow if they haven't scrolled away.
+                        } else if chat.messages.last?.role == "user" && chat.messages.last?.author_id == session.activeUserId {
+                            // Their own message: snap, and follow the reply.
+                            isNearBottom = true
+                            scrollToBottom(proxy)
+                        } else if isNearBottom {
+                            // Someone else's, or Maurice's: only if they
+                            // haven't scrolled away.
                             scrollToBottom(proxy)
                         }
                     }
@@ -430,7 +461,17 @@ struct ChatView: View {
         inputText = ""
         pendingImageData = nil
         trayOpen = false
+        dismissKeyboard()
         Task { await chat.send(text, imageData: imageData) }
+    }
+
+    /// The question is sent: the phone's keyboard goes, the answer gets the
+    /// screen. Not on iPad or the Mac, where a keyboard is a thing one keeps
+    /// typing on.
+    private func dismissKeyboard() {
+        #if os(iOS)
+        if !Platform.isPad { isInputFocused = false }
+        #endif
     }
 
     /// 💬 — post a human-only turn (no Maurice summon).
@@ -441,16 +482,53 @@ struct ChatView: View {
         inputText = ""
         pendingImageData = nil
         trayOpen = false
+        dismissKeyboard()
         Task { await chat.postBubble(text, imageData: imageData) }
     }
 
-    private func scrollToBottom(_ proxy: ScrollViewProxy) {
-        withAnimation(.easeOut(duration: 0.2)) {
-            // x: 0, not `.bottom`'s 0.5 — a 2D anchor scrolls both axes, so a
-            // centred one would re-centre the content horizontally too. Here
-            // there is nothing to scroll sideways, and pinning x keeps it that
-            // way even if a transient relayout reports a mismatched width.
-            proxy.scrollTo("bottom", anchor: UnitPoint(x: 0, y: 1))
+    private func scrollToBottom(_ proxy: ScrollViewProxy, animated: Bool = true) {
+        // x: 0, not `.bottom`'s 0.5 — a 2D anchor scrolls both axes, so a
+        // centred one would re-centre the content horizontally too. Here
+        // there is nothing to scroll sideways, and pinning x keeps it that
+        // way even if a transient relayout reports a mismatched width.
+        let anchor = UnitPoint(x: 0, y: 1)
+        if animated {
+            withAnimation(.easeOut(duration: 0.2)) { proxy.scrollTo("bottom", anchor: anchor) }
+        } else {
+            proxy.scrollTo("bottom", anchor: anchor)
+        }
+    }
+}
+
+/// Reports a scroll the member made — `up` when they pulled the content
+/// down to read earlier lines. Scroll phases where the system has them
+/// (iOS 18, macOS 15: finger, wheel and trackpad alike); a drag alongside
+/// the scroll view's own before that, which the wheel does not send — an
+/// older Mac keeps the follow until a message of its own.
+private extension View {
+    func userScroll(_ onScroll: @escaping (_ up: Bool) -> Void) -> some View {
+        modifier(UserScrollModifier(onScroll: onScroll))
+    }
+}
+
+private struct UserScrollModifier: ViewModifier {
+    let onScroll: (_ up: Bool) -> Void
+    @State private var lastOffset: CGFloat = 0
+
+    func body(content: Content) -> some View {
+        if #available(iOS 18.0, macOS 15.0, *) {
+            content.onScrollPhaseChange { _, phase, context in
+                guard phase == .interacting || phase == .decelerating else { return }
+                let y = context.geometry.contentOffset.y
+                defer { lastOffset = y }
+                if y < lastOffset - 1 { onScroll(true) }
+            }
+        } else {
+            content.simultaneousGesture(
+                DragGesture(minimumDistance: 8).onChanged { value in
+                    if value.translation.height > 8 { onScroll(true) }
+                }
+            )
         }
     }
 }
@@ -1080,6 +1158,12 @@ private struct MessageRow: View {
     /// Image (if any) + markdown body — shared by both layouts.
     @ViewBuilder
     private var messageContentCore: some View {
+        // What this reply took, if we watched it happen (see
+        // `ChatService.toolTrails`): the same line as during the turn, with the
+        // sources it found on it. A reloaded thread has the sources alone.
+        if let trail = chat.toolTrails[message.id], !trail.steps.isEmpty {
+            TurnActivityRow(activity: trail, blocks: message.data ?? [])
+        }
         if let img = imageInfo, img.path != "pending", let baseURL = session.serverURL {
             ChatImageView(url: baseURL + img.path)
         }
@@ -1089,7 +1173,7 @@ private struct MessageRow: View {
             SelectableMarkdown(text: message.content)
         }
         if let blocks = message.data, !blocks.isEmpty {
-            DataCardStack(blocks: blocks)
+            DataCardStack(blocks: blocks, includeSources: chat.toolTrails[message.id] == nil)
         }
     }
 
@@ -1208,12 +1292,16 @@ private struct MessageRow: View {
 private struct DataCardStack: View {
     @Environment(\.mauriceTheme) private var theme
     let blocks: [DataBlock]
+    /// Off when the activity line carries the pills: the sources are drawn once.
+    var includeSources = true
     @State private var expanded = false
 
     /// Payloads stamped with a `card` kind get a purpose-built view, shown open:
     /// they ARE the answer, not evidence for it. Everything else keeps the
     /// generic collapsed dump.
-    private var typedBlocks: [DataBlock] { blocks.filter { $0.data.cardKind != nil } }
+    private var typedBlocks: [DataBlock] {
+        blocks.filter { $0.data.cardKind != nil && (includeSources || $0.data.cardKind != "sources") }
+    }
     private var plainBlocks: [DataBlock] { blocks.filter { $0.data.cardKind == nil } }
 
     /// A turn's searches, folded together.
@@ -1903,20 +1991,176 @@ private struct ChatImageView: View {
     }
 }
 
-// MARK: - Tool Activity Indicator (web search / MCP tool running)
+// MARK: - Turn Activity Row (what a turn is doing, on one line)
 
-private struct ToolActivityIndicator: View {
+/// Everything a turn has done and is doing, on one line: the sources found
+/// so far as pills, the steps done, the one running, the pulse, the clock.
+///
+///     [pills] · Recherche web ×2 · Outil garden – Recherche sur le web… ◌ 12 s
+///
+/// Live under the stream, then kept — pulse and clock stopped — under the
+/// finished reply. It is also the wait before the first word: an empty turn
+/// draws the pulse and the clock alone, so there is never a second progress
+/// mark on screen (the wave of three dots that used to greet every turn is
+/// gone; the pulse is chosen in Settings, see `ThinkingPulse`).
+///
+/// The point is that it holds still. Before, each call set a label and cleared
+/// it on the way out, so a turn with five calls flashed five lines under the
+/// answer as it was being written; here the row appears once and grows in
+/// place. A tap on the words opens every step on its own line.
+private struct TurnActivityRow: View {
     @Environment(\.mauriceTheme) private var theme
-    let label: String
+    @AppStorage(ThinkingPulse.prefKey) private var pulseRaw = ThinkingPulse.Style.defaultChoice.rawValue
+    let activity: TurnActivity
+    /// The turn's blocks so far; only the `sources` payloads are drawn here.
+    var blocks: [DataBlock] = []
+    /// A live row pulses and counts; a kept one is a record and does neither.
+    var live = false
+    /// Leads with the hat, as a reply row does on the desktop, while there is
+    /// no reply row yet.
+    var withHat = false
+
+    @State private var expanded = false
+
+    private var pulse: ThinkingPulse.Style { .init(rawValue: pulseRaw) ?? .defaultChoice }
+    private var running: Bool { live && activity.isRunning }
+    private var done: [ToolStep] { activity.steps.filter { !$0.running } }
+    private var current: [ToolStep] { activity.steps.filter(\.running) }
+
+    /// One row of pills per place searched, in the order the first search of
+    /// each ran — the same folding `DataCardStack` does for a reloaded thread.
+    private var sourcesByOrigin: [(origin: String, payloads: [JSONValue])] {
+        var out: [(origin: String, payloads: [JSONValue])] = []
+        for block in blocks where block.data.cardKind == "sources" {
+            let origin = block.data.string("origin")
+            if let i = out.firstIndex(where: { $0.origin == origin }) {
+                out[i].payloads.append(block.data)
+            } else {
+                out.append((origin, [block.data]))
+            }
+        }
+        return out
+    }
 
     var body: some View {
-        HStack(spacing: 10) {
-            ProgressView().scaleEffect(0.7)
-            Text("\(label)…")
-                .font(.system(size: 13))
-                .foregroundStyle(theme.inkMute)
+        #if os(macOS)
+        if withHat {
+            HStack(alignment: .top, spacing: 14) {
+                BoaterHat(size: 18, color: theme.ink, ribbonColor: theme.surface)
+                    .frame(width: 26, height: 20)
+                content.padding(.top, 1)
+            }
+        } else {
+            content
         }
-        .padding(.vertical, 8)
+        #else
+        content
+        #endif
+    }
+
+    private var content: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 8) {
+                ForEach(sourcesByOrigin, id: \.origin) { row in
+                    SourcesCard(cards: row.payloads)
+                }
+                if activity.isVisible {
+                    Button { withAnimation(.easeOut(duration: 0.15)) { expanded.toggle() } } label: { words }
+                        .buttonStyle(.plain)
+                }
+                if running {
+                    ThinkingPulse(style: pulse, color: theme.inkSoft)
+                }
+                elapsed
+            }
+            .frame(minHeight: 22)
+            if expanded { detail }
+        }
+        .padding(.vertical, 4)
+        .animation(.easeOut(duration: 0.18), value: activity.steps)
+    }
+
+    /// Done steps, muted; then the running ones, brighter.
+    private var words: some View {
+        HStack(spacing: 6) {
+            if !done.isEmpty {
+                Text(done.map(Self.name(of:)).joined(separator: " · "))
+                    .foregroundStyle(theme.inkMute)
+                    .lineLimit(1)
+                    .truncationMode(.head)
+                    .layoutPriority(-1)
+            }
+            if let now = currentText {
+                if !done.isEmpty { Text("–").foregroundStyle(theme.inkMute) }
+                Text(now)
+                    .foregroundStyle(theme.inkSoft)
+                    .lineLimit(1)
+                    .fixedSize(horizontal: true, vertical: false)
+            }
+        }
+        .font(.system(size: 12.5))
+        .contentShape(Rectangle())
+    }
+
+    /// What is happening right now: the running tool(s), or the phase
+    /// (thinking, reconnecting) when no tool is.
+    private var currentText: String? {
+        if !current.isEmpty { return current.map(Self.name(of:)).joined(separator: " · ") + "…" }
+        if let phase = activity.phase { return phase + "…" }
+        return nil
+    }
+
+    /// The clock: ticking while the turn runs, frozen on the recap. A turn
+    /// that took two seconds does not need to be timed.
+    @ViewBuilder
+    private var elapsed: some View {
+        if running {
+            TimelineView(.periodic(from: .now, by: 1)) { _ in
+                if activity.elapsed >= 2 { duration }
+            }
+        } else if activity.elapsed >= 2 {
+            duration
+        }
+    }
+
+    private var duration: some View {
+        Text(Self.format(activity.elapsed))
+            .font(.system(size: 12, weight: .medium, design: .rounded).monospacedDigit())
+            .foregroundStyle(theme.inkMute)
+    }
+
+    /// Every step on its own line: done ones ticked, the running ones last.
+    private var detail: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            ForEach(done) { step in
+                HStack(spacing: 6) {
+                    Image(systemName: "checkmark").font(.system(size: 9, weight: .semibold)).frame(width: 12)
+                    Text(Self.name(of: step))
+                }
+                .foregroundStyle(theme.inkMute)
+            }
+            ForEach(current) { step in
+                HStack(spacing: 6) {
+                    Image(systemName: "arrow.right").font(.system(size: 9, weight: .semibold)).frame(width: 12)
+                    Text(Self.name(of: step) + "…")
+                }
+                .foregroundStyle(theme.inkSoft)
+            }
+        }
+        .font(.system(size: 12))
+        .padding(.leading, 2)
+        .transition(.opacity.combined(with: .move(edge: .top)))
+    }
+
+    private static func name(of step: ToolStep) -> String {
+        let label = ToolStep.label(for: step.tool, running: step.running)
+        return step.count > 1 ? "\(label) ×\(step.count)" : label
+    }
+
+    /// Seconds up to a minute, then minutes and seconds.
+    private static func format(_ t: TimeInterval) -> String {
+        let s = Int(t.rounded())
+        return s < 60 ? L("chat.activity.secs", s) : L("chat.activity.mins", s / 60, s % 60)
     }
 }
 
@@ -2247,33 +2491,6 @@ private func mauriceMarkdownTheme(_ t: MauriceTheme) -> MarkdownUI.Theme {
 }
 
 // MARK: - Streaming Indicator
-
-private struct StreamingIndicator: View {
-    @Environment(\.mauriceTheme) private var theme
-
-    var body: some View {
-        let dots = TimelineView(.animation(minimumInterval: 1.0 / 30.0)) { timeline in
-            let t = timeline.date.timeIntervalSinceReferenceDate
-            HStack(spacing: 4) {
-                ForEach(0..<3, id: \.self) { i in
-                    Circle()
-                        .fill(theme.inkMute)
-                        .frame(width: 6, height: 6)
-                        .offset(y: sin(t * 4.0 + Double(i) * 0.8) * 3)
-                }
-            }
-        }
-        #if os(iOS)
-        dots.padding(.top, 2)
-        #else
-        HStack(alignment: .top, spacing: 14) {
-            BoaterHat(size: 18, color: theme.ink, ribbonColor: theme.surface)
-                .frame(width: 26, height: 20)
-            dots.padding(.top, 6)
-        }
-        #endif
-    }
-}
 
 // MARK: - Composer Bar
 

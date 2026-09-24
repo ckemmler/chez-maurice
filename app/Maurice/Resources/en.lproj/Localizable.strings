@@ -340,6 +340,12 @@
 "dictation.consent.title" = "Dictate in %@?";
 "dictation.consent.body" = "This device has no offline dictation model for %@, so Maurice can only transcribe it by sending the audio to Apple. Nothing else about Maurice changes — your conversations stay on your own server. You can turn this off again in Settings.";
 "dictation.consent.allow" = "Send audio to Apple";
+"settings.pulse.group" = "ACTIVITY";
+"settings.pulse.halo" = "Halo";
+"settings.pulse.orbit" = "Orbit";
+"settings.pulse.stroke" = "Stroke";
+"settings.pulse.hat" = "The hat";
+"settings.pulse.caption" = "The mark that shows Maurice at work, on the line that gathers what a reply has done so far. Try each one in a conversation.";
 "settings.dictation.group" = "DICTATION";
 "settings.dictation.allow_server" = "Allow Apple transcription";
 "settings.dictation.caption" = "Dictation stays on this device whenever the language has an offline model. Allow this and languages without one are transcribed by Apple instead, which means the audio leaves your device. The microphone shows a cloud while that is happening.";
@@ -414,6 +420,10 @@
 "chat.activity.webSearch" = "Searching the web";
 "chat.activity.usingTool" = "Using %@";
 "chat.activity.reconnecting" = "Connection lost, Maurice carries on…";
+"chat.activity.webSearchDone" = "Searched the web";
+"chat.activity.usedTool" = "Used %@";
+"chat.activity.secs" = "%ds";
+"chat.activity.mins" = "%dm %02ds";
 
 /* A reply that could not be followed to its end */
 "chat.error.busy" = "Maurice is already answering in this conversation.";

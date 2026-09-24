@@ -6,6 +6,91 @@ import UIKit
 import AppKit
 #endif
 
+// MARK: - Turn Activity
+
+/// One kind of work a turn did: a tool, and how many times it ran.
+///
+/// The tool's own name is kept rather than a label, so the row can name it in
+/// the tense it is in — running or done — and follow a language change.
+struct ToolStep: Identifiable, Equatable {
+    let tool: String
+    var count = 1
+    var running = true
+    /// Steps are folded by tool, so the name identifies the row.
+    var id: String { tool }
+
+    /// What a member sees for a tool. MCP tools are namespaced "server__tool";
+    /// the server segment is the identifier worth showing ("garden", "tasks").
+    static func label(for tool: String, running: Bool) -> String {
+        if tool == "web_search" { return L(running ? "chat.activity.webSearch" : "chat.activity.webSearchDone") }
+        let server = tool.components(separatedBy: "__").first ?? tool
+        return L(running ? "chat.activity.usingTool" : "chat.activity.usedTool", server)
+    }
+}
+
+/// Everything a turn has done so far, folded small enough to draw on one line.
+///
+/// Each call used to replace a single label and clear it on the way out, so a
+/// turn that searched three times and read two notes flashed five labels under
+/// the reply, one after the other. Here they accumulate: the same tool twice is
+/// one step with a count, and the line lives from the start of the turn to its
+/// end instead of blinking in and out between calls.
+struct TurnActivity: Equatable {
+    var steps: [ToolStep] = []
+    /// Thinking, or reconnecting: a passing state of the turn, not a tool call.
+    var phase: String? = nil
+    var startedAt: Date? = nil
+    /// Set when the turn ends — what freezes the counter on the kept recap.
+    var endedAt: Date? = nil
+
+    /// Whether there is anything to draw (an empty activity draws nothing and
+    /// the bare streaming dots take over).
+    var isVisible: Bool { !steps.isEmpty || phase != nil }
+    var isRunning: Bool { endedAt == nil }
+    var calls: Int { steps.reduce(0) { $0 + $1.count } }
+    var elapsed: TimeInterval {
+        guard let startedAt else { return 0 }
+        return (endedAt ?? Date()).timeIntervalSince(startedAt)
+    }
+
+    /// A tool started: a step of its own, or one more call of a step we have.
+    mutating func begin(_ tool: String) {
+        phase = nil
+        if startedAt == nil { startedAt = Date() }
+        if let i = steps.firstIndex(where: { $0.tool == tool }) {
+            steps[i].count += 1
+            steps[i].running = true
+        } else {
+            steps.append(ToolStep(tool: tool))
+        }
+    }
+
+    mutating func end(_ tool: String?) {
+        guard let tool else {
+            for i in steps.indices { steps[i].running = false }
+            return
+        }
+        if let i = steps.firstIndex(where: { $0.tool == tool }) { steps[i].running = false }
+    }
+
+    /// A re-attached stream reports the tool running right now. It was counted
+    /// before the connection dropped, so it is marked running, not counted again.
+    mutating func resume(_ tool: String?) {
+        phase = nil
+        end(nil)
+        guard let tool else { return }
+        if let i = steps.firstIndex(where: { $0.tool == tool }) { steps[i].running = true }
+        else { steps.append(ToolStep(tool: tool)) }
+    }
+
+    /// The turn is over: the counter stops and nothing is left running.
+    mutating func finish() {
+        phase = nil
+        end(nil)
+        endedAt = Date()
+    }
+}
+
 // MARK: - Chat Service
 
 @Observable @MainActor
@@ -44,8 +129,13 @@ final class ChatService {
     /// `done`). Carried onto the finished message.
     var streamingUsage: TurnUsage?
     var isGeneratingImage = false
-    /// Human-readable label of the tool currently running (e.g. "Searching the web"), or nil.
-    var toolActivity: String?
+    /// What the turn being streamed is doing — one growing line rather than a
+    /// label that flickers with every call (see `TurnActivity`).
+    var activity = TurnActivity()
+    /// The activity of finished turns, by message id: the collapsed recap that
+    /// stays under the reply. Session-lived — the server does not persist the
+    /// trail, so a thread reloaded from scratch shows its sources and no recap.
+    var toolTrails: [String: TurnActivity] = [:]
     /// A refusal or a lost reply: stays until tapped or the next send.
     var error: String?
     /// A network hiccup on a background load (list, thread, room action): shown
@@ -521,7 +611,8 @@ final class ChatService {
         streamingText = ""
         streamingData = []
         streamingUsage = nil
-        toolActivity = nil
+        activity = TurnActivity()
+        toolTrails = [:]
         pendingSummon = false
         currentMauriceId = defaultMauriceId
     }
@@ -935,6 +1026,7 @@ final class ChatService {
         streamingText = ""
         streamingData = []
         streamingUsage = nil
+        activity = TurnActivity(startedAt: Date())
         error = nil
         followedTurn = (convoId, Date())
         #if os(iOS) && canImport(UIKit)
@@ -1013,7 +1105,7 @@ final class ChatService {
                     return .abandoned
                 }
                 if lost {
-                    toolActivity = L("chat.activity.reconnecting")
+                    activity.phase = L("chat.activity.reconnecting")
                     isGeneratingImage = false
                 }
                 try? await Task.sleep(for: .seconds(attachFailures > 0 ? 2 : 1))
@@ -1041,7 +1133,7 @@ final class ChatService {
             streamingData = []
             streamingUsage = nil
             isGeneratingImage = false
-            toolActivity = nil
+            activity = TurnActivity()
             pendingSummon = false
             return
         }
@@ -1064,6 +1156,13 @@ final class ChatService {
                 messages.append(assistantMsg)
                 knownIds.insert(id)
             }
+            // The recap stays under the reply, whether the message came from
+            // this stream or reached the thread over the socket first.
+            if !activity.steps.isEmpty {
+                var done = activity
+                done.finish()
+                toolTrails[id] = done
+            }
         }
 
         streamingText = ""
@@ -1071,7 +1170,7 @@ final class ChatService {
         streamingUsage = nil
         isStreaming = false
         isGeneratingImage = false
-        toolActivity = nil
+        activity = TurnActivity()
         pendingSummon = false
         if case .nothingRunning = outcome {
             // Persisted while we were away, or never made: the thread knows.
@@ -1112,18 +1211,20 @@ final class ChatService {
             streamingData = event.blocks ?? []
             streamingUsage = event.usage
             isGeneratingImage = false
-            toolActivity = event.tool.map(Self.toolLabel(for:))
+            activity.resume(event.tool)
         case .text_delta:
             if let t = event.text {
                 streamingText += t
             }
             // Visible text ends the "Thinking" phase (a tool label
             // is cleared by its own end event).
-            if toolActivity == Self.thinkingLabel { toolActivity = nil }
+            if activity.phase == Self.thinkingLabel { activity.phase = nil }
         case .thinking:
             // Reasoning models go quiet for a while before the first
             // word; say so instead of showing a bare spinner.
-            if toolActivity == nil { toolActivity = Self.thinkingLabel }
+            if activity.phase == nil && !activity.steps.contains(where: \.running) {
+                activity.phase = Self.thinkingLabel
+            }
         case .ping:
             break // keepalive — nothing to show
         case .image_loading:
@@ -1137,9 +1238,9 @@ final class ChatService {
             }
         case .tool_call:
             if event.status == "start", let tool = event.tool {
-                toolActivity = Self.toolLabel(for: tool)
+                activity.begin(tool)
             } else {
-                toolActivity = nil
+                activity.end(event.tool)
             }
         case .tool_data:
             if let data = event.data {
@@ -1151,7 +1252,7 @@ final class ChatService {
             break // the follower takes it from here
         case .error:
             isGeneratingImage = false
-            toolActivity = nil
+            activity.phase = nil
             self.error = event.message ?? "Stream error"
         }
     }
@@ -1201,16 +1302,6 @@ final class ChatService {
     /// after a language change the comparison would never match again.
     private static var thinkingLabel: String { L("chat.activity.thinking") }
 
-    /// Map a server tool name (e.g. "web_search", "tasks__triage") to a
-    /// friendly activity label. The server segment of an MCP name is its own
-    /// identifier ("tasks", "garden") and stays as it is.
-    private static func toolLabel(for tool: String) -> String {
-        if tool == "web_search" { return L("chat.activity.webSearch") }
-        // MCP tools are namespaced "server__tool"; show the server segment.
-        let server = tool.components(separatedBy: "__").first ?? tool
-        return L("chat.activity.usingTool", server)
-    }
-
     // MARK: - User Switch
 
     func onUserSwitch() async {
@@ -1230,7 +1321,8 @@ final class ChatService {
         streamingText = ""
         streamingData = []
         streamingUsage = nil
-        toolActivity = nil
+        activity = TurnActivity()
+        toolTrails = [:]
         error = nil
         await loadConversations()
         // Open a conversation requested by a cross-household notification tap,
