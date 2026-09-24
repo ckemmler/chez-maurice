@@ -984,6 +984,9 @@ enum GardenSort: String, SortChoice {
 
 struct GardenPageView: View {
     @Environment(SessionStore.self) private var session
+    #if os(iOS)
+    @Environment(\.horizontalSizeClass) private var hSize
+    #endif
     @Environment(GardensStore.self) private var gardens
     @Environment(\.mauriceTheme) private var theme
     let garden: ServerGarden
@@ -1130,11 +1133,14 @@ struct GardenPageView: View {
             // replaces the custom breadcrumb bar and the collapsed back chevron.
             ToolbarItem(placement: .topBarLeading) {
                 HStack(spacing: 8) {
-                    Button { onToggleSidebar() } label: {
-                        Image(systemName: "sidebar.leading")
-                            .foregroundStyle(theme.inkSoft)
+                    // Only in a collapsed split (see ChatView.chatToolbar).
+                    if hSize == .compact {
+                        Button { onToggleSidebar() } label: {
+                            Image(systemName: "sidebar.leading")
+                                .foregroundStyle(theme.inkSoft)
+                        }
+                        .buttonStyle(.plain)
                     }
-                    .buttonStyle(.plain)
                     if !garden.mine {
                         AvatarStack(participants: gardens.others(of: garden),
                                     serverBase: session.serverURL, size: 22, ring: theme.bg)

@@ -34,6 +34,9 @@ struct ChatView: View {
     /// Force one scroll-to-bottom after a (re)load, regardless of scroll state.
     @State private var pendingScrollToBottom = true
     @FocusState private var isInputFocused: Bool
+    #if os(iOS)
+    @Environment(\.horizontalSizeClass) private var hSize
+    #endif
 
     private var accent: Color { session.activeDeviceUser?.color ?? .blue }
 
@@ -188,12 +191,18 @@ struct ChatView: View {
             // One Maurice: no badge, whatever the conversation is bound to.
             ToolbarItem(placement: .topBarLeading) {
                 HStack(spacing: 9) {
-                    Button { onToggleSidebar() } label: {
-                        Image(systemName: "sidebar.leading")
-                            .foregroundStyle(theme.inkSoft)
+                    // Only when the split has collapsed to a stack (a narrow
+                    // window): the system then offers a back chevron we hide.
+                    // With the sidebar column in play the system's own toggle
+                    // is there, and a second one read as two of the same.
+                    if hSize == .compact {
+                        Button { onToggleSidebar() } label: {
+                            Image(systemName: "sidebar.leading")
+                                .foregroundStyle(theme.inkSoft)
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel(session.localized("chat.back_to_conversations"))
                     }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel(session.localized("chat.back_to_conversations"))
                     Text(chat.activeConversation?.title ?? session.localized("chat.new_conversation"))
                         .font(.system(size: 17, design: .serif))
                         .foregroundStyle(theme.ink)
@@ -428,7 +437,11 @@ struct ChatView: View {
             }
         }
         .padding(.horizontal, 12)
-        .padding(.bottom, 4)
+        // iPad: level with the sidebar's floating controls, which hover 10pt
+        // off the screen's edge (an overlay on a scroll view sits under the
+        // safe area); the field would otherwise float 14pt higher than them.
+        .padding(.bottom, Platform.isPad ? 10 : 4)
+        .ignoresSafeArea(.container, edges: Platform.isPad ? .bottom : [])
         #else
         // Mac: like iOS, the tray is hidden during chat and toggled from the ctx
         // pill in the input row — so it doesn't sit on top of the field — and
@@ -814,7 +827,7 @@ private struct ConversationDetailsSheet: View {
 
     /// The whole conversation's meter: total cost first, then what the cache
     /// did for it, the token split, and which models did the work. Unpriced
-    /// turns (local models) fall back to token volume rather than a fake "$0".
+    /// turns (local models) fall back to token volume rather than a fake "0 €".
     @ViewBuilder
     private var usageSection: some View {
         let u = usage
@@ -1477,7 +1490,7 @@ struct TurnUsageFooter: View {
     private func money(_ v: Double) -> String { UsageFormat.money(v) }
     private func tokens(_ n: Int) -> String { UsageFormat.tokens(n) }
 
-    /// Cost if priced, token volume otherwise — never a bare "$0.00" for a model
+    /// Cost if priced, token volume otherwise — never a bare "0,00 €" for a model
     /// we simply have no price for.
     private var headline: String {
         if let c = usage.cost { return money(c) }

@@ -1,7 +1,10 @@
 // What a turn cost, and what it would have cost without the cache.
 //
-// The numbers here are list prices in USD per million tokens. They are a local
-// copy of a published price sheet, so they drift: treat a missing entry as
+// The numbers here are list prices in USD per million tokens — the currency
+// the sheets are published in; the meter itself counts in **euros** (since
+// 24 September 2026, see `priceUsage`), because that is what the household
+// pays in. They are a local copy of a published price sheet, so they drift:
+// treat a missing entry as
 // "unpriced" (cost comes back null and the apps show tokens only) rather than
 // guessing. Never let an unknown model silently price at zero — a zero reads as
 // "this was free", which is the one wrong answer.
@@ -23,10 +26,12 @@ export interface ModelPrice {
 // only has to be made in one place.
 const ANTHROPIC_CACHE = { cacheWrite: 1.25, cacheRead: 0.1 };
 
-// Scaleway publishes in euros and this meter counts in dollars. One fixed rate
-// — the ECB reference of 2026-09-16 — rather than a live one: a meter that
-// drifts with the exchange rate cannot be reconciled against any bill. Move it
-// when the sheet is re-read, not before.
+// The sheets are in dollars (Scaleway's in euros — its entries below are
+// converted up so the table stays in one currency) and the meter counts in
+// euros: `priceUsage` divides by this. One fixed rate — the ECB reference of
+// 2026-09-16 — rather than a live one: a meter that drifts with the exchange
+// rate cannot be reconciled against any bill. Move it when the sheets are
+// re-read, not before.
 const EUR_USD = 1.1537;
 
 /** List prices per million tokens. Keys are bare model ids — a dated snapshot
@@ -149,7 +154,8 @@ export function priceUsage(u: TurnUsage): TurnUsage {
     u.cost_uncached = null;
     return u;
   }
-  const per = (tokens: number, rate: number) => (tokens / 1_000_000) * rate;
+  // Per million tokens, in euros: the table is in dollars, the household is not.
+  const per = (tokens: number, rate: number) => (tokens / 1_000_000) * rate / EUR_USD;
   u.cost =
     per(u.input, p.input) +
     per(u.output, p.output) +

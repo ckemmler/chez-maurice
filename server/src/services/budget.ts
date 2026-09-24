@@ -7,6 +7,11 @@
 // money. This is the thing that says *no* — for the demo fleet, where every
 // household runs on our key, and for any hosted instance sold with a bundle.
 //
+// Every figure here is in euros — what the household pays in — since
+// 24 September 2026 (`pricing.ts` converts at its fixed rate). The `_usd`
+// in column, env and field names is older than that and left alone: a rename
+// would touch every deployed plist, fleet env and client for a label.
+//
 // Three layers of cap, the tightest one wins, all off by default:
 //
 //   the instance's — env, the operator's fuse, counted over the whole household

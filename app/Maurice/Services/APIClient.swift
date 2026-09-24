@@ -376,7 +376,7 @@ struct TurnUsage: Decodable, Equatable {
         promptTokens > 0 ? Double(cache_read) / Double(promptTokens) : nil
     }
 
-    /// USD saved by the cache on this turn, if both figures are known.
+    /// Euros saved by the cache on this turn, if both figures are known.
     var saved: Double? {
         guard let cost, let cost_uncached else { return nil }
         return max(0, cost_uncached - cost)
@@ -466,11 +466,16 @@ struct ConversationUsage: Equatable {
 /// How cost and token figures are spelled everywhere they appear, so the
 /// per-turn coin and the conversation summary can't disagree on rounding.
 enum UsageFormat {
-    /// Dollars at a resolution that doesn't round a real cost to "$0.00".
+    /// Euros — what the household pays in; the server meters in them — at a
+    /// resolution that doesn't round a real cost to "0,00 €". Spelled the
+    /// member's way ("0,42 €" in French, "€0.42" in English).
     static func money(_ v: Double) -> String {
-        if v == 0 { return "$0" }
-        if v < 0.01 { return String(format: "$%.4f", v) }
-        return String(format: "$%.2f", v)
+        let f = NumberFormatter()
+        f.numberStyle = .currency
+        f.currencyCode = "EUR"
+        f.minimumFractionDigits = v == 0 ? 0 : (v < 0.01 ? 4 : 2)
+        f.maximumFractionDigits = f.minimumFractionDigits
+        return f.string(from: NSNumber(value: v)) ?? String(format: "%.2f €", v)
     }
 
     static func tokens(_ n: Int) -> String {
