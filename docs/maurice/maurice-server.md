@@ -1,6 +1,6 @@
 ---
 title: The server
-date: '2026-09-24'
+date: '2026-09-25'
 flags: []
 locale: en
 description: 'The Hono/Bun engine: API surface, the streaming agentic loop, prompt
@@ -45,6 +45,8 @@ Route groups mounted from `server/src/routes` (chat engine):
 | `/api/reports` | `reports.ts` | Operator-only moderation of reports filed in shared rooms |
 | `/admin`, `/login` | `admin.ts`, `web-admin.ts`, `web-login.ts` | Household admin web UI: members, models and their context windows, provider keys, Calibre library, access matrix, spending caps, the docs refresh, the household export |
 | `/api/admin/export` | `admin.ts` | The household archive (`maurice-archive` v1, `services/archive.ts`), `application/gzip`, streamed; admin token. `GET /admin/export` is the same behind the console cookie — see [[maurice-households-rooms]] |
+| `/api/mail-accounts` | `mailAccounts.ts` | The member's own mailboxes (25 September 2026, `services/mailAccounts.ts`): `GET /` (never a password), `POST /` `{ address, password, provider?, host?, port?, security?, username?, name? }` — logs in through the `email` tool as the member before answering, 201 when it worked, **422 with the mailbox's reason and nothing kept** when it did not, 409 for an address already there —, `PUT /:id/password` (kept only if it works, else the previous one is put back), `POST /:id/check`, `DELETE /:id`. Another member's account is 404. Spaces in a pasted password are dropped (Gmail shows app passwords in groups of four); dashes are kept (Apple's contain them) |
+| `/api/local/mail-accounts/:memberId` | `mailAccountsLocal.ts` | What the `email` tool reads, passwords decrypted. **Two locks**: loopback only (the admin dashboard's test) *and* the gateway's `MAURICE_MCP_TOKEN` in `X-Maurice-Tool-Token` — not `Authorization`, which `proxyAuth` would read as a session. No key configured on the server = closed. Unlike an ancillary turn, this route hands out mail passwords, and "any process on the machine" is a wider circle than "the gateway" |
 | `/api/me/usage`, `/api/admin/usage` | `me.ts`, `admin.ts` | What a member spent today and this month against the tightest cap that applies to them; the admin's view of everyone — see *The spending fuse* |
 | `/api/import` | `import.ts` | A member imports their own ChatGPT or Claude history (19 September 2026, P4 of the domains): `POST /?provider=anthropic\|chatgpt` with the export `.zip` (multipart, `file`) answers the corpus job to poll; `GET /status?job=`; `GET /history?provider=` (runs and watermark). Guests refused. `services/chatImport.ts`, shared with the console's `/admin/users/:id/import*`; the work is the corpus's — see [[maurice-knowledge]] |
 | `/api/admin/corpus/reconcile`, `/api/admin/domains/map` | `admin.ts` | The nights by hand, for a script or a demo: reconcile every conversation into the corpus and answer when done; map one member now (`dry_run`, `force`) — what `scripts/seed-demo-household.sh --morning` calls in turn |

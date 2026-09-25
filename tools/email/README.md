@@ -52,7 +52,27 @@ syntax (`X-GM-RAW`), which also allows `has_attachment` and a free
 
 ## Setting an account up
 
-For now, accounts live in `email.toml` beside `maurice.db` — `~/.maurice/email.toml` on a Mac, the data volume in the container — or wherever `MAURICE_EMAIL_CONFIG` points;
+**The ordinary way: the member adds it themselves** through the server,
+`POST /api/mail-accounts` with `{ address, password }` (plus `provider:
+"gmail"` for a Workspace domain, or `host`/`port`/`security`/`username` for a
+server the domain does not name). The server logs in through this tool before
+answering: a password the mailbox refuses is not kept, and the reason comes
+back (422). The password is encrypted at rest with the household's key
+(`MAURICE_SECRET_KEY`, else `secret.key` in the app dir) and never returned.
+`GET /api/mail-accounts` lists them with their last state, `PUT
+/:id/password` replaces a revoked app password (kept only if it works), `POST
+/:id/check` logs in again, `DELETE /:id` forgets it. See
+`server/src/services/mailAccounts.ts`.
+
+The tool reads them, password included, from
+`/api/local/mail-accounts/<member id>` — loopback only, and only with the
+gateway's own `MAURICE_MCP_TOKEN` in `X-Maurice-Tool-Token`; a gateway started
+without that key sees only the file's accounts, and says why. They are read
+afresh on every call, so an account removed is gone from the next one, and a
+new password opens a new session.
+
+**The admin's way**, for what the API cannot describe (Proton through Bridge
+with an existing Keychain entry, say): accounts live in `email.toml` beside `maurice.db` — `~/.maurice/email.toml` on a Mac, the data volume in the container — or wherever `MAURICE_EMAIL_CONFIG` points;
 see `email.example.toml`. The smallest account is two lines:
 
 ```toml
@@ -104,8 +124,8 @@ images that are not attachments, large messages, stats.
 
 ## Next
 
-1. Accounts per member in the server (a table, the secret encrypted at rest),
-   so the TOML and the Keychain go away and the tool runs in a container.
-2. A settings screen in the app: address, password, a connection test.
+1. ~~Accounts per member in the server~~ (done, 25 September 2026).
+2. A settings screen in the app over `/api/mail-accounts`: address, password,
+   the connection test's answer.
 3. OAuth (XOAUTH2) for Gmail and Outlook.
 4. Optionally, indexing into the corpus, for search that IMAP does badly.

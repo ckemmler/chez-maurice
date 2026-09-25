@@ -56,7 +56,7 @@ export type ArchiveManifest = {
 };
 
 export type ExportOptions = {
-  /** maurice.db, images/, files/, uploads/, avatars/, config.toml. */
+  /** maurice.db, images/, files/, uploads/, avatars/, config.toml, secret.key. */
   appDir?: string;
   /** The data-api databases (life.db, compte.db …). */
   dataDir?: string;
@@ -67,8 +67,10 @@ export type ExportOptions = {
 
 export class ArchiveError extends Error {}
 
-/** The app-dir entries that travel as they are, when they exist. */
-const LIVE_ENTRIES = ["images", "files", "uploads", "avatars", "config.toml"];
+/** The app-dir entries that travel as they are, when they exist. `secret.key`
+ *  opens the mail passwords in maurice.db (services/mailAccounts.ts): without
+ *  it a moved household keeps its accounts and loses every password. */
+const LIVE_ENTRIES = ["images", "files", "uploads", "avatars", "config.toml", "secret.key"];
 
 /** Patterns tar leaves out of every directory it reads. WAL sidecars belong
  *  to a live database, not to a snapshot; the rest is macOS litter that the

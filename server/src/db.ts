@@ -899,6 +899,32 @@ db.run(`
 `);
 try { db.run(`CREATE INDEX IF NOT EXISTS idx_life_facts_member ON life_facts(member_id, state)`); } catch {}
 
+// A member's mail accounts (25 September 2026, services/mailAccounts.ts), read
+// by the `email` tool through a loopback route. Only the member sees or edits
+// their own; `secret` is the password encrypted with the household's key
+// (AES-256-GCM), never returned by a member-facing route. The connection
+// fields are optional: the tool guesses them from the address's domain.
+db.run(`
+  CREATE TABLE IF NOT EXISTS mail_accounts (
+    id          TEXT PRIMARY KEY,
+    member_id   TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    address     TEXT NOT NULL,
+    name        TEXT,
+    provider    TEXT,
+    host        TEXT,
+    port        INTEGER,
+    security    TEXT,
+    username    TEXT,
+    secret      TEXT NOT NULL,
+    state       TEXT NOT NULL DEFAULT 'unchecked' CHECK (state IN ('unchecked', 'ok', 'error')),
+    last_error  TEXT,
+    checked_at  TEXT,
+    created_at  TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at  TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE (member_id, address)
+  )
+`);
+
 // The brief's own one-liner (20 September 2026). The everyday prompt carries an
 // *index* of the member's domains — a name and a sentence each — rather than
 // every brief in full, and loads a brief only when a question falls into it

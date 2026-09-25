@@ -19,12 +19,6 @@ from tools.email.service import AccessDenied, EmailService
 
 from .fakes import FakeIMAPClient, build_raw
 
-MEMBER_IDS = {"alex": "id-alex", "sam": "id-sam"}
-
-
-@pytest.fixture(autouse=True)
-def member_registry(monkeypatch):
-    monkeypatch.setattr(accounts_mod, "resolve_member_id", lambda username: MEMBER_IDS.get(username))
 
 
 def write_config(tmp_path: Path, body: str) -> Path:

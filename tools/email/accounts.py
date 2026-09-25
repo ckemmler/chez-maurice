@@ -4,17 +4,22 @@ An account belongs to exactly one member, and a member only ever sees their
 own: the gateway names the caller by id on every request, and there is no path
 — not for the owner, not for an admin — into another member's mailbox.
 
-For now the accounts are written in a TOML file, ``email.toml`` beside
-``maurice.db`` (``~/.maurice`` on a Mac, the data volume in the container), or
-wherever ``MAURICE_EMAIL_CONFIG`` points. The smallest account is two lines, a
-member and an address; everything else is guessed from the domain (see
-providers.py) and can be overridden. The file holds no secrets.
+Accounts come from two places, merged per member:
 
-Passwords come from the macOS Keychain first (service ``maurice-email``,
-account = the address, unless the account names another), then from an
-environment variable (``MAURICE_EMAIL_<NAME>_PASSWORD``) — the only way in the
-container, which has no Keychain. ``<NAME>`` is the account's name, so a
-household with two members on Gmail names one of them.
+* **The server** — what the member added themselves from the app (the
+  ``mail_accounts`` table, password encrypted at rest). The tool reads them,
+  password included, from ``/api/local/mail-accounts/<member id>``: loopback
+  only, and only with the gateway's own key (``MAURICE_MCP_TOKEN``) in
+  ``X-Maurice-Tool-Token``. This is the ordinary path.
+* **A TOML file**, ``email.toml`` beside ``maurice.db`` (``~/.maurice`` on a
+  Mac, the data volume in the container), or wherever ``MAURICE_EMAIL_CONFIG``
+  points — the admin's path, for what the app cannot describe (Proton through
+  Bridge on the Mac, a Keychain entry that already exists). The smallest
+  account is two lines, a member and an address; everything else is guessed
+  from the domain (see providers.py) and can be overridden. The file holds no
+  secrets: passwords come from the macOS Keychain (service ``maurice-email``,
+  account = the address, unless the account names another), then from
+  ``MAURICE_EMAIL_<NAME>_PASSWORD``.
 """
 
 from __future__ import annotations
@@ -23,9 +28,15 @@ import ipaddress
 import logging
 import os
 import re
+import hashlib
+import json
 import sqlite3
+import ssl
 import subprocess
-from dataclasses import dataclass, field
+import urllib.error
+import urllib.parse
+import urllib.request
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any
 
@@ -68,6 +79,10 @@ class Account:
     password_env: str | None = None
     timeout_seconds: float = 30.0
     password_help: str = ""
+    source: str = "file"  # file | app
+    # An account from the server carries its password; a file account never does.
+    password: str | None = field(default=None, repr=False, compare=False)
+    password_error: str | None = None
 
     def describe(self) -> dict[str, Any]:
         return {
@@ -76,7 +91,14 @@ class Account:
             "provider": self.provider or "custom",
             "server": f"{self.host}:{self.port} ({self.security})",
             "gmail_search": self.gmail,
+            "added_from": self.source,
         }
+
+    def fingerprint(self) -> str:
+        """Changes when anything a connection depends on does — a new password
+        above all — so a session opened with the old one is not reused."""
+        parts = [self.host, str(self.port), self.security, self.username, self.password or ""]
+        return hashlib.sha256("\x00".join(parts).encode()).hexdigest()[:16]
 
 
 @dataclass
@@ -140,7 +162,7 @@ def _is_loopback(host: str) -> bool:
         return False
 
 
-def _account(raw: dict[str, Any], taken: set[tuple[str, str]]) -> Account:
+def _account(raw: dict[str, Any], taken: set[tuple[str, str]], *, dedupe: bool = False) -> Account:
     member = str(raw.get("member") or "").strip()
     address = str(raw.get("address") or "").strip()
     if not member or not address or "@" not in address:
@@ -180,6 +202,10 @@ def _account(raw: dict[str, Any], taken: set[tuple[str, str]]) -> Account:
     name = name.lower()
     if not _NAME.match(name):
         raise ConfigError(f"{address}: account name {name!r} must be short, lowercase, [a-z0-9_-]")
+    if dedupe:
+        base, n = name, 2
+        while (member, name) in taken:
+            name, n = f"{base[:28]}-{n}", n + 1
     if (member, name) in taken:
         raise ConfigError(f"member {member!r} has two accounts named {name!r}; give one a name")
     taken.add((member, name))
@@ -245,6 +271,10 @@ def _from_keychain(service: str, account: str | None) -> str | None:
 
 
 def password_for(account: Account) -> str:
+    if account.password_error:
+        raise CredentialError(f"{account.address}: {account.password_error}")
+    if account.password:
+        return account.password
     if account.auth == "oauth":
         raise CredentialError(
             f"{account.address}: {account.password_help or 'this provider needs OAuth, which is not supported yet'}"
@@ -260,3 +290,64 @@ def password_for(account: Account) -> str:
         f"-s {account.keychain_service} -a {account.keychain_account} -w "
         f"(or set {account.password_env}).{hint}"
     )
+
+
+# ── accounts the member added from the app ──────────────────────────────
+
+
+def _server_bases() -> list[str]:
+    """Where this household's server listens: TLS on the Mac (its own
+    certificate), plain HTTP in the container — try both on loopback, as
+    tools/shared/model_config.py does. ``MAURICE_API_BASE`` settles it."""
+    base = os.environ.get("MAURICE_API_BASE")
+    if base:
+        return [base.rstrip("/")]
+    port = os.environ.get("PORT") or "3001"
+    return [f"https://127.0.0.1:{port}", f"http://127.0.0.1:{port}"]
+
+
+_server_base: str | None = None
+
+
+def fetch_app_accounts(member_id: str, taken: set[tuple[str, str]]) -> tuple[list[Account], str | None]:
+    """The accounts this member added from the app, passwords included, and
+    why not when they could not be read. Never raises: a server that is down
+    costs these accounts, not the ones in the file."""
+    global _server_base
+    token = os.environ.get("MAURICE_MCP_TOKEN") or os.environ.get("AKITA_MCP_TOKEN")
+    if not token:
+        return [], "the gateway has no MAURICE_MCP_TOKEN, so it cannot read accounts added from the app"
+    # Loopback to a certificate that is this machine's own.
+    context = ssl.create_default_context()
+    context.check_hostname = False
+    context.verify_mode = ssl.CERT_NONE
+    path = f"/api/local/mail-accounts/{urllib.parse.quote(member_id, safe='')}"
+    last: Exception | None = None
+    body: dict[str, Any] | None = None
+    for base in [_server_base] if _server_base else _server_bases():
+        request = urllib.request.Request(base + path, headers={"Host": "localhost", "X-Maurice-Tool-Token": token})
+        try:
+            with urllib.request.urlopen(request, timeout=5, context=context) as resp:
+                body = json.loads(resp.read().decode())
+            _server_base = base
+            break
+        except urllib.error.HTTPError as exc:
+            return [], f"the server refused the accounts request ({exc.code})"
+        except (OSError, ValueError) as exc:
+            last = exc
+    if body is None:
+        _server_base = None
+        return [], f"the server could not be reached for your accounts ({last})"
+    accounts = []
+    for raw in body.get("accounts", []):
+        entry = {k: v for k, v in raw.items() if k not in {"id", "password", "password_error"}}
+        entry["member"] = member_id
+        try:
+            account = _account(entry, taken, dedupe=True)
+        except ConfigError as exc:
+            log.warning("account %s from the app is unusable: %s", raw.get("address"), exc)
+            continue
+        accounts.append(
+            replace(account, source="app", password=raw.get("password"), password_error=raw.get("password_error"))
+        )
+    return accounts, None

@@ -135,17 +135,34 @@ listed as attachments. iCloud could not be tried: the stored app-specific
 password is refused, which is also why the `mail` tool keeps that account
 disabled.
 
-**Step 1 of four.** For now the accounts sit in `email.toml` beside
-`maurice.db` (`~/.maurice` on the Mac, the data volume in the container) and the
-passwords in the Keychain (`maurice-email`, the address as account) or, in the
-container, which has none, `MAURICE_EMAIL_<NAME>_PASSWORD` in the household's
-`.env`. The production image ships the tool (`!tools/email` in
-`Dockerfile.dockerignore`). The admin does all of it; a member who does not use
-a terminal cannot yet — what each side does is in the digest's *Connecting a
-mailbox*. Next: accounts per member in the server with the secret
-encrypted at rest, then a settings screen in the app (address, password,
-connection test), then OAuth for Gmail and Outlook, then optional indexing into
-the corpus.
+**Where the accounts come from — two sources, merged per member.** Since step 2
+(the evening of 25 September 2026) the ordinary one is the **server**: the member
+adds a mailbox through `/api/mail-accounts` (see [[maurice-server]]), the
+password sealed under the household key in `mail_accounts` (see
+[[maurice-data-model]]). The server logs in *through this tool* before keeping
+it — one IMAP implementation, in Python: it asks the gateway for the member's
+`email__list_accounts` and reads back the new address's state, so a password the
+mailbox refuses is never stored and the member sees the reason at once. The tool
+reads the accounts, passwords included, from `/api/local/mail-accounts/<member>`
+(loopback and the gateway's `MAURICE_MCP_TOKEN`), afresh on every call: an
+account removed is gone from the next one, and a new password opens a new
+session (the session key carries a fingerprint of host, port, login and
+password). A name already taken gets a suffix (`gmail-2`). A gateway started
+without the key sees only the file's accounts, and the tool says so instead of
+"you have no account".
+
+The second source is the admin's: `email.toml` beside `maurice.db` (`~/.maurice`
+on the Mac, the data volume in the container), passwords in the Keychain
+(`maurice-email`, the address as account) or `MAURICE_EMAIL_<NAME>_PASSWORD` —
+for what the API cannot describe, Proton through Bridge with its Keychain entry
+above all. The production image ships the tool (`!tools/email` in
+`Dockerfile.dockerignore`); `list_accounts` says for each account whether it was
+`added_from` the app or the file.
+
+**Next**: the settings screen in the app over `/api/mail-accounts` (step 3 —
+until then a member cannot add a mailbox without a terminal, and the digest's
+*Connecting a mailbox* says what the admin does meanwhile), then OAuth for Gmail
+and Outlook, then optional indexing into the corpus.
 
 ## `mail` — the first tool built around a hostile input
 
@@ -318,7 +335,7 @@ when imapclient ships the fix.
 ## Gaps & notes
 
 - **The gateway enforces none of this.** Families and the experimental flag live only in the Bun server. A client that authenticates straight to the MCP gateway — a member token, an OAuth custom connector — gets the *complete* mounted roster, whatever the member was granted in the app. Closing that is its own piece of work. (The native tools — `maurice_docs`, the three `domains__*` — are the exception by construction: they live in the server's loop and the gateway never sees them; `corpus__map_conversations`, though, is mounted like any corpus tool and reads whatever member the caller claims.)
-- **`email` has no server-side accounts yet.** The accounts file and the Keychain are one household's setup on a Mac; a member cannot add a mailbox from the app, and a Linux container has no Keychain. It is also *experimental* like every non-core family, so a member needs the admin's tick before they see it.
+- **`email` has no screen in the app yet.** The server holds a member's accounts since the evening of 25 September 2026, but only the API reaches them; a member cannot add a mailbox without a terminal until the settings screen exists. It is also *experimental* like every non-core family, so a member needs the admin's tick before they see it. Outlook.com needs OAuth, not built.
 - **`web` and `signals` can't be turned off.** They're re-unioned into every resolution, so unticking them in the picker does nothing.
 - **Family selection is coarser than it looks.** `toolInFamilies` still accepts the parent prefix for back-compat, so a conversation holding `"garden"` opens all 54 garden tools at once, sub-families included.
 - **No per-tool sandboxing.** A tool runs with the gateway's process privileges; the only access control is the member contextvar and tool-family gating, not OS-level isolation.

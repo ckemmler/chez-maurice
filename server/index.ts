@@ -56,6 +56,8 @@ import { scheduleDomainBriefsNightly } from "./src/services/domainBriefs";
 import { scheduleDomainMappingNightly } from "./src/services/domainMapping";
 import domains from "./src/routes/domains";
 import lifeFacts from "./src/routes/lifeFacts";
+import mailAccounts from "./src/routes/mailAccounts";
+import mailAccountsLocal from "./src/routes/mailAccountsLocal";
 import importRoutes from "./src/routes/import";
 import { gardenLook, isNoteSharedWith, gardenFor } from "./src/services/gardens";
 import maurices from "./src/routes/maurices";
@@ -320,6 +322,7 @@ app.route("/api/reports", reports);
 app.route("/api/maurices", maurices);
 app.route("/api/domains", domains);
 app.route("/api/life-facts", lifeFacts);
+app.route("/api/mail-accounts", mailAccounts);
 app.route("/api/models", models);
 app.route("/api/tool-families", toolFamilies);
 app.route("/api/admin", admin);
@@ -333,6 +336,9 @@ app.route("/api/v1/gardens", gardens);
 // /api/v1/* on purpose — that prefix requires an authenticated member, and a
 // tool beside the database is not one; its boundary is the machine.
 app.route("/api/ancillary", ancillaryRoute);
+// Loopback-only and keyed: the `email` tool reads a member's accounts, passwords
+// included, from here (src/routes/mailAccountsLocal.ts).
+app.route("/api/local/mail-accounts", mailAccountsLocal);
 app.route("/api/v1/garden-tools", gardenTools);
 
 // ── Shared garden on the web ─────────────────────────────────────

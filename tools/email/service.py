@@ -12,6 +12,7 @@ from collections import Counter
 from datetime import datetime, timezone
 from typing import Any, Callable
 
+from . import accounts as accounts_mod
 from .accounts import Account, ConfigError, EmailConfig
 from .imap import AccountUnavailable, MailboxError, Session, build_criteria, default_client_factory, gmail_query
 from .message import (
@@ -55,30 +56,63 @@ class AccessDenied(RuntimeError):
     """No member on the request, or an account that is not theirs."""
 
 
+class Accounts(list):
+    """A member's accounts, with the reason the app's could not be read, if any."""
+
+    note: str | None = None
+
+
+AppAccounts = Callable[[str, set], "tuple[list[Account], str | None]"]
+
+
 class EmailService:
-    def __init__(self, config: EmailConfig, client_factory: Callable[[Account], Any] = default_client_factory) -> None:
+    def __init__(
+        self,
+        config: EmailConfig,
+        client_factory: Callable[[Account], Any] = default_client_factory,
+        app_accounts: AppAccounts | None = None,
+    ) -> None:
         self.config = config
         self.client_factory = client_factory
-        self._sessions: dict[tuple[str, str], Session] = {}
+        self.app_accounts = app_accounts
+        self._sessions: dict[tuple[str, str, str], Session] = {}
 
     # ── who ──────────────────────────────────────────────────────────────
-    def accounts(self, *, member_id: str | None = None, username: str | None = None) -> list[Account]:
+    def accounts(self, *, member_id: str | None = None, username: str | None = None) -> Accounts:
+        """The file's accounts for this member, then the ones they added from
+        the app. Read afresh on every call: an account removed in the app is
+        gone from the very next one."""
         if member_id:
-            return self.config.for_member(member_id)
-        if username:
-            return self.config.for_username(username)
-        raise AccessDenied("no member on this request: mail is only ever read for the member asking")
+            found = Accounts(self.config.for_member(member_id))
+        elif username:
+            found = Accounts(self.config.for_username(username))
+            member_id = accounts_mod.resolve_member_id(username)
+        else:
+            raise AccessDenied("no member on this request: mail is only ever read for the member asking")
+        if member_id:
+            taken = {(member_id, a.name) for a in found}
+            fetch = self.app_accounts or accounts_mod.fetch_app_accounts
+            added, found.note = fetch(member_id, taken)
+            found.extend(added)
+        return found
 
     def _session(self, account: Account) -> Session:
-        key = (account.member, account.name)
+        key = (account.member, account.name, account.fingerprint())
         if key not in self._sessions:
+            # A new password (or server) for the same account: drop the
+            # session opened with the old one.
+            for old in [k for k in self._sessions if k[:2] == key[:2]]:
+                self._sessions.pop(old).close()
             self._sessions[key] = Session(account, self.client_factory)
         return self._sessions[key]
 
     def _pick(self, accounts: list[Account], name: str | None) -> list[Account]:
         if not accounts:
-            where = self.config.path
-            raise AccessDenied(f"you have no mail account set up (accounts live in {where})")
+            note = getattr(accounts, "note", None)
+            raise AccessDenied(
+                "you have no mail account set up — add one in the app, Settings → Mail"
+                + (f" ({note})" if note else "")
+            )
         if name is None:
             return accounts
         for account in accounts:
