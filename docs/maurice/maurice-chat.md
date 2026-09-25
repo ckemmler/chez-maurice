@@ -1,6 +1,6 @@
 ---
 title: The chat experience
-date: '2026-09-24'
+date: '2026-09-25'
 flags: []
 locale: en
 description: Streaming render, tool-result data cards, math, markdown, images, dictation,
@@ -89,6 +89,8 @@ Prose is **MarkdownUI** themed to the Maurice palette (code spans and blocks in 
 ## Dictation
 
 Since August 2026 the composer takes **dictation**: on-device speech recognition in the member's language (any regional variant), text shown as it is spoken, inserted at the caret, listening through pauses, and a manual edit winning over the transcript. Apple's servers are used only for languages with no local model, and only if the member allows it in Settings. On iPhone the **Action Button** opens a fresh thread and starts listening (`DictateIntent`).
+
+The composer's input row keeps one **+** on the left (camera, photos, files, pasted image, add context, the conversation's tools) and puts the **mic beside the send button**. While listening, the gap between the model pill and the mic shows the microphone's **loudness as a scrolling waveform** (25 September 2026): the audio tap reduces each buffer to its RMS and hands the view one value every ~50 ms, never the audio itself. An input that changes mid-sentence (AirPods connecting; the Simulator rebuilding its device) no longer ends dictation: the engine restarts on the new input and what was heard is kept, up to three times a session; a call or Siri still stops it. A multi-channel input (a USB interface on iPad, the Simulator's ten channels) is reduced to its first channel before recognition, which otherwise returned nothing at all.
 
 ## Model switcher
 

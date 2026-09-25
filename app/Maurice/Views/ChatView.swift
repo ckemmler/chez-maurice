@@ -1449,6 +1449,42 @@ enum TurnCostPref {
 /// replaced, makes that a substitution instead of an ever-growing append — and
 /// the same structure puts the words at the caret, or over the selection, since
 /// an empty selection at the end is just the append case.
+/// The microphone's loudness as bars scrolling right to left: the newest
+/// sample sits against the mic, the oldest falls off the leading edge. Empty
+/// slots (the first seconds) draw as flat dots, so the strip reads as a line
+/// waiting for a voice rather than as nothing.
+///
+/// Reads the levels itself, so their twenty updates a second redraw this strip
+/// and not the whole composer around it.
+private struct DictationWaveform: View {
+    let dictation: Dictation
+    let color: Color
+
+    var body: some View {
+        let levels = dictation.levels
+        Canvas { ctx, size in
+            let barWidth: CGFloat = 3
+            let gap: CGFloat = 2
+            let step = barWidth + gap
+            let count = max(0, Int(size.width / step))
+            let minHeight: CGFloat = 3
+            for i in 0..<count {
+                // i counts from the trailing edge back into the past.
+                let index = levels.count - 1 - i
+                let level = index >= 0 ? CGFloat(levels[index]) : 0
+                let height = max(minHeight, level * size.height)
+                let x = size.width - CGFloat(i + 1) * step + gap
+                let rect = CGRect(x: x, y: (size.height - height) / 2, width: barWidth, height: height)
+                // Older bars fade a little, so the eye goes to the mic.
+                let age = CGFloat(i) / CGFloat(max(count, 1))
+                ctx.fill(Path(roundedRect: rect, cornerRadius: barWidth / 2),
+                         with: .color(color.opacity(0.9 - 0.5 * age)))
+            }
+        }
+        .accessibilityHidden(true)
+    }
+}
+
 private struct DictationAnchor {
     let base: String
     /// Character offsets, not String.Index. An index belongs to the string it
@@ -3003,7 +3039,21 @@ private struct ComposerBar: View {
                     // the left cluster, just after the action icons.
                     modelPill
 
+                    #if os(iOS)
+                    // While listening, the gap up to the mic carries what the
+                    // mic hears — proof it is listening, and to you.
+                    if dictation.isListening {
+                        DictationWaveform(dictation: dictation,
+                                          color: (session.activeDeviceUser?.color ?? .blue).legible(onDark: theme.isDark))
+                            .frame(maxWidth: .infinity, minHeight: 24, maxHeight: 24)
+                            .padding(.horizontal, 6)
+                            .transition(.opacity)
+                    } else {
+                        Spacer()
+                    }
+                    #else
                     Spacer()
+                    #endif
 
                     #if os(macOS)
                     // Return sends, Shift-Return breaks the line — said once, in

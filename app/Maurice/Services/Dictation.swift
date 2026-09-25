@@ -1,6 +1,7 @@
 import Foundation
 import Speech
 import AVFoundation
+import Accelerate
 
 /// Speech-to-text for the composer.
 ///
@@ -66,6 +67,41 @@ private final class RequestBox: @unchecked Sendable {
         lock.lock(); defer { lock.unlock() }
         request = nil
         pending.removeAll()
+    }
+}
+
+/// Loudness of the microphone, measured inside the audio tap.
+///
+/// The tap sees ~40 buffers a second on a realtime thread. Each one is reduced
+/// to its RMS here and only the loudest of every ~50ms window is handed on, so
+/// the main actor gets twenty small numbers a second instead of the audio.
+private final class LevelMeter: @unchecked Sendable {
+    private let lock = NSLock()
+    private var peak: Float = 0
+    private var frames: AVAudioFrameCount = 0
+
+    /// Feed one buffer; returns a level (0...1) when a window has closed.
+    func measure(_ buffer: AVAudioPCMBuffer) -> Float? {
+        guard let samples = buffer.floatChannelData?[0], buffer.frameLength > 0 else { return nil }
+        var rms: Float = 0
+        vDSP_rmsqv(samples, 1, &rms, vDSP_Length(buffer.frameLength))
+        lock.lock(); defer { lock.unlock() }
+        peak = max(peak, rms)
+        frames += buffer.frameLength
+        guard Double(frames) >= buffer.format.sampleRate * 0.05 else { return nil }
+        // Speech sits roughly between -50 and -10 dBFS; map that span onto
+        // 0...1 so a normal voice fills the bars and silence stays flat.
+        let db = 20 * log10(max(peak, 1e-7))
+        let level = min(1, max(0, (db + 50) / 40))
+        peak = 0
+        frames = 0
+        return level
+    }
+
+    func reset() {
+        lock.lock(); defer { lock.unlock() }
+        peak = 0
+        frames = 0
     }
 }
 
@@ -158,6 +194,17 @@ final class Dictation {
     /// state, while listen() swaps a fresh request in for each utterance. A
     /// small locked box is the whole of the synchronisation needed.
     private nonisolated let requestBox = RequestBox()
+    private nonisolated let levelMeter = LevelMeter()
+    /// The microphone's recent loudness, oldest first, one value (0...1) per
+    /// ~50ms — what the composer draws as a waveform while listening.
+    private(set) var levels: [Float] = []
+    /// Three seconds of history: more than the widest strip can show.
+    static let levelHistory = 60
+    /// The format the tap was installed with, to notice when a new input
+    /// brings another.
+    private var tapFormat: AVAudioFormat?
+    /// Engine restarts after an input change, this session.
+    private var restarts = 0
     private var task: SFSpeechRecognitionTask?
     private let engine = AVAudioEngine()
 
@@ -383,25 +430,10 @@ final class Dictation {
         }
         #endif
 
-        let input = engine.inputNode
-        // Tap the node's own format. Hardcoding a rate here is the classic way
-        // to crash on a device whose input runs at something else.
-        let format = input.outputFormat(forBus: 0)
-        input.removeTap(onBus: 0)
-        // Weak self, not the request: a new utterance swaps in a new request,
-        // and a tap still feeding the old one would go into a task nobody reads.
-        // Append synchronously, inside the tap. The buffer belongs to the engine
-        // and its backing storage may be recycled the moment this block returns,
-        // so hopping to the main actor first hands the recogniser audio that has
-        // since been overwritten — garbled or dropped words rather than a crash.
-        // It also kept ~50 buffers a second off the main thread.
-        //
-        // The box is locked because the tap runs on a realtime audio thread
-        // while listen() swaps the request in per utterance — and it holds the
-        // audio when no request is installed, rather than dropping it.
-        input.installTap(onBus: 0, bufferSize: 1024, format: format) { [weak self] buffer, _ in
-            self?.requestBox.append(buffer)
-        }
+        levels = []
+        levelMeter.reset()
+        restarts = 0
+        installTap()
 
         engine.prepare()
         do {
@@ -446,11 +478,10 @@ final class Dictation {
             Task { @MainActor in
                 guard let self else { return }
                 // This fires for any I/O change, and the engine survives most of
-                // them — plugging in headphones mid-sentence should not end the
-                // dictation. Only a change that actually stopped the engine has
-                // taken the microphone away.
+                // them. One that stopped it has moved the microphone, not taken
+                // it: start again on the new input.
                 guard !self.engine.isRunning else { return }
-                self.interrupted()
+                self.resumeAfterReconfiguration()
             }
         }
 
@@ -472,6 +503,86 @@ final class Dictation {
         if let interruptionObserver { centre.removeObserver(interruptionObserver) }
         configObserver = nil
         interruptionObserver = nil
+    }
+
+    /// Tap the microphone in its current format, and remember that format.
+    private func installTap() {
+        let input = engine.inputNode
+        // Tap the node's own format. Hardcoding a rate here is the classic way
+        // to crash on a device whose input runs at something else.
+        let format = input.outputFormat(forBus: 0)
+        input.removeTap(onBus: 0)
+        tapFormat = format        // Weak self, not the request: a new utterance swaps in a new request,
+        // and a tap still feeding the old one would go into a task nobody reads.
+        // Append synchronously, inside the tap. The buffer belongs to the engine
+        // and its backing storage may be recycled the moment this block returns,
+        // so hopping to the main actor first hands the recogniser audio that has
+        // since been overwritten — garbled or dropped words rather than a crash.
+        // It also kept ~50 buffers a second off the main thread.
+        //
+        // The box is locked because the tap runs on a realtime audio thread
+        // while listen() swaps the request in per utterance — and it holds the
+        // audio when no request is installed, rather than dropping it.
+        input.installTap(onBus: 0, bufferSize: 1024, format: format) { [weak self] buffer, _ in
+            guard let self else { return }
+            self.requestBox.append(Self.firstChannel(of: buffer))
+            if let level = self.levelMeter.measure(buffer) {
+                Task { @MainActor [weak self] in self?.pushLevel(level) }
+            }
+        }
+    }
+
+    /// The recogniser hears one voice on one channel. A phone's microphone is
+    /// mono already; a USB interface on an iPad, or the Simulator (ten
+    /// channels), is not — and handed those buffers the recogniser returns
+    /// nothing at all, no text and no error. Keep the first channel.
+    private nonisolated static func firstChannel(of buffer: AVAudioPCMBuffer) -> AVAudioPCMBuffer {
+        let format = buffer.format
+        guard format.channelCount > 1, !format.isInterleaved,
+              let source = buffer.floatChannelData?[0],
+              let mono = AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: format.sampleRate,
+                                       channels: 1, interleaved: false),
+              let copy = AVAudioPCMBuffer(pcmFormat: mono, frameCapacity: buffer.frameLength),
+              let target = copy.floatChannelData?[0]
+        else { return buffer }
+        copy.frameLength = buffer.frameLength
+        target.update(from: source, count: Int(buffer.frameLength))
+        return copy
+    }
+
+    /// The input changed under a running session and the engine stopped: pick
+    /// the microphone up again where it now is, rather than end the dictation.
+    ///
+    /// AirPods connecting mid-sentence do this, and so does the Simulator, which
+    /// rebuilds its audio device a few milliseconds after every start. A real
+    /// interruption — a call, Siri — arrives through the audio session instead
+    /// and still ends the session.
+    private func resumeAfterReconfiguration() {
+        guard state == .listening else { return }
+        // Bounded: an input that keeps collapsing is not coming back.
+        guard restarts < 3 else { interrupted(); return }
+        restarts += 1
+        let previous = tapFormat
+        installTap()
+        engine.prepare()
+        do {
+            try engine.start()
+        } catch {
+            interrupted()
+            return
+        }
+        // A recognition request takes one format. If the new input speaks
+        // another, bank what was heard and hand over to a fresh request; the
+        // box holds the new audio meanwhile. Not endAudio(): an utterance that
+        // had heard nothing yet ends in a "no speech" error, which ends the
+        // whole session.
+        if let previous, let now = tapFormat, previous != now, let rec = recognizer {
+            committed = transcript
+            requestBox.detach()
+            let old = task
+            listen(with: rec)
+            old?.cancel()
+        }
     }
 
     /// Deliver what was heard, then say why it stopped.
@@ -499,13 +610,16 @@ final class Dictation {
         requestBox.install(req)
 
         let generation = self.generation
-        task = rec.recognitionTask(with: req) { [weak self] result, error in
-            Task { @MainActor in
+        task = rec.recognitionTask(with: req) { [weak self] result, error in            Task { @MainActor in
                 guard let self, self.state == .listening else { return }
                 // A task outlives the session that created it; without this an
                 // orphan goes on writing the transcript of the session that
                 // replaced it.
                 guard generation == self.generation else { return }
+                // Nor may a task that has been handed over — after an input
+                // change it is cancelled, and its cancellation error must not
+                // end the session its successor is running.
+                guard self.request === req else { return }
                 // Error FIRST. SFSpeechRecognitionTask routinely delivers a
                 // non-nil result AND a non-nil error together (an on-device
                 // asset fault, a dropped connection in server mode). Testing
@@ -567,8 +681,15 @@ final class Dictation {
         transcript = ""
     }
 
+    private func pushLevel(_ level: Float) {
+        guard isListening || isStarting else { return }
+        levels.append(level)
+        if levels.count > Self.levelHistory { levels.removeFirst(levels.count - Self.levelHistory) }
+    }
+
     private func teardown() {
         removeInterruptionObservers()
+        levels = []
         usingServer = false
         committed = ""
         if engine.isRunning { engine.stop() }
