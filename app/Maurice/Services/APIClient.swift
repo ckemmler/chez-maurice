@@ -630,11 +630,32 @@ struct LoginResponse: Decodable {
     let token: String
 }
 
+/// `/api/auth/enroll`. An open invitation first answers `needs_profile` (who is
+/// joining?) with no session; the other fields come with the session.
 struct EnrollResponse: Decodable {
-    let user_id: String
-    let token: String
-    let role: String
-    let needs_pin: Bool
+    let user_id: String?
+    let token: String?
+    let role: String?
+    let needs_pin: Bool?
+    let needs_profile: Bool?
+    let household: String?
+}
+
+/// An open invitation — someone not yet a member (`/api/users/invites`).
+struct OpenInvite: Decodable, Identifiable, Hashable {
+    let code: String
+    let expires_at: String
+    var id: String { code }
+}
+
+struct OpenInvitesResponse: Decodable {
+    let invites: [OpenInvite]
+}
+
+/// A member's device code (`/api/users/:id/invite`).
+struct MemberInviteCode: Decodable {
+    let code: String
+    let expires_at: String
 }
 
 struct OkResponse: Decodable {

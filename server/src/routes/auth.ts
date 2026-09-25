@@ -14,7 +14,9 @@ import {
   adminExists,
   createUser,
   setUserPin,
+  householdInfo,
 } from "../services/users";
+import { isOpenInvite, redeemOpenInvite } from "../services/invites";
 import { requireAuth } from "../middleware/auth";
 import type { Context } from "hono";
 
@@ -158,6 +160,11 @@ auth.post("/login", async (c) => {
 // ── POST /api/auth/enroll ───────────────────────────────────────
 // Redeem an invite code on a fresh device → a session for that member, with no
 // admin password needed. Members are told to set a PIN next; guests aren't.
+//
+// An open invitation (someone not yet a member) takes two calls: without a
+// name it answers `needs_profile` and leaves the code unused, so the app can
+// ask who is joining; with `display_name` (and optionally `avatar_color`) it
+// makes the member and signs them in.
 
 auth.post("/enroll", async (c) => {
   const ip = clientIp(c);
@@ -166,8 +173,23 @@ auth.post("/enroll", async (c) => {
     c.header("Retry-After", String(retry));
     return c.json({ error: "Too many attempts. Try again later." }, 429);
   }
-  const { code, device_id } = await c.req.json().catch(() => ({}));
+  const { code, device_id, display_name, avatar_color } = await c.req.json().catch(() => ({}));
   if (!code) return c.json({ error: "code required" }, 400);
+
+  if (isOpenInvite(String(code))) {
+    const name = String(display_name ?? "").trim().slice(0, 40);
+    if (!name) return c.json({ needs_profile: true, household: householdInfo().name });
+    const color = /^#[0-9a-fA-F]{6}$/.test(String(avatar_color ?? "")) ? String(avatar_color) : undefined;
+    const joined = await redeemOpenInvite(String(code), { display_name: name, avatar_color: color });
+    if (!joined) {
+      // Taken between the two calls — by the other phone that scanned it.
+      enrollLimiter.recordFailure(ip);
+      return c.json({ error: "Invalid or expired code" }, 401);
+    }
+    const { token } = createSession(joined.userId, device_id);
+    return c.json({ user_id: joined.userId, token, role: "standard", needs_pin: true });
+  }
+
   const redeemed = redeemInviteCode(code);
   if (!redeemed) {
     enrollLimiter.recordFailure(ip);

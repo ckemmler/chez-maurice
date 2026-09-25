@@ -20,6 +20,10 @@ struct UserPickerView: View {
     @State private var enrollCode = ""
     @State private var enrollError: String?
     @State private var enrollBusy = false
+    /// An open invitation: the code is good and the server asks who is joining.
+    @State private var enrollNeedsProfile = false
+    @State private var enrollName = ""
+    @State private var enrollColor = InviteEnrollOverlay.colors[0]
     /// A redeemed enrollment held until a member sets their PIN (members only).
     @State private var pendingEnroll: (userId: String, token: String, user: DeviceUser)?
     @State private var pinSetupText = ""
@@ -172,9 +176,15 @@ struct UserPickerView: View {
                 InviteEnrollOverlay(
                     code: $enrollCode,
                     error: $enrollError,
+                    needsProfile: enrollNeedsProfile,
+                    name: $enrollName,
+                    color: $enrollColor,
                     busy: enrollBusy,
                     onSubmit: { Task { await enrollWithCode() } },
-                    onCancel: { showEnroll = false; enrollCode = ""; enrollError = nil }
+                    onCancel: {
+                        showEnroll = false; enrollCode = ""; enrollError = nil
+                        enrollNeedsProfile = false; enrollName = ""
+                    }
                 )
             }
 
@@ -191,6 +201,18 @@ struct UserPickerView: View {
         .task(id: session.currentHouseholdId) {
             await fetchUsers()
         }
+        // A scanned or opened invitation lands here: use its code straight
+        // away, as if typed — an open one then asks who is joining.
+        .task(id: session.pendingInvitation?.code) {
+            guard let invitation = session.pendingInvitation,
+                  invitation.server == session.serverURL else { return }
+            session.pendingInvitation = nil
+            enrollCode = invitation.code
+            enrollError = nil
+            enrollNeedsProfile = false
+            showEnroll = true
+            await enrollWithCode()
+        }
         .sheet(isPresented: $showAddHousehold) {
             PairingView(onPaired: { showAddHousehold = false })
                 .environment(session)
@@ -206,16 +228,33 @@ struct UserPickerView: View {
         do {
             var body: [String: String] = ["code": enrollCode.trimmingCharacters(in: .whitespacesAndNewlines)]
             if let deviceId = session.deviceId { body["device_id"] = deviceId }
+            if enrollNeedsProfile {
+                let name = enrollName.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !name.isEmpty else { return }
+                body["display_name"] = name
+                body["avatar_color"] = enrollColor
+            }
             let resp: EnrollResponse = try await api.post("/api/auth/enroll", body: body)
-            let me: ServerUser = try await api.get("/api/users/me", token: resp.token)
+            if resp.needs_profile == true {
+                // An open invitation: ask who is joining, then send again.
+                enrollNeedsProfile = true
+                return
+            }
+            guard let userId = resp.user_id, let token = resp.token else {
+                enrollError = session.localized("enroll.failed")
+                return
+            }
+            let me: ServerUser = try await api.get("/api/users/me", token: token)
             showEnroll = false
             enrollCode = ""
-            if resp.needs_pin {
+            enrollNeedsProfile = false
+            enrollName = ""
+            if resp.needs_pin == true {
                 // Hold the session until the member sets their PIN.
-                pendingEnroll = (resp.user_id, resp.token, DeviceUser(from: me))
+                pendingEnroll = (userId, token, DeviceUser(from: me))
             } else {
                 // Guest: sign in now; the device stays locked to this account.
-                finishEnroll(userId: resp.user_id, token: resp.token, user: DeviceUser(from: me))
+                finishEnroll(userId: userId, token: token, user: DeviceUser(from: me))
             }
         } catch let err as APIError {
             if case .server(_, let msg) = err { enrollError = msg } else { enrollError = err.localizedDescription }
@@ -529,31 +568,61 @@ private struct InviteEnrollOverlay: View {
     @Environment(\.colorScheme) private var colorScheme
     @Binding var code: String
     @Binding var error: String?
+    /// Second step of an open invitation: the newcomer names themselves.
+    let needsProfile: Bool
+    @Binding var name: String
+    @Binding var color: String
     let busy: Bool
     let onSubmit: () -> Void
     let onCancel: () -> Void
+
+    /// The member colours on offer — the hat palettes' grounds.
+    static let colors = ["#2c5aa0", "#7a4f6e", "#b97a1e", "#3d6b4f", "#a6452e", "#e3a7c2", "#44504f", "#9c6b4a"]
 
     var body: some View {
         let theme = MauriceTheme.current(for: colorScheme)
         ZStack {
             Color.black.opacity(0.4).ignoresSafeArea().onTapGesture { onCancel() }
             VStack(spacing: 20) {
-                Text(L("enroll.title"))
+                Text(L(needsProfile ? "enroll.profile.title" : "enroll.title"))
                     .font(.system(size: 22, design: .serif)).foregroundStyle(theme.ink)
-                Text(L("enroll.subtitle"))
+                Text(L(needsProfile ? "enroll.profile.subtitle" : "enroll.subtitle"))
                     .font(.system(size: 14)).foregroundStyle(theme.inkSoft)
                     .multilineTextAlignment(.center)
 
-                TextField(L("enroll.placeholder"), text: $code)
-                    .textFieldStyle(.roundedBorder)
-                    .font(.system(.body, design: .monospaced))
-                    #if os(iOS)
-                    .textInputAutocapitalization(.characters)
-                    .autocorrectionDisabled()
-                    #endif
-                    .frame(width: 220)
-                    .multilineTextAlignment(.center)
-                    .onSubmit { onSubmit() }
+                if needsProfile {
+                    TextField(L("enroll.profile.name"), text: $name)
+                        .textFieldStyle(.roundedBorder)
+                        #if os(iOS)
+                        .textInputAutocapitalization(.words)
+                        #endif
+                        .frame(width: 220)
+                        .multilineTextAlignment(.center)
+                        .onSubmit { onSubmit() }
+                    HStack(spacing: 10) {
+                        ForEach(Self.colors, id: \.self) { hex in
+                            Button { color = hex } label: {
+                                Circle()
+                                    .fill(Color(hex: hex))
+                                    .frame(width: 24, height: 24)
+                                    .overlay(Circle().strokeBorder(theme.ink, lineWidth: color == hex ? 2 : 0).padding(-4))
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                    .padding(.vertical, 4)
+                } else {
+                    TextField(L("enroll.placeholder"), text: $code)
+                        .textFieldStyle(.roundedBorder)
+                        .font(.system(.body, design: .monospaced))
+                        #if os(iOS)
+                        .textInputAutocapitalization(.characters)
+                        .autocorrectionDisabled()
+                        #endif
+                        .frame(width: 220)
+                        .multilineTextAlignment(.center)
+                        .onSubmit { onSubmit() }
+                }
 
                 if let error {
                     Text(error).font(.caption).foregroundStyle(.red).multilineTextAlignment(.center)
@@ -563,7 +632,7 @@ private struct InviteEnrollOverlay: View {
                     Button(L("picker.admin.cancel")) { onCancel() }.glassBorderedButton()
                     Button(L("enroll.submit")) { onSubmit() }
                         .glassProminentButton()
-                        .disabled(code.trimmingCharacters(in: .whitespaces).isEmpty || busy)
+                        .disabled((needsProfile ? name : code).trimmingCharacters(in: .whitespaces).isEmpty || busy)
                 }
             }
             .padding(32)

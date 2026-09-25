@@ -363,6 +363,21 @@ db.run(`
   )
 `);
 
+// Open invitations: an admin invites *someone* — no member exists yet. Whoever
+// redeems the code names themselves and becomes a member. Single use: a QR code
+// is easily photographed and passed on, and one invitation lets one person in.
+// The row stays after use (used_by/used_at) as the record of who came in by it.
+db.run(`
+  CREATE TABLE IF NOT EXISTS household_invites (
+    code       TEXT PRIMARY KEY,
+    created_by TEXT REFERENCES users(id) ON DELETE SET NULL,
+    expires_at TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    used_by    TEXT REFERENCES users(id) ON DELETE SET NULL,
+    used_at    TEXT
+  )
+`);
+
 // APNs device tokens for push. A token belongs to whoever is the active user on
 // that device (re-registered on user switch); pruned when Apple reports it dead.
 db.run(`

@@ -596,3 +596,22 @@
 "proposals.dismiss" = "Opbergen";
 "proposals.undo_dismiss" = "In de lijst houden";
 "proposals.dismissed" = "Opgeborgen: zijn gesprekken komen niet meer terug.";
+
+/* Invitations */
+"invite.scan" = "Uitnodiging scannen";
+"invite.scan.not_invitation" = "Die QR-code is geen Maurice-uitnodiging.";
+"enroll.profile.title" = "Wie komt erbij?";
+"enroll.profile.subtitle" = "Je naam, zoals het huishouden die ziet, en een kleur.";
+"enroll.profile.name" = "Je voornaam";
+"enroll.failed" = "De uitnodiging kon niet worden gebruikt. Vraag een nieuwe.";
+"members.title" = "Leden";
+"members.invite_someone" = "Iemand uitnodigen";
+"members.invite_someone.hint" = "Een QR-code voor één persoon, zeven dagen geldig. Die kiest bij aankomst een naam.";
+"members.pending" = "Openstaande uitnodigingen";
+"members.list" = "In dit huishouden";
+"members.new_device" = "Nieuw apparaat";
+"members.new_device.hint" = "Tik op iemand om een code te tonen die de app op een ander apparaat van die persoon installeert.";
+"members.new_device.for" = "Een nieuw apparaat voor %@";
+"members.share" = "Link versturen";
+"members.revoke" = "Intrekken";
+"members.valid_until" = "Geldig tot %@";

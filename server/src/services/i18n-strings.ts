@@ -4,6 +4,10 @@
 
 export const STRINGS: Record<string, Record<string, string>> = {
   "en": {
+    "join.title": "An invitation to %@",
+    "join.body": "Open this link on the iPhone, iPad or Mac where Chez Maurice is installed. Not installed yet? Install it, then scan the code again.",
+    "join.open": "Open in Chez Maurice",
+    "join.code": "Or enter this code in the app:",
     "chat.tool_unavailable": "Tool %@ is unavailable.",
     "chat.stopped_tool_steps": "\n\n*(Stopped after several tool steps.)*",
     "chat.stopped_tool_steps_more": "\n\n*(Stopped after several tool steps. Ask me to continue if you need more.)*",
@@ -347,6 +351,10 @@ export const STRINGS: Record<string, Record<string, string>> = {
     "flash.corpus_reconcile_running": "A reconciliation is already running"
   },
   "fr": {
+    "join.title": "Une invitation chez %@",
+    "join.body": "Ouvrez ce lien sur l’iPhone, l’iPad ou le Mac où Chez Maurice est installé. Pas encore installé ? Installez-le, puis scannez à nouveau le code.",
+    "join.open": "Ouvrir dans Chez Maurice",
+    "join.code": "Ou saisissez ce code dans l’app :",
     "chat.tool_unavailable": "L'outil %@ n'est pas disponible.",
     "chat.stopped_tool_steps": "\n\n*(Arrêté après plusieurs étapes d'outils.)*",
     "chat.stopped_tool_steps_more": "\n\n*(Arrêté après plusieurs étapes d'outils. Demandez-moi de continuer si besoin.)*",
@@ -665,6 +673,10 @@ export const STRINGS: Record<string, Record<string, string>> = {
     "flash.corpus_reconcile_running": "Un rattrapage est déjà en cours"
   },
   "it": {
+    "join.title": "Un invito da %@",
+    "join.body": "Apri questo link sull’iPhone, iPad o Mac dove è installato Chez Maurice. Non ancora installato? Installalo, poi scansiona di nuovo il codice.",
+    "join.open": "Apri in Chez Maurice",
+    "join.code": "Oppure inserisci questo codice nell’app:",
     "chat.tool_unavailable": "Lo strumento %@ non è disponibile.",
     "chat.stopped_tool_steps": "\n\n*(Interrotto dopo diversi passaggi con gli strumenti.)*",
     "chat.stopped_tool_steps_more": "\n\n*(Interrotto dopo diversi passaggi con gli strumenti. Chiedimi di continuare se ti serve altro.)*",
@@ -926,6 +938,10 @@ export const STRINGS: Record<string, Record<string, string>> = {
     "flash.docs_refresh_off": "L'aggiornamento automatico della documentazione è disattivato"
   },
   "de": {
+    "join.title": "Eine Einladung zu %@",
+    "join.body": "Öffne diesen Link auf dem iPhone, iPad oder Mac, auf dem Chez Maurice installiert ist. Noch nicht installiert? Installiere es und scanne den Code dann erneut.",
+    "join.open": "In Chez Maurice öffnen",
+    "join.code": "Oder gib diesen Code in der App ein:",
     "chat.tool_unavailable": "Das Tool %@ ist nicht verfügbar.",
     "chat.stopped_tool_steps": "\n\n*(Nach mehreren Tool-Schritten gestoppt.)*",
     "chat.stopped_tool_steps_more": "\n\n*(Nach mehreren Tool-Schritten gestoppt. Bitte mich weiterzumachen, wenn du mehr brauchst.)*",
@@ -1187,6 +1203,10 @@ export const STRINGS: Record<string, Record<string, string>> = {
     "flash.docs_refresh_off": "Automatische Aktualisierung der Dokumentation ist aus"
   },
   "es": {
+    "join.title": "Una invitación de %@",
+    "join.body": "Abre este enlace en el iPhone, iPad o Mac donde está instalado Chez Maurice. ¿Aún no lo tienes? Instálalo y vuelve a escanear el código.",
+    "join.open": "Abrir en Chez Maurice",
+    "join.code": "O introduce este código en la app:",
     "chat.tool_unavailable": "La herramienta %@ no está disponible.",
     "chat.stopped_tool_steps": "\n\n*(Detenido tras varios pasos de herramientas.)*",
     "chat.stopped_tool_steps_more": "\n\n*(Detenido tras varios pasos de herramientas. Pídeme que continúe si necesitas más.)*",
@@ -1448,6 +1468,10 @@ export const STRINGS: Record<string, Record<string, string>> = {
     "flash.docs_refresh_off": "La actualización automática de la documentación está desactivada"
   },
   "pt": {
+    "join.title": "Um convite de %@",
+    "join.body": "Abra esta ligação no iPhone, iPad ou Mac onde o Chez Maurice está instalado. Ainda não está instalado? Instale-o e volte a digitalizar o código.",
+    "join.open": "Abrir no Chez Maurice",
+    "join.code": "Ou introduza este código na app:",
     "chat.tool_unavailable": "A ferramenta %@ não está disponível.",
     "chat.stopped_tool_steps": "\n\n*(Parado após vários passos de ferramentas.)*",
     "chat.stopped_tool_steps_more": "\n\n*(Parado após vários passos de ferramentas. Pede-me para continuar se precisares de mais.)*",
@@ -1709,6 +1733,10 @@ export const STRINGS: Record<string, Record<string, string>> = {
     "flash.docs_refresh_off": "A atualização automática da documentação está desligada"
   },
   "nl": {
+    "join.title": "Een uitnodiging van %@",
+    "join.body": "Open deze link op de iPhone, iPad of Mac waarop Chez Maurice is geïnstalleerd. Nog niet geïnstalleerd? Installeer het en scan de code opnieuw.",
+    "join.open": "Openen in Chez Maurice",
+    "join.code": "Of voer deze code in de app in:",
     "chat.tool_unavailable": "De tool %@ is niet beschikbaar.",
     "chat.stopped_tool_steps": "\n\n*(Gestopt na meerdere toolstappen.)*",
     "chat.stopped_tool_steps_more": "\n\n*(Gestopt na meerdere toolstappen. Vraag me door te gaan als je meer nodig hebt.)*",

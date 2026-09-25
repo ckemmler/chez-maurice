@@ -1,6 +1,6 @@
 ---
 title: The data model
-date: '2026-09-24'
+date: '2026-09-25'
 flags: []
 locale: en
 description: 'The SQLite schema behind the chat engine: identity, conversations, files,
@@ -36,6 +36,7 @@ Anthropic's key stays in `households.api_key`; the other providers got their own
 | `sessions` | `id`, `user_id`, `device_id`, `expires_at` | Opaque session tokens. |
 | `api_tokens` | `id`, `user_id`, `token_hash` (unique), `token_plain` (self-service only), `label`, `scope ∈ {mcp,health,full}` | `maur_*` bearer tokens; the self-service MCP token is recoverable so all of a member's devices show the same one. |
 | `invite_codes` | `code` (PK), `user_id`, `expires_at` | Admin hands one to a member to enroll a device; reusable within the window, revocable by deleting the row. |
+| `household_invites` | `code` (PK), `created_by`, `expires_at`, `used_by`, `used_at` | An open invitation: brings someone who isn't a member yet, who names themselves on arrival. Single use; the row stays as the record of who came in by it. |
 | `device_tokens` | `token` (PK), `user_id`, `platform`, `household_tag` | APNs push; `household_tag` routes a tap to the right foyer in a multi-household app. |
 | `devices` | `id`, `household_id`, `name`, `pairing_token` (unique), `paired_at` | Programmatic device pairing. |
 | `guest_contacts` | `guest_user_id` + `member_id` (PK) | The people a guest may reach; enforced both directions. |

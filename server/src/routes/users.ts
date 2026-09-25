@@ -16,6 +16,8 @@ import { unreadRoomCount } from "../services/conversations";
 import { saveAvatar } from "../services/avatars";
 import { registerDeviceToken, removeDeviceToken } from "../services/push";
 import { blockMember, unblockMember } from "../services/safety";
+import { createInviteCode, getInviteForUser, revokeInvite } from "../services/auth";
+import { createOpenInvite, listOpenInvites, revokeOpenInvite } from "../services/invites";
 
 const users = new Hono();
 
@@ -198,6 +200,43 @@ users.post("/", requireAdmin, async (c) => {
     }
     throw err;
   }
+});
+
+// ── Admin-only: invitations ─────────────────────────────────────
+// The app's "Members" screen hands these out as QR codes. Open invitations
+// bring someone new; a member's own code adds a device for someone already here.
+
+// GET /api/users/invites — open invitations still waiting for someone
+users.get("/invites", requireAdmin, (c) => c.json({ invites: listOpenInvites() }));
+
+// POST /api/users/invites — invite someone new
+users.post("/invites", requireAdmin, (c) => c.json(createOpenInvite(c.get("userId")), 201));
+
+// DELETE /api/users/invites/:code — withdraw an unused invitation
+users.delete("/invites/:code", requireAdmin, (c) => {
+  if (!revokeOpenInvite(c.req.param("code"))) return c.json({ error: "Invitation not found" }, 404);
+  return c.json({ ok: true });
+});
+
+// GET /api/users/:id/invite — the member's current device code, if any
+users.get("/:id/invite", requireAdmin, (c) => {
+  const id = c.req.param("id");
+  if (!getUser(id)) return c.json({ error: "User not found" }, 404);
+  return c.json({ invite: getInviteForUser(id) });
+});
+
+// POST /api/users/:id/invite — a (new) device code for this member; replaces the old one
+users.post("/:id/invite", requireAdmin, (c) => {
+  const id = c.req.param("id");
+  if (!getUser(id)) return c.json({ error: "User not found" }, 404);
+  const { code, expiresAt } = createInviteCode(id);
+  return c.json({ code, expires_at: expiresAt }, 201);
+});
+
+// DELETE /api/users/:id/invite — revoke the member's device code
+users.delete("/:id/invite", requireAdmin, (c) => {
+  revokeInvite(c.req.param("id"));
+  return c.json({ ok: true });
 });
 
 // PATCH /api/users/:id (admin edits a user)

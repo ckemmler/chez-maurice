@@ -67,6 +67,16 @@ function generateInviteCode(): string {
   return Array.from(bytes, (b) => INVITE_ALPHABET[b % INVITE_ALPHABET.length]).join("");
 }
 
+/** A code free in both invitation tables — a code means one thing. */
+export function freshInviteCode(): string {
+  const taken = (c: string) =>
+    db.query(`SELECT 1 FROM invite_codes WHERE code = ?`).get(c) ||
+    db.query(`SELECT 1 FROM household_invites WHERE code = ?`).get(c);
+  let code = generateInviteCode();
+  while (taken(code)) code = generateInviteCode();
+  return code;
+}
+
 /** Canonicalize user input: uppercase, drop everything but A–Z/2–9. */
 export function normalizeInviteCode(raw: string): string {
   return raw.toUpperCase().replace(/[^A-Z0-9]/g, "");
@@ -79,8 +89,7 @@ export function formatInviteCode(code: string): string {
 
 export function createInviteCode(userId: string, days = 7): { code: string; expiresAt: string } {
   db.run(`DELETE FROM invite_codes WHERE user_id = ?`, [userId]); // one active code per member
-  let code = generateInviteCode();
-  while (db.query(`SELECT 1 FROM invite_codes WHERE code = ?`).get(code)) code = generateInviteCode();
+  const code = freshInviteCode();
   const expiresAt = new Date(Date.now() + days * 86400000).toISOString();
   db.run(`INSERT INTO invite_codes (code, user_id, expires_at) VALUES (?, ?, ?)`, [code, userId, expiresAt]);
   return { code, expiresAt };

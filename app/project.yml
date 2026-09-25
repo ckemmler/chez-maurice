@@ -60,7 +60,7 @@ targetTemplates:
         INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad: "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"
         # Asked for at the moment the feature is used, so the wording has to say
         # what Maurice does with the permission, not just that it wants it.
-        INFOPLIST_KEY_NSCameraUsageDescription: "Maurice uses the camera so you can take a profile photo."
+        INFOPLIST_KEY_NSCameraUsageDescription: "Maurice uses the camera to take a profile photo or scan a household invitation."
         INFOPLIST_KEY_NSMicrophoneUsageDescription: "Maurice uses the microphone so you can dictate a message instead of typing it."
         INFOPLIST_KEY_NSSpeechRecognitionUsageDescription: "Maurice turns your dictation into text on this device whenever your language has an offline model. If it doesn't, Maurice asks you first before sending any audio to Apple."
         MARKETING_VERSION: "0.1"

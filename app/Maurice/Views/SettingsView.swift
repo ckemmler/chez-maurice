@@ -13,7 +13,7 @@ struct SettingsView: View {
     @Environment(\.mauriceTheme) private var theme
     @Environment(\.dismiss) private var dismiss
 
-    enum Pane: Hashable { case appearance, language, household, garden, token, files, importChats }
+    enum Pane: Hashable { case appearance, language, household, members, garden, token, files, importChats }
     @State private var pane: Pane? = nil
 
     // MCP token (loaded once; the root row copies, the token pane manages).
@@ -122,6 +122,13 @@ struct SettingsView: View {
                                          label: session.localized("foyer.switch_title"),
                                          value: session.currentHousehold?.name,
                                          accent: accent) { pane = .household }
+                                // Who is in this foyer, and letting someone in —
+                                // the admin's, from the app rather than the web.
+                                if session.activeDeviceUser?.role == "admin" {
+                                    SetDivider()
+                                    IndexRow(icon: "person.2", label: session.localized("members.title"),
+                                             accent: accent) { pane = .members }
+                                }
                             }
                         }
                     }
@@ -298,6 +305,7 @@ struct SettingsView: View {
                     case .appearance: appearancePane
                     case .language:   languagePane
                     case .household:  householdPane
+                    case .members:    MembersPane(accent: accent)
                     case .garden:     gardenPane
                     case .token:      tokenPane
                     case .files:      FilesLibraryView(accent: accent, library: $filesLibrary)
@@ -315,7 +323,8 @@ struct SettingsView: View {
         case .appearance: return session.localized("settings.palette.title")
         case .language:   return session.localized("settings.locale.title")
         case .household:  return session.localized("foyer.switch_title")
-        case .garden:     return session.localized("settings.garden.title")
+        case .members:    return session.localized("members.title")
+        case .garden:    return session.localized("settings.garden.title")
         case .token:      return session.localized("settings.mcp.title")
         case .files:      return session.localized("settings.files.title")
         case .importChats: return session.localized("settings.import.title")
@@ -636,6 +645,216 @@ private struct WebThemesResponse: Decodable {
 }
 
 // MARK: - Index-card building blocks
+
+// MARK: - Members (admin)
+
+/// Who is in the foyer, and letting someone in. An open invitation brings
+/// someone new — they name themselves when they arrive; a member's own code
+/// adds a device for someone already here. Both are shown as a QR code.
+private struct MembersPane: View {
+    @Environment(SessionStore.self) private var session
+    @Environment(\.mauriceTheme) private var theme
+    let accent: Color
+
+    @State private var members: [ServerUser] = []
+    @State private var invites: [OpenInvite] = []
+    @State private var shown: ShownInvite?
+    @State private var busy = false
+    @State private var error: String?
+
+    /// The QR sheet's subject.
+    struct ShownInvite: Identifiable {
+        let invitation: Invitation
+        let title: String
+        let expiresAt: String
+        /// The member a device code belongs to; nil for an open invitation.
+        let memberId: String?
+        var id: String { invitation.code }
+    }
+
+    private var api: APIClient? { session.serverURL.map { APIClient(baseURL: $0) } }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            VStack(alignment: .leading, spacing: 9) {
+                Button { Task { await inviteSomeone() } } label: {
+                    Label(session.localized("members.invite_someone"), systemImage: "qrcode")
+                        .font(.system(size: 14, weight: .medium))
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 10)
+                }
+                .glassProminentButton()
+                .disabled(busy)
+                SetCaption(session.localized("members.invite_someone.hint"))
+            }
+
+            if !invites.isEmpty {
+                SetGroup(session.localized("members.pending")) {
+                    SetCard {
+                        ForEach(Array(invites.enumerated()), id: \.element.id) { i, invite in
+                            if i > 0 { SetDivider() }
+                            IndexRow(icon: "envelope.open",
+                                     label: InviteQRSheet.formatted(invite.code),
+                                     value: InviteQRSheet.expiry(invite.expires_at, session: session),
+                                     accent: accent) {
+                                shown = ShownInvite(invitation: invitation(invite.code),
+                                                    title: session.localized("members.invite_someone"),
+                                                    expiresAt: invite.expires_at, memberId: nil)
+                            }
+                        }
+                    }
+                }
+            }
+
+            SetGroup(session.localized("members.list")) {
+                SetCard {
+                    ForEach(Array(members.enumerated()), id: \.element.id) { i, member in
+                        if i > 0 { SetDivider() }
+                        IndexRow(icon: member.role == "admin" ? "crown" : member.role == "guest" ? "person.crop.circle.badge.questionmark" : "person",
+                                 label: member.display_name,
+                                 value: session.localized("members.new_device"),
+                                 accent: Color(hex: member.avatar_color)) {
+                            Task { await showDeviceCode(for: member) }
+                        }
+                    }
+                }
+                SetCaption(session.localized("members.new_device.hint"))
+            }
+
+            if let error {
+                Text(error).font(.caption).foregroundStyle(.red)
+            }
+        }
+        .task { await load() }
+        .sheet(item: $shown) { item in
+            InviteQRSheet(invitation: item.invitation, title: item.title, expiresAt: item.expiresAt,
+                          onRevoke: { Task { await revoke(item) } })
+                .environment(session)
+        }
+    }
+
+    private func invitation(_ code: String) -> Invitation {
+        Invitation(server: session.serverURL ?? "", code: code)
+    }
+
+    private func load() async {
+        guard let api, let token = session.tokenForActiveUser else { return }
+        do {
+            members = try await api.get("/api/users", token: token)
+            invites = (try await api.get("/api/users/invites", token: token) as OpenInvitesResponse).invites
+        } catch {
+            self.error = error.localizedDescription
+        }
+    }
+
+    private func inviteSomeone() async {
+        guard let api, let token = session.tokenForActiveUser else { return }
+        busy = true
+        defer { busy = false }
+        do {
+            let invite: OpenInvite = try await api.post("/api/users/invites", body: [String: String](), token: token)
+            invites.insert(invite, at: 0)
+            shown = ShownInvite(invitation: invitation(invite.code),
+                                title: session.localized("members.invite_someone"),
+                                expiresAt: invite.expires_at, memberId: nil)
+        } catch {
+            self.error = error.localizedDescription
+        }
+    }
+
+    /// The member's current device code, or a fresh one.
+    private func showDeviceCode(for member: ServerUser) async {
+        guard let api, let token = session.tokenForActiveUser else { return }
+        struct Current: Decodable { let invite: MemberInviteCode? }
+        do {
+            let current: Current = try await api.get("/api/users/\(member.id)/invite", token: token)
+            let code: MemberInviteCode
+            if let existing = current.invite {
+                code = existing
+            } else {
+                code = try await api.post("/api/users/\(member.id)/invite", body: [String: String](), token: token)
+            }
+            shown = ShownInvite(invitation: invitation(code.code),
+                                title: session.localized("members.new_device.for", member.display_name),
+                                expiresAt: code.expires_at, memberId: member.id)
+        } catch {
+            self.error = error.localizedDescription
+        }
+    }
+
+    private func revoke(_ item: ShownInvite) async {
+        guard let api, let token = session.tokenForActiveUser else { return }
+        let path = item.memberId.map { "/api/users/\($0)/invite" } ?? "/api/users/invites/\(item.invitation.code)"
+        do {
+            try await api.delete(path, token: token)
+            invites.removeAll { $0.code == item.invitation.code }
+            shown = nil
+        } catch {
+            self.error = error.localizedDescription
+        }
+    }
+}
+
+/// An invitation as a QR code, big enough to scan across a table, with the
+/// code to type as a fallback and the link to send when the person isn't here.
+private struct InviteQRSheet: View {
+    @Environment(SessionStore.self) private var session
+    @Environment(\.mauriceTheme) private var theme
+    @Environment(\.dismiss) private var dismiss
+    let invitation: Invitation
+    let title: String
+    let expiresAt: String
+    let onRevoke: () -> Void
+
+    var body: some View {
+        VStack(spacing: 18) {
+            Text(title)
+                .font(.system(size: 20, design: .serif)).foregroundStyle(theme.ink)
+                .multilineTextAlignment(.center)
+            // Dark modules on white, whatever the theme: a scanner wants contrast.
+            QRCodeImage(text: invitation.link)
+                .padding(14)
+                .background(Color.white, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .frame(maxWidth: 260)
+            Text(Self.formatted(invitation.code))
+                .font(.system(size: 22, weight: .medium, design: .monospaced))
+                .tracking(3)
+                .foregroundStyle(theme.ink)
+                .textSelection(.enabled)
+            Text(Self.expiry(expiresAt, session: session) ?? "")
+                .font(.system(size: 12)).foregroundStyle(theme.inkMute)
+            HStack(spacing: 12) {
+                if let url = URL(string: invitation.link) {
+                    ShareLink(item: url) {
+                        Label(session.localized("members.share"), systemImage: "square.and.arrow.up")
+                    }
+                    .glassBorderedButton()
+                }
+                Button(session.localized("members.revoke"), role: .destructive) { onRevoke() }
+                    .glassBorderedButton()
+            }
+            Button(L("common.done")) { dismiss() }
+                .glassProminentButton()
+        }
+        .padding(28)
+        .frame(minWidth: 320)
+        .background(theme.surface)
+        .presentationBackground(theme.surface)
+    }
+
+    static func formatted(_ code: String) -> String {
+        code.count == 8 ? "\(code.prefix(4))-\(code.suffix(4))" : code
+    }
+
+    /// "Valid until 2 Oct", in the member's language.
+    static func expiry(_ iso: String, session: SessionStore) -> String? {
+        let parser = ISO8601DateFormatter()
+        parser.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        guard let date = parser.date(from: iso) ?? ISO8601DateFormatter().date(from: iso) else { return nil }
+        let text = date.formatted(Date.FormatStyle(date: .abbreviated, time: .omitted).locale(session.resolvedLocale))
+        return session.localized("members.valid_until", text)
+    }
+}
 
 private struct SetHeader: View {
     @Environment(\.mauriceTheme) private var theme

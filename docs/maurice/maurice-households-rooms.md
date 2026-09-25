@@ -1,6 +1,6 @@
 ---
 title: Households, rooms & devices
-date: '2026-09-19'
+date: '2026-09-25'
 flags: []
 locale: en
 description: Members and roles, guests, multi-person rooms, device pairing and PINs,
@@ -32,6 +32,8 @@ Then `UserPickerView.swift` is the member grid, with three ways in:
 - **Invite code** — `POST /api/auth/enroll` redeems a code; if you're a standard member you then set a PIN (`/api/auth/set-pin`). Guests enroll without one.
 
 Invite codes (`server/src/services/auth.ts`) are 8 characters from an unambiguous alphabet (no I/O/0/1), one active per member, valid ~7 days, reusable within the window; `/api/auth/enroll` is the public guessing surface so failed attempts are rate-limited per-IP and globally. Sessions are opaque 64-char tokens, refreshed on use.
+
+**Inviting someone, by QR code (25 September 2026).** Besides a member's own code (a new device for someone already here), an admin can invite *someone* — no member exists until the code is used (`household_invites`, `server/src/services/invites.ts`). It is **single use**, valid seven days: the first `enroll` call without a name answers `needs_profile` and leaves the code unused, the app asks "who's joining?" (first name, colour), and the second call makes a **standard member** — the handle is the name folded to ASCII, numbered when taken — and signs them in; a PIN follows as for any member. The code is claimed in one statement before the member is created, so two phones scanning the same QR code can't both come in. Both kinds are handed out **from the app**: Settings → Members (admins only) shows "Invite someone", the invitations still waiting, and each member's "New device" code, as a QR code with the typed code and a link to send (`/api/users/invites`, `/api/users/:id/invite`). The QR code carries `https://<household>/join?code=…`, a public landing page that offers "Open in Chez Maurice" (`maurice://join?server=…&code=…`) and shows the code to type; it doesn't say whether a code is valid, which would make it an unthrottled oracle. The pairing screen has **Scan an invitation**, and an invitation link pasted into the address field works too; either one pairs the household and uses the code in one go.
 
 ## Members, roles & guests
 
@@ -74,5 +76,6 @@ All of this — members, roles, guests, rooms, device enrollment, PINs, foyer sw
 - **The server is single-tenant.** There is one hardcoded `'default'` household per server; "multiple households" is a *client* capability (one device, many servers). The schema carries `household_id` everywhere, but a single server doesn't host multiple households. At home this is literal: each extra household is its own launchd agent, on its own port, with its own data directory and gardens root (see [[maurice-architecture]]).
 - **A device-pairing ceremony exists but is unused.** `/api/auth/pair` + the `devices` table (one-time pairing tokens) are implemented, yet the app pairs via the unauthenticated `/api/health` — the token flow is currently orphaned.
 - **Sessions don't expire** in this version.
+- **An open invitation makes a standard member, never a guest** — a guest needs their reach configured (contacts, Maurices), which is still the console's. And `maurice://` links open only the iOS app: the macOS target generates its Info.plist and declares no URL scheme, so on a Mac the invitation link is pasted into the address field.
 - **Guest persona access has no override** — it reuses each persona's `maurice_access` list rather than a guest-specific grant.
 - **"Child" is a box, not a birth date** — the server knows nothing of ages; the admin ticks it, and only what Maurice does on his own reads it (opening a conversation, the night's proposals). It does not change a child's model access or content rules, which are their own settings.

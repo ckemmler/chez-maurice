@@ -596,3 +596,22 @@
 "proposals.dismiss" = "Put away";
 "proposals.undo_dismiss" = "Keep it on the list";
 "proposals.dismissed" = "Put away: its conversations will not come up again.";
+
+/* Invitations */
+"invite.scan" = "Scan an invitation";
+"invite.scan.not_invitation" = "That QR code isn't a Maurice invitation.";
+"enroll.profile.title" = "Who's joining?";
+"enroll.profile.subtitle" = "Your name, as the household will see it, and a colour.";
+"enroll.profile.name" = "Your first name";
+"enroll.failed" = "The invitation couldn't be used. Ask for a new one.";
+"members.title" = "Members";
+"members.invite_someone" = "Invite someone";
+"members.invite_someone.hint" = "A QR code for one person, valid for seven days. They choose their name when they arrive.";
+"members.pending" = "Invitations waiting";
+"members.list" = "In this household";
+"members.new_device" = "New device";
+"members.new_device.hint" = "Tap someone to show a code that sets up the app on another of their devices.";
+"members.new_device.for" = "A new device for %@";
+"members.share" = "Send the link";
+"members.revoke" = "Withdraw";
+"members.valid_until" = "Valid until %@";

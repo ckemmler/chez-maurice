@@ -32,6 +32,11 @@ struct MauriceApp: App {
                 .environment(resolvedGardens)
                 .environment(domains)
                 .environment(\.locale, session.resolvedLocale)
+                // maurice://join?server=…&code=… — from an invitation page's
+                // "Open" button, or the camera app reading one.
+                .onOpenURL { url in
+                    if let invitation = Invitation(url.absoluteString) { session.receive(invitation) }
+                }
                 #if os(macOS)
                 // Kill the macOS keyboard focus rings app-wide — they clash with
                 // our custom pill/row borders. Propagates to all views + sheets.

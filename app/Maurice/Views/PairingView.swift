@@ -1,4 +1,8 @@
 import SwiftUI
+import CoreImage.CIFilterBuiltins
+#if os(iOS)
+import AVFoundation
+#endif
 
 /// First-launch screen: enter the Maurice server URL to pair this device.
 struct PairingView: View {
@@ -10,6 +14,7 @@ struct PairingView: View {
     @State private var serverURL = ""
     @State private var isConnecting = false
     @State private var error: String?
+    @State private var showScanner = false
 
     var body: some View {
         let theme = MauriceTheme.current(for: colorScheme)
@@ -68,6 +73,22 @@ struct PairingView: View {
                     }
                     .glassProminentButton()
                     .disabled(serverURL.trimmingCharacters(in: .whitespaces).isEmpty || isConnecting)
+
+                    #if os(iOS)
+                    // The short way in: the QR code someone in the household
+                    // shows you carries both the address and the code.
+                    if QRScannerView.isAvailable {
+                        Button {
+                            showScanner = true
+                        } label: {
+                            Label(session.localized("invite.scan"), systemImage: "qrcode.viewfinder")
+                                .font(.system(size: 15, weight: .medium))
+                                .frame(maxWidth: 400)
+                                .padding(.vertical, 10)
+                        }
+                        .glassBorderedButton()
+                    }
+                    #endif
                 }
             }
             .padding(.horizontal, 40)
@@ -83,10 +104,34 @@ struct PairingView: View {
             Spacer()
             }
         }
+        #if os(iOS)
+        .sheet(isPresented: $showScanner) {
+            QRScannerView { text in
+                showScanner = false
+                if let invitation = Invitation(text) {
+                    accept(invitation)
+                } else {
+                    error = session.localized("invite.scan.not_invitation")
+                }
+            }
+            .ignoresSafeArea()
+        }
+        #endif
+    }
+
+    /// An invitation, scanned or pasted: the household comes with it.
+    private func accept(_ invitation: Invitation) {
+        session.receive(invitation)
+        onPaired?()
     }
 
     private func connect() async {
         guard !isConnecting else { return }
+        // An invitation link pasted into the address field is an invitation.
+        if let invitation = Invitation(serverURL) {
+            accept(invitation)
+            return
+        }
         // Default the scheme to https (Maurice servers are TLS), trim, drop any
         // trailing slash, and require a real host — so a bare "mac.local:3001"
         // just works and a typo gives a clear message instead of a crash.
@@ -151,3 +196,103 @@ struct PairingView: View {
         return msg
     }
 }
+
+// MARK: - QR codes
+
+/// A QR code for a string, drawn crisp at any size (CoreImage builds it one
+/// module per pixel; nearest-neighbour scaling keeps the edges hard).
+struct QRCodeImage: View {
+    let text: String
+
+    var body: some View {
+        if let image = Self.cgImage(for: text) {
+            Image(decorative: image, scale: 1)
+                .interpolation(.none)
+                .resizable()
+                .aspectRatio(1, contentMode: .fit)
+                .accessibilityLabel(text)
+        }
+    }
+
+    static func cgImage(for text: String) -> CGImage? {
+        let filter = CIFilter.qrCodeGenerator()
+        filter.message = Data(text.utf8)
+        filter.correctionLevel = "M"
+        guard let output = filter.outputImage else { return nil }
+        return CIContext().createCGImage(output, from: output.extent)
+    }
+}
+
+#if os(iOS)
+/// The camera, reading the first QR code it sees. Hands back the raw text;
+/// the caller decides whether it is an invitation.
+struct QRScannerView: UIViewControllerRepresentable {
+    let onFound: (String) -> Void
+
+    static var isAvailable: Bool {
+        AVCaptureDevice.default(for: .video) != nil
+    }
+
+    func makeUIViewController(context: Context) -> Controller {
+        let controller = Controller()
+        controller.onFound = onFound
+        return controller
+    }
+
+    func updateUIViewController(_ controller: Controller, context: Context) {}
+
+    final class Controller: UIViewController, AVCaptureMetadataOutputObjectsDelegate {
+        var onFound: ((String) -> Void)?
+        private let captureSession = AVCaptureSession()
+        private var preview: AVCaptureVideoPreviewLayer?
+        private var found = false
+
+        override func viewDidLoad() {
+            super.viewDidLoad()
+            view.backgroundColor = .black
+            guard let device = AVCaptureDevice.default(for: .video),
+                  let input = try? AVCaptureDeviceInput(device: device),
+                  captureSession.canAddInput(input) else { return }
+            captureSession.addInput(input)
+            let output = AVCaptureMetadataOutput()
+            guard captureSession.canAddOutput(output) else { return }
+            captureSession.addOutput(output)
+            output.setMetadataObjectsDelegate(self, queue: .main)
+            output.metadataObjectTypes = [.qr]
+            let layer = AVCaptureVideoPreviewLayer(session: captureSession)
+            layer.videoGravity = .resizeAspectFill
+            view.layer.addSublayer(layer)
+            preview = layer
+        }
+
+        override func viewDidLayoutSubviews() {
+            super.viewDidLayoutSubviews()
+            preview?.frame = view.bounds
+        }
+
+        override func viewWillAppear(_ animated: Bool) {
+            super.viewWillAppear(animated)
+            // startRunning blocks until the camera is up; keep it off the main thread.
+            let session = captureSession
+            DispatchQueue.global(qos: .userInitiated).async { session.startRunning() }
+        }
+
+        override func viewWillDisappear(_ animated: Bool) {
+            super.viewWillDisappear(animated)
+            let session = captureSession
+            DispatchQueue.global(qos: .userInitiated).async { session.stopRunning() }
+        }
+
+        func metadataOutput(_ output: AVCaptureMetadataOutput,
+                            didOutput objects: [AVMetadataObject],
+                            from connection: AVCaptureConnection) {
+            guard !found,
+                  let code = objects.compactMap({ $0 as? AVMetadataMachineReadableCodeObject }).first,
+                  let text = code.stringValue else { return }
+            found = true
+            UINotificationFeedbackGenerator().notificationOccurred(.success)
+            onFound?(text)
+        }
+    }
+}
+#endif

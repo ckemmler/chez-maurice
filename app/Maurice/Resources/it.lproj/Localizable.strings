@@ -596,3 +596,22 @@
 "proposals.dismiss" = "Metti via";
 "proposals.undo_dismiss" = "Tienilo in lista";
 "proposals.dismissed" = "Messo via: le sue conversazioni non torneranno più.";
+
+/* Invitations */
+"invite.scan" = "Scansiona un invito";
+"invite.scan.not_invitation" = "Questo codice QR non è un invito Maurice.";
+"enroll.profile.title" = "Chi arriva?";
+"enroll.profile.subtitle" = "Il tuo nome, come lo vedrà la casa, e un colore.";
+"enroll.profile.name" = "Il tuo nome";
+"enroll.failed" = "Non è stato possibile usare l’invito. Chiedine uno nuovo.";
+"members.title" = "Membri";
+"members.invite_someone" = "Invita qualcuno";
+"members.invite_someone.hint" = "Un codice QR per una persona, valido sette giorni. Sceglie il suo nome all’arrivo.";
+"members.pending" = "Inviti in attesa";
+"members.list" = "In questa casa";
+"members.new_device" = "Nuovo dispositivo";
+"members.new_device.hint" = "Tocca qualcuno per mostrare un codice che installa l’app su un altro suo dispositivo.";
+"members.new_device.for" = "Un nuovo dispositivo per %@";
+"members.share" = "Invia il link";
+"members.revoke" = "Ritira";
+"members.valid_until" = "Valido fino al %@";

@@ -42,8 +42,65 @@ struct Household: Codable, Identifiable, Hashable {
     var unread: Int? = nil
 }
 
+/// An invitation into a household: its address and a code, carried by a QR
+/// code or a link. Two spellings reach the app — the page a QR code points at
+/// (`https://<household>/join?code=…`, scanned in the app or pasted into the
+/// address field) and what that page's "Open" button hands over
+/// (`maurice://join?server=…&code=…`).
+struct Invitation: Equatable {
+    let server: String
+    let code: String
+
+    init(server: String, code: String) {
+        self.server = server
+        self.code = code
+    }
+
+    init?(_ raw: String) {
+        guard let url = URL(string: raw.trimmingCharacters(in: .whitespacesAndNewlines)),
+              let parts = URLComponents(url: url, resolvingAgainstBaseURL: false) else { return nil }
+        let query = { (name: String) in parts.queryItems?.first { $0.name == name }?.value }
+        guard let code = query("code"), !code.isEmpty else { return nil }
+        switch url.scheme?.lowercased() {
+        case "maurice":
+            guard url.host == "join", let server = query("server"),
+                  let normal = PairingView.normalizedURL(server) else { return nil }
+            self.init(server: normal, code: code)
+        case "https", "http":
+            guard parts.path == "/join", let host = parts.host else { return nil }
+            let port = parts.port.map { ":\($0)" } ?? ""
+            self.init(server: "\(url.scheme!.lowercased())://\(host)\(port)", code: code)
+        default:
+            return nil
+        }
+    }
+
+    /// The link a QR code carries: the household's own landing page, which
+    /// works with or without the app installed.
+    var link: String {
+        var parts = URLComponents(string: server + "/join")
+        parts?.queryItems = [URLQueryItem(name: "code", value: code)]
+        return parts?.string ?? server + "/join?code=" + code
+    }
+}
+
 @Observable
 final class SessionStore {
+    /// An invitation received and not yet used. The user picker picks it up:
+    /// it enrolls with the code, asking who is joining when the invitation is
+    /// an open one.
+    var pendingInvitation: Invitation?
+
+    /// Take an invitation from a scan or a link: select its household (pairing
+    /// it if this device has never seen it), go to the user picker, and leave
+    /// the code there to be used.
+    func receive(_ invitation: Invitation) {
+        pair(serverURL: invitation.server)
+        activeUserId = nil
+        pendingInvitation = invitation
+        Task { await refreshFoyers() }
+    }
+
     /// Every household paired on this device.
     var households: [Household] = [] { didSet { saveHouseholds() } }
     /// Which household is currently being viewed.

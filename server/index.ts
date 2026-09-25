@@ -69,7 +69,8 @@ import { imagesDir } from "./src/services/images";
 import { avatarsDir } from "./src/services/avatars";
 import { proxyAuth, validateApiTokenRaw, validateHealthToken } from "./src/middleware/auth";
 import { fullHealth, hookConsoleErrors, publicHealth, recordError } from "./src/services/health";
-import { validateSession } from "./src/services/auth";
+import { validateSession, normalizeInviteCode, formatInviteCode } from "./src/services/auth";
+import { t, langOf } from "./src/services/i18n";
 import { isParticipant } from "./src/services/conversations";
 import { setRoomPublisher, setSubscriberCount, roomTopic, userTopic } from "./src/services/roomBus";
 
@@ -240,6 +241,7 @@ app.use("/*", async (c, next) => {
   const open =
     path.startsWith("/api/") ||
     path === "/healthz" ||
+    path === "/join" ||
     path.startsWith("/login") ||
     path.startsWith("/admin") ||
     path.startsWith("/mcp") ||
@@ -671,6 +673,41 @@ app.all("/calibre/*", async (c) => {
     }),
   );
   return new Response(resp.body, { status: resp.status, headers: resp.headers });
+});
+
+// ── Invitation landing page ─────────────────────────────────────
+// What an invitation QR code points at: https://<household>/join?code=…. With
+// the app installed, "Open" hands the household's address and the code to it
+// (maurice://join); without, the page says what to install and shows the code
+// to type. The code is not checked here — a page that answered "valid" would be
+// an unthrottled oracle beside the rate-limited /api/auth/enroll.
+
+app.get("/join", (c) => {
+  const lang = langOf(c);
+  const code = normalizeInviteCode(c.req.query("code") ?? "");
+  const url = new URL(c.req.url);
+  const proto = c.req.header("x-forwarded-proto") ?? url.protocol.replace(":", "");
+  const host = c.req.header("x-forwarded-host") ?? c.req.header("host") ?? url.host;
+  const server = `${proto}://${host}`;
+  const open = `maurice://join?server=${encodeURIComponent(server)}&code=${encodeURIComponent(code)}`;
+  const esc = (s: string) =>
+    s.replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[ch]!);
+  return c.html(`<!DOCTYPE html><html lang="${lang}"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Chez Maurice</title>
+<style>
+  body { font-family: ui-serif, Georgia, serif; max-width: 30rem; margin: 14vh auto; padding: 0 1.5rem; color: #2a2622; background: #f5efe6; text-align: center; }
+  h1 { font-size: 1.6rem; font-weight: 400; margin: 0 0 .75rem; }
+  p { color: #6b6358; line-height: 1.6; font-size: .98rem; }
+  a.open { display: inline-block; margin: 1.25rem 0; padding: .8rem 1.6rem; border-radius: 999px; background: #2a2622; color: #f5efe6; text-decoration: none; font-family: ui-sans-serif, system-ui, sans-serif; }
+  .code { font-family: ui-monospace, monospace; font-size: 1.6rem; letter-spacing: .2rem; background: #ece3d6; padding: .5rem 1rem; border-radius: 8px; display: inline-block; }
+</style></head><body>
+  <h1>${esc(t(lang, "join.title", householdName()))}</h1>
+  <p>${esc(t(lang, "join.body"))}</p>
+  ${code ? `<a class="open" href="${esc(open)}">${esc(t(lang, "join.open"))}</a>
+  <p>${esc(t(lang, "join.code"))}</p>
+  <div class="code">${esc(formatInviteCode(code))}</div>` : ""}
+</body></html>`);
 });
 
 // ── Health / status ─────────────────────────────────────────────

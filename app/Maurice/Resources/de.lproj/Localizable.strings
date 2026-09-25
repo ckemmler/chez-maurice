@@ -596,3 +596,22 @@
 "proposals.dismiss" = "Weglegen";
 "proposals.undo_dismiss" = "In der Liste behalten";
 "proposals.dismissed" = "Weggelegt: seine Gespräche kommen nicht wieder hoch.";
+
+/* Invitations */
+"invite.scan" = "Einladung scannen";
+"invite.scan.not_invitation" = "Dieser QR-Code ist keine Maurice-Einladung.";
+"enroll.profile.title" = "Wer kommt dazu?";
+"enroll.profile.subtitle" = "Dein Name, wie der Haushalt ihn sieht, und eine Farbe.";
+"enroll.profile.name" = "Dein Vorname";
+"enroll.failed" = "Die Einladung konnte nicht verwendet werden. Bitte um eine neue.";
+"members.title" = "Mitglieder";
+"members.invite_someone" = "Jemanden einladen";
+"members.invite_someone.hint" = "Ein QR-Code für eine Person, sieben Tage gültig. Sie wählt ihren Namen bei der Ankunft.";
+"members.pending" = "Offene Einladungen";
+"members.list" = "In diesem Haushalt";
+"members.new_device" = "Neues Gerät";
+"members.new_device.hint" = "Tippe auf jemanden, um einen Code anzuzeigen, der die App auf einem weiteren Gerät einrichtet.";
+"members.new_device.for" = "Ein neues Gerät für %@";
+"members.share" = "Link senden";
+"members.revoke" = "Zurückziehen";
+"members.valid_until" = "Gültig bis %@";
