@@ -227,6 +227,15 @@ def gmail_query(
     return " ".join(parts)
 
 
+def _text_slice(data: dict[Any, Any]) -> bytes:
+    """The ``BODY[TEXT]<0.n>`` value of a fetch, whatever offset key the server
+    echoed back (Gmail answers ``BODY[TEXT]<0>``)."""
+    for key, value in data.items():
+        if isinstance(key, bytes) and key.startswith(b"BODY[TEXT]") and isinstance(value, bytes):
+            return value
+    return b""
+
+
 def _needs_utf8(criteria: Sequence[Any]) -> bool:
     return any(isinstance(c, str) and not c.isascii() for c in criteria)
 
@@ -387,30 +396,43 @@ class Session:
             raise MailboxError(f"search failed in {folder!r}: {exc}") from exc
         return sorted(int(u) for u in uids)
 
-    def envelopes(self, folder: str, uids: Sequence[int]) -> list[dict[str, Any]]:
-        """Header metadata only. Never a body."""
+    def envelopes(self, folder: str, uids: Sequence[int], text_bytes: int = 0) -> list[dict[str, Any]]:
+        """Header metadata. A body only if ``text_bytes`` asks for one.
+
+        The slice of text rides on the FETCH the headers already need, so it
+        costs no extra round trip; it comes back under ``_message`` as the
+        headers and that slice reassembled, for the caller to parse and — this
+        is a body — wrap as untrusted before anyone reads it.
+        """
         if not uids:
             return []
         self.examine(folder)
+        parts: list[str] = [HEADER_FETCH, "FLAGS", "RFC822.SIZE"]
+        if text_bytes > 0:
+            parts.append(f"BODY.PEEK[TEXT]<0.{text_bytes}>")
         try:
-            fetched = self.client().fetch(list(uids), [HEADER_FETCH, "FLAGS", "RFC822.SIZE"])
+            fetched = self.client().fetch(list(uids), parts)
         except Exception as exc:
             raise MailboxError(f"fetch failed in {folder!r}: {exc}") from exc
         out = []
         for uid, data in fetched.items():
-            summary = envelope_summary(parse_message(data.get(HEADER_KEY) or b""))
+            header = data.get(HEADER_KEY) or b""
+            summary = envelope_summary(parse_message(header))
             flags = [_decode(f) for f in data.get(b"FLAGS", ())]
-            out.append(
-                {
-                    "account": self.account.name,
-                    "folder": folder,
-                    "uid": int(uid),
-                    "size": int(data.get(b"RFC822.SIZE", 0) or 0),
-                    "unread": "\\Seen" not in flags,
-                    "flagged": "\\Flagged" in flags,
-                    **summary,
-                }
-            )
+            entry = {
+                "account": self.account.name,
+                "folder": folder,
+                "uid": int(uid),
+                "size": int(data.get(b"RFC822.SIZE", 0) or 0),
+                "unread": "\\Seen" not in flags,
+                "flagged": "\\Flagged" in flags,
+                **summary,
+            }
+            if text_bytes > 0:
+                text = _text_slice(data)
+                entry["_message"] = header + b"\r\n" + text
+                entry["_message_partial"] = len(text) >= text_bytes
+            out.append(entry)
         return out
 
     def size(self, folder: str, uid: int) -> int:
@@ -446,9 +468,4 @@ class Session:
         except Exception as exc:
             raise MailboxError(f"fetch of uid {uid} failed in {folder!r}: {exc}") from exc
         data = fetched.get(uid) or fetched.get(int(uid)) or {}
-        text = b""
-        for key, value in data.items():
-            if isinstance(key, bytes) and key.startswith(b"BODY[TEXT]") and isinstance(value, bytes):
-                text = value
-                break
-        return (data.get(HEADER_KEY) or b"") + b"\r\n" + text
+        return (data.get(HEADER_KEY) or b"") + b"\r\n" + _text_slice(data)

@@ -6,6 +6,7 @@ that passes is also a proof that looking never marks anything read.
 
 from __future__ import annotations
 
+import re
 from email.message import EmailMessage
 from typing import Any
 
@@ -123,6 +124,8 @@ class FakeIMAPClient:
                 elif part == "BODY.PEEK[]":
                     entry[b"BODY[]"] = raw
                 elif str(part).startswith("BODY.PEEK[TEXT]"):
-                    entry[b"BODY[TEXT]<0>"] = body
+                    # BODY.PEEK[TEXT]<0.n> — hand back n octets, as a server does.
+                    count = re.search(r"<0\.(\d+)>", str(part))
+                    entry[b"BODY[TEXT]<0>"] = body[: int(count.group(1))] if count else body
             out[int(uid)] = entry
         return out

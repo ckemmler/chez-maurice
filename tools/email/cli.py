@@ -48,6 +48,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--has-attachment", action="store_true", default=None)
     p.add_argument("--gmail-query")
     p.add_argument("--limit", type=int, default=20)
+    p.add_argument("--no-preview", dest="preview", action="store_false", default=None)
 
     p = sub.add_parser("read")
     p.add_argument("uid", type=int)
@@ -91,6 +92,7 @@ def main(argv: list[str] | None = None) -> int:
                 since=args.since,
                 before=args.before,
                 unread=args.unread,
+                preview=args.preview,
             )
         elif args.command == "read":
             out = service.get_message(

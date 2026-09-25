@@ -88,8 +88,10 @@ async def list_tools() -> list[Tool]:
         Tool(
             name="search",
             description=(
-                "Find messages. Returns envelopes only — date, sender, recipients, subject, "
-                "unread/flagged, uid and folder — newest first, never a body. Every field is "
+                "Find messages: date, sender, recipients, subject, unread/flagged, uid and "
+                "folder, newest first. When the search comes back with three or fewer, each "
+                "one also carries `preview`, the start of its body — read it instead of "
+                "calling get_message, which would cost another round trip. Every field is "
                 "optional and they combine with AND. Without `account`, searches all your accounts. "
                 "folder='*' searches every folder but junk, trash and drafts. " + UNTRUSTED_NOTE
             ),
@@ -112,6 +114,10 @@ async def list_tools() -> list[Tool]:
                         "description": "Gmail search syntax (e.g. 'category:purchases', 'label:school'). Gmail only.",
                     },
                     "limit": {"type": "integer", "description": "How many to return (default 20, at most 100)."},
+                    "preview": {
+                        "type": "boolean",
+                        "description": "Force the body previews on or off. Left out, they come with a result of three or fewer.",
+                    },
                 },
             },
         ),
@@ -190,6 +196,7 @@ def dispatch(service: EmailService, name: str, args: dict[str, Any], *, member_i
             limit=args.get("limit") or 20,
             gmail_raw=args.get("gmail_query"),
             has_attachment=args.get("has_attachment"),
+            preview=args.get("preview"),
             sender=args.get("from"),
             to=args.get("to"),
             subject=args.get("subject"),

@@ -126,6 +126,13 @@ hostile-input handling and nothing of its vocabulary.
   have read the owner's mail out to the others.
 - **Blocking IMAP off the event loop.** Calls run in a worker thread, one lock
   per account session, so a slow mail server does not stall the other tools.
+- **A narrow search answers on its own.** When the whole search — every
+  account, every folder — comes back with three messages or fewer, each
+  envelope carries `preview`, the first 1 200 characters of the body, wrapped
+  in the same untrusted markers as `get_message`. It costs nothing on the wire —
+  the text slice rides on the `BODY.PEEK[TEXT]<0.n>` of the FETCH the headers
+  already needed — and it spares a whole turn. `preview` forces it
+  either way.
 
 Verified against the real Proton mailbox through Bridge on the day: roles read
 from the flags, 103 messages found since 20 September in `All Mail`, a
@@ -134,6 +141,34 @@ Outlook signature images (`image001.jpg`, referenced by Content-ID) no longer
 listed as attachments. iCloud could not be tried: the stored app-specific
 password is refused, which is also why the `mail` tool keeps that account
 disabled.
+
+**Why a mail answer takes as long as it does** (25 September 2026). *Relis-moi
+le mail à Jean* took 58 s: 23 s in `search`, 10 s in `get_message`, 25 s across
+three model rounds. Neither the network nor Gmail's search is at fault —
+measured from the Mac mini, an IMAP round trip is 100–150 ms and the whole
+sequence fits in 3 s.
+
+Two of the three are now accounted for. **The second fetch was pure waste**:
+reading a 1.9 kB message took a second model round and a second IMAP fetch to
+return what the first could have carried, which is what the preview above
+removes. **The model is the larger half**: the same question, twice each,
+against three models — `glm-5.3-flash` 45 and 51 s wall (30 and 36 s of them
+inside the model, 5 to 6 rounds), `mistral-medium-latest` 18 and 22 s (4.6 and
+6.8 s), `deepseek-v4-flash-0731` 17 and 27 s (4.7 and 8.6 s). A factor of five
+to seven per round, and Flash also takes the most rounds, so it pays twice. It
+is the member's own `everyday_model`, so it is the member's lever.
+
+**The third is still open, and one hypothesis has already been buried.** The
+23 s looked like the price of a reconnect after eleven idle minutes, and a
+keepalive was written for it. An A/B settled it: the same session left idle for
+fifteen minutes answered in 1.33 s *without* a keepalive — Gmail had not hung
+up — and `lsof` shows the gateway holding a single IMAP connection across
+hours and dozens of calls. There was no second login. The keepalive was
+dropped. What is left unexplained is a per-call IMAP latency that swings from
+0.6 s to 10.3 s on a warm connection with no reconnection in sight, for a 1.9 kB
+message — visible in the gateway and in a standalone process alike, which
+points away from Maurice and towards Gmail throttling the account. Not
+measured, not fixed.
 
 **Where the accounts come from — two sources, merged per member.** Since step 2
 (the evening of 25 September 2026) the ordinary one is the **server**: the member

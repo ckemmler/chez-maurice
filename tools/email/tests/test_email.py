@@ -221,6 +221,91 @@ def test_everywhere_skips_trash(service):
     assert "icloud:INBOX" in out["per_folder"]
 
 
+# ── previews: a narrow search answers without a second round trip ────────
+
+
+def test_a_narrow_search_brings_the_body_with_it(service):
+    alex = service.accounts(member_id="id-alex")
+    out = service.search(alex, account="icloud", subject="école")
+    (message,) = out["messages"]
+    assert "Jeudi 18h" in message["preview"]
+    assert BEGIN_MARKER in message["preview"] and END_MARKER in message["preview"]
+    assert message["preview_truncated"] is False
+
+
+def test_the_preview_rides_on_the_fetch_the_headers_need(service):
+    """The whole point: no extra round trip. One FETCH, asking for the text
+    slice alongside the headers — and peeked, so nothing is marked read."""
+    alex = service.accounts(member_id="id-alex")
+    service.search(alex, account="icloud", subject="école")
+    fetches = [c[1] for c in service.clients["alex@icloud.com"].calls if c[0] == "fetch"]
+    assert len(fetches) == 1
+    assert "BODY.PEEK[TEXT]<0.4800>" in fetches[0][1]
+
+
+def test_a_wide_result_stays_envelopes_only(tmp_path):
+    """Four matches is a list to choose from, not a message to read: sending
+    four bodies nobody asked for would cost more than the turn it saves."""
+    client = FakeIMAPClient(
+        {"INBOX": {n: build_raw(f"Sujet {n}", "x@y.z", f"corps {n}") for n in range(1, 5)}}
+    )
+    svc = EmailService(load_config(write_config(tmp_path, CONFIG)), client_factory=lambda acc: client)
+    out = svc.search(svc.accounts(member_id="id-alex"), account="icloud")
+    assert len(out["messages"]) == 4
+    assert all("preview" not in m for m in out["messages"])
+    assert all("BODY.PEEK[TEXT]" not in str(p) for c in client.calls if c[0] == "fetch" for p in c[1][1])
+
+
+def test_the_count_that_decides_is_the_whole_search(tmp_path):
+    """Two folders holding two matches each is four messages to choose from,
+    not two — folder='*' must not smuggle previews in one folder at a time."""
+    client = FakeIMAPClient(
+        {
+            "INBOX": {1: build_raw("A", "x@y.z", "corps A"), 2: build_raw("B", "x@y.z", "corps B")},
+            "Archive": {3: build_raw("C", "x@y.z", "corps C"), 4: build_raw("D", "x@y.z", "corps D")},
+        }
+    )
+    svc = EmailService(load_config(write_config(tmp_path, CONFIG)), client_factory=lambda acc: client)
+    out = svc.search(svc.accounts(member_id="id-alex"), account="icloud", folder="*")
+    assert len(out["messages"]) == 4
+    assert all("preview" not in m for m in out["messages"])
+
+
+def test_preview_can_be_asked_for_or_refused(tmp_path):
+    client = FakeIMAPClient(
+        {"INBOX": {n: build_raw(f"Sujet {n}", "x@y.z", f"corps {n}") for n in range(1, 5)}}
+    )
+    svc = EmailService(load_config(write_config(tmp_path, CONFIG)), client_factory=lambda acc: client)
+    alex = svc.accounts(member_id="id-alex")
+    assert all("preview" in m for m in svc.search(alex, account="icloud", preview=True)["messages"])
+    assert all("preview" not in m for m in svc.search(alex, account="icloud", limit=1, preview=False)["messages"])
+
+
+def test_previews_are_withheld_from_a_result_too_wide_to_read(tmp_path):
+    client = FakeIMAPClient({"INBOX": {n: build_raw(f"Sujet {n}", "x@y.z", f"corps {n}") for n in range(1, 31)}})
+    svc = EmailService(load_config(write_config(tmp_path, CONFIG)), client_factory=lambda acc: client)
+    out = svc.search(svc.accounts(member_id="id-alex"), account="icloud", limit=30, preview=True)
+    assert all("preview" not in m for m in out["messages"])
+    assert any("previews withheld" in note for note in out["notes"])
+
+
+def test_a_long_preview_is_cut_and_says_so(tmp_path):
+    client = FakeIMAPClient({"INBOX": {1: build_raw("Long", "x@y.z", "ligne\n" * 4000)}})
+    svc = EmailService(load_config(write_config(tmp_path, CONFIG)), client_factory=lambda acc: client)
+    (message,) = svc.search(svc.accounts(member_id="id-alex"), account="icloud")["messages"]
+    assert message["preview_truncated"] is True
+    assert len(message["preview"]) < 2500  # the preamble plus a bounded body
+
+
+def test_an_empty_body_leaves_no_preview_behind(tmp_path):
+    """No body, no key — and never the raw slice the transport left behind."""
+    client = FakeIMAPClient({"INBOX": {1: build_raw("Vide", "x@y.z", "   ")}})
+    svc = EmailService(load_config(write_config(tmp_path, CONFIG)), client_factory=lambda acc: client)
+    (message,) = svc.search(svc.accounts(member_id="id-alex"), account="icloud")["messages"]
+    assert "preview" not in message
+    assert "_message" not in message and "_message_partial" not in message
+
+
 def test_one_account_down_does_not_hide_the_other(tmp_path):
     def factory(acc):
         if acc.name == "gmail":
