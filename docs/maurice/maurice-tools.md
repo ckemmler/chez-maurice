@@ -1,6 +1,6 @@
 ---
 title: The MCP tool ecosystem
-date: '2026-09-21'
+date: '2026-09-25'
 flags: []
 locale: en
 description: 'The gateway that gives Maurice his capabilities: discovery, per-member
@@ -86,12 +86,66 @@ The night's own corpus tool sits behind them: **`corpus__map_conversations`** (`
 
 The public/private boundary is not aspirational; it is in `.gitignore` and `tools/README.md`:
 
-- **Public (ships):** `garden`, `corpus` (since September 2026 — it came in with its history and a test suite; its data, logs and `config/corpus.yaml` stay ignored, a `corpus.example.yaml` ships), `shared`, `mcp_gateway`.
+- **Public (ships):** `garden`, `corpus` (since September 2026 — it came in with its history and a test suite; its data, logs and `config/corpus.yaml` stay ignored, a `corpus.example.yaml` ships), `email` (25 September 2026, below), `shared`, `mcp_gateway`.
 - **Private overlay (gitignored — the `maurice-tools` repo):** `tracks`, `health`, `signals`, `tasks`, `calendar`, `contacts`, `calibre`, `readwise`, `compte`, `social`, `layouts`, `thoughts`, `mail` (September 2026), and `pipelines`.
 
 **Secrets live in `.env`, never in a tracked config file.** Both repos load one with `python-dotenv`, walking up from the source file to the first `.env` found; `maurice-tools/.env.example` documents the variables the overlay needs (`NEBIUS_API_KEY` for Calibre chapter summaries, `CALIBRE_API_KEY` for the book-browser artifact). Tracked config files hold only non-secret defaults — models, base URLs — and a missing key now fails with a named error instead of a `KeyError`. This replaced two credentials that had been committed to the private repo (September 2026).
 
 The gateway auto-discovers whatever directories are present, so a public checkout runs **garden-only**, while the home install overlays the private tools. This is exactly the *chat + garden ship first, the rest roll out gradually* line, made concrete at the filesystem level.
+
+## `email` — anyone's mail, read-only
+
+Public since 25 September 2026, and the answer to *most of people's data is in
+their mail*. `mail` (next section) is one person's triage method; `email` is the
+access layer anyone can use, and assumes no method at all. It reuses `mail`'s
+hostile-input handling and nothing of its vocabulary.
+
+- **Six reads, no writes.** `list_accounts`, `list_folders`, `search`
+  (envelopes only, newest first, across all the member's accounts by default),
+  `get_message` (headers, body as text, the list of attachments),
+  `get_attachment` (text, HTML, PDF text layer, forwarded message) and `stats`
+  (counts per main folder, top senders and domains, from headers alone). No
+  send, move, flag or delete: absent, not disabled.
+- **Nothing is marked read.** Folders are opened with EXAMINE, every fetch is a
+  `BODY.PEEK`; the test fake raises on anything else.
+- **An account is an address and a password.** Host, port and transport come
+  from the domain (`providers.py`: Gmail, iCloud, Fastmail, Yahoo, Proton via
+  Bridge, Orange, Free, SFR, La Poste); a Workspace address says
+  `provider = "gmail"`, anything else names its host. Outlook.com is recognised
+  and refused with the reason — Microsoft takes only OAuth over IMAP.
+- **Folders by role.** SPECIAL-USE flags (`\All`, `\Sent`, `\Trash`…) with usual
+  names as a fallback, so `[Gmail]/Tous les messages` and iCloud's
+  `Sent Messages` are found without anyone spelling them. The default search
+  scope is the `\All` folder where there is one (Gmail, Proton), the inbox
+  elsewhere; on Gmail the search fields become Gmail's own syntax (`X-GM-RAW`).
+- **Member-private twice.** The tool opens only the accounts of the member the
+  gateway names (no member, no mail; no owner override), and the server lists
+  `email` in `PRIVATE_ONLY`, so the family is withheld from any conversation with
+  a second participant. `mail` joined it the same day: its own guard admitted
+  only the owner, but in a room where the owner spoke a turn holding it could
+  have read the owner's mail out to the others.
+- **Blocking IMAP off the event loop.** Calls run in a worker thread, one lock
+  per account session, so a slow mail server does not stall the other tools.
+
+Verified against the real Proton mailbox through Bridge on the day: roles read
+from the flags, 103 messages found since 20 September in `All Mail`, a
+newsletter read and still unread afterwards, a PDF invoice's text extracted,
+Outlook signature images (`image001.jpg`, referenced by Content-ID) no longer
+listed as attachments. iCloud could not be tried: the stored app-specific
+password is refused, which is also why the `mail` tool keeps that account
+disabled.
+
+**Step 1 of four.** For now the accounts sit in `email.toml` beside
+`maurice.db` (`~/.maurice` on the Mac, the data volume in the container) and the
+passwords in the Keychain (`maurice-email`, the address as account) or, in the
+container, which has none, `MAURICE_EMAIL_<NAME>_PASSWORD` in the household's
+`.env`. The production image ships the tool (`!tools/email` in
+`Dockerfile.dockerignore`). The admin does all of it; a member who does not use
+a terminal cannot yet — what each side does is in the digest's *Connecting a
+mailbox*. Next: accounts per member in the server with the secret
+encrypted at rest, then a settings screen in the app (address, password,
+connection test), then OAuth for Gmail and Outlook, then optional indexing into
+the corpus.
 
 ## `mail` — the first tool built around a hostile input
 
@@ -264,6 +318,7 @@ when imapclient ships the fix.
 ## Gaps & notes
 
 - **The gateway enforces none of this.** Families and the experimental flag live only in the Bun server. A client that authenticates straight to the MCP gateway — a member token, an OAuth custom connector — gets the *complete* mounted roster, whatever the member was granted in the app. Closing that is its own piece of work. (The native tools — `maurice_docs`, the three `domains__*` — are the exception by construction: they live in the server's loop and the gateway never sees them; `corpus__map_conversations`, though, is mounted like any corpus tool and reads whatever member the caller claims.)
+- **`email` has no server-side accounts yet.** The accounts file and the Keychain are one household's setup on a Mac; a member cannot add a mailbox from the app, and a Linux container has no Keychain. It is also *experimental* like every non-core family, so a member needs the admin's tick before they see it.
 - **`web` and `signals` can't be turned off.** They're re-unioned into every resolution, so unticking them in the picker does nothing.
 - **Family selection is coarser than it looks.** `toolInFamilies` still accepts the parent prefix for back-compat, so a conversation holding `"garden"` opens all 54 garden tools at once, sub-families included.
 - **No per-tool sandboxing.** A tool runs with the gateway's process privileges; the only access control is the member contextvar and tool-family gating, not OS-level isolation.

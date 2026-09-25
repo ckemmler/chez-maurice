@@ -131,7 +131,7 @@ FROM base AS production
 # The sources, for real this time. Dockerfile.dockerignore is an allowlist
 # that keeps every private symlink out — the thirteen tools/ entries that point
 # into maurice-tools, and web/'s private pages and theme. What lands here is the
-# public surface and nothing else; `garden, corpus` is the whole MCP roster, and
+# public surface and nothing else; `garden, corpus, email` is the whole MCP roster, and
 # the build fails loudly rather than quietly shipping someone's private repo.
 COPY . /app
 

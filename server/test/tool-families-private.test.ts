@@ -27,10 +27,14 @@ test("the corpus is always on and no longer experimental", () => {
   expect(ALWAYS_ON).toContain("signals");
 });
 
-test("only the corpus is member-private, and its tools are recognised by prefix", () => {
-  expect(PRIVATE_ONLY).toEqual(["corpus"]);
+test("the corpus and the mailboxes are member-private, recognised by prefix", () => {
+  expect(PRIVATE_ONLY).toEqual(["corpus", "email", "mail"]);
   expect(isPrivateOnlyTool("corpus__search")).toBe(true);
   expect(isPrivateOnlyTool("corpus__map_conversations")).toBe(true);
+  // A room would otherwise hear whoever spoke have their mail read out.
+  expect(isPrivateOnlyTool("email__search")).toBe(true);
+  expect(isPrivateOnlyTool("email__get_message")).toBe(true);
+  expect(isPrivateOnlyTool("mail__latest_proposal")).toBe(true);
   expect(isPrivateOnlyTool("garden__list_notes")).toBe(false);
   expect(isPrivateOnlyTool("web_search")).toBe(false);
 });

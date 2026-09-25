@@ -1,6 +1,6 @@
 ---
 title: Applications, plugins, and the case of the mail
-date: '2026-09-17'
+date: '2026-09-25'
 flags: []
 locale: en
 description: 'How a personal application like mail triage attaches to the Maurice
@@ -22,6 +22,17 @@ parent: maurice-docs
 daily use — see [[maurice-tools]] for the mechanism. What follows is the product
 thinking around it, written down so it can be picked up later. Nothing here is
 decided. The priority is the demo fleet; this waits.
+
+**25 September 2026: the split is made, the other way round.** Rather than
+extract the example from `mail`, a new public tool, `email`, was written beside
+it: read-only access to a member's own mailboxes, any provider, an account
+being an address and a password. `mail` stays private and unchanged — it is the
+application (Candide's method); `email` is the access anyone can share. The
+triage can later be rebuilt on top of it. See [[maurice-tools]]. One correction
+to what follows: Gmail's reduced scopes (read-only, modify-without-send) exist
+only for the Gmail API, and are as restricted as full access; over IMAP a
+credential always opens everything, so the honest claim is "the tool has no
+way to send", not "the credential cannot".
 
 ## The question
 

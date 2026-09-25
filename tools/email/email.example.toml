@@ -1,0 +1,46 @@
+# Mail accounts for the `email` tool. Copy to email.toml beside maurice.db — ~/.maurice/email.toml on a Mac, the data volume in the container (or point
+# MAURICE_EMAIL_CONFIG at another file). This file holds NO passwords.
+#
+# An account belongs to one member — their Maurice username — and only that
+# member ever sees it. The smallest account is two lines: the host, port and
+# transport are guessed from the address (Gmail, iCloud, Fastmail, Yahoo,
+# Proton via Bridge, Orange, Free, SFR, La Poste).
+#
+# The password goes in the macOS Keychain, under service "maurice-email" and
+# the address as account:
+#
+#   security add-generic-password -s maurice-email -a someone@gmail.com -w
+#
+# (-w with no value prompts, so it stays out of the shell history; add -U to
+# replace one.) Or set MAURICE_EMAIL_<NAME>_PASSWORD in the environment.
+#
+# Then check it:
+#   .venv/bin/python -m tools.email.cli --member alex accounts
+
+[[accounts]]
+member = "alex"
+address = "alex.example@gmail.com"
+# Gmail wants an app password: turn on 2-Step Verification, then
+# https://myaccount.google.com/apppasswords
+
+[[accounts]]
+member = "alex"
+address = "alex.example@icloud.com"
+# iCloud wants an app-specific password, from https://account.apple.com
+
+# A custom domain hosted by Google Workspace: say so, the domain cannot.
+# [[accounts]]
+# member = "sam"
+# address = "sam@example.org"
+# provider = "gmail"
+# name = "work"
+
+# Any other IMAP server: name it.
+# [[accounts]]
+# member = "sam"
+# address = "sam@example.net"
+# host = "imap.example.net"
+# port = 993
+# security = "tls"          # or "starttls"
+# username = "sam"          # when the login is not the address
+# keychain_service = "my-own-keychain-item"   # reuse an existing Keychain entry

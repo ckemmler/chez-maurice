@@ -1,5 +1,5 @@
 # Third-party deps for the gateway's sub-tools that ship NO pyproject.toml
-# (calendar, compte, contacts, garden, layouts, mail, signals, social, tasks).
+# (calendar, compte, contacts, email, garden, layouts, mail, signals, social, tasks).
 # The gateway imports every sub-tool at startup, so these must be present for
 # it to boot. Discovered by AST-scanning those tools' imports.
 feedparser        # social (RSS/Atom)
@@ -14,5 +14,6 @@ requests          # signals, social
 python-dateutil   # calendar, signals, social, tasks
 PyYAML            # layouts, tasks
 anthropic         # garden (generate_evocation, link_*_entities, …)
-imapclient        # mail (mailbox names in modified UTF-7; bare imaplib will not do)
+imapclient        # email, mail (mailbox names in modified UTF-7; bare imaplib will not do)
+pypdf             # email (the text layer of a PDF attachment)
 httpx             # mail (Ollama classification, and the optional escalation)

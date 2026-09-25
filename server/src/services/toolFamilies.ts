@@ -34,8 +34,10 @@ export const ALWAYS_ON = ["web", "signals", "corpus"];
 // corpus is one member's whole indexed life: in a room the turn is taken on
 // behalf of whoever spoke, so an unguarded search would read their private
 // conversations out to everyone else present. Same rule as the domain briefs
-// (services/claude.ts): never in a room, never for another member.
-export const PRIVATE_ONLY = ["corpus"];
+// (services/claude.ts): never in a room, never for another member. The
+// member's mailboxes are the same case, through either mail tool, and neither
+// can tell on its own: it sees who asked, not who else is listening.
+export const PRIVATE_ONLY = ["corpus", "email", "mail"];
 
 /** True for a tool whose family may not be handed to a turn with more than one
  *  participant. */
@@ -138,6 +140,7 @@ const META: Record<string, { title: string; icon: string; blurb: string }> = {
   layouts:  { title: "Layouts",    icon: "rectangle.3.group",              blurb: "Saved layouts." },
   calibre:  { title: "Books",      icon: "books.vertical",                 blurb: "Your Calibre library." },
   corpus:   { title: "Corpus",     icon: "doc.text.magnifyingglass",       blurb: "Search your corpus." },
+  email:    { title: "Email",      icon: "envelope",                       blurb: "Search and read your own mailboxes — never sends, never marks read." },
   domains:  { title: "Domain proposals", icon: "book.closed",              blurb: "Propose, adjust and adopt domains — in the conversation Maurice opened for it." },
 };
 

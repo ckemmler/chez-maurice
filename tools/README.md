@@ -37,17 +37,19 @@ one of, tried in order:
 
 Because of this, the repo splits cleanly into **public** and **private** tools:
 
-- **Public** (shipped in this repo): `garden/`, plus the `shared/` + `mcp_gateway/`
-  infrastructure. This is all the open-source release contains.
-- **Private** (everyone else: `calibre/`, `corpus/`, `tracks/`, `pipelines/`,
+- **Public** (shipped in this repo): `garden/`, `corpus/`, `email/`, plus the
+  `shared/` + `mcp_gateway/` infrastructure. This is all the open-source release
+  contains.
+- **Private** (everyone else: `calibre/`, `mail/`, `tracks/`, `pipelines/`,
   `readwise/`, `health/`, `thoughts/`, `signals/`, `social/`, `calendar/`,
   `contacts/`, `tasks/`, `compte/`, `layouts/`, …). These live in a **separate
   private repo** and are dropped into `tools/` as an on-disk **overlay**. The
   gateway picks them up automatically; with them absent (the public checkout)
-  it simply mounts only `garden`.
+  it simply mounts only the public ones.
 
 The root `.gitignore` is **default-deny** for `tools/*/`: any tool dir is private
-unless explicitly allow-listed (currently `garden`, `shared`, `mcp_gateway`). To
+unless explicitly allow-listed (currently `garden`, `corpus`, `email`, `shared`,
+`mcp_gateway`). To
 open-source a new tool, add a `!/tools/<name>/` line; to keep one private, do
 nothing.
 

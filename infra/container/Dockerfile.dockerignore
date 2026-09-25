@@ -74,6 +74,7 @@ web/src/lib/tasks-api.ts
 !tools/shared
 !tools/mcp_gateway
 !tools/corpus
+!tools/email
 # …minus the corpus's own artefacts: 730 MB of vector store, plus a config that
 # names absolute paths on the machine that wrote it.
 tools/corpus/data
