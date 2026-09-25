@@ -4,7 +4,7 @@
 "pairing.connect" = "Connect";
 "pairing.error.status" = "Server returned unexpected status";
 "pairing.error.connect" = "Could not connect: %@";
-"pairing.error.invalid_url" = "That doesn't look like a valid address. Example: https://your-mac.local:3001";
+"pairing.error.invalid_url" = "That doesn't look like a valid address. Example: https://monfoyer.chezmaurice.eu";
 "pairing.error.unreachable" = "the server didn't respond";
 "pairing.error.https_hint" = "Maurice servers use https — try https:// instead of http://.";
 "picker.title" = "Who's here?";
@@ -207,7 +207,7 @@
 "context.section.conversations" = "Conversations";
 "context.searchPlaceholder" = "Search notes, books, conversations…";
 "context.nothingMatches" = "nothing matches “%@”";
-"pairing.url_placeholder" = "https://mac-mini.tailnet.ts.net:3001";
+"pairing.url_placeholder" = "https://monfoyer.chezmaurice.eu";
 
 /* Enrollment + PIN setup */
 "enroll.cta" = "Have an invite code?";

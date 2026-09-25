@@ -4,7 +4,7 @@
 "pairing.connect" = "Verbinden";
 "pairing.error.status" = "Server gaf een onverwachte status terug";
 "pairing.error.connect" = "Verbinden mislukt: %@";
-"pairing.error.invalid_url" = "Dat lijkt geen geldig adres. Voorbeeld: https://jouw-mac.local:3001";
+"pairing.error.invalid_url" = "Dat lijkt geen geldig adres. Voorbeeld: https://monfoyer.chezmaurice.eu";
 "pairing.error.unreachable" = "de server reageerde niet";
 "pairing.error.https_hint" = "Maurice-servers gebruiken https — probeer https:// in plaats van http://.";
 "picker.title" = "Wie is er?";
@@ -207,7 +207,7 @@
 "context.section.conversations" = "Gesprekken";
 "context.searchPlaceholder" = "Zoek in notities, boeken, gesprekken…";
 "context.nothingMatches" = "niets komt overeen met “%@”";
-"pairing.url_placeholder" = "https://mac-mini.tailnet.ts.net:3001";
+"pairing.url_placeholder" = "https://monfoyer.chezmaurice.eu";
 
 /* Enrollment + PIN setup */
 "enroll.cta" = "Heb je een uitnodigingscode?";
