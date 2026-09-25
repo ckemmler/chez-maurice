@@ -1,6 +1,6 @@
 /* Dutch — generated */
 "app.tagline" = "Een gezellige plek om te kletsen";
-"pairing.instructions" = "Maurice draait op een computer bij jou thuis.\nVoer het adres in om dit apparaat te verbinden.";
+"pairing.instructions" = "Elk huishouden heeft zijn eigen Maurice.\nVoer het adres van het jouwe in om dit apparaat te verbinden.";
 "pairing.connect" = "Verbinden";
 "pairing.error.status" = "Server gaf een onverwachte status terug";
 "pairing.error.connect" = "Verbinden mislukt: %@";
@@ -256,6 +256,7 @@
 "composer.photo" = "Fotobibliotheek";
 "composer.file" = "Bestanden";
 "composer.paste_image" = "Afbeelding plakken";
+"composer.add" = "Foto’s, bestanden, context toevoegen";
 
 /* Files library */
 "settings.files.group" = "Jouw bestanden";

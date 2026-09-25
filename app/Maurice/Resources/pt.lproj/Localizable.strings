@@ -1,6 +1,6 @@
 /* Portuguese — generated */
 "app.tagline" = "Um cantinho acolhedor para conversar";
-"pairing.instructions" = "O Maurice corre num computador na sua casa.\nIntroduza o endereço para ligar este dispositivo.";
+"pairing.instructions" = "Cada casa tem o seu próprio Maurice.\nIntroduza o endereço da sua para ligar este dispositivo.";
 "pairing.connect" = "Ligar";
 "pairing.error.status" = "O servidor devolveu um estado inesperado";
 "pairing.error.connect" = "Não foi possível ligar: %@";
@@ -256,6 +256,7 @@
 "composer.photo" = "Fototeca";
 "composer.file" = "Ficheiros";
 "composer.paste_image" = "Colar imagem";
+"composer.add" = "Adicionar fotos, ficheiros, contexto";
 
 /* Files library */
 "settings.files.group" = "Os seus ficheiros";

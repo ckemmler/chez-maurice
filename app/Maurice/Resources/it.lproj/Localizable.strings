@@ -1,6 +1,6 @@
 /* Italian — generated */
 "app.tagline" = "Un angolo accogliente per chiacchierare";
-"pairing.instructions" = "Maurice vive su un computer a casa tua.\nInserisci il suo indirizzo per collegare questo dispositivo.";
+"pairing.instructions" = "Ogni casa ha il suo Maurice.\nInserisci l’indirizzo della tua per collegare questo dispositivo.";
 "pairing.connect" = "Connetti";
 "pairing.error.status" = "Il server ha restituito uno stato imprevisto";
 "pairing.error.connect" = "Connessione non riuscita: %@";
@@ -256,6 +256,7 @@
 "composer.photo" = "Libreria foto";
 "composer.file" = "File";
 "composer.paste_image" = "Incolla immagine";
+"composer.add" = "Aggiungi foto, file, contesto";
 
 /* Files library */
 "settings.files.group" = "I tuoi file";

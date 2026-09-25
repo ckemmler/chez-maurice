@@ -1,6 +1,6 @@
 /* French — generated */
 "app.tagline" = "Un coin douillet pour discuter";
-"pairing.instructions" = "Maurice tourne sur un ordinateur chez vous.\nSaisissez son adresse pour connecter cet appareil.";
+"pairing.instructions" = "Chaque foyer a son propre Maurice.\nSaisissez l’adresse du vôtre pour connecter cet appareil.";
 "pairing.connect" = "Se connecter";
 "pairing.error.status" = "Le serveur a renvoyé un statut inattendu";
 "pairing.error.connect" = "Connexion impossible : %@";
@@ -256,6 +256,7 @@
 "composer.photo" = "Photothèque";
 "composer.file" = "Fichiers";
 "composer.paste_image" = "Coller l’image";
+"composer.add" = "Ajouter photos, fichiers, contexte";
 
 /* Files library */
 "settings.files.group" = "Vos fichiers";

@@ -1,6 +1,6 @@
 /* English — generated */
 "app.tagline" = "A cozy place to chat";
-"pairing.instructions" = "Maurice runs on a computer in your home.\nEnter its address to connect this device.";
+"pairing.instructions" = "Every household has its own Maurice.\nEnter your household's address to connect this device.";
 "pairing.connect" = "Connect";
 "pairing.error.status" = "Server returned unexpected status";
 "pairing.error.connect" = "Could not connect: %@";
@@ -256,6 +256,7 @@
 "composer.photo" = "Photo Library";
 "composer.file" = "Files";
 "composer.paste_image" = "Paste Image";
+"composer.add" = "Add photos, files, context";
 
 /* Files library */
 "settings.files.group" = "Your files";

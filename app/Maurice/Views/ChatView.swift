@@ -2701,6 +2701,54 @@ private struct ComposerBar: View {
         !composer.items.isEmpty || composer.lockedCount > 0
     }
 
+    /// The + menu: attachments first (camera, photos, files, a pasted image),
+    /// then what shapes the conversation (context, tools).
+    private var plusMenu: some View {
+        Menu {
+            Section {
+                Button { showCamera = true } label: {
+                    Label(session.localized("composer.camera"), systemImage: "camera")
+                }
+                Button { showPhotoPicker = true } label: {
+                    Label(session.localized("composer.photo"), systemImage: "photo")
+                }
+                Button { showFileImporter = true } label: {
+                    Label(session.localized("composer.file"), systemImage: "folder")
+                }
+                // Only offered while the clipboard holds an image, so the menu
+                // never shows a paste that would do nothing. Read at menu-open
+                // time; a mere "has image" check doesn't trigger the system's
+                // paste banner.
+                if clipboardHasImage {
+                    Button { pasteImageFromClipboard() } label: {
+                        Label(session.localized("composer.paste_image"), systemImage: "doc.on.clipboard")
+                    }
+                }
+            }
+            Section {
+                Button(action: onAddContext) {
+                    Label(session.localized("chat.add_context"), systemImage: "text.badge.plus")
+                }
+                Button(action: onOpenTools) {
+                    Label(session.localized("chat.tools_title"), systemImage: "wrench.adjustable")
+                }
+                .disabled(chat.activeConversation == nil)
+            }
+        } label: {
+            Image(systemName: "plus")
+                .font(.system(size: 16, weight: .regular))
+                .foregroundStyle(theme.inkSoft)
+                .frame(width: 34, height: 34)
+                .contentShape(Rectangle())
+        }
+        .menuIndicator(.hidden)
+        .buttonStyle(.plain)   // no default menu-button background
+        .glassControl(theme, in: Circle(), fallbackFill: .clear)
+        .disabled(chat.isStreaming)
+        .help(session.localized("composer.add"))
+        .accessibilityLabel(session.localized("composer.add"))
+    }
+
     /// Instant model switcher for the thread's Maurice. Picking a model persists
     /// to that Maurice (everyday → this member's own preference; a persona → the
     /// persona) and applies to this and subsequent chats. The leading dot is
@@ -2913,36 +2961,63 @@ private struct ComposerBar: View {
 
                 GlassGroup(spacing: 6) {
                 HStack(spacing: 4) {
-                    Menu {
-                        Button { showCamera = true } label: {
-                            Label(session.localized("composer.camera"), systemImage: "camera")
+                    // One + for everything that adds to the turn — a photo, a
+                    // file, context, the conversation's tools — the way Claude's
+                    // own apps do it. A row of single-purpose icons crowded the
+                    // field's left edge.
+                    plusMenu
+
+                    // Once context is attached, a suitcase shows it and opens
+                    // the review/trim tray — state worth seeing without a menu.
+                    if hasContext {
+                        Button(action: onToggleTray) {
+                            Image(systemName: "suitcase")
+                                .font(.system(size: 16, weight: .regular))
+                                .foregroundStyle(trayOpen
+                                                 ? (session.activeDeviceUser?.color ?? .blue).legible(onDark: theme.isDark)
+                                                 : theme.inkSoft)
+                                .frame(width: 34, height: 34)
                         }
-                        Button { showPhotoPicker = true } label: {
-                            Label(session.localized("composer.photo"), systemImage: "photo")
-                        }
-                        Button { showFileImporter = true } label: {
-                            Label(session.localized("composer.file"), systemImage: "folder")
-                        }
-                        // Only offered while the clipboard holds an image, so
-                        // the menu never shows a paste that would do nothing.
-                        // Read at menu-open time; a mere "has image" check
-                        // doesn't trigger the system's paste banner.
-                        if clipboardHasImage {
-                            Button { pasteImageFromClipboard() } label: {
-                                Label(session.localized("composer.paste_image"), systemImage: "doc.on.clipboard")
-                            }
-                        }
-                    } label: {
-                        Image(systemName: "paperclip")
-                            .font(.system(size: 16))
-                            .foregroundStyle(theme.inkSoft)
-                            .frame(width: 34, height: 34)
-                            .contentShape(Rectangle())
+                        .buttonStyle(.plain)
+                        .glassControl(theme, in: Circle(), fallbackFill: .clear)
+                        .help(session.localized("chat.review_context"))
                     }
-                    .menuIndicator(.hidden)
-                    .buttonStyle(.plain)   // no default menu-button background
-                    .glassControl(theme, in: Circle(), fallbackFill: .clear)
-                    .disabled(chat.isStreaming)
+
+                    #if os(iOS)
+                    // Dismiss the keyboard from inside the input row (when focused)
+                    // — no floating accessory bar that would cover Send.
+                    if isFocused {
+                        Button { isFocused = false } label: {
+                            Image(systemName: "keyboard.chevron.compact.down")
+                                .font(.system(size: 16))
+                                .foregroundStyle(theme.inkSoft)
+                                .frame(width: 34, height: 34)
+                        }
+                        .buttonStyle(.plain)
+                        .glassControl(theme, in: Circle(), fallbackFill: .clear)
+                        .help(session.localized("chat.hide_keyboard"))
+                    }
+                    #endif
+
+                    // Instant model switcher for the thread's Maurice — sits in
+                    // the left cluster, just after the action icons.
+                    modelPill
+
+                    Spacer()
+
+                    #if os(macOS)
+                    // Return sends, Shift-Return breaks the line — said once, in
+                    // the row, while the field is still empty.
+                    if inputText.isEmpty {
+                        Text(session.localized(chat.isRoom ? "chat.composer.hint_room"
+                                                           : "chat.composer.hint"))
+                            .font(.system(size: 9.5, design: .monospaced))
+                            .foregroundStyle(theme.inkMute)
+                            .tracking(0.5)
+                            .lineLimit(1)
+                            .padding(.trailing, 6)
+                    }
+                    #endif
 
                     // Dictate — fills the field, never sends. Recognition
                     // mishears, and a mishearing that sent itself would cost a
@@ -2992,69 +3067,6 @@ private struct ComposerBar: View {
                     .glassControl(theme, in: Circle(), fallbackFill: .clear)
                     .disabled(chat.isStreaming)
                     .help(session.localized(dictation.isListening ? "chat.dictate_stop" : "chat.dictate"))
-                    #endif
-
-                    // Tools — per-chat tool families (wrench).
-                    Button(action: onOpenTools) {
-                        Image(systemName: "wrench.adjustable")
-                            .font(.system(size: 15))
-                            .foregroundStyle(theme.inkSoft)
-                            .frame(width: 34, height: 34)
-                    }
-                    .buttonStyle(.plain)
-                    .glassControl(theme, in: Circle(), fallbackFill: .clear)
-                    .help(session.localized("chat.tools_help"))
-
-                    // Context button — `+` to add when there's none; once context
-                    // has been attached it turns into a suitcase that opens the
-                    // review/trim tray (where "Add context" still lives, so this
-                    // path keeps everything the bare `+` offered).
-                    Button(action: hasContext ? onToggleTray : onAddContext) {
-                        Image(systemName: hasContext ? "suitcase" : "plus")
-                            .font(.system(size: 16, weight: .regular))
-                            .foregroundStyle(hasContext && trayOpen
-                                             ? (session.activeDeviceUser?.color ?? .blue).legible(onDark: theme.isDark)
-                                             : theme.inkSoft)
-                            .frame(width: 34, height: 34)
-                    }
-                    .buttonStyle(.plain)
-                    .glassControl(theme, in: Circle(), fallbackFill: .clear)
-                    .help(session.localized(hasContext ? "chat.review_context" : "chat.add_context"))
-
-                    #if os(iOS)
-                    // Dismiss the keyboard from inside the input row (when focused)
-                    // — no floating accessory bar that would cover Send.
-                    if isFocused {
-                        Button { isFocused = false } label: {
-                            Image(systemName: "keyboard.chevron.compact.down")
-                                .font(.system(size: 16))
-                                .foregroundStyle(theme.inkSoft)
-                                .frame(width: 34, height: 34)
-                        }
-                        .buttonStyle(.plain)
-                        .glassControl(theme, in: Circle(), fallbackFill: .clear)
-                        .help(session.localized("chat.hide_keyboard"))
-                    }
-                    #endif
-
-                    // Instant model switcher for the thread's Maurice — sits in
-                    // the left cluster, just after the action icons.
-                    modelPill
-
-                    Spacer()
-
-                    #if os(macOS)
-                    // Return sends, Shift-Return breaks the line — said once, in
-                    // the row, while the field is still empty.
-                    if inputText.isEmpty {
-                        Text(session.localized(chat.isRoom ? "chat.composer.hint_room"
-                                                           : "chat.composer.hint"))
-                            .font(.system(size: 9.5, design: .monospaced))
-                            .foregroundStyle(theme.inkMute)
-                            .tracking(0.5)
-                            .lineLimit(1)
-                            .padding(.trailing, 6)
-                    }
                     #endif
 
                     // The send row reads as a sentence:

@@ -1,6 +1,6 @@
 /* German — generated */
 "app.tagline" = "Ein gemütlicher Ort zum Plaudern";
-"pairing.instructions" = "Maurice läuft auf einem Computer bei dir zu Hause.\nGib seine Adresse ein, um dieses Gerät zu verbinden.";
+"pairing.instructions" = "Jeder Haushalt hat seinen eigenen Maurice.\nGib die Adresse deines Haushalts ein, um dieses Gerät zu verbinden.";
 "pairing.connect" = "Verbinden";
 "pairing.error.status" = "Server hat einen unerwarteten Status zurückgegeben";
 "pairing.error.connect" = "Verbindung fehlgeschlagen: %@";
@@ -256,6 +256,7 @@
 "composer.photo" = "Fotomediathek";
 "composer.file" = "Dateien";
 "composer.paste_image" = "Bild einfügen";
+"composer.add" = "Fotos, Dateien, Kontext hinzufügen";
 
 /* Files library */
 "settings.files.group" = "Deine Dateien";
