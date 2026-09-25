@@ -179,7 +179,14 @@ words underneath. Strings in the app's seven languages.
 family is no longer experimental: it is granted by the member's own act of
 adding a mailbox, not by the admin's tick. Rooms still withhold it.
 Accounts that live only in `email.toml` are not seen by that rule; their owner
-picks the family by hand.
+picks the family by hand. **The picker says so** (`familiesForMember`, the same
+evening): with a mailbox, Email is listed among the always-on families
+(*Always on · Web search · Corpus · Signals · Email*); without one it is offered
+in the experimental section, for an admin whose mailbox is in the file; a member
+with neither sees nothing. The first version made it a "core" family that was
+not always-on, which the app shows nowhere — Email was invisible in the picker.
+The private `mail` family is titled **Mail triage** there, so the two are not
+confused.
 
 **Next**: OAuth for Gmail and Outlook, then optional indexing into the corpus.
 

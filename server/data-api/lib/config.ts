@@ -11,6 +11,7 @@
 import { resolve } from "node:path";
 import { existsSync, readFileSync, renameSync } from "node:fs";
 import { homedir } from "node:os";
+import { assertTestSandbox } from "../../lib/appDir";
 
 // ── TOML parser (flat key/value sections only) ─────────────────────────
 
@@ -65,9 +66,17 @@ function loadConfig(): TomlConfig {
 // ── Public API ──────────────────────────────────────────────────────────
 
 export function getDataDir(): string {
-  if (process.env.MAURICE_DATA_DIR) return process.env.MAURICE_DATA_DIR;
+  if (process.env.MAURICE_DATA_DIR) {
+    assertTestSandbox(process.env.MAURICE_DATA_DIR, "the data directory (life.db)");
+    return process.env.MAURICE_DATA_DIR;
+  }
   const cfg = loadConfig();
-  if (cfg.paths?.data_dir) return cfg.paths.data_dir;
+  if (cfg.paths?.data_dir) {
+    // config.toml's data_dir is the household's own: under bun test it is
+    // never the right answer (lib/appDir.ts, assertTestSandbox).
+    assertTestSandbox(cfg.paths.data_dir, "the data directory (life.db)");
+    return cfg.paths.data_dir;
+  }
   throw new Error(
     "Maurice data_dir not configured. Set MAURICE_DATA_DIR or create ~/.maurice/config.toml with [paths] data_dir."
   );

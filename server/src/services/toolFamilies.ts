@@ -151,6 +151,8 @@ const META: Record<string, { title: string; icon: string; blurb: string }> = {
   calibre:  { title: "Books",      icon: "books.vertical",                 blurb: "Your Calibre library." },
   corpus:   { title: "Corpus",     icon: "doc.text.magnifyingglass",       blurb: "Search your corpus." },
   email:    { title: "Email",      icon: "envelope",                       blurb: "Search and read your own mailboxes — never sends, never marks read." },
+  // The private triage tool, not to be mistaken for Email beside it.
+  mail:     { title: "Mail triage", icon: "tray.full",                     blurb: "The owner's nightly sorting proposals and the triage vocabulary." },
   domains:  { title: "Domain proposals", icon: "book.closed",              blurb: "Propose, adjust and adopt domains — in the conversation Maurice opened for it." },
 };
 
@@ -201,11 +203,29 @@ export function toolInFamilies(toolName: string, families: string[]): boolean {
 let cache: { at: number; families: ToolFamily[] } | null = null;
 const TTL = 60_000;
 
-/** The household's tool families with live counts (cached briefly). Experimental
- *  families are withheld from members who haven't been granted access. */
+/** The household's families as one member sees them in the picker.
+ *
+ *  Email is the one family whose place depends on the member. With a mailbox
+ *  they added in the app it rides in every private turn (resolveFamilies), so
+ *  the picker lists it with the always-on ones, where it is true. Without one
+ *  there is nothing it could read from the app's accounts, and it is offered
+ *  like an experimental family: an admin whose mailbox lives in email.toml
+ *  (Proton through Bridge) ticks it by hand. Until 25 September 2026 it was
+ *  "core" and not always-on, which the app shows nowhere at all.
+ *  Experimental families are withheld from members who haven't been granted
+ *  access. */
+export function familiesForMember(all: ToolFamily[], memberId: string): ToolFamily[] {
+  const mail = hasMailAccount(memberId);
+  const placed = all.map((f) =>
+    f.id === "email" ? { ...f, group: mail ? "core" as const : "experimental" as const, alwaysOn: mail } : f,
+  );
+  return canUseExperimental(memberId) ? placed : placed.filter((f) => f.group !== "experimental");
+}
+
+/** The household's tool families with live counts (cached briefly), placed
+ *  for this member (familiesForMember). */
 export async function listFamilies(memberId: string): Promise<ToolFamily[]> {
-  const forMember = (all: ToolFamily[]) =>
-    canUseExperimental(memberId) ? all : all.filter((f) => f.group !== "experimental");
+  const forMember = (all: ToolFamily[]) => familiesForMember(all, memberId);
   if (cache && Date.now() - cache.at < TTL) return forMember(cache.families);
   const counts: Record<string, number> = { web: 1 };
   try {

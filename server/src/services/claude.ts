@@ -1047,9 +1047,22 @@ function attachBinaries(messages: any[], attachments: FileAttachment[]): void {
   messages[i] = { role: "user", content: [...blocks, ...tail] };
 }
 
+/** What a turn ran on, filled in as soon as it is known, for the error line. */
+interface TurnTrace {
+  provider: string | null;
+  model: string | null;
+}
+
 /**
  * Stream a response from Claude with an agentic tool loop.
  * Falls back to echo-back if no API key is configured.
+ *
+ * Every `error` event the turn emits is also logged as one `[turn-error]` JSON
+ * line — conversation, provider, model, message. Until 25 September 2026 a
+ * failed turn left nothing in api.log but the 200 of the POST: a household
+ * whose Z.ai key had been replaced answered 401 on every message, and only
+ * calling Z.ai by hand said why. `[round]` lines are written on success only,
+ * so this is the failure's half of the same trace.
  */
 export async function* streamResponse(
   conversationId: string,
@@ -1057,6 +1070,34 @@ export async function* streamResponse(
   profileText?: string | null,
   memberId?: string,
   signal?: AbortSignal
+): AsyncGenerator<StreamEvent> {
+  const trace: TurnTrace = { provider: null, model: null };
+  for await (const ev of streamTurn(conversationId, userDisplayName, profileText, memberId, signal, trace)) {
+    if (ev.type === "error") logTurnError(conversationId, trace, ev.message);
+    yield ev;
+  }
+}
+
+function logTurnError(conversationId: string, trace: TurnTrace, message: string | undefined): void {
+  console.error(
+    "[turn-error]",
+    JSON.stringify({
+      t: new Date().toISOString(),
+      convo: conversationId,
+      provider: trace.provider,
+      model: trace.model,
+      message: (message ?? "").slice(0, 500),
+    }),
+  );
+}
+
+async function* streamTurn(
+  conversationId: string,
+  userDisplayName: string,
+  profileText: string | null | undefined,
+  memberId: string | undefined,
+  signal: AbortSignal | undefined,
+  trace: TurnTrace,
 ): AsyncGenerator<StreamEvent> {
   const config = getHouseholdConfig();
   // Language for any fallback/error text we send back (the model's own replies
@@ -1257,6 +1298,8 @@ function trackedBooks(
   const rec = getModel(resolved);
   const isLocal = rec?.tier === "local";
   const provider = rec?.provider ?? (isLocal ? "ollama" : "anthropic");
+  trace.provider = provider;
+  trace.model = resolved;
   const temperature = maurice ? maurice.temp : undefined;
   // The reasoning choice — the persona's, or the household's factory setting
   // for the everyday Maurice — honoured only where the roster says the model

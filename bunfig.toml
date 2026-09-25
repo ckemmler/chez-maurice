@@ -1,0 +1,12 @@
+# `bun test` started from the repo root: the same sandbox as from server/.
+#
+# server/bunfig.toml preloads test/_preload.ts, which points MAURICE_DATA_DIR at
+# a throwaway — but Bun only reads it when the run starts in server/. On 25
+# September 2026 a run from here skipped it, and the suites wrote into the
+# household's live maurice.db (see server/lib/appDir.ts, assertTestSandbox,
+# which now refuses that outright). This file makes the root behave like
+# server/: only the server's suites (not web/e2e's Playwright specs), with
+# the preload.
+[test]
+root = "./server"
+preload = ["./server/test/_preload.ts"]

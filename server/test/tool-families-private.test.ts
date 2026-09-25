@@ -93,3 +93,21 @@ test("a member who added a mailbox holds the Email family, without the experimen
   // A member without a mailbox does not get it.
   expect(resolveFamilies("no-such-conversation", false, "someone-else") as string[]).not.toContain("email");
 });
+
+test("the picker shows Email where it is true for this member", async () => {
+  const { default: db } = await import("../src/db");
+  const { familiesForMember } = await import("../src/services/toolFamilies");
+  db.run(`INSERT OR IGNORE INTO users (id, username, display_name, role) VALUES ('tf-admin', 'tf-admin', 'Admin', 'admin')`);
+  db.run(`INSERT OR IGNORE INTO users (id, username, display_name, role) VALUES ('tf-plain', 'tf-plain', 'Plain', 'standard')`);
+  const all = [
+    { id: "web", title: "Web search", icon: "globe", blurb: "", count: 1, group: "core" as const, alwaysOn: true },
+    { id: "email", title: "Email", icon: "envelope", blurb: "", count: 6, group: "core" as const, alwaysOn: false },
+  ];
+  const email = (member: string) => familiesForMember(all, member).find((f) => f.id === "email");
+  // tf-mail added a mailbox above: always on, listed with web.
+  expect(email("tf-mail")).toMatchObject({ group: "core", alwaysOn: true });
+  // An admin without one (their mailbox is in email.toml): offered, to tick by hand.
+  expect(email("tf-admin")).toMatchObject({ group: "experimental", alwaysOn: false });
+  // A member with neither a mailbox nor experimental access: not offered.
+  expect(email("tf-plain")).toBeUndefined();
+});
