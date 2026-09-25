@@ -89,8 +89,18 @@ function groupOf(id: string): "core" | "garden" | "experimental" {
   // The domain proposal tools are native and granted by the conversation
   // alone (services/domainProposals.ts), never by a family or the flag.
   if (id === "domains") return "core";
+  // A member's own mail is granted by their having added a mailbox
+  // (hasMailAccount below), not by the admin's experimental tick.
+  if (id === "email") return "core";
   if (id === "garden-notes" || id === "garden-journal") return "garden";
   return "experimental";
+}
+
+/** True once the member has added a mailbox from the app (mail_accounts).
+ *  Accounts in the admin's email.toml are not seen here: those members pick
+ *  the Email family by hand, as before. */
+export function hasMailAccount(memberId: string): boolean {
+  return !!db.query(`SELECT 1 FROM mail_accounts WHERE member_id = ? LIMIT 1`).get(memberId);
 }
 
 /** True for tools whose family is gated behind per-member experimental access. */
@@ -236,7 +246,11 @@ export function resolveFamilies(conversationId: string, isLocal: boolean, member
   const expOK = memberId ? canUseExperimental(memberId) : true;
   const chosen = selectedFamilies(conversationId);
   if (chosen === "all") return "all"; // an explicit household/persona "all" (member tools still gated downstream)
-  const withCore = [...new Set([...chosen, ...ALWAYS_ON])];
+  // A member who added a mailbox did it so that Maurice would read it: the
+  // family rides in every one of their turns without a picker or an admin.
+  // Rooms still withhold it (PRIVATE_ONLY, applied in claude.ts).
+  const mail = memberId && hasMailAccount(memberId) ? ["email"] : [];
+  const withCore = [...new Set([...chosen, ...ALWAYS_ON, ...mail])];
   return expOK ? withCore : withCore.filter((id) => groupOf(id) !== "experimental");
 }
 

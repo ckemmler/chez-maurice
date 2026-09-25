@@ -75,3 +75,21 @@ test("an unselected turn gets search and widening, a selected one gets the readi
   // Other families are none of this function's business.
   expect(corpusToolAllowed("garden__list_notes", false)).toBe(true);
 });
+
+test("a member who added a mailbox holds the Email family, without the experimental tick", async () => {
+  const { default: db } = await import("../src/db");
+  const { createMailAccount } = await import("../src/services/mailAccounts");
+  const { hasMailAccount } = await import("../src/services/toolFamilies");
+  db.run(`INSERT OR IGNORE INTO households (id, name) VALUES ('default', 'Home')`);
+  db.run(`INSERT OR IGNORE INTO users (id, username, display_name, role) VALUES ('tf-mail', 'tf-mail', 'Mail', 'standard')`);
+  expect(hasMailAccount("tf-mail")).toBe(false);
+  expect(resolveFamilies("no-such-conversation", false, "tf-mail") as string[]).not.toContain("email");
+  createMailAccount("tf-mail", { address: "tf@gmail.com", password: "x" });
+  expect(resolveFamilies("no-such-conversation", false, "tf-mail") as string[]).toContain("email");
+  // Granted by the mailbox, not by the admin: never withheld as experimental…
+  expect(isExperimentalTool("email__search")).toBe(false);
+  // …and still never in a room.
+  expect(isPrivateOnlyTool("email__search")).toBe(true);
+  // A member without a mailbox does not get it.
+  expect(resolveFamilies("no-such-conversation", false, "someone-else") as string[]).not.toContain("email");
+});

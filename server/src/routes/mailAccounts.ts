@@ -63,7 +63,7 @@ accounts.post("/", async (c) => {
   const checked = await checkMailAccount(uid, created.id);
   if (checked.state !== "ok") {
     deleteMailAccount(uid, created.id);
-    return c.json({ error: "the mailbox refused the login", detail: checked.last_error }, 422);
+    return c.json({ error: checked.last_error ?? "the mailbox refused the login", detail: checked.last_error }, 422);
   }
   return c.json(view(checked), 201);
 });
@@ -84,7 +84,7 @@ accounts.put("/:id/password", async (c) => {
   if (checked.state !== "ok") {
     restoreSecret(uid, id, previous);
     await checkMailAccount(uid, id);
-    return c.json({ error: "the mailbox refused the login", detail: checked.last_error }, 422);
+    return c.json({ error: checked.last_error ?? "the mailbox refused the login", detail: checked.last_error }, 422);
   }
   return c.json(view(checked));
 });

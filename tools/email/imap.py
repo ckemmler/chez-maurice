@@ -242,7 +242,7 @@ class Session:
         self.account = account
         self.client_factory = client_factory
         self.lock = threading.RLock()
-        self.state = "unknown"  # unknown | ok | unreachable | no_credentials
+        self.state = "unknown"  # unknown | ok | refused | unreachable | no_credentials
         self.error: str | None = None
         self._client: Any = None
         self._selected: str | None = None
@@ -262,6 +262,12 @@ class Session:
             self.state, self.error = "no_credentials", str(exc)
             raise AccountUnavailable(str(exc)) from exc
         except Exception as exc:
+            # The server answered, and said no: a wrong or revoked password,
+            # not a network problem. Saying "unreachable" sent people looking
+            # at their connection.
+            if type(exc).__name__ == "LoginError":
+                self.state, self.error = "refused", f"the mailbox refused the login: {exc}"
+                raise AccountUnavailable(f"{self.account.address}: {self.error}") from exc
             self.state, self.error = "unreachable", f"{type(exc).__name__}: {exc}"
             raise AccountUnavailable(
                 f"{self.account.address} could not be reached: {type(exc).__name__}: {exc}"

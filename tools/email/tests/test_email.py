@@ -330,3 +330,16 @@ def test_signature_images_are_not_attachments():
                      disposition="inline")
     msg.add_attachment(b"%PDF-1.4", maintype="application", subtype="pdf", filename="facture.pdf")
     assert [a["filename"] for a in describe_attachments(msg)] == ["facture.pdf"]
+
+
+def test_a_refused_login_is_not_called_unreachable(tmp_path):
+    class LoginError(Exception):  # imapclient.exceptions.LoginError, by name
+        pass
+
+    def factory(acc):
+        raise LoginError("[AUTHENTICATIONFAILED] Authentication Failed")
+
+    svc = EmailService(load_config(write_config(tmp_path, CONFIG)), client_factory=factory)
+    entry = svc.list_accounts(svc.accounts(member_id="id-sam"))["accounts"][0]
+    assert entry["state"] == "refused"
+    assert "refused the login" in entry["error"] and "reached" not in entry["error"]

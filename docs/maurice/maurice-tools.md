@@ -159,10 +159,29 @@ above all. The production image ships the tool (`!tools/email` in
 `Dockerfile.dockerignore`); `list_accounts` says for each account whether it was
 `added_from` the app or the file.
 
-**Next**: the settings screen in the app over `/api/mail-accounts` (step 3 —
-until then a member cannot add a mailbox without a terminal, and the digest's
-*Connecting a mailbox* says what the admin does meanwhile), then OAuth for Gmail
-and Outlook, then optional indexing into the corpus.
+**The member does it from the app** (step 3, the same evening): *Settings → Mail
+→ Mailboxes* in the Maurice app (`MailPane` in `SettingsView.swift`) lists the
+member's mailboxes with their state and **Check again / New password / Remove**,
+and adds one: the address is typed, the provider is recognised from the domain
+(`MailProvider`, the same table as `providers.py`) and its instructions shown,
+with a link to the page that makes the password (Google's app passwords, the
+Apple Account, Yahoo's security page); Outlook is said to be impossible for now;
+an unknown domain asks for its server, or *a Gmail address at work or school*
+(Workspace). **Connect** posts to `/api/mail-accounts`, which logs in first; the
+screen distinguishes *the mailbox refused this password* (the tool reports an
+IMAP `LoginError` as `refused`, "the mailbox refused the login", no longer as
+"unreachable") from *Maurice couldn't reach this mailbox*, the mailbox's own
+words underneath. Strings in the app's seven languages.
+
+**The family follows the mailbox.** A member with at least one account in
+`mail_accounts` holds the `email` family in every private turn
+(`hasMailAccount` in `toolFamilies.ts`, unioned in `resolveFamilies`), and the
+family is no longer experimental: it is granted by the member's own act of
+adding a mailbox, not by the admin's tick. Rooms still withhold it.
+Accounts that live only in `email.toml` are not seen by that rule; their owner
+picks the family by hand.
+
+**Next**: OAuth for Gmail and Outlook, then optional indexing into the corpus.
 
 ## `mail` — the first tool built around a hostile input
 
@@ -335,7 +354,8 @@ when imapclient ships the fix.
 ## Gaps & notes
 
 - **The gateway enforces none of this.** Families and the experimental flag live only in the Bun server. A client that authenticates straight to the MCP gateway — a member token, an OAuth custom connector — gets the *complete* mounted roster, whatever the member was granted in the app. Closing that is its own piece of work. (The native tools — `maurice_docs`, the three `domains__*` — are the exception by construction: they live in the server's loop and the gateway never sees them; `corpus__map_conversations`, though, is mounted like any corpus tool and reads whatever member the caller claims.)
-- **`email` has no screen in the app yet.** The server holds a member's accounts since the evening of 25 September 2026, but only the API reaches them; a member cannot add a mailbox without a terminal until the settings screen exists. It is also *experimental* like every non-core family, so a member needs the admin's tick before they see it. Outlook.com needs OAuth, not built.
+- **A hosted household's gateway answered anyone, until 25 September 2026.** The server proxies `/mcp` to the gateway verbatim, and `start-mcp-gateway.sh` turns auth on only when `MAURICE_MCP_TOKEN` (or an OAuth password) is set — which nothing set in the container. So `https://<household>/mcp` accepted MCP calls with no credentials at all, for whatever member id a caller put in `X-Maurice-Member-Id`: every member's garden and corpus were readable from the internet (found while wiring the mail tool, before any mailbox was added on the fleet). `infra/container/entrypoint.sh` now gives each household a key of its own (`~/.maurice/mcp.token` in the volume, generated once, exported before supervisord); verified the same day: anonymous `/mcp` is 401 on both hosted households, the server's own calls 200. Nothing records whether the hole was used before — the gateway logged requests but not their origin.
+- **`email` cannot reach Outlook.com.** Microsoft takes only OAuth over IMAP; not built. Nor does it index mail: search is IMAP's own (Gmail's is good, others' less so).
 - **`web` and `signals` can't be turned off.** They're re-unioned into every resolution, so unticking them in the picker does nothing.
 - **Family selection is coarser than it looks.** `toolInFamilies` still accepts the parent prefix for back-compat, so a conversation holding `"garden"` opens all 54 garden tools at once, sub-families included.
 - **No per-tool sandboxing.** A tool runs with the gateway's process privileges; the only access control is the member contextvar and tool-family gating, not OS-level isolation.

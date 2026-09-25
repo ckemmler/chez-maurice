@@ -13,7 +13,7 @@ struct SettingsView: View {
     @Environment(\.mauriceTheme) private var theme
     @Environment(\.dismiss) private var dismiss
 
-    enum Pane: Hashable { case appearance, language, household, members, garden, token, files, importChats }
+    enum Pane: Hashable { case appearance, language, household, members, garden, token, files, importChats, mail }
     @State private var pane: Pane? = nil
 
     // MCP token (loaded once; the root row copies, the token pane manages).
@@ -48,6 +48,8 @@ struct SettingsView: View {
     @State private var filesLibrary: LibraryResponse?
     /// The chat-history import (ImportConversationsView): what the index row says.
     @State private var importSummary = ImportSummary()
+    /// The member's mailboxes (MailPane); nil until loaded.
+    @State private var mailAccounts: [MailAccountRow]?
 
     private var locales: [(id: String?, label: String)] {
         [(nil, session.localized("settings.locale.system")),
@@ -76,6 +78,7 @@ struct SettingsView: View {
         .task { await loadWebThemes() }
         .task { await loadFiles() }
         .task { if !session.activeIsGuest { importSummary = await ImportSummary.load(session: session) } }
+        .task { if !session.activeIsGuest { await loadMailAccounts() } }
         .onChange(of: avatarItem) { _, item in prepareCrop(item) }
         .confirmationDialog(session.localized("settings.avatar.hint"), isPresented: $showSourceDialog, titleVisibility: .hidden) {
             Button(session.localized("settings.avatar.take_photo")) { showCamera = true }
@@ -148,6 +151,16 @@ struct SettingsView: View {
                                 IndexRow(icon: "folder", label: session.localized("settings.files.title"),
                                          value: filesValue, accent: accent) { pane = .files }
                             }
+                        }
+
+                        // Their own mail, which Maurice reads when they ask. Added
+                        // here by the member, never by the admin.
+                        SetGroup(session.localized("mail.group")) {
+                            SetCard {
+                                IndexRow(icon: "envelope", label: session.localized("mail.title"),
+                                         value: mailValue, accent: accent) { pane = .mail }
+                            }
+                            SetCaption(session.localized("mail.caption"))
                         }
 
                         // Their history from other assistants — a setting, not a step
@@ -310,11 +323,25 @@ struct SettingsView: View {
                     case .token:      tokenPane
                     case .files:      FilesLibraryView(accent: accent, library: $filesLibrary)
                     case .importChats: ImportConversationsView(accent: accent, summary: $importSummary)
+                    case .mail:       MailPane(accent: accent, accounts: $mailAccounts)
                     }
                 }
                 .padding(.horizontal, 18).padding(.top, 14).padding(.bottom, 18)
             }
             footer
+        }
+    }
+
+    private var mailValue: String? {
+        guard let mailAccounts else { return nil }
+        return mailAccounts.isEmpty ? session.localized("mail.value.none")
+            : session.localized("mail.value.count", mailAccounts.count)
+    }
+
+    private func loadMailAccounts() async {
+        guard let url = session.serverURL, let token = session.tokenForActiveUser else { return }
+        if let r: MailAccountsResponse = try? await APIClient(baseURL: url).get("/api/mail-accounts", token: token) {
+            mailAccounts = r.accounts
         }
     }
 
@@ -328,6 +355,7 @@ struct SettingsView: View {
         case .token:      return session.localized("settings.mcp.title")
         case .files:      return session.localized("settings.files.title")
         case .importChats: return session.localized("settings.import.title")
+        case .mail:       return session.localized("mail.title")
         }
     }
 
@@ -853,6 +881,375 @@ private struct InviteQRSheet: View {
         guard let date = parser.date(from: iso) ?? ISO8601DateFormatter().date(from: iso) else { return nil }
         let text = date.formatted(Date.FormatStyle(date: .abbreviated, time: .omitted).locale(session.resolvedLocale))
         return session.localized("members.valid_until", text)
+    }
+}
+
+// MARK: - Mailboxes
+
+/// A mailbox the member added (`/api/mail-accounts`). The password never comes back.
+struct MailAccountRow: Decodable, Identifiable, Equatable {
+    let id: String
+    let address: String
+    let provider: String?
+    let host: String?
+    let state: String        // unchecked | ok | error
+    let last_error: String?
+}
+struct MailAccountsResponse: Decodable { let accounts: [MailAccountRow] }
+private struct NewMailAccount: Encodable {
+    let address: String
+    let password: String
+    let provider: String?
+    let host: String?
+    let port: Int?
+    let username: String?
+}
+private struct NewMailPassword: Encodable { let password: String }
+
+/// What the address's domain says about where the mail lives and what password
+/// it wants — the same table as the tool's providers.py, for the help shown
+/// while the member types. The server and the tool decide; this only explains.
+enum MailProvider: Equatable {
+    case gmail, icloud, yahoo, fastmail, outlook, proton, isp, unknown
+
+    static func of(_ address: String) -> MailProvider? {
+        guard let at = address.lastIndex(of: "@") else { return nil }
+        let domain = address[address.index(after: at)...].lowercased()
+        guard domain.contains("."), !domain.hasSuffix(".") else { return nil }
+        switch domain {
+        case "gmail.com", "googlemail.com": return .gmail
+        case "icloud.com", "me.com", "mac.com": return .icloud
+        case "yahoo.com", "yahoo.fr", "ymail.com": return .yahoo
+        case "fastmail.com", "fastmail.fm": return .fastmail
+        case "outlook.com", "outlook.fr", "hotmail.com", "hotmail.fr", "live.com", "live.fr", "msn.com": return .outlook
+        case "proton.me", "protonmail.com", "pm.me": return .proton
+        case "orange.fr", "wanadoo.fr", "free.fr", "sfr.fr", "neuf.fr", "laposte.net": return .isp
+        default: return .unknown
+        }
+    }
+
+    var helpKey: String {
+        switch self {
+        case .gmail: "mail.help.gmail"
+        case .icloud: "mail.help.icloud"
+        case .yahoo: "mail.help.yahoo"
+        case .fastmail: "mail.help.fastmail"
+        case .outlook: "mail.help.outlook"
+        case .proton: "mail.help.proton"
+        case .isp: "mail.help.isp"
+        case .unknown: "mail.help.unknown"
+        }
+    }
+
+    /// Where the member makes the password Maurice needs.
+    var page: (key: String, url: URL)? {
+        switch self {
+        case .gmail: ("mail.help.gmail.open", URL(string: "https://myaccount.google.com/apppasswords")!)
+        case .icloud: ("mail.help.icloud.open", URL(string: "https://account.apple.com")!)
+        case .yahoo: ("mail.help.yahoo.open", URL(string: "https://login.yahoo.com/account/security")!)
+        default: nil
+        }
+    }
+
+    /// Outlook takes only OAuth over IMAP; Proton only through Bridge on a Mac.
+    var possible: Bool { self != .outlook }
+    var wantsAppPassword: Bool { [.gmail, .icloud, .yahoo, .fastmail].contains(self) }
+}
+
+/// The member's own mailboxes: what Maurice may read when they ask, and
+/// nothing else — he never sends, moves, deletes or marks anything read, and
+/// never in a conversation with someone else. Adding one logs in first: a
+/// password the mailbox refuses is not kept, and its reason is shown here.
+private struct MailPane: View {
+    @Environment(SessionStore.self) private var session
+    @Environment(\.mauriceTheme) private var theme
+    let accent: Color
+    @Binding var accounts: [MailAccountRow]?
+
+    @State private var address = ""
+    @State private var password = ""
+    @State private var workspace = false
+    @State private var host = ""
+    @State private var port = ""
+    @State private var login = ""
+    @State private var busy = false
+    @State private var error: String?
+    @State private var detail: String?
+    @State private var added: String?
+    /// The account whose password is being replaced, and the new one.
+    @State private var renewing: String?
+    @State private var newPassword = ""
+    @State private var removing: MailAccountRow?
+
+    private var api: APIClient? { session.serverURL.map { APIClient(baseURL: $0) } }
+
+    private var provider: MailProvider? {
+        guard let p = MailProvider.of(address.trimmingCharacters(in: .whitespaces)) else { return nil }
+        return p == .unknown && workspace ? .gmail : p
+    }
+
+    private var canConnect: Bool {
+        guard let provider, provider.possible, !busy, !password.trimmingCharacters(in: .whitespaces).isEmpty else { return false }
+        return provider != .unknown || !host.trimmingCharacters(in: .whitespaces).isEmpty
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            SetCaption(session.localized("mail.intro"))
+
+            if let accounts, !accounts.isEmpty {
+                SetGroup(session.localized("mail.yours")) {
+                    ForEach(accounts) { account in accountCard(account) }
+                }
+            }
+
+            SetGroup(session.localized("mail.add")) {
+                addForm
+            }
+
+            SetCaption(session.localized("mail.privacy"))
+        }
+        .task { await load() }
+        .confirmationDialog(session.localized("mail.remove"), isPresented: Binding(
+            get: { removing != nil }, set: { if !$0 { removing = nil } }
+        ), titleVisibility: .visible, presenting: removing) { account in
+            Button(session.localized("mail.remove"), role: .destructive) { Task { await remove(account) } }
+            Button(L("common.cancel"), role: .cancel) {}
+        } message: { account in
+            Text(session.localized("mail.remove.confirm", account.address))
+        }
+    }
+
+    // MARK: Accounts
+
+    private func accountCard(_ account: MailAccountRow) -> some View {
+        SetCard {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(spacing: 11) {
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .fill(accent.opacity(0.14)).frame(width: 26, height: 26)
+                        .overlay(Image(systemName: "envelope").font(.system(size: 13))
+                            .foregroundStyle(accent.legible(onDark: theme.isDark)))
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(account.address).font(.system(size: 13.5)).foregroundStyle(theme.ink)
+                            .lineLimit(1).truncationMode(.middle)
+                        stateLine(account)
+                    }
+                    Spacer(minLength: 0)
+                }
+                if account.state == "error", let reason = account.last_error {
+                    Text(reason).font(.system(size: 11, design: .monospaced)).foregroundStyle(theme.inkMute)
+                        .textSelection(.enabled)
+                }
+                if renewing == account.id {
+                    HStack(spacing: 8) {
+                        SecureField(session.localized("mail.password"), text: $newPassword)
+                            .textFieldStyle(.roundedBorder)
+                        Button(session.localized("mail.save")) { Task { await renew(account) } }
+                            .glassProminentButton()
+                            .disabled(busy || newPassword.trimmingCharacters(in: .whitespaces).isEmpty)
+                    }
+                }
+                HStack(spacing: 8) {
+                    Button(session.localized("mail.check")) { Task { await check(account) } }
+                        .glassBorderedButton().disabled(busy)
+                    Button(session.localized("mail.new_password")) {
+                        newPassword = ""
+                        renewing = renewing == account.id ? nil : account.id
+                    }
+                    .glassBorderedButton().disabled(busy)
+                    Spacer(minLength: 0)
+                    Button(session.localized("mail.remove"), role: .destructive) { removing = account }
+                        .glassBorderedButton().disabled(busy)
+                }
+                .font(.system(size: 12))
+            }
+            .padding(13)
+        }
+    }
+
+    @ViewBuilder private func stateLine(_ account: MailAccountRow) -> some View {
+        switch account.state {
+        case "ok":
+            Label(session.localized("mail.state.ok"), systemImage: "checkmark.circle.fill")
+                .font(.system(size: 11.5)).foregroundStyle(.green)
+        case "error":
+            Label(session.localized("mail.state.error"), systemImage: "exclamationmark.triangle.fill")
+                .font(.system(size: 11.5)).foregroundStyle(.orange)
+        default:
+            Text(session.localized("mail.state.unchecked")).font(.system(size: 11.5)).foregroundStyle(theme.inkMute)
+        }
+    }
+
+    // MARK: Adding one
+
+    private var addForm: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            field(session.localized("mail.address"), text: $address, email: true)
+
+            if let provider {
+                help(provider)
+                if MailProvider.of(address) == .unknown {
+                    SetCheckRow(label: session.localized("mail.workspace"), on: workspace, accent: accent) {
+                        workspace.toggle()
+                    }
+                    .background(theme.surfaceAlt, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                }
+                if provider == .unknown {
+                    field(session.localized("mail.server"), text: $host, email: false)
+                    HStack(spacing: 8) {
+                        field(session.localized("mail.port"), text: $port, email: false).frame(maxWidth: 90)
+                        field(session.localized("mail.login"), text: $login, email: false)
+                    }
+                }
+                if provider.possible {
+                    SecureField(session.localized(provider.wantsAppPassword ? "mail.password" : "mail.password.plain"),
+                                text: $password)
+                        .textFieldStyle(.roundedBorder)
+                        .onSubmit { if canConnect { Task { await add() } } }
+                    Button {
+                        Task { await add() }
+                    } label: {
+                        HStack(spacing: 8) {
+                            if busy { ProgressView().controlSize(.small) }
+                            Text(session.localized(busy ? "mail.checking" : "mail.connect"))
+                        }
+                        .font(.system(size: 14, weight: .medium))
+                        .frame(maxWidth: .infinity).padding(.vertical, 10)
+                    }
+                    .glassProminentButton()
+                    .disabled(!canConnect)
+                }
+            }
+
+            if let added {
+                Label(added, systemImage: "checkmark.circle.fill").font(.system(size: 12.5)).foregroundStyle(.green)
+            }
+            if let error {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(error).font(.system(size: 12.5, weight: .medium)).foregroundStyle(.red)
+                    if let detail {
+                        Text(detail).font(.system(size: 11, design: .monospaced)).foregroundStyle(theme.inkMute)
+                            .textSelection(.enabled)
+                    }
+                }
+            }
+        }
+    }
+
+    private func field(_ placeholder: String, text: Binding<String>, email: Bool) -> some View {
+        TextField(placeholder, text: text)
+            .textFieldStyle(.roundedBorder)
+            .autocorrectionDisabled()
+            #if os(iOS)
+            .textInputAutocapitalization(.never)
+            .keyboardType(email ? .emailAddress : .default)
+            .textContentType(email ? .emailAddress : nil)
+            #endif
+    }
+
+    private func help(_ provider: MailProvider) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(session.localized(provider.helpKey))
+                .font(.system(size: 12.5)).foregroundStyle(provider.possible ? theme.inkSoft : .orange)
+                .fixedSize(horizontal: false, vertical: true)
+            if let page = provider.page {
+                Link(destination: page.url) {
+                    Label(session.localized(page.key), systemImage: "arrow.up.forward.square")
+                        .font(.system(size: 12.5, weight: .medium))
+                        .foregroundStyle(accent.legible(onDark: theme.isDark))
+                }
+            }
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(theme.surfaceAlt, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(theme.rule, lineWidth: 0.5))
+    }
+
+    // MARK: Server
+
+    private func load() async {
+        guard let api, let token = session.tokenForActiveUser else { return }
+        if let r: MailAccountsResponse = try? await api.get("/api/mail-accounts", token: token) {
+            accounts = r.accounts
+        }
+    }
+
+    /// The server's own words for a refusal, under a headline in the member's
+    /// language. A 422 is either the mailbox saying no to the password (the
+    /// tool's wording for an IMAP LoginError, tools/email/imap.py) or a server
+    /// Maurice could not reach at all — two different things to go and fix.
+    private func show(_ err: Error) {
+        if case APIError.server(let code, let message) = err {
+            let refused = message.contains("refused the login")
+            error = session.localized(code != 422 ? "mail.failed" : refused ? "mail.refused" : "mail.unreachable")
+            detail = message
+        } else {
+            error = session.localized("mail.failed")
+            detail = err.localizedDescription
+        }
+    }
+
+    private func add() async {
+        guard let api, let token = session.tokenForActiveUser, let provider else { return }
+        busy = true; error = nil; detail = nil; added = nil
+        defer { busy = false }
+        let trimmedHost = host.trimmingCharacters(in: .whitespaces)
+        let body = NewMailAccount(
+            address: address.trimmingCharacters(in: .whitespaces),
+            password: password,
+            provider: provider == .gmail && workspace ? "gmail" : nil,
+            host: provider == .unknown && !trimmedHost.isEmpty ? trimmedHost : nil,
+            port: provider == .unknown ? Int(port.trimmingCharacters(in: .whitespaces)) : nil,
+            username: provider == .unknown && !login.trimmingCharacters(in: .whitespaces).isEmpty
+                ? login.trimmingCharacters(in: .whitespaces) : nil)
+        do {
+            let row: MailAccountRow = try await api.post("/api/mail-accounts", body: body, token: token)
+            accounts = (accounts ?? []) + [row]
+            added = session.localized("mail.added")
+            address = ""; password = ""; host = ""; port = ""; login = ""; workspace = false
+        } catch {
+            password = ""
+            show(error)
+        }
+    }
+
+    private func check(_ account: MailAccountRow) async {
+        guard let api, let token = session.tokenForActiveUser else { return }
+        busy = true; defer { busy = false }
+        do {
+            let row: MailAccountRow = try await api.post("/api/mail-accounts/\(account.id)/check",
+                                                         body: [String: String](), token: token)
+            replace(row)
+        } catch { show(error) }
+    }
+
+    private func renew(_ account: MailAccountRow) async {
+        guard let api, let token = session.tokenForActiveUser else { return }
+        busy = true; error = nil; detail = nil
+        defer { busy = false }
+        do {
+            let row: MailAccountRow = try await api.put("/api/mail-accounts/\(account.id)/password",
+                                                        body: NewMailPassword(password: newPassword), token: token)
+            replace(row)
+            renewing = nil
+        } catch { show(error) }
+        newPassword = ""
+    }
+
+    private func remove(_ account: MailAccountRow) async {
+        guard let api, let token = session.tokenForActiveUser else { return }
+        do {
+            try await api.delete("/api/mail-accounts/\(account.id)", token: token)
+            accounts?.removeAll { $0.id == account.id }
+        } catch { show(error) }
+        removing = nil
+    }
+
+    private func replace(_ row: MailAccountRow) {
+        guard let i = accounts?.firstIndex(where: { $0.id == row.id }) else { return }
+        accounts?[i] = row
     }
 }
 
