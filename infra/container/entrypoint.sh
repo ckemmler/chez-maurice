@@ -180,5 +180,26 @@ if [[ ! -f "$HOME/.maurice/gardens/gardens.json" ]]; then
   fi
 fi
 
+# ── The gateway's key ────────────────────────────────────────────────────────
+# The server proxies /mcp to the gateway verbatim, so the gateway's own auth is
+# the only thing between the internet and every member's garden, corpus and
+# mail. start-mcp-gateway.sh turns auth on only when MAURICE_MCP_TOKEN (or an
+# OAuth password) is set, and until 25 September 2026 nothing set one here: a
+# hosted household answered MCP calls from anyone, for any member id they
+# claimed in a header. So a household that was not given a key gets one of its
+# own, kept in the volume so it survives the container, and exported before
+# supervisord starts — the server presents it, the gateway requires it, and
+# the mail tool shows it to read a member's accounts.
+if [[ -z "${MAURICE_MCP_TOKEN:-}" ]]; then
+  TOKEN_FILE="$HOME/.maurice/mcp.token"
+  if [[ ! -s "$TOKEN_FILE" ]]; then
+    ( umask 077; python3 -c 'import secrets; print(secrets.token_urlsafe(32))' >"$TOKEN_FILE" )
+    say "generated the gateway's key ($TOKEN_FILE)"
+  fi
+  chmod 600 "$TOKEN_FILE"
+  MAURICE_MCP_TOKEN="$(tr -d '[:space:]' <"$TOKEN_FILE")"
+  export MAURICE_MCP_TOKEN
+fi
+
 say "ready — $(bun --version) / $(node --version) / $(python3 --version)"
 exec "$@"
