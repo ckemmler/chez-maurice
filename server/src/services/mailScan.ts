@@ -9,6 +9,7 @@ import { openConversation, type OpenRequest, type OpenResult } from "./openedCon
 import { listUsers } from "./users";
 import { backfillMailConversations, linkMailConversation } from "./mailApproval";
 import { readingWanted, runMailReading } from "./mailReading";
+import { writeMailDocuments } from "./mailDocuments";
 
 // The header walk, driven from the server (specs/mail-import.md, the wiring
 // of lot 1, settled 26 September 2026).
@@ -88,6 +89,8 @@ export interface MailScanDeps {
   /** The reading passes (services/mailReading.ts); a test stubs them. */
   read?: (memberId: string) => Promise<{ outcome: string; judged: number; read: number; cost: number; error: string | null }>;
   wantsReading?: (memberId: string) => boolean;
+  /** The documents (services/mailDocuments.ts), after a reading that read. */
+  document?: (memberId: string) => Promise<{ outcome: string; written: unknown[]; cost: number; error: string | null }>;
 }
 
 const RECONCILE_EVERY_MS = 7 * 24 * 60 * 60 * 1000;
@@ -106,6 +109,7 @@ export function mailToolCall(memberId: string, tool: string, args: any): Promise
 const defaultDeps: MailScanDeps = {
   call: emailCall, members: () => listUsers(), open: openConversation, locale: memberLocale,
   read: (memberId) => runMailReading(memberId), wantsReading: readingWanted,
+  document: (memberId) => writeMailDocuments(memberId),
 };
 let deps: MailScanDeps = defaultDeps;
 
@@ -209,6 +213,8 @@ export interface MailNightlyStats {
   opened: number;
   /** Members whose reading ran tonight (lot 4), and what it got through. */
   reading?: { members: number; judged: number; read: number; cost: number };
+  /** Notes written tonight from the readings (lot 5). */
+  documents?: { members: number; notes: number; cost: number };
 }
 
 /** What the night remembers of one member. */
@@ -415,6 +421,19 @@ async function doRun(d: MailScanDeps): Promise<MailNightlyOutcome> {
             lastError = `${m.id}: reading — ${r.error}`;
             console.warn(`[mail] nightly: ${lastError}`);
           }
+          // Something was read tonight: the documents (lot 5) — the fiches
+          // and digests the new readings allow, in the member's garden.
+          if (r.read > 0 && d.document) {
+            const w = await d.document(m.id);
+            stats.documents ??= { members: 0, notes: 0, cost: 0 };
+            stats.documents.members++;
+            stats.documents.notes += w.written.length;
+            stats.documents.cost += w.cost;
+            if (w.outcome === "failed" && w.error) {
+              lastError = `${m.id}: documents — ${w.error}`;
+              console.warn(`[mail] nightly: ${lastError}`);
+            }
+          }
         }
       } else {
         // Paused (the member said stop) or failed: named, and tried again
@@ -434,6 +453,7 @@ async function doRun(d: MailScanDeps): Promise<MailNightlyOutcome> {
     `[mail] nightly: ${stats.walked} mailbox(es) walked, ${stats.skipped} member(s) without mail, ${stats.failed} failed, ` +
       `${stats.messages} message(s) in the stores, ${stats.reconciled} reconciled, ${stats.opened} conversation(s) opened` +
       (stats.reading ? `, ${stats.reading.members} reading(s): ${stats.reading.judged} judged, ${stats.reading.read} read, ${stats.reading.cost.toFixed(3)} €` : "") +
+      (stats.documents ? `, ${stats.documents.notes} note(s) written for ${stats.documents.members} member(s), ${stats.documents.cost.toFixed(3)} €` : "") +
       `, in ${Math.round(ms / 1000)}s`,
   );
   return finish(stats.failed ? "failed" : "walked", lastError, stats);

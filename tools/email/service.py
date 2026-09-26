@@ -373,6 +373,52 @@ class EmailService:
         _member_id, store = self._member_store(accounts)
         return reading_mod.control(store, self._reading_job(store), state, error=error, measured=measured, seconds=seconds)
 
+    # ── lot 5: the documents' material, and what they leave ──────────────
+    def reading_material(self, accounts: list[Account], limit: int = 5000) -> dict[str, Any]:
+        _member_id, store = self._member_store(accounts)
+        return reading_mod.material(store, limit=max(1, min(int(limit or 5000), 20000)))
+
+    def reading_reset(self, accounts: list[Account]) -> dict[str, Any]:
+        _member_id, store = self._member_store(accounts)
+        return reading_mod.reset_truncated(store)
+
+    def documents_record(
+        self, accounts: list[Account], *, written: list[dict[str, Any]] | None = None, deleted: list[dict[str, Any]] | None = None
+    ) -> dict[str, Any]:
+        """What the documents pass wrote (``{kind, key, slug, locale, title,
+        sources}``) and what it found gone (``{kind, key}``)."""
+        _member_id, store = self._member_store(accounts)
+        n_written = n_deleted = 0
+        for w in written or []:
+            if not w.get("kind") or not w.get("key") or not w.get("slug"):
+                continue
+            store.record_artefact(str(w["kind"]), str(w["key"]), slug=str(w["slug"]), locale=str(w.get("locale") or "en"),
+                                  title=w.get("title"), sources=[str(s) for s in (w.get("sources") or [])])
+            n_written += 1
+        for d in deleted or []:
+            if d.get("kind") and d.get("key") and store.mark_artefact_deleted(str(d["kind"]), str(d["key"])):
+                n_deleted += 1
+        return {"recorded": {"written": n_written, "deleted": n_deleted}, "artefacts": store.artefacts()}
+
+    def get_by_id(self, accounts: list[Account], message: str, max_bytes: int = 8000) -> dict[str, Any]:
+        """One message by the id a note's source carries: its store row says
+        where it was last seen, and the mailbox is asked for it there."""
+        _member_id, store = self._member_store(accounts)
+        locations = store.locations(message)
+        if not locations:
+            raise MailboxError(f"no message {message!r} in the header store")
+        by_address = {a.address.lower(): a for a in accounts}
+        for loc in locations:
+            acc = by_address.get(loc["address"].lower())
+            if acc is None:
+                continue
+            try:
+                out = self.get_message(accounts, uid=int(loc["uid"]), account=acc.name, folder=loc["folder"], max_bytes=max_bytes)
+            except MailboxError:
+                continue
+            return {"id": message, **out}
+        raise MailboxError(f"message {message!r} is no longer where the store last saw it; walk the mailbox again")
+
     def reading_progress(self, accounts: list[Account]) -> dict[str, Any]:
         _member_id, store = self._member_store(accounts)
         job = reading_mod.status(store)

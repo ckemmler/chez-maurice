@@ -307,6 +307,43 @@ async def list_tools() -> list[Tool]:
             inputSchema={"type": "object", "properties": {}},
         ),
         Tool(
+            name="get_by_id",
+            description=(
+                "Read one message by the id a garden note's source carries (the header store's message id, "
+                "e.g. `gm:…`): what the note says can be checked against the message itself. "
+                "Same output as get_message. " + UNTRUSTED_NOTE
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "id": {"type": "string", "description": "The message id from the note's sources."},
+                    "max_bytes": {"type": "integer", "description": "Body length to return (default 8000)."},
+                },
+                "required": ["id"],
+            },
+        ),
+        Tool(
+            name="reading_material",
+            description="Server-side, for the documents pass: every message read whole, unsealed, with its thread.",
+            inputSchema={"type": "object", "properties": {"limit": {"type": "integer"}}},
+        ),
+        Tool(
+            name="reading_reset",
+            description="Server-side: forget the full readings whose text was cut, so the next pass reads them again.",
+            inputSchema={"type": "object", "properties": {}},
+        ),
+        Tool(
+            name="documents_record",
+            description="Server-side: what the documents pass wrote in the garden (`written`) and found gone (`deleted`), keyed on the source.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "written": {"type": "array", "items": {"type": "object"}},
+                    "deleted": {"type": "array", "items": {"type": "object"}},
+                },
+            },
+        ),
+        Tool(
             name="stats",
             description=(
                 "An overview of one account without reading any message: counts per main "
@@ -402,6 +439,14 @@ def dispatch(service: EmailService, name: str, args: dict[str, Any], *, member_i
         )
     if name == "reading_progress":
         return service.reading_progress(accounts)
+    if name == "get_by_id":
+        return service.get_by_id(accounts, str(args["id"]), max_bytes=args.get("max_bytes") or 8000)
+    if name == "reading_material":
+        return service.reading_material(accounts, limit=args.get("limit") or 5000)
+    if name == "reading_reset":
+        return service.reading_reset(accounts)
+    if name == "documents_record":
+        return service.documents_record(accounts, written=args.get("written"), deleted=args.get("deleted"))
     if name == "stats":
         return service.stats(
             accounts,

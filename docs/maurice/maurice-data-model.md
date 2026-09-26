@@ -148,7 +148,15 @@ under the household key** like the subject (derived from the body, never
 the body, and not in clear on the disk either), with the tokens each pass
 spent — and `capacity`, a row per run of the passes (`job`, `messages`,
 `seconds`, `measured_at`), from which the estimate takes its nights once a
-run of a hundred messages or more exists. The server keeps nothing
+run of a hundred messages or more exists. Lot 5 (the night after) adds
+`artefacts` — what the documents pass wrote in the garden, keyed on the
+*source* (`kind` ∈ `person`/`thread`/`hub`, `key` = the address, the thread
+root, `hub`), with the note's `slug`, `locale`, `title`, the message ids it
+was written from (`sources`), `written_at`, and `deleted_at`, set the first
+time the note is found missing from the garden and never cleared by the
+pass: a thrown-away note stays thrown away. The garden side of the same
+thing is the note's frontmatter: `meta.origin: mail`, `meta.kind`,
+`meta.key`, `meta.sources`, `meta.opened: false`, `meta.author: maurice`. The server keeps nothing
 of the job in `maurice.db`: the night's own memory — last run, last
 reconciliation and the conversation opened per member — is
 `<app dir>/mail-nightly.json`, and `mail_conversations` (above) holds only

@@ -107,6 +107,12 @@ def main(argv: list[str] | None = None) -> int:
 
     sub.add_parser("reading-progress", help="the reading job, the passes' progress, the measured capacity")
 
+    sub.add_parser("reading-reset", help="forget the readings whose text was cut, to read them again")
+
+    p = sub.add_parser("get-by-id", help="one message by the id a note's source carries")
+    p.add_argument("id")
+    p.add_argument("--max-bytes", type=int, default=8000)
+
     args = parser.parse_args(argv)
     service: EmailService | None = None
     try:
@@ -161,6 +167,10 @@ def main(argv: list[str] | None = None) -> int:
             out = service.decline_reading(accounts)
         elif args.command == "reading-progress":
             out = service.reading_progress(accounts)
+        elif args.command == "reading-reset":
+            out = service.reading_reset(accounts)
+        elif args.command == "get-by-id":
+            out = service.get_by_id(accounts, args.id, max_bytes=args.max_bytes)
         else:
             out = service.stats(accounts, account=args.account, since=args.since, before=args.before, folder=args.folder)
     except (ConfigError, AccessDenied, AccountUnavailable, MailboxError) as exc:

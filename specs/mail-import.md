@@ -1,4 +1,4 @@
-# Making a large mailbox useful — design, lots 1 to 4 built
+# Making a large mailbox useful — design, lots 1 to 5 built
 
 A member arrives with years of mail. What should Maurice do with it?
 
@@ -7,8 +7,9 @@ conversation with Candide. Lot 1 (the job, the cursor, the header store), its
 wiring to the night and to the account's creation, and lot 2 (the triage, the
 report, the reconciliation, the calibration, the conversation with the
 numbers) were built on 26 September, lot 3 (the approval — `job_id` on the
-ledger, the member's yes) the same evening, and lot 4 (the two reading
-passes) right after; lot 5 is design.
+ledger, the member's yes) the same evening, lot 4 (the two reading passes)
+right after, and lot 5 (the documents) in the night that followed. What is
+left is in *Still open*.
 Numbers are measured where they say so and estimated where they say that
 instead.
 
@@ -559,8 +560,46 @@ capacity is measured**: each run of a hundred messages or more leaves
 last runs' messages per hour over a four-hour night instead of the 1 500
 assumption (`nights.measured` says which).
 
-**Lot 5 — the documents.** Fiches and digests written as drafts, with the
-disclaimer and per-line sourcing.
+**Lot 5 — the documents.** *Built, 26–27 September 2026, on decisions of
+the night.* Settled with Candide: the fiches and digests are **notes** in
+`notes/<locale>/`, tagged `mail` and `correspondent` or `thread`, under a
+hub note "My mail" (a MOC) — the domain seeding's mechanics, `meta.opened:
+false`, `meta.author: maurice`, `meta.origin: mail`, the source key and
+the message ids in `meta`, a "where it comes from" section that carries
+the **disclaimer** on the page ("Part of this note was written by a machine
+reading your mail. Every line points to the message it comes from."), the
+model, the date, and the list of messages read; **thresholds**: a person
+with two read messages or more has a fiche, a thread with two or more a
+digest, the rest lives in the fiches; **the pointer**: the model ends every
+line with the indices of its sources, the server turns them into a
+readable pointer after the line — *(22 Sept 2026, Jean Derély, « Toujours
+à Bruxelles ? »)* — and lists the ids in the frontmatter, **a line with no
+source is dropped**; `email__get_by_id` (member-facing) reads a message by
+that id, so Maurice can check a note against its source in a conversation;
+the click in the app is later. **Before the documents, the bodies**: the
+full pass now cuts the quoted part of a reply (`strip_quoted`: every `>`
+line, and everything from the line that introduces the quoted or forwarded
+message, in the house's languages, when some text of the message's own
+precedes it) and reads a 48 kB slice instead of 16; `reading_reset` forgets
+the readings whose text was cut so the next pass reads them again; the
+full-pass prompt no longer lets the model assume the member's gender.
+`services/mailDocuments.ts` (`writeMailDocuments`): `reading_material`
+(server-only) gives every reading unsealed with its thread root (the
+report's grouping); people are grouped on the other party's address
+(the sender, or the first recipient who is not the member), threads on the
+root; one call per note on `mail_write` (a new invocation preferring the
+night's models, as the domain notes); `renderPerson` / `renderThread` keep
+only sourced lines; the hub lists every fiche and digest still on disk.
+**Second runs** (the "still open" of yesterday, settled): `artefacts` in
+the store, keyed on the source — a note thrown away is found missing
+once, marked `deleted_at`, and never written again; a note still there is
+rewritten only when new messages joined its sources; the hub is refreshed
+whenever something was written. On the ledger as the member under the
+reading job's id. The night writes after a reading that read something;
+by hand, `POST /api/admin/mail/documents/run {member_id | username,
+wait?}`. Then **Maurice comes back** in the mail conversation, rendered
+without a model in the member's language: how many fiches and digests, the
+hub's path, the titles.
 
 Lot 1 and lot 2 answer most of what makes a mailbox opaque, and they are free.
 If the project stopped after lot 2 it would still have been worth doing.
@@ -583,13 +622,21 @@ If the project stopped after lot 2 it would still have been worth doing.
 - **A reading the model cannot shape is left to read**, twice per batch and
   then for another night; nothing retries it within a run, and nothing yet
   says how many nights a message may be left before it is skipped for good.
-- **What happens on a second run.** A fiche or digest already deleted must not
-  be silently rewritten the next night. Keying the refusal on the *source* — no
-  more artefacts from message X, or from person Y after three refusals — is
-  coarse but stable and needs no judgement. Nothing keyed on wording will work:
-  a model never phrases the same thing twice.
-- **What the disclaimer looks like** in frontmatter and on the rendered page,
-  and whether it can honestly mark sections rather than documents.
+- **A second run is keyed on the source** (settled, lot 5): the person's
+  address or the thread's root in `artefacts`; a deleted note is never
+  rewritten. What is not done: a refusal after "three refusals" of a person,
+  and a member's way to say *no more about this person* other than deleting
+  the fiche once (which works, since a deleted fiche stays deleted).
+- **The disclaimer marks the document, not its sections**: one line at the
+  head of "where it comes from", on every note the pass writes, plus
+  `meta.author` and `meta.origin` in the frontmatter. Marking sections would
+  only mean something once the member edits a note and keeps Maurice's
+  part; nothing tracks that yet.
+- **The one-click source in the app** does not exist: the pointer is
+  readable, the id is in the frontmatter, and `email__get_by_id` resolves it
+  in a conversation.
+- **Who is who.** People are keyed on an address: the same person on two
+  addresses is two fiches until a contact list exists (above).
 
 ## Not in scope
 

@@ -253,3 +253,90 @@ def test_the_pass_tools_are_reachable_and_a_refusing_folder_leaves_its_messages_
     monkeypatch.setattr(FakeIMAPClient, "fetch", real)
     assert len(call("reading_next", {"stage": "light", "limit": 3})["messages"]) == 3
     assert call("reading_control", {"state": "running"})["job"]["state"] == "running"
+
+
+# ── lot 5: the quoted part cut, the material, the artefacts, get_by_id ──
+
+from tools.email.reading import strip_quoted  # noqa: E402
+
+
+def test_the_quoted_part_of_a_reply_is_cut_and_a_bare_forward_is_kept():
+    reply = "Oui, jeudi me va.\n\nLe 22 sept. 2026 à 10:12, Jean <jean@x> a écrit :\n> Tu es libre jeudi ?\n> Jean"
+    assert strip_quoted(reply) == "Oui, jeudi me va."
+    english = "Fine by me.\n\nOn Mon, Sep 22, 2026 at 10:12 AM Jean <jean@x> wrote:\n> Free Thursday?"
+    assert strip_quoted(english) == "Fine by me."
+    outlook = "Merci.\n\n-----Message d'origine-----\nDe : Jean\nEnvoyé : lundi\nObjet : jeudi\n\nTu es libre ?"
+    assert strip_quoted(outlook) == "Merci."
+    forward = "---------- Forwarded message ---------\nFrom: Vadim <v@x>\n\nCérémonie le 17 février."
+    assert "Cérémonie le 17 février." in strip_quoted(forward)
+    assert strip_quoted("> only a quote\n> nothing else") == ""
+
+
+def test_the_full_pass_hands_the_reply_without_its_quote_and_wider(tmp_path):
+    body = "Oui, jeudi me va.\n\nLe 22 sept. 2026, Jean <jean@x> a écrit :\n> " + "blabla " * 3000
+    client = FakeIMAPClient({"INBOX": {1: build_raw("Re: jeudi", "Ami <ami@example.org>", body, date="Mon, 01 Sep 2026 09:00:00 +0200", message_id="<r1@x>")}})
+    svc = make_service(tmp_path, {"alex@icloud.com": client})
+    from .test_scan import scan as walk
+    walk(svc)
+    svc.triage(alex(svc)); svc.approve_reading(alex(svc))
+    light = svc.reading_next(alex(svc), stage="light")
+    svc.reading_record(alex(svc), verdicts=[{"id": light["messages"][0]["id"], "keep": True, "reason": "x"}])
+    full = svc.reading_next(alex(svc), stage="full")
+    assert full["messages"][0]["body"] == "Oui, jeudi me va." and full["messages"][0]["truncated"] is False
+    assert any(str(p).startswith("BODY.PEEK[TEXT]<0.48000>") for c in client.calls if c[0] == "fetch" for p in c[1][1])
+
+
+def test_material_unseals_and_groups_by_thread_and_a_cut_reading_can_be_reset(tmp_path):
+    svc, _client = ready(tmp_path)
+    acc = alex(svc)
+    batch = svc.reading_next(acc, stage="light", limit=9)
+    ids = [m["id"] for m in batch["messages"]]
+    svc.reading_record(acc, verdicts=[{"id": i, "keep": True, "reason": ""} for i in ids[:3]] + [{"id": i, "keep": False, "reason": ""} for i in ids[3:]])
+    svc.reading_record(acc, readings=[
+        {"id": ids[0], "reading": {"summary": "un", "truncated": True}},
+        {"id": ids[1], "reading": {"summary": "deux", "truncated": False}},
+    ])
+    mat = svc.reading_material(acc)
+    assert [m["reading"]["summary"] for m in mat["messages"]] == ["un", "deux"] or [m["reading"]["summary"] for m in mat["messages"]] == ["deux", "un"]
+    m = mat["messages"][0]
+    assert m["subject"].startswith("Sujet") and m["from_address"].endswith("@example.org") and m["thread"] and m["thread"].startswith("<m")
+    assert mat["artefacts"] == []
+    r = svc.reading_reset(acc)
+    assert r["reset"] == 1 and r["ids"] == [ids[0]]
+    assert len(svc.reading_material(acc)["messages"]) == 1
+    assert svc.reading_progress(acc)["progress"]["to_read"] == 2  # the cut one is to read again, the verdict kept
+
+
+def test_artefacts_are_keyed_on_the_source_and_a_deleted_one_is_remembered(tmp_path):
+    svc, _client = ready(tmp_path)
+    acc = alex(svc)
+    r = svc.documents_record(acc, written=[
+        {"kind": "person", "key": "ami1@example.org", "slug": "ami-1", "locale": "fr", "title": "Ami 1", "sources": ["a", "b"]},
+        {"kind": "thread", "key": "<t@x>", "slug": "le-diner", "locale": "fr", "title": "Le dîner", "sources": ["a"]},
+        {"kind": "hub", "key": "x"},  # no slug: ignored
+    ])
+    assert r["recorded"] == {"written": 2, "deleted": 0} and len(r["artefacts"]) == 2
+    r = svc.documents_record(acc, deleted=[{"kind": "person", "key": "ami1@example.org"}, {"kind": "person", "key": "nobody"}])
+    assert r["recorded"] == {"written": 0, "deleted": 1}
+    gone = next(a for a in r["artefacts"] if a["kind"] == "person")
+    assert gone["deleted_at"] and gone["sources"] == ["a", "b"]
+    # Written again (the member asked): the key comes back to life on the same row.
+    r = svc.documents_record(acc, written=[{"kind": "person", "key": "ami1@example.org", "slug": "ami-1-bis", "locale": "fr", "sources": ["c"]}])
+    again = next(a for a in r["artefacts"] if a["kind"] == "person")
+    assert again["deleted_at"] is None and again["slug"] == "ami-1-bis" and again["sources"] == ["c"]
+
+
+def test_get_by_id_reads_the_message_where_the_store_last_saw_it(tmp_path, monkeypatch):
+    svc, _client = ready(tmp_path)
+    acc = alex(svc)
+    mid = svc.reading_next(acc, stage="light", limit=1)["messages"][0]["id"]
+    out = svc.get_by_id(acc, mid)
+    assert out["id"] == mid and out["folder"] == "INBOX" and "mot0" in out["body"]
+    from tools.email.imap import MailboxError
+    with pytest.raises(MailboxError, match="no message"):
+        svc.get_by_id(acc, "gm:nope")
+    monkeypatch.setattr(server, "_service", svc)
+    monkeypatch.setattr(server, "get_member_id", lambda: "id-alex")
+    call = lambda n, a=None: json.loads(asyncio.run(server.call_tool(n, a or {}))[0].text)  # noqa: E731
+    assert call("get_by_id", {"id": mid})["uid"] == out["uid"]
+    assert call("reading_material")["messages"] == []

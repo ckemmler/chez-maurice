@@ -91,6 +91,8 @@ export interface MailOpenerStrings {
   /** What Maurice says when the yes, or the no, came from the app (lot 3). */
   approved: string;
   declined: string;
+  /** Lot 5: what he wrote — %1 fiches, %2 digests. */
+  written: string;
   numbers: string[];
 }
 
@@ -115,6 +117,7 @@ export const MAIL_OPENER_STRINGS: Record<string, MailOpenerStrings> = {
     nothing: "Over the last %1 years I find no real exchange to read.",
     approved: "Understood: I will read them, from the next night on, and come back here with what I understood.",
     declined: "Understood: I will not read them, and I will not ask again. If you change your mind, say so here or in Settings → Mail.",
+    written: "I have read them. In your garden I have written %1 fiche(s) on the people who matter and %2 digest(s) of the threads — drafts, private, each line pointing to the message it comes from: keep, correct or throw away.",
     numbers: NUMBERS.en!,
   },
   fr: {
@@ -127,6 +130,7 @@ export const MAIL_OPENER_STRINGS: Record<string, MailOpenerStrings> = {
     nothing: "Sur les %1 dernières années, je n'y trouve aucun vrai échange à lire.",
     approved: "Entendu : je les lis, dès la nuit prochaine, et je reviens ici avec ce que j'ai compris.",
     declined: "Entendu : je ne les lis pas, et je ne redemanderai pas. Si tu changes d'avis, dis-le ici ou dans Réglages → Mail.",
+    written: "Je les ai lus. Dans ton jardin, j'ai écrit %1 fiche(s) sur les personnes qui comptent et %2 digest(s) des fils — des brouillons, privés, chaque ligne renvoyant au message dont elle vient : à garder, corriger ou jeter.",
     numbers: NUMBERS.fr!,
   },
   it: {
@@ -139,6 +143,7 @@ export const MAIL_OPENER_STRINGS: Record<string, MailOpenerStrings> = {
     nothing: "Negli ultimi %1 anni non ci trovo nessuno scambio vero da leggere.",
     approved: "Capito: li leggo, dalla prossima notte, e torno qui con quello che ho capito.",
     declined: "Capito: non li leggo, e non lo chiederò più. Se cambi idea, dimmelo qui o in Impostazioni → Mail.",
+    written: "Li ho letti. Nel tuo giardino ho scritto %1 scheda/e sulle persone che contano e %2 riassunto/i dei fili — bozze, private, ogni riga rimanda al messaggio da cui viene: da tenere, correggere o buttare.",
     numbers: NUMBERS.it!,
   },
   de: {
@@ -151,6 +156,7 @@ export const MAIL_OPENER_STRINGS: Record<string, MailOpenerStrings> = {
     nothing: "In den letzten %1 Jahren finde ich keinen echten Wechsel zum Lesen.",
     approved: "Verstanden: ich lese sie, ab der nächsten Nacht, und komme hier mit dem zurück, was ich verstanden habe.",
     declined: "Verstanden: ich lese sie nicht, und ich frage nicht noch einmal. Wenn du es dir anders überlegst, sag es hier oder unter Einstellungen → Mail.",
+    written: "Ich habe sie gelesen. In deinem Garten habe ich %1 Blatt/Blätter zu den Menschen, die zählen, und %2 Zusammenfassung(en) der Fäden geschrieben — Entwürfe, privat, jede Zeile verweist auf ihre Nachricht: behalten, berichtigen oder verwerfen.",
     numbers: NUMBERS.de!,
   },
   es: {
@@ -163,6 +169,7 @@ export const MAIL_OPENER_STRINGS: Record<string, MailOpenerStrings> = {
     nothing: "En los últimos %1 años no encuentro ningún intercambio real que leer.",
     approved: "Entendido: los leo, a partir de la próxima noche, y vuelvo aquí con lo que haya entendido.",
     declined: "Entendido: no los leo, y no volveré a preguntar. Si cambias de idea, dímelo aquí o en Ajustes → Correo.",
+    written: "Los he leído. En tu jardín he escrito %1 ficha(s) sobre las personas que cuentan y %2 resumen(es) de los hilos — borradores, privados, cada línea remite a su mensaje: guardar, corregir o tirar.",
     numbers: NUMBERS.es!,
   },
   pt: {
@@ -175,6 +182,7 @@ export const MAIL_OPENER_STRINGS: Record<string, MailOpenerStrings> = {
     nothing: "Nos últimos %1 anos não encontro nenhuma troca real para ler.",
     approved: "Entendido: leio-as, a partir da próxima noite, e volto aqui com o que tiver entendido.",
     declined: "Entendido: não as leio, e não volto a perguntar. Se mudares de ideias, diz-me aqui ou em Definições → Mail.",
+    written: "Li-as. No teu jardim escrevi %1 ficha(s) sobre as pessoas que contam e %2 resumo(s) dos fios — rascunhos, privados, cada linha remete para a sua mensagem: guardar, corrigir ou deitar fora.",
     numbers: NUMBERS.pt!,
   },
   nl: {
@@ -187,6 +195,7 @@ export const MAIL_OPENER_STRINGS: Record<string, MailOpenerStrings> = {
     nothing: "Over de laatste %1 jaar vind ik geen echte uitwisseling om te lezen.",
     approved: "Begrepen: ik lees ze, vanaf de volgende nacht, en kom hier terug met wat ik begrepen heb.",
     declined: "Begrepen: ik lees ze niet, en ik vraag het niet opnieuw. Als je van gedachten verandert, zeg het hier of in Instellingen → Mail.",
+    written: "Ik heb ze gelezen. In je tuin heb ik %1 kaart(en) over de mensen die tellen en %2 samenvatting(en) van de draden geschreven — concepten, privé, elke regel verwijst naar zijn bericht: bewaren, verbeteren of weggooien.",
     numbers: NUMBERS.nl!,
   },
 };

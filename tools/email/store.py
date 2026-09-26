@@ -34,6 +34,11 @@ Shape of the thing:
   kept ones, the full reading — a structured summary the server's model
   wrote, **sealed** under the household key like the subject: derived from
   the body, never the body, and not in clear on the disk either.
+* ``artefacts`` (lot 5) is what the documents pass wrote in the garden from
+  the readings — a fiche per correspondent, a digest per thread — keyed on
+  the *source* (the person's address, the thread's root) so that a note the
+  member threw away is never written again: ``deleted_at`` is set the first
+  time the note is found missing, and the key is left alone from then on.
 * ``capacity`` (lot 4) is what a night's reading actually got through —
   messages and seconds per run — measured, beside the calibration, and never
   derived from a spend cap: the estimate's "nights" rest on it once it
@@ -117,6 +122,17 @@ CREATE TABLE IF NOT EXISTS readings (
   tokens_full    INTEGER
 );
 CREATE INDEX IF NOT EXISTS readings_light ON readings (light);
+CREATE TABLE IF NOT EXISTS artefacts (
+  kind        TEXT NOT NULL,             -- person | thread | hub
+  key         TEXT NOT NULL,             -- the address, the thread root, 'hub'
+  slug        TEXT NOT NULL,
+  locale      TEXT NOT NULL,
+  title       TEXT,
+  sources     TEXT NOT NULL DEFAULT '[]', -- JSON: message ids the note was written from
+  written_at  TEXT NOT NULL,
+  deleted_at  TEXT,
+  PRIMARY KEY (kind, key)
+);
 CREATE TABLE IF NOT EXISTS capacity (
   id          INTEGER PRIMARY KEY AUTOINCREMENT,
   job         TEXT,
@@ -639,6 +655,66 @@ class MailStore:
         with self._connect() as conn:
             q = "SELECT * FROM readings" + (" WHERE reading_sealed IS NOT NULL" if kept_only else "") + " ORDER BY read_at, message"
             return [dict(r) for r in conn.execute(q).fetchall()]
+
+    def readings_material(self, limit: int = 5000) -> list[dict[str, Any]]:
+        """Every message read whole, with the headers a document needs and
+        the reading still sealed (the service unseals), oldest first."""
+        with self._connect() as conn:
+            rows = conn.execute(
+                """SELECT m.id, m.message_id, m.sender, m.sender_address, m.recipients, m.cc, m.date,
+                          m.subject_sealed, m.refs, r.reading_sealed, r.read_at
+                   FROM readings r JOIN messages m ON m.id = r.message
+                   WHERE r.reading_sealed IS NOT NULL AND m.gone_at IS NULL
+                   ORDER BY m.date, m.id LIMIT ?""",
+                (max(1, int(limit)),),
+            ).fetchall()
+        return [dict(r) for r in rows]
+
+    def clear_readings(self, ids: list[str]) -> int:
+        """Forget the full reading of these messages (the verdict stays), so
+        the next full pass reads them again."""
+        if not ids:
+            return 0
+        n = 0
+        with self._transaction() as conn:
+            for i in range(0, len(ids), 500):
+                chunk = ids[i : i + 500]
+                n += conn.execute(
+                    f"UPDATE readings SET reading_sealed = NULL, read_at = NULL, tokens_full = NULL WHERE message IN ({','.join('?' * len(chunk))})",
+                    chunk,
+                ).rowcount
+        return int(n)
+
+    # ── the documents (lot 5) ────────────────────────────────────────────
+    def artefacts(self) -> list[dict[str, Any]]:
+        with self._connect() as conn:
+            rows = conn.execute("SELECT * FROM artefacts ORDER BY kind, written_at").fetchall()
+        out = []
+        for r in rows:
+            d = dict(r)
+            try:
+                d["sources"] = json.loads(d["sources"] or "[]")
+            except ValueError:
+                d["sources"] = []
+            out.append(d)
+        return out
+
+    def record_artefact(self, kind: str, key: str, *, slug: str, locale: str, title: str | None, sources: list[str]) -> None:
+        with self._transaction() as conn:
+            conn.execute(
+                """INSERT INTO artefacts (kind, key, slug, locale, title, sources, written_at, deleted_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, NULL)
+                   ON CONFLICT (kind, key) DO UPDATE SET slug = excluded.slug, locale = excluded.locale, title = excluded.title,
+                     sources = excluded.sources, written_at = excluded.written_at, deleted_at = NULL""",
+                (kind, key, slug, locale, title, json.dumps(sorted(set(sources)), ensure_ascii=False), now_iso()),
+            )
+
+    def mark_artefact_deleted(self, kind: str, key: str) -> bool:
+        with self._transaction() as conn:
+            n = conn.execute(
+                "UPDATE artefacts SET deleted_at = ? WHERE kind = ? AND key = ? AND deleted_at IS NULL", (now_iso(), kind, key)
+            ).rowcount
+        return n > 0
 
     def add_capacity(self, job: str | None, messages: int, seconds: float) -> None:
         with self._transaction() as conn:

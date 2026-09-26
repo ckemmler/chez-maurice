@@ -11,6 +11,7 @@ import { listProposals, proposalCard, type ProposalState } from "../services/dom
 import { canUseMaurice } from "../services/maurices";
 import { getUser, getUserByUsername } from "../services/users";
 import { mailReadingStatus, startMailReading } from "../services/mailReading";
+import { mailDocumentsStatus, startMailDocuments } from "../services/mailDocuments";
 import db from "../db";
 
 const admin = new Hono();
@@ -176,6 +177,21 @@ admin.post("/mail/reading/run", async (c) => {
 });
 
 admin.get("/mail/reading/:member_id", (c) => c.json(mailReadingStatus(c.req.param("member_id"))));
+
+// The documents (lot 5, services/mailDocuments.ts), by hand: POST
+// /api/admin/mail/documents/run { member_id | username, wait? } writes the
+// fiches and digests the member's readings allow; GET …/:member_id the last.
+admin.post("/mail/documents/run", async (c) => {
+  const body = await c.req.json().catch(() => ({}));
+  const member = memberOf(body);
+  if (!member) return c.json({ error: "Unknown member" }, 404);
+  const p = startMailDocuments(member.id);
+  if (body.wait) return c.json(await p);
+  p.catch(() => {});
+  return c.json({ started: true, member_id: member.id, ...mailDocumentsStatus(member.id) }, 202);
+});
+
+admin.get("/mail/documents/:member_id", (c) => c.json(mailDocumentsStatus(c.req.param("member_id"))));
 
 // ── POST /api/admin/conversations/open ──────────────────────────
 // Open a conversation for a member, in Maurice's voice — the operator's hand

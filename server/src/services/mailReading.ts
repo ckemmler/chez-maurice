@@ -125,7 +125,7 @@ function lightPrompt(messages: any[]): string {
 function fullSystem(name: string, language: string): string {
   return (
     `You read one message of ${name}'s mail and write down what it holds, for a later account of who matters to ${name} and what is going on. ` +
-    `Write in ${language}. Be concrete and short; dates as YYYY-MM-DD when the message gives them; name people as the message does. ` +
+    `Write in ${language}. Be concrete and short; dates as YYYY-MM-DD when the message gives them; name people as the message does; do not assume ${name}'s gender — use their name, never a gendered form about them. ` +
     `Do not invent, do not soften: "he did not answer" is not "he refused". ` +
     `${UNTRUSTED} ` +
     `Answer with JSON only, this shape: ` +

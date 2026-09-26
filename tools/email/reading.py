@@ -40,6 +40,7 @@ module hands them their material and keeps what they leave:
 from __future__ import annotations
 
 import json
+import re
 from collections import defaultdict
 from datetime import datetime
 from typing import Any
@@ -107,6 +108,37 @@ def decline(store: MailStore, member_id: str) -> dict[str, Any]:
 
 STAGES = ("light", "full")
 PREVIEW_BYTES = PREVIEW_CHARS * 4
+# The full pass reads more than the calibration sampled: on the owner's
+# first real run half the bodies went past 16 kB — HTML, and the thread
+# quoted under every reply. The quoted part is cut below before the model
+# sees it; the slice is wider so what is left is the message itself.
+FULL_SLICE_BYTES = 48_000
+
+# Where a reply stops being the reply and starts quoting: the line that
+# introduces the quoted message, in the languages of the house, or the
+# separators mail clients put before a forwarded or original message.
+_QUOTE_INTRO = re.compile(
+    r"^\s*("
+    r"(On|Le|Il|Am|El|Em|Op)\s.{4,200}?\b(wrote|a écrit|ha scritto|schrieb|escribió|escreveu|schreef)\s*:?\s*$"
+    r"|-{2,}\s*(Original Message|Message d'origine|Messaggio originale|Ursprüngliche Nachricht|Mensaje original|Mensagem original|Oorspronkelijk bericht|Forwarded message|Message transféré)\s*-{2,}"
+    r"|_{10,}"
+    r"|(From|De|Da|Von|Van)\s*:\s.+$"
+    r")",
+    re.IGNORECASE | re.MULTILINE,
+)
+
+
+def strip_quoted(text: str) -> str:
+    """Drop the quoted part of a reply: every ``>`` line, and everything from
+    the first line that introduces a quoted or forwarded message on — when
+    that line comes after some text of the message's own. A message that is
+    nothing but a forward keeps its text: there is nothing else to read."""
+    lines = [l for l in text.splitlines() if not l.lstrip().startswith(">")]
+    kept = "\n".join(lines)
+    m = _QUOTE_INTRO.search(kept)
+    if m and kept[: m.start()].strip():
+        kept = kept[: m.start()]
+    return kept.strip()
 
 
 def _years(job: dict[str, Any] | None) -> int:
@@ -156,7 +188,7 @@ def next_batch(
     by_place: dict[tuple[str, str], list[dict[str, Any]]] = defaultdict(list)
     for r in rows:
         by_place[(r["address"], r["folder"])].append(r)
-    text_bytes = PREVIEW_BYTES if stage == "light" else SLICE_BYTES
+    text_bytes = PREVIEW_BYTES if stage == "light" else FULL_SLICE_BYTES
     out: list[dict[str, Any]] = []
     errors: list[str] = []
     for (address, folder), locs in by_place.items():
@@ -188,7 +220,7 @@ def next_batch(
             if stage == "light":
                 entry["preview"] = text[:PREVIEW_CHARS]
             else:
-                entry["body"] = text
+                entry["body"] = strip_quoted(text)
                 entry["truncated"] = bool(partial)
             out.append(entry)
     # Candidates the fetch did not answer for (a folder that refused, a UID
@@ -241,6 +273,51 @@ def record(
     return {"recorded": {"verdicts": len(light_rows), "readings": len(read_rows)}, "job": store.job(job["id"]), "progress": progress(store, job, now)}
 
 
+def _unseal_json(sealed: str | None) -> dict[str, Any] | None:
+    if not sealed:
+        return None
+    try:
+        v = json.loads(sealing.unseal(sealed))
+    except Exception:
+        return None
+    return v if isinstance(v, dict) else None
+
+
+def material(store: MailStore, *, limit: int = 5000) -> dict[str, Any]:
+    """What the documents pass writes from (lot 5): every message read
+    whole, unsealed for the server — headers, the reading, and the thread it
+    belongs to (the first References entry, else its own Message-ID, as the
+    report groups threads)."""
+    from .triage import _thread_root  # the report's grouping, one place
+
+    rows = []
+    for r in store.readings_material(limit):
+        reading = _unseal_json(r["reading_sealed"])
+        if reading is None:
+            continue
+        rows.append({
+            "id": r["id"],
+            "message_id": r["message_id"],
+            "from": r["sender"],
+            "from_address": r["sender_address"],
+            "to": _list(r["recipients"]),
+            "cc": _list(r["cc"]),
+            "date": r["date"],
+            "subject": _subject(r["subject_sealed"]),
+            "thread": _thread_root({"refs": r["refs"], "message_id": r["message_id"]}),
+            "reading": reading,
+            "read_at": r["read_at"],
+        })
+    return {"messages": rows, "artefacts": store.artefacts()}
+
+
+def reset_truncated(store: MailStore) -> dict[str, Any]:
+    """Forget the readings whose text was cut, so the next full pass reads
+    them again — wider, and without the quoted part."""
+    ids = [r["id"] for r in store.readings_material() if (_unseal_json(r["reading_sealed"]) or {}).get("truncated")]
+    return {"reset": store.clear_readings(ids), "ids": ids}
+
+
 def _int(v: Any) -> int | None:
     try:
         return int(v) if v is not None else None
@@ -272,4 +349,4 @@ def control(
     return {"job": store.job(job["id"]), "capacity": store.capacity()}
 
 
-__all__ = ["KIND", "SETTLED_BY_WORD", "STAGES", "approve", "control", "decline", "next_batch", "progress", "record", "status", "now_iso"]
+__all__ = ["KIND", "SETTLED_BY_WORD", "STAGES", "approve", "control", "decline", "material", "next_batch", "progress", "record", "reset_truncated", "status", "strip_quoted", "now_iso"]
