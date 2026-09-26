@@ -1,6 +1,6 @@
 ---
 title: The data model
-date: '2026-09-25'
+date: '2026-09-26'
 flags: []
 locale: en
 description: 'The SQLite schema behind the chat engine: identity, conversations, files,
@@ -112,6 +112,19 @@ Both `context_json` and `spec_json` store the **resolved set frozen at save time
 | Table | Key columns | Notes |
 |---|---|---|
 | `calibre_libraries` | `id`, `account_id`, `label`, `library_root`, `is_default` | One global Calibre library, configurable from the admin dashboard; the Python Calibre tools and the data-api read this table *in `maurice.db`* — a concrete example of a tool sharing the chat engine's DB. |
+
+## The mail header store — one file per member, beside `maurice.db`
+
+`<app dir>/mail/<member id>.db` (26 September 2026, lot 1 of the mail import;
+[[maurice-tools]] has the walk). Written by the `email` tool only, never by
+the server: `jobs` (an import as an object — state, counts, bytes, seconds,
+last error), `cursors` (`uidvalidity`, `highest_uid_done` per account and
+folder), `messages` keyed by a folder-independent identity (`gm:` X-GM-MSGID,
+`oid:` EMAILID, `fp:` / `fp2:` fingerprints) with from, to, cc, date,
+message-id, list-id, references, list-unsubscribe and precedence in clear and
+indexed and the **subject sealed** under the same household key and envelope
+as `mail_accounts.secret`, and `locations` (account, folder, uidvalidity, uid
+→ message). No body is ever stored. About 1 kB per message.
 
 ## The data-api's databases
 

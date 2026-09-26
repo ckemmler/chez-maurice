@@ -8,6 +8,8 @@ the CLI passes a username. Nobody passes "everyone".
 from __future__ import annotations
 
 import logging
+import threading
+import time
 from collections import Counter
 from datetime import datetime, timezone
 from typing import Any, Callable
@@ -15,6 +17,8 @@ from typing import Any, Callable
 from . import accounts as accounts_mod
 from .accounts import Account, ConfigError, EmailConfig
 from .imap import AccountUnavailable, MailboxError, Session, build_criteria, default_client_factory, gmail_query
+from .scan import KIND as SCAN_KIND, Scanner
+from .store import MailStore
 from .message import (
     attachment_parts,
     attachment_text,
@@ -83,6 +87,7 @@ class Accounts(list):
     """A member's accounts, with the reason the app's could not be read, if any."""
 
     note: str | None = None
+    member_id: str | None = None  # whose they are — the key of their header store
 
 
 AppAccounts = Callable[[str, set], "tuple[list[Account], str | None]"]
@@ -99,6 +104,10 @@ class EmailService:
         self.client_factory = client_factory
         self.app_accounts = app_accounts
         self._sessions: dict[tuple[str, str, str], Session] = {}
+        self._scans: dict[str, tuple[Scanner, threading.Thread | None]] = {}  # one walk per member
+        self._scans_lock = threading.Lock()
+        self._stores: dict[str, MailStore] = {}
+        self.store_for: Callable[[str], MailStore] = MailStore.for_member
 
     # ── who ──────────────────────────────────────────────────────────────
     def accounts(self, *, member_id: str | None = None, username: str | None = None) -> Accounts:
@@ -113,6 +122,7 @@ class EmailService:
         else:
             raise AccessDenied("no member on this request: mail is only ever read for the member asking")
         if member_id:
+            found.member_id = member_id
             taken = {(member_id, a.name) for a in found}
             fetch = self.app_accounts or accounts_mod.fetch_app_accounts
             added, found.note = fetch(member_id, taken)
@@ -150,8 +160,105 @@ class EmailService:
         return picked[0]
 
     def close(self) -> None:
+        for scanner, thread in list(self._scans.values()):
+            scanner.stop()
+            if thread is not None:
+                thread.join(timeout=60)
         for session in self._sessions.values():
             session.close()
+
+    # ── the header scan (specs/mail-import.md, lot 1) ────────────────────
+    def _member_store(self, accounts: list[Account]) -> tuple[str, MailStore]:
+        member_id = getattr(accounts, "member_id", None)
+        if not member_id:
+            raise AccessDenied("no member on this request: a mailbox is only ever scanned for the member asking")
+        store = self._stores.get(member_id)
+        if store is None:
+            store = self._stores[member_id] = self.store_for(member_id)
+        return member_id, store
+
+    def _live_scan(self, member_id: str) -> tuple[Scanner, threading.Thread | None] | None:
+        """This process's walk for the member, if its thread is still going
+        (or it runs in the foreground)."""
+        entry = self._scans.get(member_id)
+        if entry is None:
+            return None
+        scanner, thread = entry
+        if thread is not None and not thread.is_alive():
+            return None
+        return entry
+
+    def scan_start(
+        self, accounts: list[Account], account: str | None = None, *, background: bool = True, batch: int | None = None
+    ) -> dict[str, Any]:
+        """Walk the member's mailboxes into their header store. In the
+        background by default — a first pass over years of mail outlives any
+        request — and ``scan_status`` says how it is going. A walk already
+        running is joined, not doubled: this process's, or one another
+        process left a fresh heartbeat for (the CLI beside the gateway)."""
+        member_id, store = self._member_store(accounts)
+        picked = self._pick(accounts, account)
+        with self._scans_lock:
+            live = self._live_scan(member_id)
+            if live is not None:
+                scanner, _thread = live
+                job = store.job(scanner.job_id) if scanner.job_id else None
+                return {"status": "stopping" if scanner.stopping.is_set() else "running", "job": job}
+            elsewhere = store.running_job(SCAN_KIND)
+            if elsewhere is not None:
+                return {"status": "running", "job": elsewhere,
+                        "note": "another process is walking this store; its checkpoint is recent"}
+            # Sessions of the scan's own: a search meanwhile keeps the shared
+            # one, and a password changed in the app closes only that one.
+            targets = [(acc, Session(acc, self.client_factory)) for acc in picked]
+            scanner = Scanner(store, member_id, targets, **({"batch": batch} if batch else {}))
+            if not background:
+                self._scans[member_id] = (scanner, None)
+            else:
+                thread = threading.Thread(target=scanner.run, name=f"email-scan-{member_id[:8]}", daemon=True)
+                self._scans[member_id] = (scanner, thread)
+                thread.start()
+        if not background:
+            try:
+                job = scanner.run()
+            finally:
+                self._scans.pop(member_id, None)
+            if job is None:
+                raise MailboxError("the header store could not be written; see the gateway log")
+            return {"status": job["state"], "job": job, **self._scan_summary(store)}
+        # The job row exists before we answer, so a status read right after
+        # finds it.
+        for _ in range(200):
+            if scanner.job_id or not thread.is_alive():
+                break
+            time.sleep(0.01)
+        return {"status": "started", "job": store.job(scanner.job_id) if scanner.job_id else None}
+
+    def scan_stop(self, accounts: list[Account]) -> dict[str, Any]:
+        """Pause at the next batch boundary. The cursor makes the next start
+        a continuation."""
+        member_id, store = self._member_store(accounts)
+        live = self._live_scan(member_id)
+        if live is None:
+            return {"status": "idle"}
+        scanner, _thread = live
+        scanner.stop()
+        return {"status": "stopping", "job": store.job(scanner.job_id) if scanner.job_id else None}
+
+    def scan_status(self, accounts: list[Account]) -> dict[str, Any]:
+        member_id, store = self._member_store(accounts)
+        live = self._live_scan(member_id)
+        if live is None:
+            # Nothing of ours is running: a 'running' row with a stale
+            # heartbeat is a process that died, and is said to be paused.
+            store.orphan_running_jobs(SCAN_KIND)
+        job = store.latest_job(SCAN_KIND)
+        running = bool(job and job["state"] == "running")
+        return {"running": running, "job": job, **self._scan_summary(store)}
+
+    @staticmethod
+    def _scan_summary(store: MailStore) -> dict[str, Any]:
+        return {"totals": store.totals(), "cursors": store.cursors()}
 
     # ── tools ────────────────────────────────────────────────────────────
     def list_accounts(self, accounts: list[Account]) -> dict[str, Any]:

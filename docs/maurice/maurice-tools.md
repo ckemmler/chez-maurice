@@ -1,6 +1,6 @@
 ---
 title: The MCP tool ecosystem
-date: '2026-09-25'
+date: '2026-09-26'
 flags: []
 locale: en
 description: 'The gateway that gives Maurice his capabilities: discovery, per-member
@@ -133,6 +133,77 @@ hostile-input handling and nothing of its vocabulary.
   the text slice rides on the `BODY.PEEK[TEXT]<0.n>` of the FETCH the headers
   already needed — and it spares a whole turn. `preview` forces it
   either way.
+
+### The header store — lot 1 of the mail import (26 September 2026)
+
+The first built piece of `specs/mail-import.md` (*knowing, not finding*): a
+member's whole mailbox walked into a store of parsed headers, free, resumable,
+and with nothing of the bodies kept. Three tools join the roster —
+`scan_mailbox` (starts the walk in the background, or joins the one running),
+`scan_status` (the job, its counts, where it is, what the store holds) and
+`scan_stop` (pause at the next checkpoint) — the same start-then-poll shape
+as the corpus's `index_conversation` / `reconcile_status`, because a first
+pass over years of mail outlives any request.
+
+- **One SQLite file per member, `<app dir>/mail/<member id>.db`**, written by
+  the `email` tool and by nothing else — never `maurice.db`. Four tables:
+  `jobs` (the import as an object: state, counts, bytes, seconds, last error),
+  `cursors` (`{uidvalidity, highest_uid_done}` per account and folder),
+  `messages` (the parsed headers) and `locations` (where each message was
+  seen: account, folder, uidvalidity, uid).
+- **The identity of a message never depends on its folder.** Members
+  reorganise folders, with Maurice's help; a moved message or a renamed
+  folder must not become a second message. In order: `X-GM-MSGID` on Gmail
+  (`gm:…`), `EMAILID` where the server announces OBJECTID (`oid:…`), else a
+  fingerprint of the normalised Message-ID + From + Date (`fp:…`), and
+  without a Message-ID a fingerprint of Date + From + To + Subject (`fp2:…`,
+  marked *weak*). A folder is only a location attached to the message; met
+  again elsewhere, the message gains a location, not a row.
+- **UIDVALIDITY is handled, not hoped about.** Each folder walk starts with a
+  fresh EXAMINE; a UIDVALIDITY that differs from the cursor's means the folder
+  was renumbered — cursor back to zero, the old generation's locations purged,
+  in one transaction, and the folder rescanned. Skipping this is how mail gets
+  dropped in silence.
+- **Batches of 500, one transaction each** — rows, locations, the moved
+  cursor and the job's checkpoint together. Every write is idempotent
+  (`INSERT … ON CONFLICT DO UPDATE`), so a batch replayed after a crash is
+  harmless: a connection dropped mid-FETCH is retried once after the session
+  reconnects; a failure while writing fails the job, and the next start
+  resumes from the cursor, replaying exactly the interrupted batch. One
+  folder the server refuses is named in the job and skipped, not the forty
+  after it; an account that refuses the login ends that account's walk.
+- **The job row is a lease.** Its `updated_at` moves at every batch and is
+  the heartbeat: a `running` job with a fresh one is another walker — this
+  gateway's thread, or the CLI beside it, on the same file — and is joined,
+  not doubled; one whose heartbeat is ten minutes old is a process that died,
+  and is marked `paused` by whoever looks next. The walk runs on IMAP
+  sessions of its own, so a search meanwhile does not fight it for the
+  connection and a password changed in the app closes only the shared one.
+- **The subject is sealed; the structural fields are not.** Same key, cipher
+  and envelope as `mail_accounts.secret` (`services/mailAccounts.ts`:
+  household key, AES-256-GCM, `v1:` + base64 of IV ‖ tag ‖ body), now in
+  Python too (`tools/email/sealing.py`, on `cryptography`); a seal made by
+  either side opens on the other, and a test proves it. From, to, cc, date,
+  message-id, list-id and references stay in clear and indexed, along with
+  `List-Unsubscribe` and `Precedence` for the triage to come — all parsed
+  from the header block the FETCH already carried, no extra round trip.
+- **Folders walked** are the ones "everywhere" means: `\All` on Gmail, every
+  selectable folder but junk, trash and drafts elsewhere.
+
+Measured on the day against the owner's Gmail, twenty years of mail: **164 194
+messages** walked end to end, the process killed outright twice along the way
+and resumed each time from its cursor without a duplicate; the last stretch
+of 136 982 messages took 13 min 18 s — about 170 a second — for 500 MB of
+headers on the wire (3 kB each, the `Received` chain mostly), and the store
+weighs 164 MB, about 1 kB a row: a 100 000-message archive is roughly
+100 MB, three times the spec's estimate, most of it `References` and the
+sealed subject. Every message carried an X-GM-MSGID; 132 had no subject. One
+real-world limit found and fixed on the spot: `UID SEARCH UID 1:*` on the
+archive answers over a megabyte of UIDs, which imaplib refuses as a single
+line; the walk asks in windows of ten thousand UIDs up to the folder's
+UIDNEXT instead (and for the last UID alone on a server that omits UIDNEXT).
+Nothing here runs on its own yet — the 03:00 rendezvous is not wired, no model
+reads anything, no euro is spent; lots 2 to 5 of the spec are still design.
 
 Verified against the real Proton mailbox through Bridge on the day: roles read
 from the flags, 103 messages found since 20 September in `All Mail`, a
@@ -397,7 +468,9 @@ when imapclient ships the fix.
 
 - **The gateway enforces none of this.** Families and the experimental flag live only in the Bun server. A client that authenticates straight to the MCP gateway — a member token, an OAuth custom connector — gets the *complete* mounted roster, whatever the member was granted in the app. Closing that is its own piece of work. (The native tools — `maurice_docs`, the three `domains__*` — are the exception by construction: they live in the server's loop and the gateway never sees them; `corpus__map_conversations`, though, is mounted like any corpus tool and reads whatever member the caller claims.)
 - **A hosted household's gateway answered anyone, until 25 September 2026.** The server proxies `/mcp` to the gateway verbatim, and `start-mcp-gateway.sh` turns auth on only when `MAURICE_MCP_TOKEN` (or an OAuth password) is set — which nothing set in the container. So `https://<household>/mcp` accepted MCP calls with no credentials at all, for whatever member id a caller put in `X-Maurice-Member-Id`: every member's garden and corpus were readable from the internet (found while wiring the mail tool, before any mailbox was added on the fleet). `infra/container/entrypoint.sh` now gives each household a key of its own (`~/.maurice/mcp.token` in the volume, generated once, exported before supervisord); verified the same day: anonymous `/mcp` is 401 on both hosted households, the server's own calls 200. Nothing records whether the hole was used before — the gateway logged requests but not their origin.
-- **`email` cannot reach Outlook.com.** Microsoft takes only OAuth over IMAP; not built. Nor does it index mail: search is IMAP's own (Gmail's is good, others' less so).
+- **`email` cannot reach Outlook.com.** Microsoft takes only OAuth over IMAP; not built. Nor does it index mail: search is IMAP's own (Gmail's is good, others' less so). The header store (above) is not a search index either: bodies are never kept, and a subject can only be read by unsealing it.
+- **The header scan is started by hand.** `scan_mailbox` runs when a member (or the CLI) asks; it is not on the nightly rendezvous, and whether the free header pass may run unasked — so that Maurice's first message about a mailbox carries real numbers — is an open question for the next beta, not a decision taken.
+- **The header store forgets nothing on its own.** A message expunged from the mailbox, or a folder renamed, keeps its old locations: only a changed UIDVALIDITY purges a folder's generation. Deciding when a location is stale (a folder no longer listed, a UID no longer present) is lot 2's business, with the triage.
 - **`web` and `signals` can't be turned off.** They're re-unioned into every resolution, so unticking them in the picker does nothing.
 - **Family selection is coarser than it looks.** `toolInFamilies` still accepts the parent prefix for back-compat, so a conversation holding `"garden"` opens all 54 garden tools at once, sub-families included.
 - **No per-tool sandboxing.** A tool runs with the gateway's process privileges; the only access control is the member contextvar and tool-family gating, not OS-level isolation.

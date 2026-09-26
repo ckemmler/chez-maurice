@@ -16,4 +16,5 @@ PyYAML            # layouts, tasks
 anthropic         # garden (generate_evocation, link_*_entities, …)
 imapclient        # email, mail (mailbox names in modified UTF-7; bare imaplib will not do)
 pypdf             # email (the text layer of a PDF attachment)
+cryptography      # email (subjects sealed under the household key, AES-256-GCM — the same seal as server/src/services/mailAccounts.ts)
 httpx             # mail (Ollama classification, and the optional escalation)

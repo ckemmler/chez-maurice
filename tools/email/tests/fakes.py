@@ -19,13 +19,18 @@ def build_raw(
     date: str = "Tue, 15 Sep 2026 09:12:00 +0200",
     html: bool = False,
     attachments: list[tuple[str, str, bytes]] | None = None,
+    message_id: str | None = None,
+    headers: dict[str, str] | None = None,
 ) -> bytes:
     msg = EmailMessage()
     msg["Subject"] = subject
     msg["From"] = sender
     msg["To"] = "alex@example.org"
-    msg["Message-ID"] = f"<{abs(hash((subject, date)))}@example.org>"
+    if message_id is not False:
+        msg["Message-ID"] = message_id or f"<{abs(hash((subject, date)))}@example.org>"
     msg["Date"] = date
+    for name, value in (headers or {}).items():
+        msg[name] = value
     if html:
         msg.set_content("plain fallback")
         msg.add_alternative(body, subtype="html")
@@ -38,18 +43,48 @@ def build_raw(
 
 
 class FakeIMAPClient:
+    """State that a reconnection must survive — the folders, the flags, the
+    UIDVALIDITY per folder, the Gmail ids, the call journal and the faults to
+    inject — is shared between an instance and its ``clone()``, so a factory
+    that answers a dropped connection with ``client.clone()`` behaves like a
+    server that is still there."""
+
     def __init__(
         self,
         folders: dict[str, dict[int, bytes]],
         flags: dict[str, tuple[bytes, ...]] | None = None,
         seen: set[tuple[str, int]] | None = None,
+        *,
+        uidvalidity: dict[str, int] | None = None,
+        gm_msgids: dict[tuple[str, int], int] | None = None,
+        capabilities: tuple[bytes, ...] = (b"IMAP4rev1",),
+        emailids: dict[tuple[str, int], str] | None = None,
     ) -> None:
         self.folders = folders
         self.folder_flags = flags or {}
         self.seen = seen or set()
+        self.uidvalidity = uidvalidity if uidvalidity is not None else {}
+        self.gm_msgids = gm_msgids if gm_msgids is not None else {}
+        self.emailids = emailids if emailids is not None else {}
+        self.caps = capabilities
+        self.omit_uidnext = False  # a server that skips the SHOULD of RFC 3501
         self.selected: str | None = None
         self.calls: list[tuple[str, Any]] = []
         self.logged_out = False
+        # {"drop_on_fetch": n} — the n-th FETCH from now dies with the connection.
+        self.faults: dict[str, int] = {}
+        self.connections = [self]
+
+    def clone(self) -> "FakeIMAPClient":
+        other = FakeIMAPClient.__new__(FakeIMAPClient)
+        other.__dict__.update(self.__dict__)
+        other.selected = None
+        other.logged_out = False
+        self.connections.append(other)
+        return other
+
+    def capabilities(self):
+        return self.caps
 
     def noop(self) -> None:
         if self.logged_out:
@@ -68,7 +103,11 @@ class FakeIMAPClient:
             raise ValueError(f"no such folder: {folder}")
         self.selected = folder
         self.calls.append(("examine", folder))
-        return {b"EXISTS": len(self.folders[folder])}
+        uids = self.folders[folder]
+        info = {b"EXISTS": len(uids), b"UIDVALIDITY": self.uidvalidity.get(folder, 1)}
+        if not self.omit_uidnext:
+            info[b"UIDNEXT"] = (max(uids) + 1) if uids else 1
+        return info
 
     def folder_status(self, folder, keys):
         messages = self.folders.get(folder, {})
@@ -76,6 +115,8 @@ class FakeIMAPClient:
         return {b"MESSAGES": len(messages), b"UNSEEN": unseen}
 
     def search(self, criteria, charset=None):
+        if self.selected is None:
+            raise ValueError("SEARCH with no mailbox selected")
         self.calls.append(("search", (list(criteria), charset)))
         return self._match(criteria)
 
@@ -86,6 +127,21 @@ class FakeIMAPClient:
     def _match(self, criteria):
         uids = sorted(self.folders.get(self.selected or "", {}))
         crit = list(criteria)
+        if "UID" in crit:
+            # `UID n:m` or `UID n:*` — and `*` is the last message even when n
+            # is past it, as RFC 3501 says and every server does. Bare `*`
+            # is that last message alone.
+            spec = str(crit[crit.index("UID") + 1])
+            if spec == "*":
+                return uids[-1:]
+            low, _, high = spec.partition(":")
+            low = int(low)
+            if high == "*":
+                if uids and low > uids[-1]:
+                    return uids[-1:]
+                uids = [u for u in uids if u >= low]
+            else:
+                uids = [u for u in uids if low <= u <= int(high)]
         if "FROM" in crit:
             needle = crit[crit.index("FROM") + 1].lower()
             uids = [u for u in uids if needle in self._header(u, "From").lower()]
@@ -107,7 +163,14 @@ class FakeIMAPClient:
         for part in parts:
             if str(part).startswith("BODY[") or str(part) in {"RFC822", "BODY"}:
                 raise AssertionError(f"non-PEEK fetch {part!r} would mark the message read")
+        if self.selected is None:
+            raise ValueError("FETCH with no mailbox selected")
         self.calls.append(("fetch", (list(uids), list(parts))))
+        if self.faults.get("drop_on_fetch"):
+            self.faults["drop_on_fetch"] -= 1
+            if self.faults["drop_on_fetch"] == 0:
+                self.logged_out = True
+                raise OSError("connection reset by peer")
         out: dict[int, dict[bytes, Any]] = {}
         for uid in uids:
             raw = self.folders.get(self.selected or "", {}).get(int(uid))
@@ -123,6 +186,14 @@ class FakeIMAPClient:
                     entry[b"BODY[HEADER]"] = header + b"\n"
                 elif part == "BODY.PEEK[]":
                     entry[b"BODY[]"] = raw
+                elif part == "X-GM-MSGID":
+                    gm = self.gm_msgids.get((self.selected, int(uid)))
+                    if gm is not None:
+                        entry[b"X-GM-MSGID"] = gm
+                elif part == "EMAILID":
+                    oid = self.emailids.get((self.selected, int(uid)))
+                    if oid is not None:
+                        entry[b"EMAILID"] = (oid.encode(),)
                 elif str(part).startswith("BODY.PEEK[TEXT]"):
                     # BODY.PEEK[TEXT]<0.n> — hand back n octets, as a server does.
                     count = re.search(r"<0\.(\d+)>", str(part))

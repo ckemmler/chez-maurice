@@ -7,6 +7,8 @@ check it before Maurice uses it.
     .venv/bin/python -m tools.email.cli --member candide read 1841 --folder inbox
     .venv/bin/python -m tools.email.cli --member candide attachment 1841 0
     .venv/bin/python -m tools.email.cli --member candide stats --since 2026-09-01
+    .venv/bin/python -m tools.email.cli --member candide scan --account gmail
+    .venv/bin/python -m tools.email.cli --member candide scan-status
 
 Run from the repo root. ``--member`` is a username: the CLI acts for one member
 exactly as the gateway does, it is not a way to see everyone's mail.
@@ -68,6 +70,12 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--before")
     p.add_argument("--folder")
 
+    p = sub.add_parser("scan", help="walk the headers into the member's store, in the foreground, resumable")
+    p.add_argument("--account")
+    p.add_argument("--batch", type=int, default=None)
+
+    sub.add_parser("scan-status")
+
     args = parser.parse_args(argv)
     service: EmailService | None = None
     try:
@@ -102,6 +110,10 @@ def main(argv: list[str] | None = None) -> int:
             out = service.get_attachment(
                 accounts, uid=args.uid, index=args.index, account=args.account, folder=args.folder
             )
+        elif args.command == "scan":
+            out = service.scan_start(accounts, account=args.account, background=False, batch=args.batch)
+        elif args.command == "scan-status":
+            out = service.scan_status(accounts)
         else:
             out = service.stats(accounts, account=args.account, since=args.since, before=args.before, folder=args.folder)
     except (ConfigError, AccessDenied, AccountUnavailable, MailboxError) as exc:

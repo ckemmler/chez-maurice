@@ -21,7 +21,7 @@ import re
 from email import policy
 from email.message import EmailMessage
 from email.parser import BytesParser
-from email.utils import parsedate_to_datetime
+from email.utils import formataddr, getaddresses, parsedate_to_datetime
 from typing import Any
 
 BEGIN_MARKER = "----- BEGIN UNTRUSTED MESSAGE BODY -----"
@@ -111,10 +111,18 @@ def _payload_text(part: Any) -> str:
 
 
 def _addresses(msg: EmailMessage, header: str) -> list[str]:
-    value = msg.get(header)
-    if not value:
+    """Each mailbox of the header as ``Name <address>``, parsed as RFC 5322
+    says — a display name may hold a comma (``"Dupont, Jean" <j@x>``), so
+    splitting on commas would cut it in two."""
+    values = msg.get_all(header)
+    if not values:
         return []
-    return [a.strip() for a in str(value).split(",") if a.strip()]
+    out = []
+    for name, address in getaddresses([str(v) for v in values]):
+        if not address and not name:
+            continue
+        out.append(formataddr((name, address)) if address else name)
+    return out
 
 
 def envelope_summary(msg: EmailMessage) -> dict[str, Any]:
@@ -135,6 +143,19 @@ def envelope_summary(msg: EmailMessage) -> dict[str, Any]:
         "reply_to": _addresses(msg, "Reply-To"),
         "list_id": str(msg.get("List-Id")) if msg.get("List-Id") else None,
         "date": iso,
+    }
+
+
+def triage_fields(msg: EmailMessage) -> dict[str, Any]:
+    """The headers the triage (lot 2 of the mail import) reads, parsed from
+    the same header block ``envelope_summary`` had — no extra fetch. Kept out
+    of ``envelope_summary`` because a References chain is long and means
+    nothing to a model answering a search."""
+    references = msg.get("References")
+    return {
+        "references": " ".join(str(references).split()) if references else None,
+        "list_unsubscribe": bool(msg.get("List-Unsubscribe")),
+        "precedence": str(msg.get("Precedence")).strip().lower() if msg.get("Precedence") else None,
     }
 
 

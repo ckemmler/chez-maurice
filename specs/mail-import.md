@@ -1,10 +1,11 @@
-# Making a large mailbox useful — design, not yet built
+# Making a large mailbox useful — design, lot 1 built
 
 A member arrives with years of mail. What should Maurice do with it?
 
 Designed 25–26 September 2026 around Aline's mailbox, and settled in
-conversation with Candide. Nothing here is built. Numbers are measured where
-they say so and estimated where they say that instead.
+conversation with Candide. Lot 1 (the job, the cursor, the header store) was
+built on 26 September; everything from lot 2 on is design. Numbers are
+measured where they say so and estimated where they say that instead.
 
 ---
 
@@ -169,9 +170,21 @@ jobs(
 )
 ```
 
-**The cursor** is `{uidvalidity, highest_uid_done}` per folder, or the highest
-`X-GM-MSGID` on Gmail — that identity is stable across moves and relabels,
-which a UID is not.
+**The cursor** is `{uidvalidity, highest_uid_done}` per (account, folder) —
+on Gmail too, over the UIDs of "All Mail": IMAP cannot resume "after this
+X-GM-MSGID". The X-GM-MSGID is the message's *identity*, stable across moves
+and relabels as a UID is not, and identity and cursor are two different
+things.
+
+**Identity never depends on the folder** (settled 26 September, with the
+member's coming reorganisation of their folders in mind). In order: X-GM-MSGID
+on Gmail; EMAILID (RFC 8474) where the server announces OBJECTID; else a
+fingerprint of the normalised Message-ID + From + Date; and without a
+Message-ID, one of Date + From + To + Subject. A folder, with its uidvalidity
+and uid, is a *location* attached to the message, in its own table: a message
+moved or a folder renamed is read again without a duplicate — it gains a
+location. A changed UIDVALIDITY resets that folder's cursor and purges its
+old-generation locations in the same transaction.
 
 **Idempotence instead of exactly-once.** The unit key is the stable message
 identity and every write is `INSERT OR REPLACE`, so replaying a batch after a
@@ -181,6 +194,28 @@ one. No journal, no distributed transaction.
 **`UIDVALIDITY` must be handled explicitly.** If it changes the folder was
 renumbered and its cursor is void — rescan it. Skip this and mail is silently
 dropped, which is the bug nobody ever sees.
+
+**Where it all lives** (settled 26 September): in the `email` tool, in one
+SQLite file per member — `<app dir>/mail/<member id>.db` — holding `jobs`,
+`cursors`, `messages` and `locations`. The tool is the only writer of that
+file and never writes `maurice.db`. The server drives it as it drives the
+corpus: one call starts the walk in the background, another reads its status.
+The subject is sealed in Python with exactly the mechanism of
+`services/mailAccounts.ts` (same key, AES-256-GCM, `v1:` + base64 of IV ‖ tag
+‖ body), which brought `cryptography` into the tools' requirements.
+
+**Found on the first real walk:** `UID SEARCH UID 1:*` on a twenty-year Gmail
+archive answers more than the megabyte imaplib accepts as one line. The walk
+searches in windows of ten thousand UIDs up to the folder's UIDNEXT instead.
+Measured over 164 194 messages: about 170 a second over the tunnel, 3 kB of
+headers each on the wire, about 1 kB per row stored — 100 000 messages is
+roughly 100 MB, three times the 30 MB estimated above, most of it
+`References` and the sealed subject.
+
+**The job row is a lease.** Its `updated_at` moves at every batch; a
+`running` job with a fresh heartbeat is another walker on the same file (the
+CLI beside the gateway) and is joined, one ten minutes old is dead and is
+marked `paused`. No pid, no lock file: the store is the only shared thing.
 
 ### Where it runs, and why the import is just the first night
 
@@ -361,11 +396,18 @@ correct prompt visible **only to the member concerned**. What that needs:
 Nothing below spends a euro until lot 3, and each lot is worth having on its
 own.
 
-**Lot 1 — the job and the envelopes.** The `jobs` table, the cursor, the
-checkpoint, `UIDVALIDITY` handling, and a per-member store of parsed headers
-with the subject sealed. Batched `UID FETCH` of headers, resumable. No model,
-no cost. Done when a mailbox can be walked end to end, interrupted at any
-point, and resumed without loss or duplication.
+**Lot 1 — the job and the envelopes.** *Built, 26 September 2026*
+(`tools/email/scan.py`, `store.py`, `identity.py`, `sealing.py`; MCP tools
+`scan_mailbox`, `scan_status`, `scan_stop`; CLI `scan`). The `jobs` table, the
+cursor, the checkpoint, `UIDVALIDITY` handling, and a per-member store of
+parsed headers with the subject sealed. Batched `UID FETCH` of headers,
+resumable. No model, no cost. Done when a mailbox can be walked end to end,
+interrupted at any point, and resumed without loss or duplication — tested
+with an exception mid-write and a connection lost mid-FETCH, and by killing
+the process outright against the real Gmail. Not wired to the 03:00
+rendezvous: whether the free header pass may run unasked, so that Maurice's
+first message to a member carries real numbers, or needs a first "yes", is
+still to be asked.
 
 **Lot 2 — the triage and the free report.** Bulk vs correspondence from headers
 alone, and the deliverable that needs no approval: who writes, what fills the

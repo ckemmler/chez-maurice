@@ -18,6 +18,9 @@ the private `mail` tool, which is one person's method; this one assumes none.
 | `get_message` | headers, the body as text, the list of attachments |
 | `get_attachment` | the text of one attachment: text, HTML, PDF (text layer), forwarded message |
 | `stats` | counts per main folder and who writes most, from headers alone |
+| `scan_mailbox` | walk one account (or all) into the member's header store, in the background; joins a walk already running |
+| `scan_status` | the current or last scan: state, counts, where it is, what the store holds |
+| `scan_stop` | pause the running scan at its next checkpoint |
 
 `search` takes structured fields (`from`, `to`, `subject`, `text`, `since`,
 `before`, `unread`, `flagged`), never raw IMAP: a model writing IMAP syntax
@@ -49,6 +52,47 @@ syntax (`X-GM-RAW`), which also allows `has_attachment` and a free
   failure is named in the result.
 - **Big messages are not downloaded whole.** Above `max_message_bytes` (10 MB)
   only the headers and the start of the text are read.
+
+## The header store (`specs/mail-import.md`, lot 1)
+
+`scan_mailbox` walks a mailbox into `<app dir>/mail/<member id>.db` — one
+SQLite file per member, written by this tool only, never `maurice.db`:
+
+- `messages`, keyed by a **folder-independent identity** (`identity.py`):
+  `X-GM-MSGID` on Gmail, `EMAILID` where OBJECTID is announced, else a
+  fingerprint of Message-ID + From + Date (or Date + From + To + Subject when
+  there is no Message-ID, marked weak). A message moved or a folder renamed is
+  the same row with one more `locations` entry (account, folder, uidvalidity,
+  uid).
+- **The subject is sealed** (`sealing.py`) with exactly the mechanism of
+  `server/src/services/mailAccounts.ts` — the household key
+  (`MAURICE_SECRET_KEY`, else `secret.key` in the app dir), AES-256-GCM,
+  `v1:` + base64(iv ‖ tag ‖ body) — so either side opens the other's seals.
+  From, to, cc, date, message-id, list-id, references, list-unsubscribe and
+  precedence stay in clear and indexed. No body is kept.
+- `cursors` holds `{uidvalidity, highest_uid_done}` per (account, folder). A
+  changed UIDVALIDITY resets the cursor and purges that folder's old-generation
+  locations in one transaction, then the folder is rescanned.
+- **Batches of 500 UIDs, one transaction each** (rows + locations + cursor),
+  every write idempotent. UIDs are searched in windows of 10 000 up to the
+  folder's UIDNEXT: `UID 1:*` on a large archive is more than the megabyte
+  imaplib accepts on one line. A dropped connection mid-FETCH is retried once;
+  a failed write fails the job and the next start resumes from the cursor.
+- `jobs` records each walk: state (`running`, `paused`, `done`, `failed`),
+  counts, bytes fetched, seconds, last error — checkpointed in the batch's own
+  transaction. The row is a lease: a `running` job with a fresh `updated_at`
+  is another walker (this gateway's thread, or the CLI beside it) and is
+  joined rather than doubled; one ten minutes stale is a process that died,
+  and is marked `paused`. One folder the server refuses is skipped and named;
+  an account that refuses the login ends that account's walk.
+
+Folders walked: the `\All` folder on Gmail, every selectable folder but junk,
+trash and drafts elsewhere. From a terminal, in the foreground and resumable:
+
+```sh
+.venv/bin/python -m tools.email.cli --member alex scan --account gmail
+.venv/bin/python -m tools.email.cli --member alex scan-status
+```
 
 ## Setting an account up
 
@@ -122,10 +166,21 @@ roles from flags and from names, Gmail search syntax, accents, one account down,
 the body that tries to close its own quotation, attachments and PDFs, signature
 images that are not attachments, large messages, stats.
 
+For the header scan (`test_scan.py`): a walk in batches, an exception while
+writing and a connection lost mid-FETCH (after resumption the store is exactly
+the mailbox and the FETCH journal shows only the interrupted batch replayed),
+a stop and a continuation, a changed UIDVALIDITY (rescanned, nothing skipped,
+no ghost row), a moved message and a renamed folder (one message, one more
+location), Gmail's X-GM-MSGID surviving a UID change, a sparse large folder
+searched in windows, and the subject absent in clear from the file.
+`test_sealing.py` runs `bun` against `mailAccounts.ts` to check that a seal
+crosses both ways (skipped without bun or the server's `node_modules`).
+
 ## Next
 
 1. ~~Accounts per member in the server~~ (done, 25 September 2026).
 2. A settings screen in the app over `/api/mail-accounts`: address, password,
    the connection test's answer.
 3. OAuth (XOAUTH2) for Gmail and Outlook.
-4. Optionally, indexing into the corpus, for search that IMAP does badly.
+4. ~~The header store~~ (lot 1 of `specs/mail-import.md`, 26 September 2026);
+   next the triage and the free report (lot 2), then the quote (lot 3).

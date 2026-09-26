@@ -159,6 +159,25 @@ async def list_tools() -> list[Tool]:
             },
         ),
         Tool(
+            name="scan_mailbox",
+            description=(
+                "Walk one account (or all) into your header store: every message's from, to, date, "
+                "message-id and list headers, the subject sealed, no body. Free, runs in the background, "
+                "resumes where it stopped; scan_status says how it is going. A scan already running is joined."
+            ),
+            inputSchema={"type": "object", "properties": {"account": _ACCOUNT}},
+        ),
+        Tool(
+            name="scan_status",
+            description="The current or last header scan: state, counts, where it is, and what the store holds.",
+            inputSchema={"type": "object", "properties": {}},
+        ),
+        Tool(
+            name="scan_stop",
+            description="Pause the running header scan at its next checkpoint. The next scan_mailbox continues from there.",
+            inputSchema={"type": "object", "properties": {}},
+        ),
+        Tool(
             name="stats",
             description=(
                 "An overview of one account without reading any message: counts per main "
@@ -223,6 +242,12 @@ def dispatch(service: EmailService, name: str, args: dict[str, Any], *, member_i
             folder=args.get("folder"),
             max_bytes=args.get("max_bytes") or 16_000,
         )
+    if name == "scan_mailbox":
+        return service.scan_start(accounts, account=args.get("account"))
+    if name == "scan_status":
+        return service.scan_status(accounts)
+    if name == "scan_stop":
+        return service.scan_stop(accounts)
     if name == "stats":
         return service.stats(
             accounts,
