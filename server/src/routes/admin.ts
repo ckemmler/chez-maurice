@@ -11,7 +11,7 @@ import { listProposals, proposalCard, type ProposalState } from "../services/dom
 import { canUseMaurice } from "../services/maurices";
 import { getUser, getUserByUsername } from "../services/users";
 import { mailReadingStatus, startMailReading } from "../services/mailReading";
-import { eraseMailDocuments, mailDocumentsStatus, startMailDocuments } from "../services/mailDocuments";
+import { eraseMailDocuments, mailDocumentsStatus, previewPeople, startMailDocuments } from "../services/mailDocuments";
 import db from "../db";
 
 const admin = new Hono();
@@ -192,6 +192,10 @@ admin.post("/mail/documents/run", async (c) => {
 });
 
 admin.get("/mail/documents/:member_id", (c) => c.json(mailDocumentsStatus(c.req.param("member_id"))));
+
+// GET /api/admin/mail/documents/:member_id/people — who a run would write
+// about, and with which addresses, without writing or calling a model.
+admin.get("/mail/documents/:member_id/people", async (c) => c.json(await previewPeople(c.req.param("member_id"))));
 
 // POST /api/admin/mail/documents/reset { member_id | username } erases what
 // the documents pass wrote in the member's garden and forgets it in their

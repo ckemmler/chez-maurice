@@ -365,6 +365,25 @@ test("an alias of the member is not a correspondent, even one the app knows noth
   expect(writes[0]!.system).toContain("neither is Anna themselves on another address of theirs");
 });
 
+test("the member's own card in the address book: every address and name on it is the member's, never a person", async () => {
+  // Anna's own card holds her Gmail — a connected mailbox — and an alias that is not one.
+  addCard({ uid: "u-anna", full_name: "Anna Lindqvist", emails: ["anna@gmail.com", "anna@studio.example"] });
+  addCard({ uid: "u-anna-2", full_name: "Lindqvist Anna", emails: ["anna@studio.example"] });
+  // From the alias, under her full name, to Mélanie at the accountant's.
+  material.push(msg("m40", "Anna Lindqvist <anna@studio.example>", ["melanie@partfin.example"], "2026-07-16T10:00:00+02:00", "Rémunération", "<t40@x>", "Anna demande une augmentation."));
+  material.push(msg("m41", "Anna Lindqvist <anna@studio.example>", ["melanie@partfin.example"], "2026-09-10T10:00:00+02:00", "Winbooks", "<t41@x>", "Anna parle de Winbooks."));
+  answer = (req) => req.system.includes(PERSON) && req.prompt.includes("Winbooks")
+    ? JSON.stringify({ title: "Mélanie", relation: { text: "Ta comptable chez Partfin [1]." }, going_on: ["Winbooks [2]"], promised: [], open: [] })
+    : defaultAnswer(req);
+  const r = await docs.writeMailDocuments(ANNA);
+  expect(r.written.map((n) => n.slug)).toContain("melanie-fiche"); // the other party, not Anna
+  expect(fs.existsSync(path.join(peopleDir, "anna-lindqvist-fiche.md"))).toBe(false);
+  const melanie = fiche("melanie-fiche");
+  expect(melanie).toContain("- address: melanie@partfin.example");
+  expect(melanie).not.toContain("anna@studio.example");
+  expect(writes.some((w) => w.system.includes("This person is in Anna's address book") && w.prompt.includes("Winbooks"))).toBe(false);
+});
+
 test("a second pass that names a thread otherwise moves the digest and keeps what the member did to it", async () => {
   await docs.writeMailDocuments(ANNA);
   const file = path.join(notesDir, "jeudi.md");
@@ -446,6 +465,8 @@ test("the admin routes write and erase by hand; the tool words are the server's"
   expect((await res.json()).written.length).toBeGreaterThan(0);
   expect((await (await req(`/mail/documents/${ANNA}`)).json()).last.outcome).toBe("written");
   expect((await req("/mail/documents/run", { method: "POST", body: JSON.stringify({ username: "nobody" }) })).status).toBe(404);
+  const preview = await (await req(`/mail/documents/${ANNA}/people`)).json();
+  expect(preview.people.map((p: any) => [p.key, p.messages])).toEqual([["jean@x.org", 3], ["team@atlas.example", 2]]);
   const erased = await (await req("/mail/documents/reset", { method: "POST", body: JSON.stringify({ username: ANNA }) })).json();
   expect(erased.removed).toBeGreaterThan(0);
   expect(erased.error).toBeNull();

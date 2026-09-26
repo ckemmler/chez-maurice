@@ -351,8 +351,9 @@ export async function writePerson(ctx: PersonContext, p: Person): Promise<Person
   const r = await ctx.ask(personSystem(ctx.member, ctx.language, { known: !!p.card, relation: settledRelation }), materialBlock(material));
   const d = parseJsonObject(r.text);
   if (!d) return { kind: "empty", stop: r.stop };
-  if (d.is_person === false && !p.card) return { kind: "declined", sources: material.map((m) => m.id) };
-  if (d.is_person === false) return { kind: "empty", stop: "declined a person in the address book" };
+  // Not a person — or, for someone in the address book, the member
+  // themselves on another address: no fiche, and not asked again.
+  if (d.is_person === false) return { kind: "declined", sources: material.map((m) => m.id) };
 
   // Every line into the fragment of the address and mailbox it comes from.
   const primary = (m: MaterialMessage) => [...(m.mailboxes ?? [])].sort()[0] ?? "";

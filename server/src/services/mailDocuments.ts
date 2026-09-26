@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import { spawnSync } from "node:child_process";
 import path from "node:path";
 import { atomicWrite, autoCommit, dumpFrontmatter, gardenFor, isOpened, parseFiche, type GardenRef } from "../../data-api/services/gardenFiche";
 import { slugify } from "../../data-api/services/articleExtract";
@@ -13,7 +14,7 @@ import { listMailAccounts } from "./mailAccounts";
 import { mailConversationOf } from "./mailApproval";
 import { mailOpenerStrings } from "./mailOpener";
 import { mailToolCall } from "./mailScan";
-import { contactCards } from "./contactAccounts";
+import { contactCards, type ContactCard } from "./contactAccounts";
 import { eraseMailFiles, indexPeopleFiches, resolvePeople, writePerson } from "./mailPeople";
 import { getModel } from "./models";
 import { publishToRoom } from "./roomBus";
@@ -246,10 +247,15 @@ export interface Group {
 
 /** People: the other party of each message — the sender when it is not
  *  the member, else the first recipient who is not. Threads: the root. */
-export function groupMaterial(messages: MaterialMessage[], memberAddresses: Set<string>, memberName = "", opts: { everyAddress?: boolean } = {}): { people: Group[]; threads: Group[] } {
+export function groupMaterial(messages: MaterialMessage[], memberAddresses: Set<string>, memberName: string | string[] = "", opts: { everyAddress?: boolean } = {}): { people: Group[]; threads: Group[] } {
   const people = new Map<string, Group>();
   const threads = new Map<string, Group>();
-  const sameName = (name: string) => !!memberName && name.trim().toLowerCase() === memberName.trim().toLowerCase();
+  // The member's names — their display name, and those of their own cards
+  // in the address book ("Candide Kemmler", "Kemmler Candide") — compared
+  // as sets of words, so the order does not matter.
+  const words = (n: string) => n.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().split(/[^a-z0-9]+/).filter(Boolean).sort().join(" ");
+  const memberNames = new Set((Array.isArray(memberName) ? memberName : [memberName]).map(words).filter(Boolean));
+  const sameName = (name: string) => memberNames.has(words(name));
   // The member's other addresses, read off the mailbox itself: the store
   // knows only the accounts added in the app, but an address that sent under
   // the member's own display name is theirs. Without this pass, mail the
@@ -257,7 +263,7 @@ export function groupMaterial(messages: MaterialMessage[], memberAddresses: Set<
   // the alias a "correspondent" — one fiche on oneself, keyed on an address,
   // mixing everyone that address ever wrote to.
   const own = new Set(memberAddresses);
-  if (memberName) {
+  if (memberNames.size) {
     for (const m of messages) {
       const from = bare(m.from ?? m.from_address);
       if (from && sameName(displayName(m.from))) own.add(from);
@@ -514,6 +520,7 @@ export async function writeMailDocuments(memberId: string, d: MailDocumentsDeps 
   const accounts = listMailAccounts(memberId);
   const memberAddresses = new Set(accounts.map((a) => a.address.toLowerCase()));
   const labels = mailboxLabels(accounts);
+  const { cards, own, memberNames } = memberIdentity(memberId, memberAddresses, name);
 
   let mat: any;
   try {
@@ -527,9 +534,9 @@ export async function writeMailDocuments(memberId: string, d: MailDocumentsDeps 
   const byKey = new Map(artefacts.map((a) => [`${a.kind}:${a.key}`, a]));
   if (!messages.length) return run;
 
-  const { people: addressGroups, threads } = groupMaterial(messages, memberAddresses, name, { everyAddress: true });
+  const { people: addressGroups, threads } = groupMaterial(messages, memberAddresses, memberNames, { everyAddress: true });
   const fiches = indexPeopleFiches(garden);
-  const people = resolvePeople(addressGroups, contactCards(memberId), fiches.rejected);
+  const people = resolvePeople(addressGroups, cards.filter((_, i) => !own.has(i)), fiches.rejected);
   const files: string[] = [];
   const recorded: any[] = [];
   const deleted: any[] = [];
@@ -728,7 +735,59 @@ export function sayDocumentsWritten(memberId: string, run: DocumentsRun, garden:
   return msg.id;
 }
 
+/** The member's own cards in their address book — those holding one of
+ *  their mailboxes, and then any holding an address of those: every address
+ *  and name on them is the member's, so an alias of theirs that is not a
+ *  connected mailbox is never taken for somebody in the book. Adds those
+ *  addresses to `memberAddresses`. */
+function memberIdentity(memberId: string, memberAddresses: Set<string>, name: string): { cards: ContactCard[]; own: Set<number>; memberNames: string[] } {
+  const cards = contactCards(memberId);
+  const own = new Set<number>();
+  for (let grew = true; grew;) {
+    grew = false;
+    cards.forEach((c, i) => {
+      if (!own.has(i) && c.emails.some((e) => memberAddresses.has(e.toLowerCase()))) {
+        own.add(i);
+        c.emails.forEach((e) => memberAddresses.add(e.toLowerCase()));
+        grew = true;
+      }
+    });
+  }
+  return { cards, own, memberNames: [name, ...[...own].map((i) => cards[i]!.full_name ?? "").filter(Boolean)] };
+}
+
+/** Who the documents pass would write about, without writing or calling a
+ *  model: the people, their addresses and message counts — for the
+ *  operator, before a run. */
+export async function previewPeople(memberId: string, d: MailDocumentsDeps = deps): Promise<any> {
+  const accounts = listMailAccounts(memberId);
+  const memberAddresses = new Set(accounts.map((a) => a.address.toLowerCase()));
+  const name = getUser(memberId)?.display_name || "the member";
+  const { cards, own, memberNames } = memberIdentity(memberId, memberAddresses, name);
+  const mat = await d.call(memberId, "reading_material", {});
+  if (mat?.error || mat?.raw) return { error: String(mat.error ?? mat.raw) };
+  const messages: MaterialMessage[] = (mat.messages ?? []).map((m: any) => ({ ...m, to: m.to ?? [], cc: m.cc ?? [], reading: m.reading ?? {}, mailboxes: m.mailboxes ?? [] }));
+  const garden = gardenFor(memberId);
+  const { people: groups, threads } = groupMaterial(messages, memberAddresses, memberNames, { everyAddress: true });
+  const people = resolvePeople(groups, cards.filter((_, i) => !own.has(i)), garden ? indexPeopleFiches(garden).rejected : new Map());
+  return {
+    member_names: memberNames,
+    member_addresses: memberAddresses.size,
+    threads: threads.length,
+    people: people.map((p) => ({ key: p.key, name: p.name, card: !!p.card, messages: p.messages.length, identities: p.identities })),
+  };
+}
+
 // ── Erasing ──────────────────────────────────────────────────────────────
+
+/** The paths of a list that git tracks in the garden's repo — all of them
+ *  when the garden is not a repo (autoCommit then does nothing anyway). */
+function trackedPaths(garden: GardenRef, paths: string[]): string[] {
+  const r = spawnSync("git", ["ls-files", "-z", "--", ...paths], { cwd: garden.root });
+  if (r.status !== 0) return paths;
+  const known = new Set(String(r.stdout).split("\0").filter(Boolean).map((p) => path.resolve(garden.root, p)));
+  return paths.filter((p) => known.has(path.resolve(p)));
+}
 
 /** Remove everything the mail pass wrote in a member's garden — the notes,
  *  the fiches it created, the mail fragments on the member's own fiches —
@@ -741,7 +800,10 @@ export async function eraseMailDocuments(memberId: string, d: MailDocumentsDeps 
   const removed = eraseMailFiles(garden);
   if (removed.length) {
     try {
-      autoCommit(garden, removed, `Mail documents erased: ${removed.length} file(s)`);
+      // Only what git knew: a path it never tracked makes `git add` refuse
+      // the whole list.
+      const tracked = trackedPaths(garden, removed);
+      if (tracked.length) autoCommit(garden, tracked, `Mail documents erased: ${tracked.length} file(s)`);
     } catch (err) {
       console.warn(`[mail] erase for ${memberId}: commit failed: ${(err as Error).message}`);
     }
