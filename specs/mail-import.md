@@ -608,9 +608,10 @@ If the project stopped after lot 2 it would still have been worth doing.
 
 - **Where the contacts come from.** The triage takes a list of addresses and
   nobody passes one yet: the `contacts` tool is private (vCard, in
-  `maurice-tools`) and the public `email` tool cannot import it. A single,
-  reconciled list of a member's contacts is a design of its own (Candide,
-  26 September 2026); until then only "replied" and "sent" make a person.
+  `maurice-tools`) and the public `email` tool cannot import it. Designed in
+  `specs/contacts.md` (26 September 2026): a CardDAV account per member,
+  read every night before the triage; until then only "replied" and "sent"
+  make a person.
 - **The tokenizer is a proxy** (`tiktoken`, `o200k_base`), not Mistral's; the
   range absorbs the difference, and the calibration says so.
 - **A night's capacity is measured, not assumed, once a run of a hundred
@@ -635,8 +636,11 @@ If the project stopped after lot 2 it would still have been worth doing.
 - **The one-click source in the app** does not exist: the pointer is
   readable, the id is in the frontmatter, and `email__get_by_id` resolves it
   in a conversation.
-- **Who is who.** People are keyed on an address: the same person on two
-  addresses is two fiches until a contact list exists (above).
+- **Who is who, and which mailbox.** People are keyed on an address: the
+  same person on two addresses is two fiches, and nothing after the store
+  says which mailbox a line came from. Designed in `specs/contacts.md`: the
+  mailbox on every pointer, disconnect and forget, and the person's
+  `people` fiche as a hub whose fragments replace the mail fiche.
 
 ## Not in scope
 
