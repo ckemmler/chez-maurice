@@ -684,6 +684,7 @@
 "mail.reading.help" = "O Maurice lê as trocas reais dos últimos anos, de noite, e diz-te quem conta para ti e o que está em curso. Nada é enviado, nada muda na tua caixa.";
 "mail.reading.caption" = "A leitura é um sim que tu dás — aqui ou na conversa que o Maurice abriu. Podes retirá-lo a qualquer momento.";
 "contacts.title" = "Contactos";
+"contacts.value.none" = "Nenhum";
 "contacts.intro" = "O Maurice lê os teus livros de endereços todas as noites, sem nunca escrever neles. Quem está nos teus contactos conta como uma pessoa: o seu correio é lido mesmo quando chega por uma ferramenta de envios em massa, e mais tarde os seus endereços serão juntados numa só ficha.";
 "contacts.yours" = "Os teus livros de endereços";
 "contacts.add" = "Adicionar um livro de endereços";

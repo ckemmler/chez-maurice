@@ -347,7 +347,7 @@ struct SettingsView: View {
 
     private var contactsValue: String? {
         guard let contactAccounts else { return nil }
-        return contactAccounts.isEmpty ? session.localized("mail.value.none")
+        return contactAccounts.isEmpty ? session.localized("contacts.value.none")
             : session.localized("mail.value.count", contactAccounts.reduce(0) { $0 + $1.cards })
     }
 

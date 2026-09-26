@@ -684,6 +684,7 @@
 "mail.reading.help" = "Maurice legge gli scambi veri degli ultimi anni, di notte, e ti dice chi conta per te e cosa è in corso. Nulla viene inviato, nulla cambia nella tua casella.";
 "mail.reading.caption" = "La lettura è un sì che dai tu — qui o nella conversazione che Maurice ha aperto. Puoi ritirarlo in ogni momento.";
 "contacts.title" = "Contatti";
+"contacts.value.none" = "Nessuno";
 "contacts.intro" = "Maurice legge le tue rubriche ogni notte, senza mai scriverci. Chi è nei tuoi contatti conta come una persona: la sua posta viene letta anche quando passa da uno strumento di invio massivo, e più avanti i suoi indirizzi saranno riuniti in una sola scheda.";
 "contacts.yours" = "Le tue rubriche";
 "contacts.add" = "Aggiungi una rubrica";

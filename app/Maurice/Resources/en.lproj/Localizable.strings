@@ -684,6 +684,7 @@
 "mail.reading.help" = "Maurice reads the real exchanges of the last years, at night, and tells you who matters to you and what is going on. Nothing is sent, nothing is changed in your mailbox.";
 "mail.reading.caption" = "Reading is a yes you give — here or in the conversation Maurice opened. You can withdraw it at any time.";
 "contacts.title" = "Contacts";
+"contacts.value.none" = "None";
 "contacts.intro" = "Maurice reads your address books every night and never writes to them. Someone in your contacts counts as a person: their mail is read even when it comes through a mailing tool, and later their addresses will be joined on one fiche.";
 "contacts.yours" = "Your address books";
 "contacts.add" = "Add an address book";

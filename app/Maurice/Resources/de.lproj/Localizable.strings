@@ -684,6 +684,7 @@
 "mail.reading.help" = "Maurice liest nachts die echten Wechsel der letzten Jahre und sagt dir, wer für dich zählt und was gerade läuft. Nichts wird gesendet, nichts in deinem Postfach verändert.";
 "mail.reading.caption" = "Das Lesen ist ein Ja, das du gibst — hier oder in dem Gespräch, das Maurice eröffnet hat. Du kannst es jederzeit zurückziehen.";
 "contacts.title" = "Kontakte";
+"contacts.value.none" = "Keine";
 "contacts.intro" = "Maurice liest deine Adressbücher jede Nacht und schreibt nie hinein. Wer in deinen Kontakten ist, zählt als Person: Seine Post wird gelesen, auch wenn sie über ein Versandwerkzeug kommt, und später werden seine Adressen auf einem Blatt zusammengeführt.";
 "contacts.yours" = "Deine Adressbücher";
 "contacts.add" = "Adressbuch hinzufügen";

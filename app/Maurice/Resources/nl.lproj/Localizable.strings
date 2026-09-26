@@ -684,6 +684,7 @@
 "mail.reading.help" = "Maurice leest 's nachts de echte uitwisselingen van de laatste jaren en zegt je wie voor jou telt en wat er speelt. Er wordt niets verzonden, niets in je mailbox veranderd.";
 "mail.reading.caption" = "Het lezen is een ja dat jij geeft — hier of in het gesprek dat Maurice opende. Je kunt het altijd intrekken.";
 "contacts.title" = "Contacten";
+"contacts.value.none" = "Geen";
 "contacts.intro" = "Maurice leest je adresboeken elke nacht en schrijft er nooit in. Wie in je contacten staat, telt als persoon: diens post wordt gelezen, ook als die via een verzendtool komt, en later worden diens adressen op één kaart samengebracht.";
 "contacts.yours" = "Je adresboeken";
 "contacts.add" = "Adresboek toevoegen";
