@@ -658,3 +658,16 @@
 "mail.port" = "Port";
 "mail.login" = "Login, if not the address";
 "mail.privacy" = "The password is kept encrypted on your household's server and never shown again. Don't paste it into a conversation. Revoking it at your provider cuts Maurice off at once.";
+"mail.scan.title" = "The header walk";
+"mail.scan.caption" = "Maurice walks the headers of all your mail — who writes, to whom, when — without reading any message. It is free, runs by itself at night, and is what will let him tell you what your mailbox holds.";
+"mail.scan.loading" = "Reading the state…";
+"mail.scan.idle" = "Not started yet";
+"mail.scan.running" = "%d messages walked, going on";
+"mail.scan.running.hint" = "Carries on in the background, and tomorrow night if need be.";
+"mail.scan.paused" = "Paused at %d messages";
+"mail.scan.done" = "%d messages walked";
+"mail.scan.failed" = "Stopped at %d messages";
+"mail.scan.start" = "Start the walk";
+"mail.scan.resume" = "Resume";
+"mail.scan.refresh" = "Pick up new mail";
+"mail.scan.help" = "Walks the headers from the last point reached. Nothing is read, nothing is sent.";

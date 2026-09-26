@@ -658,3 +658,16 @@
 "mail.port" = "Puerto";
 "mail.login" = "Usuario, si no es la dirección";
 "mail.privacy" = "La contraseña se guarda cifrada en el servidor de tu hogar y no vuelve a mostrarse. No la pegues en una conversación. Revocarla en tu proveedor corta al instante el acceso de Maurice.";
+"mail.scan.title" = "El recorrido de las cabeceras";
+"mail.scan.caption" = "Maurice recorre las cabeceras de todo tu correo — quién escribe, a quién, cuándo — sin leer ningún mensaje. Es gratis, se hace solo por la noche y es lo que le permitirá decirte qué contiene tu buzón.";
+"mail.scan.loading" = "Leyendo el estado…";
+"mail.scan.idle" = "Aún no ha empezado";
+"mail.scan.running" = "%d mensajes recorridos, en curso";
+"mail.scan.running.hint" = "Sigue en segundo plano, y la próxima noche si hace falta.";
+"mail.scan.paused" = "En pausa en %d mensajes";
+"mail.scan.done" = "%d mensajes recorridos";
+"mail.scan.failed" = "Interrumpido en %d mensajes";
+"mail.scan.start" = "Iniciar el recorrido";
+"mail.scan.resume" = "Reanudar";
+"mail.scan.refresh" = "Recoger el correo nuevo";
+"mail.scan.help" = "Recorre las cabeceras desde el último punto alcanzado. No se lee ni se envía nada.";

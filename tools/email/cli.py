@@ -9,6 +9,11 @@ check it before Maurice uses it.
     .venv/bin/python -m tools.email.cli --member candide stats --since 2026-09-01
     .venv/bin/python -m tools.email.cli --member candide scan --account gmail
     .venv/bin/python -m tools.email.cli --member candide scan-status
+    .venv/bin/python -m tools.email.cli --member candide reconcile --account gmail
+    .venv/bin/python -m tools.email.cli --member candide triage
+    .venv/bin/python -m tools.email.cli --member candide report --years 3
+    .venv/bin/python -m tools.email.cli --member candide calibrate
+    .venv/bin/python -m tools.email.cli --member candide estimate
 
 Run from the repo root. ``--member`` is a username: the CLI acts for one member
 exactly as the gateway does, it is not a way to see everyone's mail.
@@ -76,6 +81,22 @@ def main(argv: list[str] | None = None) -> int:
 
     sub.add_parser("scan-status")
 
+    p = sub.add_parser("reconcile", help="drop the store's locations the mailbox no longer has, in the foreground")
+    p.add_argument("--account")
+
+    p = sub.add_parser("triage", help="bulk or correspondence, every message, from the headers")
+    p.add_argument("--contact", action="append", default=[], help="an address to count as a person (repeatable)")
+
+    p = sub.add_parser("report", help="who writes, what fills the box, alive threads, never answered")
+    p.add_argument("--years", type=int, default=3)
+
+    p = sub.add_parser("calibrate", help="sample bodies and measure bytes → tokens; nothing kept")
+    p.add_argument("--years", type=int, default=3)
+    p.add_argument("--sample", type=int, default=None)
+
+    p = sub.add_parser("estimate", help="the numbers behind the quote (no price)")
+    p.add_argument("--years", type=int, default=3)
+
     args = parser.parse_args(argv)
     service: EmailService | None = None
     try:
@@ -114,6 +135,16 @@ def main(argv: list[str] | None = None) -> int:
             out = service.scan_start(accounts, account=args.account, background=False, batch=args.batch)
         elif args.command == "scan-status":
             out = service.scan_status(accounts)
+        elif args.command == "reconcile":
+            out = service.reconcile_start(accounts, account=args.account, background=False)
+        elif args.command == "triage":
+            out = service.triage(accounts, contacts=args.contact)
+        elif args.command == "report":
+            out = service.report(accounts, years=args.years)
+        elif args.command == "calibrate":
+            out = service.calibrate(accounts, years=args.years, sample=args.sample)
+        elif args.command == "estimate":
+            out = service.estimate(accounts, years=args.years)
         else:
             out = service.stats(accounts, account=args.account, since=args.since, before=args.before, folder=args.folder)
     except (ConfigError, AccessDenied, AccountUnavailable, MailboxError) as exc:

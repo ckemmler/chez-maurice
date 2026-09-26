@@ -17,6 +17,10 @@ from typing import Any, Callable
 from . import accounts as accounts_mod
 from .accounts import Account, ConfigError, EmailConfig
 from .imap import AccountUnavailable, MailboxError, Session, build_criteria, default_client_factory, gmail_query
+from . import calibrate as calibrate_mod
+from . import sealing
+from . import triage as triage_mod
+from .reconcile import KIND as RECONCILE_KIND, Reconciler
 from .scan import KIND as SCAN_KIND, Scanner
 from .store import MailStore
 from .message import (
@@ -104,7 +108,8 @@ class EmailService:
         self.client_factory = client_factory
         self.app_accounts = app_accounts
         self._sessions: dict[tuple[str, str, str], Session] = {}
-        self._scans: dict[str, tuple[Scanner, threading.Thread | None]] = {}  # one walk per member
+        # One worker per member's store at a time: a walk or a reconciliation.
+        self._scans: dict[str, tuple[Scanner | Reconciler, threading.Thread | None]] = {}
         self._scans_lock = threading.Lock()
         self._stores: dict[str, MailStore] = {}
         self.store_for: Callable[[str], MailStore] = MailStore.for_member
@@ -177,9 +182,10 @@ class EmailService:
             store = self._stores[member_id] = self.store_for(member_id)
         return member_id, store
 
-    def _live_scan(self, member_id: str) -> tuple[Scanner, threading.Thread | None] | None:
-        """This process's walk for the member, if its thread is still going
-        (or it runs in the foreground)."""
+    def _live_scan(self, member_id: str) -> tuple[Scanner | Reconciler, threading.Thread | None] | None:
+        """This process's worker on the member's store — a walk or a
+        reconciliation — if its thread is still going (or it runs in the
+        foreground)."""
         entry = self._scans.get(member_id)
         if entry is None:
             return None
@@ -198,29 +204,49 @@ class EmailService:
         process left a fresh heartbeat for (the CLI beside the gateway)."""
         member_id, store = self._member_store(accounts)
         picked = self._pick(accounts, account)
+        make = lambda targets: Scanner(store, member_id, targets, **({"batch": batch} if batch else {}))  # noqa: E731
+        return self._run_worker(member_id, store, picked, make, SCAN_KIND, background=background)
+
+    def _run_worker(
+        self,
+        member_id: str,
+        store: MailStore,
+        picked: list[Account],
+        make: Callable[[list[tuple[Account, Session]]], "Scanner | Reconciler"],
+        kind: str,
+        *,
+        background: bool,
+    ) -> dict[str, Any]:
+        """Start a walk or a reconciliation on the member's store, or join
+        the one running. One worker per store: the two would fight over the
+        locations. A worker of the other kind is reported as such, and the
+        caller starts again when it is done."""
         with self._scans_lock:
             live = self._live_scan(member_id)
             if live is not None:
-                scanner, _thread = live
-                job = store.job(scanner.job_id) if scanner.job_id else None
-                return {"status": "stopping" if scanner.stopping.is_set() else "running", "job": job}
-            elsewhere = store.running_job(SCAN_KIND)
+                worker, _thread = live
+                job = store.job(worker.job_id) if worker.job_id else None
+                out = {"status": "stopping" if worker.stopping.is_set() else "running", "job": job}
+                if job and job["kind"] != kind:
+                    out["note"] = f"a {job['kind']} job is running on this store; start again when it is done"
+                return out
+            elsewhere = store.running_job()
             if elsewhere is not None:
                 return {"status": "running", "job": elsewhere,
-                        "note": "another process is walking this store; its checkpoint is recent"}
-            # Sessions of the scan's own: a search meanwhile keeps the shared
+                        "note": f"another process is running a {elsewhere['kind']} job on this store; its checkpoint is recent"}
+            # Sessions of the worker's own: a search meanwhile keeps the shared
             # one, and a password changed in the app closes only that one.
             targets = [(acc, Session(acc, self.client_factory)) for acc in picked]
-            scanner = Scanner(store, member_id, targets, **({"batch": batch} if batch else {}))
+            worker = make(targets)
             if not background:
-                self._scans[member_id] = (scanner, None)
+                self._scans[member_id] = (worker, None)
             else:
-                thread = threading.Thread(target=scanner.run, name=f"email-scan-{member_id[:8]}", daemon=True)
-                self._scans[member_id] = (scanner, thread)
+                thread = threading.Thread(target=worker.run, name=f"email-{kind}-{member_id[:8]}", daemon=True)
+                self._scans[member_id] = (worker, thread)
                 thread.start()
         if not background:
             try:
-                job = scanner.run()
+                job = worker.run()
             finally:
                 self._scans.pop(member_id, None)
             if job is None:
@@ -229,14 +255,23 @@ class EmailService:
         # The job row exists before we answer, so a status read right after
         # finds it.
         for _ in range(200):
-            if scanner.job_id or not thread.is_alive():
+            if worker.job_id or not thread.is_alive():
                 break
             time.sleep(0.01)
-        return {"status": "started", "job": store.job(scanner.job_id) if scanner.job_id else None}
+        return {"status": "started", "job": store.job(worker.job_id) if worker.job_id else None}
+
+    def reconcile_start(self, accounts: list[Account], account: str | None = None, *, background: bool = True) -> dict[str, Any]:
+        """Trim the member's store to what the mailbox still holds: relist
+        every walked folder's UIDs (no FETCH), drop the locations that are
+        gone, mark the messages left without one. Weekly, or on demand."""
+        member_id, store = self._member_store(accounts)
+        picked = self._pick(accounts, account)
+        return self._run_worker(member_id, store, picked, lambda t: Reconciler(store, member_id, t), RECONCILE_KIND, background=background)
 
     def scan_stop(self, accounts: list[Account]) -> dict[str, Any]:
-        """Pause at the next batch boundary. The cursor makes the next start
-        a continuation."""
+        """Pause the running worker — a walk at its next batch boundary (the
+        cursor makes the next start a continuation), a reconciliation at its
+        next folder."""
         member_id, store = self._member_store(accounts)
         live = self._live_scan(member_id)
         if live is None:
@@ -246,19 +281,56 @@ class EmailService:
         return {"status": "stopping", "job": store.job(scanner.job_id) if scanner.job_id else None}
 
     def scan_status(self, accounts: list[Account]) -> dict[str, Any]:
+        """The walk (``job``) and the last reconciliation (``reconcile``);
+        ``running`` says whether anything is going on the store at all."""
         member_id, store = self._member_store(accounts)
         live = self._live_scan(member_id)
         if live is None:
             # Nothing of ours is running: a 'running' row with a stale
             # heartbeat is a process that died, and is said to be paused.
-            store.orphan_running_jobs(SCAN_KIND)
+            store.orphan_running_jobs()
         job = store.latest_job(SCAN_KIND)
-        running = bool(job and job["state"] == "running")
-        return {"running": running, "job": job, **self._scan_summary(store)}
+        reconcile = store.latest_job(RECONCILE_KIND)
+        running = any(j and j["state"] == "running" for j in (job, reconcile))
+        return {"running": running, "job": job, "reconcile": reconcile, **self._scan_summary(store)}
 
     @staticmethod
     def _scan_summary(store: MailStore) -> dict[str, Any]:
         return {"totals": store.totals(), "cursors": store.cursors()}
+
+    # ── lot 2: the triage, the report, the calibration, the estimate ─────
+    def triage(self, accounts: list[Account], contacts: list[str] | None = None) -> dict[str, Any]:
+        """Bulk or correspondence, for every message in the store, from the
+        headers alone. The member is every address of their accounts."""
+        _member_id, store = self._member_store(accounts)
+        member = {a.address.lower() for a in accounts}
+        return triage_mod.triage_store(store, member, set(contacts or []))
+
+    def report(self, accounts: list[Account], years: int = 3) -> dict[str, Any]:
+        _member_id, store = self._member_store(accounts)
+        member = {a.address.lower() for a in accounts}
+        if not store.triage_counts()["counts"]:
+            self.triage(accounts)
+        return triage_mod.report(store, member=member, unseal=sealing.unseal, years=max(1, int(years or 3)))
+
+    def calibrate(self, accounts: list[Account], years: int = 3, sample: int | None = None) -> dict[str, Any]:
+        """A hundred bodies sampled and counted; nothing kept but the ratio."""
+        _member_id, store = self._member_store(accounts)
+        if not store.triage_counts()["counts"]:
+            self.triage(accounts)
+        sessions = {a.address.lower(): self._session(a) for a in accounts}
+        kwargs: dict[str, Any] = {"years": max(1, int(years or 3))}
+        if sample:
+            kwargs["sample"] = max(1, min(int(sample), 500))
+        return calibrate_mod.calibrate(store, sessions, **kwargs)
+
+    def estimate(self, accounts: list[Account], years: int = 3) -> dict[str, Any]:
+        """The numbers behind the quote: messages, correspondence, tokens
+        of the two readings, nights. No euro — the server prices."""
+        _member_id, store = self._member_store(accounts)
+        if not store.triage_counts()["counts"]:
+            self.triage(accounts)
+        return calibrate_mod.estimate(store, years=max(1, int(years or 3)))
 
     # ── tools ────────────────────────────────────────────────────────────
     def list_accounts(self, accounts: list[Account]) -> dict[str, Any]:

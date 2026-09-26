@@ -169,13 +169,72 @@ async def list_tools() -> list[Tool]:
         ),
         Tool(
             name="scan_status",
-            description="The current or last header scan: state, counts, where it is, and what the store holds.",
+            description=(
+                "The current or last header scan: state, counts, where it is, what the store holds — "
+                "and the last reconciliation. `running` is true while either is going."
+            ),
             inputSchema={"type": "object", "properties": {}},
         ),
         Tool(
             name="scan_stop",
-            description="Pause the running header scan at its next checkpoint. The next scan_mailbox continues from there.",
+            description="Pause the running header scan (or reconciliation) at its next checkpoint. The next start continues from there.",
             inputSchema={"type": "object", "properties": {}},
+        ),
+        Tool(
+            name="reconcile_mailbox",
+            description=(
+                "Trim your header store to what the mailbox still holds: relist every walked folder's UIDs "
+                "(no message fetched, seconds even for a large archive), drop the locations of messages that "
+                "were deleted or moved and of folders that are gone, mark messages no longer seen anywhere. "
+                "Runs in the background; scan_status reports it. Not while a scan is running."
+            ),
+            inputSchema={"type": "object", "properties": {"account": _ACCOUNT}},
+        ),
+        Tool(
+            name="triage_mailbox",
+            description=(
+                "Sort every message of your header store from its headers alone: bulk (List-Id, "
+                "List-Unsubscribe, Precedence: bulk), correspondence (a sender you have written to, one of "
+                "your contacts, or yourself), or other. Free, no model, recomputable. `contacts` is an "
+                "optional list of addresses to count as people."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {"contacts": {"type": "array", "items": {"type": "string"}, "description": "Addresses of your contacts, if you have them."}},
+            },
+        ),
+        Tool(
+            name="mailbox_report",
+            description=(
+                "The free report on your mailbox, from the header store and its triage: who writes to you, "
+                "what fills the box, which threads are alive, who never got an answer — over the last years "
+                "(default 3). Runs the triage first if it was never run. " + UNTRUSTED_NOTE
+            ),
+            inputSchema={"type": "object", "properties": {"years": {"type": "integer", "description": "The window, in years (default 3)."}}},
+        ),
+        Tool(
+            name="calibrate_reading",
+            description=(
+                "Measure how many tokens this mailbox's messages turn out to be: a hundred bodies of the "
+                "reading window are fetched (not stored, not marked read) and counted. Needed once before "
+                "estimate_reading. A few seconds."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "years": {"type": "integer", "description": "The reading window, in years (default 3)."},
+                    "sample": {"type": "integer", "description": "Bodies to sample (default 100)."},
+                },
+            },
+        ),
+        Tool(
+            name="estimate_reading",
+            description=(
+                "The numbers behind a reading of your correspondence: messages in the window, how many are "
+                "correspondence, the tokens of a light pass and of a full reading (from the calibration), "
+                "the nights it would take. No price: the server prices. Nothing is read or spent."
+            ),
+            inputSchema={"type": "object", "properties": {"years": {"type": "integer", "description": "The window, in years (default 3)."}}},
         ),
         Tool(
             name="stats",
@@ -248,6 +307,17 @@ def dispatch(service: EmailService, name: str, args: dict[str, Any], *, member_i
         return service.scan_status(accounts)
     if name == "scan_stop":
         return service.scan_stop(accounts)
+    if name == "reconcile_mailbox":
+        return service.reconcile_start(accounts, account=args.get("account"))
+    if name == "triage_mailbox":
+        contacts = args.get("contacts")
+        return service.triage(accounts, contacts=[str(c) for c in contacts] if isinstance(contacts, list) else None)
+    if name == "mailbox_report":
+        return service.report(accounts, years=args.get("years") or 3)
+    if name == "calibrate_reading":
+        return service.calibrate(accounts, years=args.get("years") or 3, sample=args.get("sample"))
+    if name == "estimate_reading":
+        return service.estimate(accounts, years=args.get("years") or 3)
     if name == "stats":
         return service.stats(
             accounts,

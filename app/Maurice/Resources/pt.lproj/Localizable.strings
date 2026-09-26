@@ -658,3 +658,16 @@
 "mail.port" = "Porta";
 "mail.login" = "Utilizador, se não for o endereço";
 "mail.privacy" = "A palavra-passe fica guardada cifrada no servidor da tua casa e nunca volta a ser mostrada. Não a coles numa conversa. Revogá-la no teu fornecedor corta de imediato o acesso do Maurice.";
+"mail.scan.title" = "O levantamento dos cabeçalhos";
+"mail.scan.caption" = "O Maurice levanta os cabeçalhos de todo o teu correio — quem escreve, a quem, quando — sem ler nenhuma mensagem. É grátis, faz-se sozinho de noite, e é o que lhe permitirá dizer-te o que a tua caixa contém.";
+"mail.scan.loading" = "A ler o estado…";
+"mail.scan.idle" = "Ainda não começou";
+"mail.scan.running" = "%d mensagens levantadas, em curso";
+"mail.scan.running.hint" = "Continua em segundo plano, e na próxima noite se for preciso.";
+"mail.scan.paused" = "Em pausa em %d mensagens";
+"mail.scan.done" = "%d mensagens levantadas";
+"mail.scan.failed" = "Interrompido em %d mensagens";
+"mail.scan.start" = "Iniciar o levantamento";
+"mail.scan.resume" = "Retomar";
+"mail.scan.refresh" = "Levantar o correio novo";
+"mail.scan.help" = "Levanta os cabeçalhos a partir do último ponto atingido. Nada é lido, nada é enviado.";

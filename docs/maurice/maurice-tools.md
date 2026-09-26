@@ -202,8 +202,8 @@ real-world limit found and fixed on the spot: `UID SEARCH UID 1:*` on the
 archive answers over a megabyte of UIDs, which imaplib refuses as a single
 line; the walk asks in windows of ten thousand UIDs up to the folder's
 UIDNEXT instead (and for the last UID alone on a server that omits UIDNEXT).
-Nothing here runs on its own yet — the 03:00 rendezvous is not wired, no model
-reads anything, no euro is spent; lots 2 to 5 of the spec are still design.
+No model reads anything and no euro is spent; what runs on its own, and what
+the store says about a mailbox, is the next section.
 
 Verified against the real Proton mailbox through Bridge on the day: roles read
 from the flags, 103 messages found since 20 September in `All Mail`, a
@@ -212,6 +212,92 @@ Outlook signature images (`image001.jpg`, referenced by Content-ID) no longer
 listed as attachments. iCloud could not be tried: the stored app-specific
 password is refused, which is also why the `mail` tool keeps that account
 disabled.
+
+### The walk wired, the triage, the reconciliation, the estimate — lot 2 (26 September 2026)
+
+Settled with the owner on the day and built the same afternoon: the free
+header pass runs **unasked** — it costs nothing, reads no body, writes only
+the member's own file, and asking first would leave Maurice's first message
+about a mailbox empty of facts. Three moments start it, all through the tool,
+as the member (`server/src/services/mailScan.ts`): **as soon as a mail account
+is created** (after the login check in `POST /api/mail-accounts`,
+fire-and-forget through the member's gateway session); **every night at
+03:00**, at the corpus's rendezvous and in its shape — start, then poll
+`scan_status` until `running` is false; the last run in
+`<app dir>/mail-nightly.json`, `MAURICE_MAIL_NIGHTLY=off` to disable, a run
+in flight shared, the log `[mail] nightly: N mailbox(es) walked, S member(s)
+without mail, F failed, M message(s) in the stores, R reconciled, O
+conversation(s) opened, in Ss`; and **on demand** — `scan_mailbox` in a
+conversation, or the card under *Settings → Mail* in the app (`MailPane`),
+which reads `GET /api/mail-accounts/scan` (the tool's status flattened:
+`state` ∈ `running`/`paused`/`done`/`failed`/`idle`/`none`, the counts, the
+store's totals), refreshes every five seconds while the walk runs, and
+restarts it with `POST …/scan` — "Start", "Resume" after a pause or a
+failure, "Pick up new mail" once done. While the walk runs, only that card
+speaks.
+
+Five tools join the roster, all free, none calling a model:
+
+- **`triage_mailbox`** — bulk or correspondence, every message, from the
+  headers alone (`tools/email/triage.py`), kept in a `triage` table with the
+  reason, recomputable. `List-Id`, `List-Unsubscribe`, `Precedence:
+  bulk|list|junk` and an address that says nobody reads it (`no-reply@`,
+  `notifications@`, `mailer-daemon@`) make **bulk**; a sender the member has
+  written to (in the To or Cc of a message whose From is the member), one of
+  their contacts, or the member themself make **correspondence** — the person
+  wins over the mark, a friend's mail through a group is still a friend's;
+  what has neither is **other**. `contacts` is a list of addresses the caller
+  passes, empty today (the gap below).
+- **`mailbox_report`** — the free report, a deliverable apart from the first
+  message: who writes (senders of correspondence and other, with whether they
+  were ever answered), what fills the box (bulk sources by messages and by
+  bytes), which threads are alive (three messages or more, one in the last
+  ninety days, grouped on the first `References` id; the subject unsealed for
+  those alone), who never got an answer (wrote twice or more, never in the
+  member's To/Cc). Over the last three years by default; runs the triage
+  first when nothing was.
+- **`reconcile_mailbox`** — the store trimmed to what the mailbox still holds
+  (`reconcile.py`): LIST, then for every folder the cursor knows, `UID
+  SEARCH` in windows of ten thousand up to UIDNEXT and **no FETCH at all** —
+  seconds even on 164 000 messages; the locations of UIDs gone are dropped, a
+  folder that left LIST loses its locations and its cursor (back under the
+  same name, it is walked afresh), a renumbered folder is reset for the next
+  walk, and a message left with no location is marked `gone_at` — its row,
+  its triage, the threads it is in stay true; seen again, the mark goes. A
+  job of kind `reconcile` with the same lease as the walk; never at the same
+  time as a walk on the same store (the walk adds what the listing would not
+  know and would remove); a stop mid-listing removes nothing. The night runs
+  it **once a week** per member.
+- **`calibrate_reading`** — bytes → tokens, measured (`calibrate.py`): a
+  hundred bodies of the reading window sampled among correspondence and
+  other, one location each, the first 16 kB of text fetched on the header
+  FETCH (`BODY.PEEK[TEXT]<0.16000>`, nothing marked read), turned into plain
+  text as `get_message` would, counted with `tiktoken` (`o200k_base`) — **a
+  proxy** for Mistral's tokenizer, within ten to twenty percent, said in the
+  output — and **nothing kept** but one row of ratios (`calibration`: sampled,
+  complete, bytes, tokens, tokens in the first 600 characters). `tiktoken`
+  joins `requirements-tools.txt`.
+- **`estimate_reading`** — the numbers behind the quote: messages in the
+  window by kind, how many a reading would open, the tokens of the light pass
+  (60 of headers plus the preview's, per message) and of a full reading (the
+  bytes on the wire times the ratio), and the nights from a stated capacity
+  of 1 500 messages a night — an assumption until lot 4 measures it. **No
+  price: the tool never prices**, the server does from `pricing.ts`.
+
+The same five from the CLI (`triage`, `report`, `reconcile`, `calibrate`,
+`estimate`). Measured on the owner's Gmail on the day, from the store alone:
+164 194 messages — **134 488 bulk, 19 825 correspondence, 9 881 other**
+(101 754 by `List-Id`, 32 550 by `List-Unsubscribe`, 13 940 answered
+senders, 5 885 the owner's own); the last three years hold 2 131, 466 of
+them to read (this Gmail is a legacy box: Facebook, Medium and Uber fill it);
+the calibration on a hundred bodies gave **18.9 tokens per kB** on the wire
+and 139 tokens in a preview, 44 of the hundred read whole — so a full reading
+is about 449 000 tokens, the light pass 93 000, one or two nights.
+
+**Then Maurice opens the conversation** ([[maurice-chat]] has the surface;
+`services/mailOpener.ts` the text): once per member, only when the walk is
+done, past the opening guard by decision, and made of numbers and nothing
+else — see [[maurice-chat]]. The "yes" and the spend are lot 3, not built.
 
 **Why a mail answer takes as long as it does** (25 September 2026). *Relis-moi
 le mail à Jean* took 58 s: 23 s in `search`, 10 s in `get_message`, 25 s across
@@ -469,8 +555,9 @@ when imapclient ships the fix.
 - **The gateway enforces none of this.** Families and the experimental flag live only in the Bun server. A client that authenticates straight to the MCP gateway — a member token, an OAuth custom connector — gets the *complete* mounted roster, whatever the member was granted in the app. Closing that is its own piece of work. (The native tools — `maurice_docs`, the three `domains__*` — are the exception by construction: they live in the server's loop and the gateway never sees them; `corpus__map_conversations`, though, is mounted like any corpus tool and reads whatever member the caller claims.)
 - **A hosted household's gateway answered anyone, until 25 September 2026.** The server proxies `/mcp` to the gateway verbatim, and `start-mcp-gateway.sh` turns auth on only when `MAURICE_MCP_TOKEN` (or an OAuth password) is set — which nothing set in the container. So `https://<household>/mcp` accepted MCP calls with no credentials at all, for whatever member id a caller put in `X-Maurice-Member-Id`: every member's garden and corpus were readable from the internet (found while wiring the mail tool, before any mailbox was added on the fleet). `infra/container/entrypoint.sh` now gives each household a key of its own (`~/.maurice/mcp.token` in the volume, generated once, exported before supervisord); verified the same day: anonymous `/mcp` is 401 on both hosted households, the server's own calls 200. Nothing records whether the hole was used before — the gateway logged requests but not their origin.
 - **`email` cannot reach Outlook.com.** Microsoft takes only OAuth over IMAP; not built. Nor does it index mail: search is IMAP's own (Gmail's is good, others' less so). The header store (above) is not a search index either: bodies are never kept, and a subject can only be read by unsealing it.
-- **The header scan is started by hand.** `scan_mailbox` runs when a member (or the CLI) asks; it is not on the nightly rendezvous, and whether the free header pass may run unasked — so that Maurice's first message about a mailbox carries real numbers — is an open question for the next beta, not a decision taken.
-- **The header store forgets nothing on its own.** A message expunged from the mailbox, or a folder renamed, keeps its old locations: only a changed UIDVALIDITY purges a folder's generation. Deciding when a location is stale (a folder no longer listed, a UID no longer present) is lot 2's business, with the triage.
+- **The triage knows no contacts.** `triage_mailbox` takes a list of addresses and nobody passes one: the `contacts` tool is private (vCard, `maurice-tools`) and the public `email` tool cannot import it. A single reconciled list of a member's contacts is a design of its own (26 September 2026); until then only "replied" and "sent" make a person, and a contact who never got a reply is "other".
+- **The calibration's tokenizer is a proxy** (`tiktoken`), not Mistral's; **a night's reading capacity is assumed** (1 500 messages) until lot 4 exists. The range is wide enough for the first; nothing yet checks the second.
+- **The "yes" is not built.** The conversation asks; a reply is an ordinary turn and nothing reads a body or spends a cent (lot 3: `job_id` on `spend_ledger`, the ceiling, then the reading). The Settings card shows the walk, not the reconciliation or the triage.
 - **`web` and `signals` can't be turned off.** They're re-unioned into every resolution, so unticking them in the picker does nothing.
 - **Family selection is coarser than it looks.** `toolInFamilies` still accepts the parent prefix for back-compat, so a conversation holding `"garden"` opens all 54 garden tools at once, sub-families included.
 - **No per-tool sandboxing.** A tool runs with the gateway's process privileges; the only access control is the member contextvar and tool-family gating, not OS-level isolation.

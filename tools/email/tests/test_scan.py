@@ -84,7 +84,7 @@ def test_a_mailbox_is_walked_in_batches_into_the_store(tmp_path):
     svc = make_service(tmp_path, {"alex@icloud.com": client})
     out = scan(svc)
     assert out["status"] == "done"
-    assert out["totals"] == {"messages": 1240, "locations": 1240}
+    assert out["totals"] == {"messages": 1240, "locations": 1240, "gone": 0}
     assert stored_uids("INBOX") == list(range(1, 1201))
     assert stored_uids("Archive") == list(range(5000, 5040))
     assert stored_uids("Deleted Messages") == []  # trash is not "everywhere"
@@ -246,7 +246,7 @@ def test_a_moved_message_is_one_message_with_two_locations(tmp_path):
     moved = client.folders["INBOX"].pop(4)
     client.folders["Projets"][1] = moved
     out = scan(svc)
-    assert out["totals"] == {"messages": 10, "locations": 11}
+    assert out["totals"] == {"messages": 10, "locations": 11, "gone": 0}
     (row,) = [m for m in store().messages() if m["message_id"] == "<sujet-4@example.org>"]
     assert [(l["folder"], l["uid"]) for l in store().locations(row["id"])] == [("INBOX", 4), ("Projets", 1)]
 
@@ -258,7 +258,7 @@ def test_a_renamed_folder_is_the_same_messages_with_new_locations(tmp_path):
     client.folders["Dossiers"] = client.folders.pop("Projets")
     client.uidvalidity["Dossiers"] = 9
     out = scan(svc)
-    assert out["totals"] == {"messages": 23, "locations": 43}
+    assert out["totals"] == {"messages": 23, "locations": 43, "gone": 0}
     assert len(stored_uids("Dossiers")) == 20 and len(stored_uids("Projets")) == 20  # the old name is a memory
 
 
@@ -284,7 +284,7 @@ def test_gmail_identity_is_the_msgid_not_the_uid(tmp_path):
     client.folders[GMAIL_ALL][8] = raw
     client.gm_msgids[(GMAIL_ALL, 8)] = 1_718_000_000_000_000_001
     out = svc.scan_start(alex, account="gmail", background=False)
-    assert out["totals"] == {"messages": 1, "locations": 2}
+    assert out["totals"] == {"messages": 1, "locations": 2, "gone": 0}
     assert [c[1] for c in client.calls if c[0] == "examine"].count(GMAIL_ALL) >= 2
     examined = {c[1] for c in client.calls if c[0] == "examine"}
     assert examined == {GMAIL_ALL}  # \All holds everything: the inbox is not walked twice

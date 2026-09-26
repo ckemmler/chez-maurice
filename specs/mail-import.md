@@ -1,11 +1,14 @@
-# Making a large mailbox useful — design, lot 1 built
+# Making a large mailbox useful — design, lots 1 and 2 built
 
 A member arrives with years of mail. What should Maurice do with it?
 
 Designed 25–26 September 2026 around Aline's mailbox, and settled in
-conversation with Candide. Lot 1 (the job, the cursor, the header store) was
-built on 26 September; everything from lot 2 on is design. Numbers are
-measured where they say so and estimated where they say that instead.
+conversation with Candide. Lot 1 (the job, the cursor, the header store), its
+wiring to the night and to the account's creation, and lot 2 (the triage, the
+report, the reconciliation, the calibration, the conversation with the
+numbers) were built on 26 September; everything from lot 3 on is design.
+Numbers are measured where they say so and estimated where they say that
+instead.
 
 ---
 
@@ -404,16 +407,69 @@ parsed headers with the subject sealed. Batched `UID FETCH` of headers,
 resumable. No model, no cost. Done when a mailbox can be walked end to end,
 interrupted at any point, and resumed without loss or duplication — tested
 with an exception mid-write and a connection lost mid-FETCH, and by killing
-the process outright against the real Gmail. Not wired to the 03:00
-rendezvous: whether the free header pass may run unasked, so that Maurice's
-first message to a member carries real numbers, or needs a first "yes", is
-still to be asked.
+the process outright against the real Gmail.
 
-**Lot 2 — the triage and the free report.** Bulk vs correspondence from headers
-alone, and the deliverable that needs no approval: who writes, what fills the
-box, which threads are alive, who was never answered. This is also what
-produces the quote — counts, size distribution, and a bytes→tokens calibration
-over ~100 sampled bodies.
+**The wiring.** *Built, 26 September 2026* (`server/src/services/mailScan.ts`,
+the routes in `routes/mailAccounts.ts`, the card in the app's Settings → Mail).
+Settled with Candide the same day: the free header pass runs **unasked** — it
+costs nothing, reads no body, writes only the member's own file. It starts as
+soon as a mail account is created (after the login check in
+`POST /api/mail-accounts`, fire-and-forget through the member's gateway
+session), goes on at the 03:00 rendezvous (the corpus's shape: start, then
+poll `scan_status` until `running` is false; `mail-nightly.json`,
+`MAURICE_MAIL_NIGHTLY=off`), and on demand (`scan_mailbox`, or the button
+under *Settings → Mail*, which reads `GET /api/mail-accounts/scan` and
+restarts with `POST …/scan`). While it runs, only that card speaks.
+
+**Lot 2 — the triage and the free report.** *Built, 26 September 2026*
+(`tools/email/triage.py`, `reconcile.py`, `calibrate.py`; MCP tools
+`triage_mailbox`, `mailbox_report`, `reconcile_mailbox`, `calibrate_reading`,
+`estimate_reading`; CLI `triage`, `report`, `reconcile`, `calibrate`,
+`estimate`). Bulk vs correspondence from headers alone, kept in a `triage`
+table with the reason and recomputable: `List-Id`, `List-Unsubscribe`,
+`Precedence: bulk|list|junk` and a no-reply address make **bulk**; a sender
+the member has written to (in the To/Cc of a message whose From is the
+member), one of their contacts, or the member themself make
+**correspondence**, and the person wins over the mark; what has neither is
+**other**. The contacts are a list the caller passes, empty for now (below).
+The report — who writes, what fills the box (by messages and by bytes),
+which threads are alive (three messages, one in the last ninety days, the
+subject unsealed for those alone), who never got an answer — is
+`mailbox_report`, a deliverable apart from the first message. The
+**reconciliation** relists every walked folder's UIDs (`UID SEARCH` in
+windows, no FETCH — seconds on 164 000 messages), drops the locations of UIDs
+gone and of folders that left LIST, resets a renumbered folder for the next
+walk, and marks a message left without a location `gone_at` (its row stays;
+seen again, the mark goes); it is a job of kind `reconcile`, never at the
+same time as a walk on the same store, and a stop mid-listing removes
+nothing. The **calibration** samples a hundred bodies of the reading window
+(`BODY.PEEK[TEXT]<0.16000>` on the header FETCH, nothing kept, nothing marked
+read), counts them with `tiktoken` — *a proxy* for Mistral's tokenizer,
+within ten to twenty percent, said in the output — and keeps one row of
+ratios; **the estimate** turns the counts and the ratio into two token
+figures (the light pass on the first 600 characters, a full reading of every
+body) and a number of nights from a stated capacity (1 500 messages a night,
+an assumption until lot 4 measures it). The tool never prices: the server
+does, from `pricing.ts`. On the owner's Gmail on the day: 164 194 messages —
+134 488 bulk, 19 825 correspondence, 9 881 other; 2 131 in the last three
+years, 466 of them to read; 18.9 tokens per kB on the wire, 139 tokens in a
+preview.
+
+**The conversation Maurice opens** (settled 26 September 2026;
+`services/mailOpener.ts`). Opened **late** — only when the walk is done —
+and made of **numbers, nothing else**: messages in all and correspondence,
+the same over the last three years, the cost as a **range** (low: the light
+pass alone on mistral-small; high: the light pass plus every body read whole
+by the household's everyday model; zero on Ollama, and "I have no price"
+when the sheet does not know the model — never a silent zero), the nights in
+words ("three or four nights", never "tomorrow morning"), and the question
+"shall I read? yes or no". No top senders, no unanswered threads. Rendered by
+the server in the member's language, no model. Once per member, and **past
+the opening guard** (`force`): a mailbox walked is worth the exception, and
+the numbers wait for nobody's fifteen days. The night runs the chain after a
+walk that is done: reconcile (weekly, per member), triage, calibrate,
+estimate, open — recorded in `mail-nightly.json`. The "yes" itself and the
+spend are lot 3.
 
 **Lot 3 — the quote and the approval.** `job_id` on `spend_ledger` first (see
 *Metering*), then the range, the hard ceiling, and the member's yes.
@@ -429,6 +485,15 @@ If the project stopped after lot 2 it would still have been worth doing.
 
 ## Still open
 
+- **Where the contacts come from.** The triage takes a list of addresses and
+  nobody passes one yet: the `contacts` tool is private (vCard, in
+  `maurice-tools`) and the public `email` tool cannot import it. A single,
+  reconciled list of a member's contacts is a design of its own (Candide,
+  26 September 2026); until then only "replied" and "sent" make a person.
+- **The tokenizer is a proxy** (`tiktoken`, `o200k_base`), not Mistral's; the
+  range absorbs the difference, and the calibration says so.
+- **A night's capacity is assumed** (1 500 messages) until the reading
+  passes of lot 4 exist to measure it.
 - **What happens on a second run.** A fiche or digest already deleted must not
   be silently rewritten the next night. Keying the refusal on the *source* — no
   more artefacts from message X, or from person Y after three refusals — is

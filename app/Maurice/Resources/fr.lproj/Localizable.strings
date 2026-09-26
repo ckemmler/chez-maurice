@@ -658,3 +658,16 @@
 "mail.port" = "Port";
 "mail.login" = "Identifiant, si ce n'est pas l'adresse";
 "mail.privacy" = "Le mot de passe est gardé chiffré sur le serveur de votre foyer et n'est plus jamais affiché. Ne le collez pas dans une conversation. Le révoquer chez votre fournisseur coupe l'accès de Maurice aussitôt.";
+"mail.scan.title" = "Le relevé des en-têtes";
+"mail.scan.caption" = "Maurice relève les en-têtes de tout votre courrier — qui écrit, à qui, quand — sans lire aucun message. C'est gratuit, ça se fait tout seul la nuit, et c'est ce qui lui permettra de vous dire ce que contient votre boîte.";
+"mail.scan.loading" = "Lecture de l'état…";
+"mail.scan.idle" = "Pas encore commencé";
+"mail.scan.running" = "%d messages relevés, en cours";
+"mail.scan.running.hint" = "Se poursuit en arrière-plan, et la nuit prochaine s'il le faut.";
+"mail.scan.paused" = "En pause à %d messages";
+"mail.scan.done" = "%d messages relevés";
+"mail.scan.failed" = "Interrompu à %d messages";
+"mail.scan.start" = "Lancer le relevé";
+"mail.scan.resume" = "Reprendre";
+"mail.scan.refresh" = "Relever le nouveau courrier";
+"mail.scan.help" = "Relève les en-têtes depuis le dernier point atteint. Rien n'est lu, rien n'est envoyé.";

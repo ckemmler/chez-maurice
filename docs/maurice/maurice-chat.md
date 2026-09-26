@@ -1,6 +1,6 @@
 ---
 title: The chat experience
-date: '2026-09-25'
+date: '2026-09-26'
 flags: []
 locale: en
 description: Streaming render, tool-result data cards, math, markdown, images, dictation,
@@ -50,6 +50,8 @@ In a conversation you have alone with him, Maurice reads the briefs of your [[ma
 ## A conversation Maurice opens
 
 Since 19 September 2026 a conversation can begin with Maurice. The server creates it for one member with a first message in his voice (`conversations.opened_by = 'maurice'`, `server/src/services/openedConversations.ts`), gives it a title (the one asked for, else the first line of the message), and leaves it unread: the member's global socket receives a `conversation_opened` event, and a member with no socket live gets an APNs push ("Maurice: …"), the way a room notifies its members. In the sidebar the row carries one quiet caption under its title, "Opened by Maurice" — the first author tells it apart, not a colour — and the unread dot until it is opened; the list rows carry `unread` so a cold start shows the dot too, and the foyer badge counts it. Opening it marks it read; replying is an ordinary turn, charged to the member. [[maurice-carnet|Carnet]] lists and reads these conversations too (since 19 September 2026, on its Domains shelf) and registers for the push under its own platform, `carnet-ios`; it cannot answer, and the push reaches it only once the server sends under Carnet's own APNs topic.
+
+**The mailbox in numbers** (26 September 2026, the second night that opens one; `services/mailScan.ts`, the text in `services/mailOpener.ts`): once a member's mail header walk is done ([[maurice-tools]]), and once per member, Maurice opens a conversation titled *Your mailbox, in numbers* — four short paragraphs, every one a number or the question, rendered by the server in the member's language with no model: how many messages and how many of them correspondence, the same over the last three years, what reading those would cost as a **range** (the light pass alone at the low end; the light pass plus every body read whole by the household's everyday model at the high end; "costs nothing on this household" on Ollama, "I have no price for the model" when the sheet does not know it — never a silent zero), the nights in words ("three or four nights", never "tomorrow morning"), and *Shall I read them? Yes or no.* No sender, no subject, no thread: that is the report, asked for by name. Settled the same day: it walks **past the opening guard** (`force`) — a walked mailbox is worth the exception — and it is opened once, recorded in `<app dir>/mail-nightly.json`. The yes itself does nothing yet (lot 3 of `specs/mail-import.md`): a reply is an ordinary turn.
 
 What the model sees: the history would start with an assistant turn, which the Messages API refuses, so one constant user lead (`[Maurice opened this conversation on his own. His first message follows.]`) is placed before it, after the context window is cut, for every provider.
 

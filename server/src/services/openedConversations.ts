@@ -88,7 +88,9 @@ export interface OpenRequest {
   /** A domain (a row of `maurices`) to bind the conversation to, or null for
    *  the everyday Maurice. */
   mauriceId?: string | null;
-  /** Skip the guard — the admin's hand, never the night's. */
+  /** Skip the guard — the admin's hand, and one night's: the mailbox
+   *  numbers (services/mailScan.ts), opened once per member when the header
+   *  walk is done, settled 26 September 2026. */
   force?: boolean;
 }
 

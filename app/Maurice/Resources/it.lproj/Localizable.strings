@@ -658,3 +658,16 @@
 "mail.port" = "Porta";
 "mail.login" = "Nome utente, se non è l'indirizzo";
 "mail.privacy" = "La password è conservata cifrata sul server della tua casa e non viene più mostrata. Non incollarla in una conversazione. Revocarla presso il provider taglia subito l'accesso a Maurice.";
+"mail.scan.title" = "La raccolta delle intestazioni";
+"mail.scan.caption" = "Maurice raccoglie le intestazioni di tutta la tua posta — chi scrive, a chi, quando — senza leggere alcun messaggio. È gratis, avviene da sola di notte, ed è ciò che gli permetterà di dirti cosa contiene la tua casella.";
+"mail.scan.loading" = "Lettura dello stato…";
+"mail.scan.idle" = "Non ancora iniziata";
+"mail.scan.running" = "%d messaggi raccolti, in corso";
+"mail.scan.running.hint" = "Continua in secondo piano, e la prossima notte se serve.";
+"mail.scan.paused" = "In pausa a %d messaggi";
+"mail.scan.done" = "%d messaggi raccolti";
+"mail.scan.failed" = "Interrotta a %d messaggi";
+"mail.scan.start" = "Avviare la raccolta";
+"mail.scan.resume" = "Riprendere";
+"mail.scan.refresh" = "Raccogliere la posta nuova";
+"mail.scan.help" = "Raccoglie le intestazioni dall'ultimo punto raggiunto. Nulla viene letto, nulla inviato.";

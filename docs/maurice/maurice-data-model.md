@@ -126,6 +126,19 @@ indexed and the **subject sealed** under the same household key and envelope
 as `mail_accounts.secret`, and `locations` (account, folder, uidvalidity, uid
 → message). No body is ever stored. About 1 kB per message.
 
+Lot 2 (the same day) adds three things, all written by the tool: a `triage`
+table (`message`, `kind` ∈ `bulk`/`correspondence`/`other`, `reason`,
+`computed_at` — recomputable, the verdict of the headers alone), a one-row
+`calibration` table (`sampled`, `complete`, `bytes`, `tokens`,
+`preview_tokens`, `tokenizer`, `computed_at` — the bytes → tokens ratio
+measured on a hundred bodies, nothing of the bodies), and `messages.gone_at`
+(a guarded `ALTER`), set by the weekly reconciliation on a message left with
+no location and cleared when the walk meets it again. `jobs.kind` is now
+`headers` or `reconcile`, one running per store at a time. The server keeps
+nothing of this in `maurice.db`: the night's own memory — last run, last
+reconciliation and the conversation opened per member — is
+`<app dir>/mail-nightly.json`.
+
 ## The data-api's databases
 
 Under `~/.maurice/data/` (`MAURICE_DATA_DIR`):

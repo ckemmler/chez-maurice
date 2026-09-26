@@ -10,6 +10,7 @@ import {
   restoreSecret,
   type MailAccount,
 } from "../services/mailAccounts";
+import { mailScanStatus, startMailScan, startMailScanInBackground } from "../services/mailScan";
 
 // The signed-in member's own mail accounts (services/mailAccounts.ts). Every
 // route acts on the caller's accounts only; another member's account is not
@@ -20,6 +21,10 @@ import {
 // server gave is returned — "Authentication Failed" is what a wrong or revoked
 // app password looks like, and the member should see it now, not in a
 // conversation next week.
+//
+// Once the login worked, the header walk starts on its own (services/
+// mailScan.ts): free, no body read, the member's own file only. Settings →
+// Mail reads where it is at GET /scan and restarts it at POST /scan.
 
 const accounts = new Hono();
 
@@ -65,8 +70,17 @@ accounts.post("/", async (c) => {
     deleteMailAccount(uid, created.id);
     return c.json({ error: checked.last_error ?? "the mailbox refused the login", detail: checked.last_error }, 422);
   }
+  startMailScanInBackground(uid);
   return c.json(view(checked), 201);
 });
+
+/** Where the header walk is: its state, the counts of the current or last
+ *  job, what the store holds — `state: "none"` for a member without mail. */
+accounts.get("/scan", async (c) => c.json(await mailScanStatus(c.get("userId"))));
+
+/** Start the walk again — after a pause, or to pick up new mail now rather
+ *  than tonight. A walk already going is joined, not doubled. */
+accounts.post("/scan", async (c) => c.json(await startMailScan(c.get("userId"))));
 
 /** A new password — after the old app password was revoked. Checked the same
  *  way; a password that does not work leaves the previous one in place. */

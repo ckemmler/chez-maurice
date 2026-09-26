@@ -658,3 +658,16 @@
 "mail.port" = "Port";
 "mail.login" = "Login, falls nicht die Adresse";
 "mail.privacy" = "Das Passwort wird verschlüsselt auf dem Server deines Haushalts gespeichert und nie wieder angezeigt. Füge es nicht in ein Gespräch ein. Widerrufst du es bei deinem Anbieter, ist Maurice sofort abgeschnitten.";
+"mail.scan.title" = "Die Kopfzeilen-Erfassung";
+"mail.scan.caption" = "Maurice erfasst die Kopfzeilen deiner gesamten Post — wer schreibt, an wen, wann — ohne eine Nachricht zu lesen. Das ist kostenlos, läuft nachts von selbst und erlaubt ihm später zu sagen, was dein Postfach enthält.";
+"mail.scan.loading" = "Stand wird gelesen…";
+"mail.scan.idle" = "Noch nicht begonnen";
+"mail.scan.running" = "%d Nachrichten erfasst, läuft";
+"mail.scan.running.hint" = "Läuft im Hintergrund weiter, notfalls in der nächsten Nacht.";
+"mail.scan.paused" = "Pausiert bei %d Nachrichten";
+"mail.scan.done" = "%d Nachrichten erfasst";
+"mail.scan.failed" = "Abgebrochen bei %d Nachrichten";
+"mail.scan.start" = "Erfassung starten";
+"mail.scan.resume" = "Fortsetzen";
+"mail.scan.refresh" = "Neue Post erfassen";
+"mail.scan.help" = "Erfasst die Kopfzeilen ab dem zuletzt erreichten Punkt. Nichts wird gelesen, nichts gesendet.";

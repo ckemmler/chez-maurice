@@ -896,6 +896,18 @@ struct MailAccountRow: Decodable, Identifiable, Equatable {
     let last_error: String?
 }
 struct MailAccountsResponse: Decodable { let accounts: [MailAccountRow] }
+/// Where the header walk is (`/api/mail-accounts/scan`): the job's state
+/// (running, paused, done, failed, idle, none), what the store holds, and
+/// the tool's own words when something went wrong.
+struct MailScanStatus: Decodable, Equatable {
+    let state: String
+    let running: Bool
+    let messages: Int
+    let seen: Int
+    let last_error: String?
+    let error: String?
+}
+private struct EmptyBody: Encodable {}
 private struct NewMailAccount: Encodable {
     let address: String
     let password: String
@@ -980,6 +992,9 @@ private struct MailPane: View {
     @State private var renewing: String?
     @State private var newPassword = ""
     @State private var removing: MailAccountRow?
+    /// Where the header walk is (GET /api/mail-accounts/scan); nil until read.
+    @State private var scan: MailScanStatus?
+    @State private var scanBusy = false
 
     private var api: APIClient? { session.serverURL.map { APIClient(baseURL: $0) } }
 
@@ -1001,6 +1016,10 @@ private struct MailPane: View {
                 SetGroup(session.localized("mail.yours")) {
                     ForEach(accounts) { account in accountCard(account) }
                 }
+                SetGroup(session.localized("mail.scan.title")) {
+                    scanCard
+                }
+                SetCaption(session.localized("mail.scan.caption"))
             }
 
             SetGroup(session.localized("mail.add")) {
@@ -1010,6 +1029,14 @@ private struct MailPane: View {
             SetCaption(session.localized("mail.privacy"))
         }
         .task { await load() }
+        // While the walk runs, the count moves: read it again every few seconds.
+        .task(id: scan?.running == true) {
+            guard scan?.running == true else { return }
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(5))
+                await loadScan()
+            }
+        }
         .confirmationDialog(session.localized("mail.remove"), isPresented: Binding(
             get: { removing != nil }, set: { if !$0 { removing = nil } }
         ), titleVisibility: .visible, presenting: removing) { account in
@@ -1078,6 +1105,94 @@ private struct MailPane: View {
                 .font(.system(size: 11.5)).foregroundStyle(.orange)
         default:
             Text(session.localized("mail.state.unchecked")).font(.system(size: 11.5)).foregroundStyle(theme.inkMute)
+        }
+    }
+
+    // MARK: The header walk (specs/mail-import.md, wired 26 September 2026)
+    //
+    // Free, no body read: every message's from, to, date and list headers,
+    // the subject sealed, into the member's own file on the household's
+    // server. It starts by itself when a mailbox is added, goes on each
+    // night, and this card says where it is — and starts it again when
+    // nothing is running, after a pause or to pick up today's mail now.
+
+    private var scanCard: some View {
+        SetCard {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(spacing: 11) {
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .fill(accent.opacity(0.14)).frame(width: 26, height: 26)
+                        .overlay(Image(systemName: scan?.running == true ? "tray.full" : "tray")
+                            .font(.system(size: 13)).foregroundStyle(accent.legible(onDark: theme.isDark)))
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(scanLine).font(.system(size: 13.5)).foregroundStyle(theme.ink)
+                        if let scan, scan.running {
+                            Label(session.localized("mail.scan.running.hint"), systemImage: "arrow.triangle.2.circlepath")
+                                .font(.system(size: 11.5)).foregroundStyle(theme.inkMute)
+                        } else if let reason = scan?.last_error ?? scan?.error {
+                            Text(reason).font(.system(size: 11, design: .monospaced)).foregroundStyle(theme.inkMute)
+                                .lineLimit(3).textSelection(.enabled)
+                        }
+                    }
+                    Spacer(minLength: 0)
+                }
+                HStack(spacing: 8) {
+                    if scan?.running == true {
+                        ProgressView().controlSize(.small)
+                    } else {
+                        Button {
+                            Task { await startScan() }
+                        } label: {
+                            HStack(spacing: 8) {
+                                Image(systemName: "play.fill").font(.system(size: 11, weight: .medium))
+                                Text(session.localized(scanButtonKey)).font(.system(size: 13, weight: .medium))
+                            }
+                            .padding(.horizontal, 14).padding(.vertical, 8)
+                        }
+                        .glassProminentButton()
+                        .tint(session.activeDeviceUser?.color ?? .blue)
+                        .disabled(scanBusy || scan == nil)
+                        .help(session.localized("mail.scan.help"))
+                    }
+                    Spacer(minLength: 0)
+                }
+            }
+            .padding(13)
+        }
+    }
+
+    private var scanLine: String {
+        guard let scan else { return session.localized("mail.scan.loading") }
+        switch scan.state {
+        case "running": return session.localized("mail.scan.running", scan.messages)
+        case "paused": return session.localized("mail.scan.paused", scan.messages)
+        case "done": return session.localized("mail.scan.done", scan.messages)
+        case "failed": return session.localized("mail.scan.failed", scan.messages)
+        default: return session.localized("mail.scan.idle")
+        }
+    }
+
+    private var scanButtonKey: String {
+        switch scan?.state {
+        case "paused", "failed": return "mail.scan.resume"
+        case "done": return "mail.scan.refresh"
+        default: return "mail.scan.start"
+        }
+    }
+
+    private func loadScan() async {
+        guard let api, let token = session.tokenForActiveUser else { return }
+        if let s: MailScanStatus = try? await api.get("/api/mail-accounts/scan", token: token) {
+            scan = s
+        }
+    }
+
+    private func startScan() async {
+        guard let api, let token = session.tokenForActiveUser else { return }
+        scanBusy = true
+        defer { scanBusy = false }
+        if let s: MailScanStatus = try? await api.post("/api/mail-accounts/scan", body: EmptyBody(), token: token) {
+            scan = s
         }
     }
 
@@ -1174,6 +1289,7 @@ private struct MailPane: View {
         if let r: MailAccountsResponse = try? await api.get("/api/mail-accounts", token: token) {
             accounts = r.accounts
         }
+        await loadScan()
     }
 
     /// The server's own words for a refusal, under a headline in the member's
@@ -1209,6 +1325,8 @@ private struct MailPane: View {
             accounts = (accounts ?? []) + [row]
             added = session.localized("mail.added")
             address = ""; password = ""; host = ""; port = ""; login = ""; workspace = false
+            // The server started the header walk on its own: show it moving.
+            await loadScan()
         } catch {
             password = ""
             show(error)

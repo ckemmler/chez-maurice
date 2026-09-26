@@ -30,6 +30,8 @@ def build_raw(
         msg["Message-ID"] = message_id or f"<{abs(hash((subject, date)))}@example.org>"
     msg["Date"] = date
     for name, value in (headers or {}).items():
+        if name in msg:  # a test's own To, say, over the default one
+            del msg[name]
         msg[name] = value
     if html:
         msg.set_content("plain fallback")

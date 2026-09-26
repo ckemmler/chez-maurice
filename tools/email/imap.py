@@ -552,6 +552,25 @@ class Session:
             raise MailboxError(f"no message with uid {uid} in {folder!r} (UIDs are per folder)")
         return data.get(FULL_KEY) or b""
 
+    def header_and_text_many(self, folder: str, uids: Sequence[int], text_bytes: int) -> dict[int, tuple[bytes, bool]]:
+        """Headers plus the first slice of the text, for several messages in
+        one FETCH: ``{uid: (raw, partial)}``, ``partial`` when the slice
+        came back full and the text may go on. For the calibration, which
+        counts and keeps nothing."""
+        if not uids:
+            return {}
+        self.examine(folder)
+        text_fetch = f"BODY.PEEK[TEXT]<0.{max(int(text_bytes), 1)}>"
+        try:
+            fetched = self.client().fetch(list(uids), [HEADER_FETCH, text_fetch])
+        except Exception as exc:
+            raise MailboxError(f"fetch of {len(uids)} uid(s) failed in {folder!r}: {exc}") from exc
+        out: dict[int, tuple[bytes, bool]] = {}
+        for uid, data in fetched.items():
+            text = _text_slice(data)
+            out[int(uid)] = ((data.get(HEADER_KEY) or b"") + b"\r\n" + text, len(text) >= int(text_bytes))
+        return out
+
     def header_and_text(self, folder: str, uid: int, text_bytes: int) -> bytes:
         """Headers plus the first slice of the text, for a message too large to
         fetch whole: a 40 MB video never crosses the wire to yield 4 kB."""

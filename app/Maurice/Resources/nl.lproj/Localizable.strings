@@ -658,3 +658,16 @@
 "mail.port" = "Poort";
 "mail.login" = "Gebruikersnaam, als het niet het adres is";
 "mail.privacy" = "Het wachtwoord wordt versleuteld bewaard op de server van je huishouden en nooit meer getoond. Plak het niet in een gesprek. Trek je het in bij je provider, dan is Maurice meteen afgesneden.";
+"mail.scan.title" = "Het doorlopen van de koppen";
+"mail.scan.caption" = "Maurice loopt de koppen van al je post door — wie schrijft, aan wie, wanneer — zonder één bericht te lezen. Het is gratis, gebeurt 's nachts vanzelf, en het is wat hem straks laat zeggen wat je mailbox bevat.";
+"mail.scan.loading" = "Stand wordt gelezen…";
+"mail.scan.idle" = "Nog niet begonnen";
+"mail.scan.running" = "%d berichten doorlopen, bezig";
+"mail.scan.running.hint" = "Gaat op de achtergrond door, en de volgende nacht als het moet.";
+"mail.scan.paused" = "Gepauzeerd bij %d berichten";
+"mail.scan.done" = "%d berichten doorlopen";
+"mail.scan.failed" = "Gestopt bij %d berichten";
+"mail.scan.start" = "Doorlopen starten";
+"mail.scan.resume" = "Hervatten";
+"mail.scan.refresh" = "Nieuwe post ophalen";
+"mail.scan.help" = "Loopt de koppen door vanaf het laatst bereikte punt. Er wordt niets gelezen, niets verzonden.";

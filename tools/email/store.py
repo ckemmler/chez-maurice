@@ -23,6 +23,12 @@ Shape of the thing:
 * ``jobs`` is the import as an object — state, counts, bytes, seconds, the
   last error — so a restart, a sleeping machine or the member saying stop all
   leave something to read.
+* ``triage`` (lot 2) is the verdict on each message from its headers alone —
+  bulk, correspondence, or neither — with the reason, recomputable at will.
+* ``calibration`` (lot 2) is the one row that says how many tokens a
+  kilobyte of this member's mail turns out to be, measured on a sample.
+* ``messages.gone_at`` (lot 2) marks a message that no longer has a location
+  after a reconciliation: the row is kept, the message is "no longer seen".
 
 Every batch writes its rows, its locations and its cursor in ONE transaction,
 and every write is idempotent (``INSERT … ON CONFLICT DO UPDATE``, which is
@@ -37,6 +43,7 @@ shared across threads.
 from __future__ import annotations
 
 import json
+import random
 import re
 import sqlite3
 import uuid
@@ -104,7 +111,29 @@ CREATE TABLE IF NOT EXISTS locations (
   PRIMARY KEY (address, folder, uidvalidity, uid)
 );
 CREATE INDEX IF NOT EXISTS locations_message ON locations (message);
+CREATE TABLE IF NOT EXISTS triage (
+  message     TEXT PRIMARY KEY REFERENCES messages (id) ON DELETE CASCADE,
+  kind        TEXT NOT NULL,           -- bulk | correspondence | other
+  reason      TEXT NOT NULL,           -- what decided it (triage.py)
+  computed_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS triage_kind ON triage (kind);
+CREATE TABLE IF NOT EXISTS calibration (
+  id              INTEGER PRIMARY KEY CHECK (id = 1),
+  sampled         INTEGER NOT NULL,
+  complete        INTEGER NOT NULL,    -- bodies read whole, the ratio's basis
+  bytes           INTEGER NOT NULL,    -- RFC822.SIZE of those, added up
+  tokens          INTEGER NOT NULL,
+  preview_tokens  REAL NOT NULL,       -- tokens in the first PREVIEW_CHARS, on average
+  tokenizer       TEXT NOT NULL,
+  computed_at     TEXT NOT NULL
+);
 """
+
+# Columns added after the first schema shipped: (table, column, type).
+MIGRATIONS = (
+    ("messages", "gone_at", "TEXT"),
+)
 
 JOB_STATES = ("running", "paused", "done", "failed")
 # A running job whose checkpoint is older than this is taken for dead. A batch
@@ -143,6 +172,10 @@ class MailStore:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         with self._connect() as conn:
             conn.executescript(SCHEMA)
+            for table, column, kind in MIGRATIONS:
+                present = {r["name"] for r in conn.execute(f"PRAGMA table_info({table})").fetchall()}
+                if column not in present:
+                    conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {kind}")
 
     @classmethod
     def for_member(cls, member_id: str) -> "MailStore":
@@ -240,7 +273,7 @@ class MailStore:
                          date = excluded.date, subject_sealed = excluded.subject_sealed,
                          list_id = excluded.list_id, list_unsubscribe = excluded.list_unsubscribe,
                          precedence = excluded.precedence, refs = excluded.refs, size = excluded.size,
-                         updated_at = excluded.updated_at""",
+                         updated_at = excluded.updated_at, gone_at = NULL""",
                     {**row, "at": at},
                 )
                 conn.execute(
@@ -312,27 +345,34 @@ class MailStore:
                 ).fetchone()
             )
 
-    def running_job(self, kind: str, *, fresh_within: float = STALE_AFTER) -> dict[str, Any] | None:
+    def running_job(self, kind: str | None = None, *, fresh_within: float = STALE_AFTER) -> dict[str, Any] | None:
         """A 'running' job whose last checkpoint is recent — alive, as far as
         this file can tell, possibly in another process (the CLI beside the
         gateway). ``updated_at`` moves at every batch, so it is the
-        heartbeat."""
+        heartbeat. Without a kind: any job at all, since a walk and a
+        reconciliation must not share the file."""
         with self._connect() as conn:
-            row = conn.execute(
-                "SELECT * FROM jobs WHERE kind = ? AND state = 'running' ORDER BY updated_at DESC LIMIT 1", (kind,)
-            ).fetchone()
+            if kind is None:
+                row = conn.execute("SELECT * FROM jobs WHERE state = 'running' ORDER BY updated_at DESC LIMIT 1").fetchone()
+            else:
+                row = conn.execute(
+                    "SELECT * FROM jobs WHERE kind = ? AND state = 'running' ORDER BY updated_at DESC LIMIT 1", (kind,)
+                ).fetchone()
         job = self._job_row(row)
         if job is None or _age_seconds(job["updated_at"]) > fresh_within:
             return None
         return job
 
-    def orphan_running_jobs(self, kind: str, *, older_than: float = STALE_AFTER) -> int:
+    def orphan_running_jobs(self, kind: str | None = None, *, older_than: float = STALE_AFTER) -> int:
         """A process that died mid-scan left its job 'running' forever. Once
         its heartbeat is stale, whoever looks next marks it 'paused': the
         cursor is the truth, the job row only says what happened. A fresh
         one is left alone — it may well be another process, still walking."""
         with self._connect() as conn:
-            rows = conn.execute("SELECT id, updated_at FROM jobs WHERE kind = ? AND state = 'running'", (kind,)).fetchall()
+            if kind is None:
+                rows = conn.execute("SELECT id, updated_at FROM jobs WHERE state = 'running'").fetchall()
+            else:
+                rows = conn.execute("SELECT id, updated_at FROM jobs WHERE kind = ? AND state = 'running'", (kind,)).fetchall()
         stale = [r["id"] for r in rows if _age_seconds(r["updated_at"]) > older_than]
         if not stale:
             return 0
@@ -343,16 +383,158 @@ class MailStore:
             )
         return len(stale)
 
+    # ── reconciliation (lot 2) ───────────────────────────────────────────
+    def known_folders(self, address: str) -> list[tuple[str, int]]:
+        """The folders ever walked for this account, with the UIDVALIDITY the
+        cursor remembers: what a reconciliation has to check."""
+        with self._connect() as conn:
+            rows = conn.execute(
+                "SELECT folder, uidvalidity FROM cursors WHERE address = ? ORDER BY folder", (address,)
+            ).fetchall()
+        return [(r["folder"], int(r["uidvalidity"])) for r in rows]
+
+    def reconcile_folder(self, address: str, folder: str, uidvalidity: int, live_uids: set[int]) -> int:
+        """Drop every location of this folder that the server no longer
+        lists: a UID gone (expunged, moved away) or a generation other than
+        the current one. Returns how many went. The messages keep their rows."""
+        with self._connect() as conn:
+            stored = [int(r["uid"]) for r in conn.execute(
+                "SELECT uid FROM locations WHERE address = ? AND folder = ? AND uidvalidity = ?",
+                (address, folder, uidvalidity),
+            ).fetchall()]
+        gone = [uid for uid in stored if uid not in live_uids]
+        removed = 0
+        with self._transaction() as conn:
+            removed += conn.execute(
+                "DELETE FROM locations WHERE address = ? AND folder = ? AND uidvalidity != ?",
+                (address, folder, uidvalidity),
+            ).rowcount
+            for i in range(0, len(gone), 500):
+                chunk = gone[i : i + 500]
+                removed += conn.execute(
+                    f"DELETE FROM locations WHERE address = ? AND folder = ? AND uidvalidity = ? AND uid IN ({','.join('?' * len(chunk))})",
+                    (address, folder, uidvalidity, *chunk),
+                ).rowcount
+        return int(removed)
+
+    def drop_folder(self, address: str, folder: str) -> int:
+        """The folder left LIST: its locations and its cursor go. Should it
+        come back under the same name, it is walked afresh."""
+        with self._transaction() as conn:
+            removed = conn.execute("DELETE FROM locations WHERE address = ? AND folder = ?", (address, folder)).rowcount
+            conn.execute("DELETE FROM cursors WHERE address = ? AND folder = ?", (address, folder))
+        return int(removed)
+
+    def mark_unlocated(self) -> dict[str, int]:
+        """After a reconciliation: a message without any location is marked
+        gone (its row stays — the triage, the threads, the history it is part
+        of are still true); one seen again is unmarked. Returns both counts."""
+        at = now_iso()
+        with self._transaction() as conn:
+            gone = conn.execute(
+                "UPDATE messages SET gone_at = ? WHERE gone_at IS NULL AND id NOT IN (SELECT message FROM locations)", (at,)
+            ).rowcount
+            back = conn.execute(
+                "UPDATE messages SET gone_at = NULL WHERE gone_at IS NOT NULL AND id IN (SELECT message FROM locations)"
+            ).rowcount
+        return {"gone": int(gone), "reappeared": int(back)}
+
     # ── reading ──────────────────────────────────────────────────────────
     def totals(self) -> dict[str, int]:
         with self._connect() as conn:
             messages = conn.execute("SELECT COUNT(*) FROM messages").fetchone()[0]
             locations = conn.execute("SELECT COUNT(*) FROM locations").fetchone()[0]
-        return {"messages": int(messages), "locations": int(locations)}
+            gone = conn.execute("SELECT COUNT(*) FROM messages WHERE gone_at IS NOT NULL").fetchone()[0]
+        return {"messages": int(messages), "locations": int(locations), "gone": int(gone)}
 
     def messages(self) -> list[dict[str, Any]]:
         with self._connect() as conn:
             return [dict(r) for r in conn.execute("SELECT * FROM messages ORDER BY date, id").fetchall()]
+
+    def headers(self) -> Iterator[dict[str, Any]]:
+        """Every row's structural fields, streamed — what the triage and the
+        report read. The sealed subject rides along, unopened."""
+        with self._connect() as conn:
+            for r in conn.execute(
+                """SELECT id, message_id, sender, sender_address, recipients, cc, date, subject_sealed,
+                          list_id, list_unsubscribe, precedence, refs, size, gone_at FROM messages"""
+            ):
+                yield dict(r)
+
+    # ── triage (lot 2) ───────────────────────────────────────────────────
+    def write_triage(self, verdicts: list[tuple[str, str, str, str]]) -> None:
+        """``(message, kind, reason, computed_at)`` for every message, in one
+        transaction; a message not in the list keeps its old verdict."""
+        with self._transaction() as conn:
+            conn.executemany(
+                """INSERT INTO triage (message, kind, reason, computed_at) VALUES (?, ?, ?, ?)
+                   ON CONFLICT (message) DO UPDATE SET kind = excluded.kind, reason = excluded.reason,
+                     computed_at = excluded.computed_at""",
+                verdicts,
+            )
+
+    def triage_kinds(self) -> dict[str, str]:
+        with self._connect() as conn:
+            return {r["message"]: r["kind"] for r in conn.execute("SELECT message, kind FROM triage")}
+
+    def triage_counts(self) -> dict[str, Any]:
+        with self._connect() as conn:
+            rows = conn.execute("SELECT kind, COUNT(*) AS n, MAX(computed_at) AS at FROM triage GROUP BY kind").fetchall()
+        return {"counts": {r["kind"]: int(r["n"]) for r in rows}, "computed_at": max((r["at"] for r in rows), default=None)}
+
+    def window_counts(self, since: str) -> dict[str, int]:
+        """Messages dated from ``since`` on, still seen, by kind — and the
+        bytes of those a reading would open (correspondence and other)."""
+        with self._connect() as conn:
+            rows = conn.execute(
+                """SELECT COALESCE(t.kind, 'untriaged') AS kind, COUNT(*) AS n, COALESCE(SUM(m.size), 0) AS bytes
+                   FROM messages m LEFT JOIN triage t ON t.message = m.id
+                   WHERE m.date >= ? AND m.date < '3000' AND m.gone_at IS NULL GROUP BY 1""",
+                (since,),
+            ).fetchall()
+        out = {"messages": 0, "bulk": 0, "correspondence": 0, "other": 0, "untriaged": 0, "bytes_to_read": 0}
+        for r in rows:
+            out[r["kind"]] = int(r["n"])
+            out["messages"] += int(r["n"])
+            if r["kind"] in ("correspondence", "other"):
+                out["bytes_to_read"] += int(r["bytes"])
+        return out
+
+    # ── calibration (lot 2) ──────────────────────────────────────────────
+    def sample_locations(self, kinds: tuple[str, ...], since: str, n: int, *, rng: random.Random | None = None) -> list[dict[str, Any]]:
+        """Up to ``n`` messages of those kinds dated from ``since``, still
+        seen, one location each, drawn at random."""
+        with self._connect() as conn:
+            rows = conn.execute(
+                f"""SELECT m.id, m.size, l.address, l.folder, l.uid
+                    FROM messages m JOIN triage t ON t.message = m.id JOIN locations l ON l.message = m.id
+                    WHERE t.kind IN ({','.join('?' * len(kinds))}) AND m.date >= ? AND m.gone_at IS NULL
+                    GROUP BY m.id""",
+                (*kinds, since),
+            ).fetchall()
+        picked = [dict(r) for r in rows]
+        (rng or random).shuffle(picked)
+        return picked[:n]
+
+    def set_calibration(self, row: dict[str, Any]) -> None:
+        with self._transaction() as conn:
+            conn.execute(
+                """INSERT INTO calibration (id, sampled, complete, bytes, tokens, preview_tokens, tokenizer, computed_at)
+                   VALUES (1, :sampled, :complete, :bytes, :tokens, :preview_tokens, :tokenizer, :computed_at)
+                   ON CONFLICT (id) DO UPDATE SET sampled = excluded.sampled, complete = excluded.complete,
+                     bytes = excluded.bytes, tokens = excluded.tokens, preview_tokens = excluded.preview_tokens,
+                     tokenizer = excluded.tokenizer, computed_at = excluded.computed_at""",
+                row,
+            )
+
+    def calibration(self) -> dict[str, Any] | None:
+        with self._connect() as conn:
+            row = conn.execute("SELECT * FROM calibration WHERE id = 1").fetchone()
+        if row is None:
+            return None
+        out = dict(row)
+        out.pop("id", None)
+        return out
 
     def locations(self, message_id: str | None = None) -> list[dict[str, Any]]:
         with self._connect() as conn:

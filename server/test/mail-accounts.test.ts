@@ -12,6 +12,7 @@ const svc = await import("../src/services/mailAccounts");
 const routes = (await import("../src/routes/mailAccounts")).default;
 const local = (await import("../src/routes/mailAccountsLocal")).default;
 const { createSession } = await import("../src/services/auth");
+const { setMailScanDeps } = await import("../src/services/mailScan");
 
 const ANNA = "ma-anna";
 const BEN = "ma-ben";
@@ -30,6 +31,8 @@ beforeAll(() => {
   annaAuth = `Bearer ${createSession(ANNA).token}`;
   benAuth = `Bearer ${createSession(BEN).token}`;
   process.env.MAURICE_MCP_TOKEN = "gateway-key";
+  // The header walk that follows a successful login goes nowhere here.
+  setMailScanDeps({ call: async () => ({ status: "started" }) });
   // The checker reads the password the tool would read, through the same
   // function the loopback route uses — so the round trip is the real one,
   // minus IMAP.
@@ -42,7 +45,10 @@ beforeAll(() => {
   });
 });
 
-afterAll(() => svc.setChecker(null));
+afterAll(() => {
+  svc.setChecker(null);
+  setMailScanDeps(null);
+});
 
 beforeEach(() => {
   db.run(`DELETE FROM mail_accounts`);

@@ -52,6 +52,7 @@ import { maybeRegenerateAdherence } from "./src/services/gardenTools";
 import { localiseRemoteImages } from "./src/services/gardenImages";
 import { scheduleDocsRefresh } from "./src/services/mauriceDocsRefresh";
 import { scheduleCorpusNightly } from "./src/services/corpusNightly";
+import { scheduleMailNightly } from "./src/services/mailScan";
 import { scheduleDomainBriefsNightly } from "./src/services/domainBriefs";
 import { scheduleDomainMappingNightly } from "./src/services/domainMapping";
 import domains from "./src/routes/domains";
@@ -214,6 +215,10 @@ scheduleDocsRefresh();
 // entries once a night, the safety net under the per-turn push (see
 // services/corpusNightly.ts).
 scheduleCorpusNightly();
+// The mail header walk: at the same hour, finish an interrupted pass and
+// pick up the new mail of every member with a mailbox (see
+// services/mailScan.ts).
+scheduleMailNightly();
 // The domain briefs: an hour after the corpus, rewrite each member's briefs
 // from what touched their domains since (see services/domainBriefs.ts).
 scheduleDomainBriefsNightly();
