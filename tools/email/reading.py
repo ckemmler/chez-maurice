@@ -285,9 +285,12 @@ def _unseal_json(sealed: str | None) -> dict[str, Any] | None:
 
 def material(store: MailStore, *, limit: int = 5000) -> dict[str, Any]:
     """What the documents pass writes from (lot 5): every message read
-    whole, unsealed for the server — headers, the reading, and the thread it
+    whole, unsealed for the server — headers, the reading, the thread it
     belongs to (the first References entry, else its own Message-ID, as the
-    report groups threads)."""
+    report groups threads), and the mailboxes it was seen in: the account
+    addresses, lowercased and sorted — one message can sit in two (a
+    forward, a copy to oneself), and every line written from it says so
+    (specs/contacts.md, lot 1)."""
     from .triage import _thread_root  # the report's grouping, one place
 
     rows = []
@@ -307,6 +310,7 @@ def material(store: MailStore, *, limit: int = 5000) -> dict[str, Any]:
             "thread": _thread_root({"refs": r["refs"], "message_id": r["message_id"]}),
             "reading": reading,
             "read_at": r["read_at"],
+            "mailboxes": sorted({a.strip().lower() for a in (r["mailboxes"] or "").split(",") if a.strip()}),
         })
     return {"messages": rows, "artefacts": store.artefacts()}
 

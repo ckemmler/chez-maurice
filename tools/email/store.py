@@ -657,12 +657,15 @@ class MailStore:
             return [dict(r) for r in conn.execute(q).fetchall()]
 
     def readings_material(self, limit: int = 5000) -> list[dict[str, Any]]:
-        """Every message read whole, with the headers a document needs and
-        the reading still sealed (the service unseals), oldest first."""
+        """Every message read whole, with the headers a document needs, the
+        mailboxes it was seen in (the account addresses of its locations,
+        comma-joined) and the reading still sealed (the service unseals),
+        oldest first."""
         with self._connect() as conn:
             rows = conn.execute(
                 """SELECT m.id, m.message_id, m.sender, m.sender_address, m.recipients, m.cc, m.date,
-                          m.subject_sealed, m.refs, r.reading_sealed, r.read_at
+                          m.subject_sealed, m.refs, r.reading_sealed, r.read_at,
+                          (SELECT group_concat(DISTINCT l.address) FROM locations l WHERE l.message = m.id) AS mailboxes
                    FROM readings r JOIN messages m ON m.id = r.message
                    WHERE r.reading_sealed IS NOT NULL AND m.gone_at IS NULL
                    ORDER BY m.date, m.id LIMIT ?""",

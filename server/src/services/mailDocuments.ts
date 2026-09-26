@@ -70,6 +70,9 @@ export interface MaterialMessage {
   subject: string | null;
   thread: string | null;
   reading: Record<string, any>;
+  /** The member's mailboxes it was seen in — account addresses, lowercased
+   *  (specs/contacts.md, lot 1). Empty from a store older than that. */
+  mailboxes?: string[];
 }
 
 export interface Artefact {
@@ -133,6 +136,7 @@ interface Words {
   timeline: string;
   decided: string;
   provenance: string;
+  mailboxes: string;
   disclaimer: string;
   written: (date: string, n: number, model: string) => string;
   unreviewed: string;
@@ -142,57 +146,57 @@ const WORDS: Record<string, Words> = {
   en: {
     hub: "My mail", hubIntro: "What Maurice understood of your mailbox: a fiche per person who matters, a digest per thread. Drafts, private, to keep, correct or throw away.",
     correspondents: "People", threads: "Threads", relationship: "The relationship", goingOn: "What is going on", promised: "What was promised", open: "Left open",
-    about: "What it is about", timeline: "Timeline", decided: "Decided", provenance: "Where it comes from",
+    about: "What it is about", timeline: "Timeline", decided: "Decided", provenance: "Where it comes from", mailboxes: "Mailboxes",
     disclaimer: "Part of this note was written by a machine reading your mail. Every line points to the message it comes from.",
-    written: (d, n, m) => `Written by Maurice on ${d} from ${n} message(s) of your mailbox, with ${m}.`,
+    written: (d, n, m) => `Written by Maurice on ${d} from ${n} message(s) of your mail, with ${m}.`,
     unreviewed: "Not reviewed yet: keep it, correct it, or throw it away.",
   },
   fr: {
     hub: "Mon courrier", hubIntro: "Ce que Maurice a compris de ta boîte : une fiche par personne qui compte, un digest par fil. Des brouillons, privés, à garder, corriger ou jeter.",
     correspondents: "Personnes", threads: "Fils", relationship: "La relation", goingOn: "Ce qui est en cours", promised: "Ce qui a été promis", open: "Resté ouvert",
-    about: "De quoi il s'agit", timeline: "Chronologie", decided: "Décidé", provenance: "D'où ça vient",
+    about: "De quoi il s'agit", timeline: "Chronologie", decided: "Décidé", provenance: "D'où ça vient", mailboxes: "Boîtes",
     disclaimer: "Une partie de cette note a été écrite par une machine lisant ton courrier. Chaque ligne renvoie au message dont elle vient.",
-    written: (d, n, m) => `Écrit par Maurice le ${d} à partir de ${n} message(s) de ta boîte, avec ${m}.`,
+    written: (d, n, m) => `Écrit par Maurice le ${d} à partir de ${n} message(s) de ton courrier, avec ${m}.`,
     unreviewed: "Pas encore relue : à garder, corriger ou jeter.",
   },
   it: {
     hub: "La mia posta", hubIntro: "Quello che Maurice ha capito della tua casella: una scheda per persona che conta, un riassunto per filo. Bozze, private, da tenere, correggere o buttare.",
     correspondents: "Persone", threads: "Fili", relationship: "La relazione", goingOn: "Cosa è in corso", promised: "Cosa è stato promesso", open: "Rimasto aperto",
-    about: "Di cosa si tratta", timeline: "Cronologia", decided: "Deciso", provenance: "Da dove viene",
+    about: "Di cosa si tratta", timeline: "Cronologia", decided: "Deciso", provenance: "Da dove viene", mailboxes: "Caselle",
     disclaimer: "Parte di questa nota è stata scritta da una macchina che legge la tua posta. Ogni riga rimanda al messaggio da cui viene.",
-    written: (d, n, m) => `Scritto da Maurice il ${d} da ${n} messaggio/i della tua casella, con ${m}.`,
+    written: (d, n, m) => `Scritto da Maurice il ${d} da ${n} messaggio/i della tua posta, con ${m}.`,
     unreviewed: "Non ancora riletta: da tenere, correggere o buttare.",
   },
   de: {
     hub: "Meine Post", hubIntro: "Was Maurice aus deinem Postfach verstanden hat: ein Blatt je Person, die zählt, eine Zusammenfassung je Faden. Entwürfe, privat, zum Behalten, Berichtigen oder Verwerfen.",
     correspondents: "Personen", threads: "Fäden", relationship: "Die Beziehung", goingOn: "Was gerade läuft", promised: "Was versprochen wurde", open: "Offen geblieben",
-    about: "Worum es geht", timeline: "Zeitleiste", decided: "Entschieden", provenance: "Woher es kommt",
+    about: "Worum es geht", timeline: "Zeitleiste", decided: "Entschieden", provenance: "Woher es kommt", mailboxes: "Postfächer",
     disclaimer: "Ein Teil dieser Notiz wurde von einer Maschine geschrieben, die deine Post liest. Jede Zeile verweist auf die Nachricht, aus der sie stammt.",
-    written: (d, n, m) => `Geschrieben von Maurice am ${d} aus ${n} Nachricht(en) deines Postfachs, mit ${m}.`,
+    written: (d, n, m) => `Geschrieben von Maurice am ${d} aus ${n} Nachricht(en) deiner Post, mit ${m}.`,
     unreviewed: "Noch nicht durchgesehen: behalten, korrigieren oder verwerfen.",
   },
   es: {
     hub: "Mi correo", hubIntro: "Lo que Maurice entendió de tu buzón: una ficha por persona que cuenta, un resumen por hilo. Borradores, privados, para guardar, corregir o tirar.",
     correspondents: "Personas", threads: "Hilos", relationship: "La relación", goingOn: "Qué está en marcha", promised: "Qué se prometió", open: "Queda abierto",
-    about: "De qué trata", timeline: "Cronología", decided: "Decidido", provenance: "De dónde viene",
+    about: "De qué trata", timeline: "Cronología", decided: "Decidido", provenance: "De dónde viene", mailboxes: "Buzones",
     disclaimer: "Parte de esta nota la escribió una máquina leyendo tu correo. Cada línea remite al mensaje del que viene.",
-    written: (d, n, m) => `Escrito por Maurice el ${d} a partir de ${n} mensaje(s) de tu buzón, con ${m}.`,
+    written: (d, n, m) => `Escrito por Maurice el ${d} a partir de ${n} mensaje(s) de tu correo, con ${m}.`,
     unreviewed: "Aún sin revisar: guardar, corregir o tirar.",
   },
   pt: {
     hub: "O meu correio", hubIntro: "O que o Maurice entendeu da tua caixa: uma ficha por pessoa que conta, um resumo por fio. Rascunhos, privados, para guardar, corrigir ou deitar fora.",
     correspondents: "Pessoas", threads: "Fios", relationship: "A relação", goingOn: "O que está em curso", promised: "O que foi prometido", open: "Em aberto",
-    about: "Do que se trata", timeline: "Cronologia", decided: "Decidido", provenance: "De onde vem",
+    about: "Do que se trata", timeline: "Cronologia", decided: "Decidido", provenance: "De onde vem", mailboxes: "Caixas",
     disclaimer: "Parte desta nota foi escrita por uma máquina a ler o teu correio. Cada linha remete para a mensagem de onde vem.",
-    written: (d, n, m) => `Escrito pelo Maurice a ${d} a partir de ${n} mensagem(ns) da tua caixa, com ${m}.`,
+    written: (d, n, m) => `Escrito pelo Maurice a ${d} a partir de ${n} mensagem(ns) do teu correio, com ${m}.`,
     unreviewed: "Ainda não revista: guardar, corrigir ou deitar fora.",
   },
   nl: {
     hub: "Mijn post", hubIntro: "Wat Maurice van je mailbox begrepen heeft: een kaart per persoon die telt, een samenvatting per draad. Concepten, privé, om te bewaren, te verbeteren of weg te gooien.",
     correspondents: "Mensen", threads: "Draden", relationship: "De relatie", goingOn: "Wat er speelt", promised: "Wat beloofd is", open: "Nog open",
-    about: "Waar het over gaat", timeline: "Tijdlijn", decided: "Besloten", provenance: "Waar het vandaan komt",
+    about: "Waar het over gaat", timeline: "Tijdlijn", decided: "Besloten", provenance: "Waar het vandaan komt", mailboxes: "Mailboxen",
     disclaimer: "Een deel van deze notitie is geschreven door een machine die je post leest. Elke regel verwijst naar het bericht waar hij vandaan komt.",
-    written: (d, n, m) => `Geschreven door Maurice op ${d} uit ${n} bericht(en) van je mailbox, met ${m}.`,
+    written: (d, n, m) => `Geschreven door Maurice op ${d} uit ${n} bericht(en) uit je post, met ${m}.`,
     unreviewed: "Nog niet nagelezen: bewaren, verbeteren of weggooien.",
   },
 };
@@ -340,13 +344,67 @@ function threadSystem(member: string, language: string): string {
 
 const REF = /\[(\d{1,3})\]/g;
 
-function pointer(m: MaterialMessage, locale: string): string {
-  return `${shortDate(m.date, locale)}, ${displayName(m.from) || "?"}, « ${(m.subject ?? "").trim() || "—"} »`;
+// ── The mailboxes ────────────────────────────────────────────────────────
+
+/** A name for the mailbox's provider, read off its domain. */
+const PROVIDER_BY_DOMAIN: Array<[RegExp, string]> = [
+  [/^(gmail|googlemail)\.com$/, "Gmail"],
+  [/^(proton\.me|protonmail\.(com|ch)|pm\.me)$/, "Proton"],
+  [/^(icloud|me|mac)\.com$/, "iCloud"],
+  [/^(outlook|hotmail|live|msn)\.[a-z.]+$/, "Outlook"],
+  [/^yahoo\.[a-z.]+$/, "Yahoo"],
+  [/^fastmail\.[a-z.]+$/, "Fastmail"],
+  [/^mailfence\.com$/, "Mailfence"],
+];
+
+const PROVIDER_BY_NAME: Record<string, string> = {
+  gmail: "Gmail", google: "Gmail", proton: "Proton", protonmail: "Proton", icloud: "iCloud",
+  outlook: "Outlook", office365: "Outlook", yahoo: "Yahoo", fastmail: "Fastmail", mailfence: "Mailfence",
+};
+
+/** What every pointer calls each of the member's mailboxes: the account's
+ *  name when the member gave one, else its provider's, else its address. A
+ *  label two mailboxes would share (two Gmail accounts) falls back to the
+ *  addresses, and a mailbox no account holds any more is its address. */
+export function mailboxLabels(accounts: Array<{ address: string; name?: string | null; provider?: string | null }>): Map<string, string> {
+  const guess = (a: { address: string; name?: string | null; provider?: string | null }): string => {
+    if (a.name?.trim()) return a.name.trim();
+    const p = a.provider?.trim().toLowerCase();
+    if (p) return PROVIDER_BY_NAME[p] ?? p.charAt(0).toUpperCase() + p.slice(1);
+    const domain = a.address.split("@")[1]?.toLowerCase() ?? "";
+    return PROVIDER_BY_DOMAIN.find(([re]) => re.test(domain))?.[1] ?? a.address.toLowerCase();
+  };
+  const labels = new Map(accounts.map((a) => [a.address.toLowerCase(), guess(a)]));
+  const count = new Map<string, number>();
+  for (const l of labels.values()) count.set(l, (count.get(l) ?? 0) + 1);
+  for (const [addr, l] of labels) if ((count.get(l) ?? 0) > 1) labels.set(addr, addr);
+  return labels;
+}
+
+function mailboxesOf(m: MaterialMessage, labels: Map<string, string>): string {
+  return (m.mailboxes ?? []).map((a) => labels.get(a) ?? a).join(" + ");
+}
+
+/** The pointer to one message: a link whose text says when, who, what and
+ *  from which mailbox, and whose target carries the message's id — so the
+ *  line keeps its source through an edit or a move, and a mailbox forgotten
+ *  can be pruned line by line (specs/contacts.md). */
+function pointer(m: MaterialMessage, locale: string, labels: Map<string, string>): string {
+  const esc = (t: string) => t.replace(/([\\[\]])/g, "\\$1");
+  const box = mailboxesOf(m, labels);
+  const text = `${shortDate(m.date, locale)}, ${displayName(m.from) || "?"}, « ${(m.subject ?? "").trim() || "—"} »${box ? ` · ${box}` : ""}`;
+  return `[${esc(text)}](${mailHref(m.id)})`;
+}
+
+/** `maurice-mail:<id>` — the ids are `gm:`, `oid:`, `fp:` or `fp2:` and a
+ *  token; anything a link target cannot hold is escaped, the colon kept. */
+export function mailHref(id: string): string {
+  return `maurice-mail:${encodeURIComponent(id).replace(/%3A/gi, ":")}`;
 }
 
 /** A line with its [n] markers turned into readable pointers at its end;
  *  null when it names no source that exists. */
-export function sourcedLine(line: string, messages: MaterialMessage[], locale: string): { text: string; ids: string[] } | null {
+export function sourcedLine(line: string, messages: MaterialMessage[], locale: string, labels: Map<string, string> = new Map()): { text: string; ids: string[] } | null {
   const refs = [...String(line).matchAll(REF)].map((m) => Number(m[1]));
   const cited = [...new Set(refs)].map((n) => messages[n - 1]).filter((m): m is MaterialMessage => !!m);
   if (!cited.length) return null;
@@ -354,7 +412,7 @@ export function sourcedLine(line: string, messages: MaterialMessage[], locale: s
   // them: French keeps one before a semicolon, a colon, a question mark.
   const text = String(line).replace(REF, "").replace(/\s{2,}/g, " ").replace(/\s+([.,])/g, "$1").trim();
   if (!text) return null;
-  return { text: `${text} — (${cited.map((m) => pointer(m, locale)).join(" ; ")})`, ids: cited.map((m) => m.id) };
+  return { text: `${text} — ${cited.map((m) => pointer(m, locale, labels)).join(" ; ")}`, ids: cited.map((m) => m.id) };
 }
 
 interface Rendered {
@@ -363,14 +421,14 @@ interface Rendered {
   ids: string[];
 }
 
-function renderPerson(text: string, g: Group, w: Words, locale: string): Rendered | "not_a_person" | null {
+function renderPerson(text: string, g: Group, w: Words, locale: string, labels: Map<string, string>): Rendered | "not_a_person" | null {
   const d = parseJsonObject(text);
   if (d && d.is_person === false) return "not_a_person";
   if (!d || typeof d.relationship !== "string") return null;
   const msgs = g.messages.slice(-MAX_PER_NOTE);
   const ids = new Set<string>();
-  const list = (v: unknown): string[] => (Array.isArray(v) ? v : []).map((l) => sourcedLine(String(l), msgs, locale)).filter((x): x is NonNullable<typeof x> => !!x).map((x) => { x.ids.forEach((i) => ids.add(i)); return `- ${x.text}`; });
-  const rel = sourcedLine(d.relationship, msgs, locale);
+  const list = (v: unknown): string[] => (Array.isArray(v) ? v : []).map((l) => sourcedLine(String(l), msgs, locale, labels)).filter((x): x is NonNullable<typeof x> => !!x).map((x) => { x.ids.forEach((i) => ids.add(i)); return `- ${x.text}`; });
+  const rel = sourcedLine(d.relationship, msgs, locale, labels);
   if (rel) rel.ids.forEach((i) => ids.add(i));
   const sections = [
     rel ? `## ${w.relationship}\n\n${rel.text}` : "",
@@ -380,13 +438,13 @@ function renderPerson(text: string, g: Group, w: Words, locale: string): Rendere
   return { title: (typeof d.title === "string" && d.title.trim()) || g.name || g.key, body: sections.join("\n\n"), ids: [...ids] };
 }
 
-function renderThread(text: string, g: Group, w: Words, locale: string): Rendered | null {
+function renderThread(text: string, g: Group, w: Words, locale: string, labels: Map<string, string>): Rendered | null {
   const d = parseJsonObject(text);
   if (!d || typeof d.about !== "string") return null;
   const msgs = g.messages.slice(-MAX_PER_NOTE);
   const ids = new Set<string>();
-  const list = (v: unknown): string[] => (Array.isArray(v) ? v : []).map((l) => sourcedLine(String(l), msgs, locale)).filter((x): x is NonNullable<typeof x> => !!x).map((x) => { x.ids.forEach((i) => ids.add(i)); return `- ${x.text}`; });
-  const about = sourcedLine(d.about, msgs, locale);
+  const list = (v: unknown): string[] => (Array.isArray(v) ? v : []).map((l) => sourcedLine(String(l), msgs, locale, labels)).filter((x): x is NonNullable<typeof x> => !!x).map((x) => { x.ids.forEach((i) => ids.add(i)); return `- ${x.text}`; });
+  const about = sourcedLine(d.about, msgs, locale, labels);
   if (about) about.ids.forEach((i) => ids.add(i));
   const sections = [
     about ? `## ${w.about}\n\n${about.text}` : "",
@@ -406,14 +464,24 @@ function noteFile(garden: GardenRef, locale: string, slug: string): string {
   return path.join(garden.root, "notes", locale, `${slug}.md`);
 }
 
-function provenance(w: Words, msgs: MaterialMessage[], model: string, locale: string, now: Date): string {
-  const lines = msgs.map((m) => `- ${pointer(m, locale)}`);
-  return `## ${w.provenance}\n\n${w.disclaimer} ${w.written(longDate(now, locale), msgs.length, model)} ${w.unreviewed}\n\n${lines.join("\n")}`;
+function provenance(w: Words, msgs: MaterialMessage[], model: string, locale: string, now: Date, labels: Map<string, string>): string {
+  const lines = msgs.map((m) => `- ${pointer(m, locale, labels)}`);
+  // How many of the messages each mailbox holds — a message in two counts
+  // in both.
+  const per = new Map<string, number>();
+  for (const m of msgs) for (const a of m.mailboxes ?? []) per.set(labels.get(a) ?? a, (per.get(labels.get(a) ?? a) ?? 0) + 1);
+  const boxes = per.size ? `${w.mailboxes}${locale === "fr" ? " :" : ":"} ${[...per].map(([l, n]) => `${l} (${n})`).join(", ")}.` : "";
+  return `## ${w.provenance}\n\n${w.disclaimer} ${w.written(longDate(now, locale), msgs.length, model)} ${w.unreviewed}${boxes ? `\n\n${boxes}` : ""}\n\n${lines.join("\n")}`;
+}
+
+/** The mailboxes a note's messages were seen in, for its frontmatter. */
+function mailboxesMeta(msgs: MaterialMessage[]): string[] {
+  return [...new Set(msgs.flatMap((m) => m.mailboxes ?? []))].sort();
 }
 
 function writeNote(
   garden: GardenRef, locale: string, slug: string, title: string, body: string,
-  opts: { kind: "person" | "thread" | "hub"; key: string; parent: string | null; sources: string[]; model: string; now: Date; flags?: string[]; description?: string },
+  opts: { kind: "person" | "thread" | "hub"; key: string; parent: string | null; sources: string[]; mailboxes?: string[]; model: string; now: Date; flags?: string[]; description?: string },
 ): string {
   const file = noteFile(garden, locale, slug);
   // A note the member has already opened keeps that: a rewrite brings new
@@ -440,6 +508,7 @@ function writeNote(
       model: opts.model,
       written_at: opts.now.toISOString().replace(/\.\d{3}Z$/, "Z"),
       sources: opts.sources,
+      ...(opts.mailboxes?.length ? { mailboxes: opts.mailboxes } : {}),
     },
   };
   fs.mkdirSync(path.dirname(file), { recursive: true });
@@ -464,7 +533,9 @@ export async function writeMailDocuments(memberId: string, d: MailDocumentsDeps 
   const language = LANGUAGE[locale] ?? "English";
   const w = wordsFor(locale);
   const name = getUser(memberId)?.display_name || "the member";
-  const memberAddresses = new Set(listMailAccounts(memberId).map((a) => a.address.toLowerCase()));
+  const accounts = listMailAccounts(memberId);
+  const memberAddresses = new Set(accounts.map((a) => a.address.toLowerCase()));
+  const labels = mailboxLabels(accounts);
 
   let mat: any;
   try {
@@ -473,7 +544,7 @@ export async function writeMailDocuments(memberId: string, d: MailDocumentsDeps 
     return fail("failed", `the mail tool could not be reached: ${(err as Error).message}`);
   }
   if (mat?.error || mat?.raw) return fail("failed", String(mat.error ?? mat.raw));
-  const messages: MaterialMessage[] = (mat.messages ?? []).map((m: any) => ({ ...m, to: m.to ?? [], cc: m.cc ?? [], reading: m.reading ?? {} }));
+  const messages: MaterialMessage[] = (mat.messages ?? []).map((m: any) => ({ ...m, to: m.to ?? [], cc: m.cc ?? [], reading: m.reading ?? {}, mailboxes: m.mailboxes ?? [] }));
   const artefacts: Artefact[] = mat.artefacts ?? [];
   const byKey = new Map(artefacts.map((a) => [`${a.kind}:${a.key}`, a]));
   if (!messages.length) return run;
@@ -536,7 +607,7 @@ export async function writeMailDocuments(memberId: string, d: MailDocumentsDeps 
       }
       const msgs = g.messages.slice(-MAX_PER_NOTE);
       const r = await ask(kind === "person" ? personSystem(name, language) : threadSystem(name, language), materialBlock(msgs));
-      const rendered = kind === "person" ? renderPerson(r.text, g, w, locale) : renderThread(r.text, g, w, locale);
+      const rendered = kind === "person" ? renderPerson(r.text, g, w, locale, labels) : renderThread(r.text, g, w, locale, labels);
       if (rendered === "not_a_person") {
         // A service, not a person: no fiche, and not asked again.
         declined.push({ kind, key: g.key, sources: msgs.map((m) => m.id) });
@@ -577,8 +648,8 @@ export async function writeMailDocuments(memberId: string, d: MailDocumentsDeps 
           console.warn(`[mail] documents for ${memberId}: could not move ${renamedFrom} to ${slug}: ${(err as Error).message}`);
         }
       }
-      const body = `${rendered.body}\n\n${provenance(w, msgs, r.model, locale, now)}`;
-      files.push(writeNote(garden, locale, slug, rendered.title, body, { kind, key: g.key, parent: hubSlug, sources: rendered.ids, model: r.model, now }));
+      const body = `${rendered.body}\n\n${provenance(w, msgs, r.model, locale, now, labels)}`;
+      files.push(writeNote(garden, locale, slug, rendered.title, body, { kind, key: g.key, parent: hubSlug, sources: rendered.ids, mailboxes: mailboxesMeta(msgs), model: r.model, now }));
       recorded.push({ kind, key: g.key, slug, locale, title: rendered.title, sources: msgs.map((m) => m.id) });
       run.written.push({ kind, key: g.key, slug, title: rendered.title, web_path: noteWebPath(garden.username, locale, slug), sources: rendered.ids.length });
     }

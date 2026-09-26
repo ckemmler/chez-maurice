@@ -40,8 +40,8 @@ let artefacts: any[] = [];
 let calls: Array<{ tool: string; args: any }> = [];
 let writes: Array<{ system: string; prompt: string }> = [];
 
-const msg = (id: string, from: string, to: string[], date: string, subject: string, thread: string, summary: string) => ({
-  id, message_id: `<${id}@x>`, from, from_address: from.match(/<([^>]+)>/)?.[1] ?? from, to, cc: [], date, subject, thread,
+const msg = (id: string, from: string, to: string[], date: string, subject: string, thread: string, summary: string, mailboxes = ["anna@gmail.com"]) => ({
+  id, message_id: `<${id}@x>`, from, from_address: from.match(/<([^>]+)>/)?.[1] ?? from, to, cc: [], date, subject, thread, mailboxes,
   reading: { summary, kind: "personal", people: [], said: [summary], promised: [], decided: [], asked: [], dates: [], open: [], thread: subject },
 });
 
@@ -49,7 +49,7 @@ function seed() {
   material = [
     msg("m1", "Jean Derély <jean@x.org>", ["anna@gmail.com"], "2026-09-01T10:00:00+02:00", "Jeudi ?", "<t1@x>", "Jean propose jeudi."),
     msg("m2", "Anna <anna@gmail.com>", ["jean@x.org"], "2026-09-02T10:00:00+02:00", "Re: Jeudi ?", "<t1@x>", "Anna accepte jeudi."),
-    msg("m3", "Jean Derély <jean@x.org>", ["anna@gmail.com"], "2026-09-10T10:00:00+02:00", "Le livre", "<t3@x>", "Jean promet de rendre le livre avant octobre."),
+    msg("m3", "Jean Derély <jean@x.org>", ["anna@gmail.com"], "2026-09-10T10:00:00+02:00", "Le livre", "<t3@x>", "Jean promet de rendre le livre avant octobre.", ["anna@gmail.com", "anna@proton.me"]),
     msg("m4", "Erlend <e@y.org>", ["anna@gmail.com"], "2026-06-25T10:00:00+02:00", "Tabouret", "<t4@x>", "Erlend demande si le tabouret est disponible."),
     // Anna on her other address, writing to herself: not a correspondent.
     msg("m6", "Anna <anna@work.example>", ["anna@gmail.com"], "2026-04-15T10:00:00+02:00", "test", "<t6@x>", "Un test."),
@@ -109,6 +109,7 @@ beforeAll(() => {
   db.run(`INSERT OR IGNORE INTO user_preferences (user_id, locale) VALUES (?, 'fr')`, [ANNA]);
   db.run(`UPDATE user_preferences SET locale = 'fr' WHERE user_id = ?`, [ANNA]);
   db.run(`INSERT OR IGNORE INTO mail_accounts (id, member_id, address, secret) VALUES ('ma-anna', ?, 'anna@gmail.com', 'v1:x')`, [ANNA]);
+  db.run(`INSERT OR IGNORE INTO mail_accounts (id, member_id, address, secret) VALUES ('ma-anna-p', ?, 'anna@proton.me', 'v1:x')`, [ANNA]);
   addModel({ id: NIGHT, name: "DeepSeek V4 Flash", tier: "cloud", vendor: "deepseek", provider: "scaleway" });
   pinNewInvocations();
   bossAuth = `Bearer ${createSession(BOSS).token}`;
@@ -152,16 +153,19 @@ test("a fiche for the person with two messages, a digest for the thread with two
   expect(fiche).toMatch(/key: jean@x\.org/);
   expect(fiche).toMatch(/sources:\n\s*- m1\n\s*- m2\n\s*- m3/);
   expect(fiche).toContain("## La relation");
-  expect(fiche).toContain("Jean t'écrit depuis septembre 2026 ; vous vous voyez à Bruxelles. — (1 sept. 2026, Jean Derély, « Jeudi ? » ; 2 sept. 2026, Anna, « Re: Jeudi ? »)");
-  expect(fiche).toContain("- Un rendez-vous jeudi — (2 sept. 2026, Anna, « Re: Jeudi ? »)");
+  // Every pointer is a link to its message and says the mailbox it sits in.
+  expect(fiche).toContain("Jean t'écrit depuis septembre 2026 ; vous vous voyez à Bruxelles. — [1 sept. 2026, Jean Derély, « Jeudi ? » · Gmail](maurice-mail:m1) ; [2 sept. 2026, Anna, « Re: Jeudi ? » · Gmail](maurice-mail:m2)");
+  expect(fiche).toContain("- Un rendez-vous jeudi — [2 sept. 2026, Anna, « Re: Jeudi ? » · Gmail](maurice-mail:m2)");
   expect(fiche).not.toContain("sans source");
-  expect(fiche).toContain("## Ce qui a été promis\n\n- Jean a promis de rendre le livre avant octobre — (10 sept. 2026, Jean Derély, « Le livre »)");
+  expect(fiche).toContain("## Ce qui a été promis\n\n- Jean a promis de rendre le livre avant octobre — [10 sept. 2026, Jean Derély, « Le livre » · Gmail + Proton](maurice-mail:m3)");
   expect(fiche).toContain("## D'où ça vient");
   expect(fiche).toContain("Une partie de cette note a été écrite par une machine lisant ton courrier.");
   expect(fiche).toContain("Écrit par Maurice le 26 septembre 2026 à partir de 3 message(s)");
+  expect(fiche).toContain("Boîtes : Gmail (3), Proton (1).");
+  expect(fiche).toMatch(/mailboxes:\n\s*- anna@gmail\.com\n\s*- anna@proton\.me/);
   const digest = read("jeudi");
   expect(digest).toMatch(/- thread/);
-  expect(digest).toContain("## Chronologie\n\n- 2026-09-01 — Jean propose jeudi — (1 sept. 2026, Jean Derély, « Jeudi ? »)");
+  expect(digest).toContain("## Chronologie\n\n- 2026-09-01 — Jean propose jeudi — [1 sept. 2026, Jean Derély, « Jeudi ? » · Gmail](maurice-mail:m1)");
   const hub = read("mon-courrier");
   expect(hub).toMatch(/flags:\n\s*- moc/);
   expect(hub).toContain("## Personnes\n\n- [[jean-derely|Jean Derély]]");
@@ -193,7 +197,7 @@ test("a second run rewrites nothing unchanged, a thrown-away note is never writt
   expect(fs.existsSync(path.join(notesDir, "jeudi.md"))).toBe(false);
   expect(artefacts.find((a) => a.kind === "thread")!.deleted_at).toBeTruthy();
   // The new message is in the provenance; the frontmatter's sources stay what the model cited.
-  expect(read("jean-derely")).toContain("- 20 sept. 2026, Jean Derély, « Re: Jeudi ? »");
+  expect(read("jean-derely")).toContain("- [20 sept. 2026, Jean Derély, « Re: Jeudi ? » · Gmail](maurice-mail:m5)");
   const hub = read("mon-courrier");
   expect(hub).not.toContain("[[jeudi|");
   const fourth = await docs.writeMailDocuments(ANNA);
@@ -292,4 +296,23 @@ test("the admin route writes by hand; the three tool words are the server's", as
   expect((await req("/mail/documents/run", { method: "POST", body: JSON.stringify({ username: "nobody" }) })).status).toBe(404);
   for (const t of ["reading_material", "reading_reset", "documents_record"]) expect(isServerOnlyTool(`email__${t}`)).toBe(true);
   expect(isServerOnlyTool("email__get_by_id")).toBe(false);
+});
+
+test("a mailbox is called by the account's name, else its provider, else its address; two alike fall back to the addresses", () => {
+  const labels = docs.mailboxLabels([
+    { address: "Anna@Gmail.com" },
+    { address: "anna@protonmail.com" },
+    { address: "anna@work.example" },
+    { address: "a@fastmail.com", name: "Travail" },
+    { address: "a@custom.example", provider: "icloud" },
+  ]);
+  expect([...labels]).toEqual([
+    ["anna@gmail.com", "Gmail"], ["anna@protonmail.com", "Proton"], ["anna@work.example", "anna@work.example"],
+    ["a@fastmail.com", "Travail"], ["a@custom.example", "iCloud"],
+  ]);
+  const two = docs.mailboxLabels([{ address: "a@gmail.com" }, { address: "b@gmail.com" }]);
+  expect([...two.values()]).toEqual(["a@gmail.com", "b@gmail.com"]);
+  // The link keeps the id's colon and escapes what a target cannot hold.
+  expect(docs.mailHref("fp:57bb")).toBe("maurice-mail:fp:57bb");
+  expect(docs.mailHref("oid:a b)")).toBe("maurice-mail:oid:a%20b)");
 });

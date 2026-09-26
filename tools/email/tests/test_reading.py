@@ -300,6 +300,7 @@ def test_material_unseals_and_groups_by_thread_and_a_cut_reading_can_be_reset(tm
     assert [m["reading"]["summary"] for m in mat["messages"]] == ["un", "deux"] or [m["reading"]["summary"] for m in mat["messages"]] == ["deux", "un"]
     m = mat["messages"][0]
     assert m["subject"].startswith("Sujet") and m["from_address"].endswith("@example.org") and m["thread"] and m["thread"].startswith("<m")
+    assert m["mailboxes"] == ["alex@icloud.com"]
     assert mat["artefacts"] == []
     r = svc.reading_reset(acc)
     assert r["reset"] == 1 and r["ids"] == [ids[0]]

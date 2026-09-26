@@ -1,4 +1,4 @@
-# People and mailboxes — design, nothing built yet
+# People and mailboxes — design, lot 1 built
 
 Settled with Candide on 26 September 2026, after the first full mail import
 (Gmail and Proton, `specs/mail-import.md`, lots 1 to 5). Two refinements of
@@ -253,8 +253,10 @@ new documents.
 
 ## Lots
 
-1. **The mailbox everywhere.** `mailboxes` in `reading_material`, the pointer
-   as a `maurice-mail:` link with the mailbox's label, the digests with it.
+1. **The mailbox everywhere.** *Built 26 September 2026.* `mailboxes` in
+   `reading_material`, the pointer as a `maurice-mail:` link with the
+   mailbox's label, the digests with it, the count per mailbox in "where it
+   comes from", `meta.mailboxes`. Nothing opens the link yet.
 2. **Contact accounts.** CardDAV per member (route, sealed secret, Settings
    pane), the nightly read, the addresses into the triage.
 3. **Person fiches.** The hub, identities, relation, fragments per
