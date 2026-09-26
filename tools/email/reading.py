@@ -161,6 +161,20 @@ def _list(raw: str | None) -> list[str]:
     return [str(x) for x in v] if isinstance(v, list) else []
 
 
+def _decoded(value: str | None) -> str | None:
+    """A header as a person reads it: RFC 2047 encoded words decoded
+    (``=?utf-8?q?C=C3=A9cile?= <c@x>`` → ``Cécile <c@x>``). The store keeps
+    the header as written; the documents show names."""
+    if not value or "=?" not in value:
+        return value
+    from email.header import decode_header, make_header
+
+    try:
+        return str(make_header(decode_header(value)))
+    except Exception:  # noqa: BLE001 — a malformed word stays as written
+        return value
+
+
 def _subject(sealed: str | None) -> str | None:
     if not sealed:
         return None
@@ -301,10 +315,10 @@ def material(store: MailStore, *, limit: int = 5000) -> dict[str, Any]:
         rows.append({
             "id": r["id"],
             "message_id": r["message_id"],
-            "from": r["sender"],
+            "from": _decoded(r["sender"]),
             "from_address": r["sender_address"],
-            "to": _list(r["recipients"]),
-            "cc": _list(r["cc"]),
+            "to": [_decoded(a) or a for a in _list(r["recipients"])],
+            "cc": [_decoded(a) or a for a in _list(r["cc"])],
             "date": r["date"],
             "subject": _subject(r["subject_sealed"]),
             "thread": _thread_root({"refs": r["refs"], "message_id": r["message_id"]}),

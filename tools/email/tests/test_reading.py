@@ -308,6 +308,16 @@ def test_material_unseals_and_groups_by_thread_and_a_cut_reading_can_be_reset(tm
     assert svc.reading_progress(acc)["progress"]["to_read"] == 2  # the cut one is to read again, the verdict kept
 
 
+def test_encoded_names_are_decoded_for_the_documents():
+    from tools.email.reading import _decoded
+
+    assert _decoded("=?utf-8?q?C=C3=A9cile_Hankenne?= <c@x.org>") == "Cécile Hankenne <c@x.org>"
+    assert _decoded("=?UTF-8?B?Sm9zw6k=?= <j@x.org>") == "José <j@x.org>"
+    assert _decoded("Plain <p@x.org>") == "Plain <p@x.org>"
+    assert _decoded("=?bad?q?broken") == "=?bad?q?broken"
+    assert _decoded(None) is None
+
+
 def test_artefacts_are_keyed_on_the_source_and_a_deleted_one_is_remembered(tmp_path):
     svc, _client = ready(tmp_path)
     acc = alex(svc)
