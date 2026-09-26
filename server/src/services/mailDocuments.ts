@@ -546,8 +546,9 @@ export async function writeMailDocuments(memberId: string, d: MailDocumentsDeps 
     }
   }
 
-  // The hub: refreshed whenever something was written, unless thrown away.
-  if (run.written.length && !hubDeleted) {
+  // The hub: refreshed whenever something was written or found gone, so it
+  // never lists a note that is not there — unless it was thrown away itself.
+  if ((run.written.length || deleted.length) && !hubDeleted) {
     const all = artefacts.filter((a) => !a.deleted_at && (a.kind === "person" || a.kind === "thread") && !recorded.some((r) => r.kind === a.kind && r.key === a.key) && fs.existsSync(noteFile(garden, a.locale, a.slug)));
     const entries = [...recorded, ...all.map((a) => ({ kind: a.kind, slug: a.slug, title: a.title ?? a.slug }))];
     const section = (kind: string, head: string) => {
@@ -578,7 +579,8 @@ export async function writeMailDocuments(memberId: string, d: MailDocumentsDeps 
   }
   if (run.written.length) {
     if (run.outcome === "nothing") run.outcome = "written";
-    run.said = sayDocumentsWritten(memberId, run, garden);
+    // Maurice speaks of fiches and digests, not of the index alone.
+    if (run.written.some((n) => n.kind !== "hub")) run.said = sayDocumentsWritten(memberId, run, garden);
   }
   console.log(
     `[mail] documents for ${memberId}: ${run.written.length} note(s) written (${run.written.filter((n) => n.kind === "person").length} fiche(s), ${run.written.filter((n) => n.kind === "thread").length} digest(s)), ` +

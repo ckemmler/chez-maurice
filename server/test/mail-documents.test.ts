@@ -198,6 +198,14 @@ test("a second run rewrites nothing unchanged, a thrown-away note is never writt
   expect(hub).not.toContain("[[jeudi|");
   const fourth = await docs.writeMailDocuments(ANNA);
   expect(fourth.skipped).toEqual({ unchanged: 1, deleted: 2, too_few: 0, declined: 0 });
+  expect(fourth.written).toEqual([]); // nothing new, nothing newly gone: the hub is left alone
+  // The fiche thrown away too: found gone, the hub is refreshed to say so, and Maurice says nothing.
+  fs.rmSync(path.join(notesDir, "jean-derely.md"));
+  const fifth = await docs.writeMailDocuments(ANNA);
+  expect(fifth.written.map((n) => n.kind)).toEqual(["hub"]);
+  expect(fifth.said).toBeNull();
+  expect(read("mon-courrier")).not.toContain("[[jean-derely|");
+  expect(fifth.skipped.deleted).toBe(3);
 });
 
 test("the member's cap stops the run before the call; a model answer with no sources writes nothing", async () => {
