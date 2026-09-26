@@ -90,14 +90,36 @@ encrypting the lock and leaving the door open — and for a hosted household
 FTS5. The cost is losing local exact search, which is the job we already said
 not to rebuild.
 
-**But that does not close the encryption question, only shrink it.** The subject
+**The header store is still sensitive, and is sealed accordingly.** The subject
 line lives in the header, and `Audience du 14 mars — garde alternée` is a
-subject. The parsed-header store is 30 MB rather than 400, and it is the table
-of contents of Aline's file, on a disk in Paris. An earlier draft of this spec
-said "nothing to encrypt at rest"; that was too quick. **Open: encrypt the
-header store under the household key, or accept it in clear?** The tension is
-that the triage and any later "who wrote to me about X" query want to read
-subjects, so encryption at rest here is not free the way it is for a password.
+subject: 30 MB rather than 400, but the table of contents of Aline's file.
+Settled 26 September:
+
+- **The subject is sealed** under the household key (AES-256-GCM, the mechanism
+  `services/mailAccounts.ts` already uses for passwords).
+- **The structural fields stay in clear and indexed** — from, to, cc, date,
+  message-id, list-id, references. Everything relational and statistical (who
+  writes, how often, which threads, who was never answered) reads only those,
+  so it stays fast.
+- **Volume encryption on the hosted side, as well as this, not instead.** It
+  protects a decommissioned disk; the provider holds that key, so it does not
+  protect against the provider.
+
+What this costs: no SQL predicate and no FTS index on subjects, so a later
+"who wrote to me about X" is a decrypt-and-scan rather than an index lookup —
+about a second over 100 k rows, which is acceptable at this size. The triage
+does not notice at all: it sees each message once, in sequence, as it arrives.
+
+What it does **not** buy, and the spec should not pretend otherwise: protection
+against someone holding the running server. The threat model of the existing
+mechanism is stated in its own comment — *a copy of `maurice.db` without the
+key carries no usable password* — i.e. a backup, a snapshot, a support dump. A
+system that works while the member sleeps must be able to read their data while
+they sleep; the 03:00 pass has nobody in front of it, so the key must be
+reachable by the server alone. That is the price of nightly automation, not a
+flaw to engineer away. And `from` / `to` in clear already say a great deal: that
+Aline corresponds with a juvenile-law solicitor is most of the story, subjects
+or no subjects.
 
 **A household without Ollama pays for embeddings too.** The corpus config
 anticipates this (`qwen3-embedding-8b` on Scaleway). It is a line in the quote
@@ -333,6 +355,35 @@ correct prompt visible **only to the member concerned**. What that needs:
   it aloud.
 
 ---
+
+## Build order
+
+Nothing below spends a euro until lot 3, and each lot is worth having on its
+own.
+
+**Lot 1 — the job and the envelopes.** The `jobs` table, the cursor, the
+checkpoint, `UIDVALIDITY` handling, and a per-member store of parsed headers
+with the subject sealed. Batched `UID FETCH` of headers, resumable. No model,
+no cost. Done when a mailbox can be walked end to end, interrupted at any
+point, and resumed without loss or duplication.
+
+**Lot 2 — the triage and the free report.** Bulk vs correspondence from headers
+alone, and the deliverable that needs no approval: who writes, what fills the
+box, which threads are alive, who was never answered. This is also what
+produces the quote — counts, size distribution, and a bytes→tokens calibration
+over ~100 sampled bodies.
+
+**Lot 3 — the quote and the approval.** `job_id` on `spend_ledger` first (see
+*Metering*), then the range, the hard ceiling, and the member's yes.
+
+**Lot 4 — the two reading passes.** The light model over the first ~600
+characters of the survivors, then the larger one over what it keeps.
+
+**Lot 5 — the documents.** Fiches and digests written as drafts, with the
+disclaimer and per-line sourcing.
+
+Lot 1 and lot 2 answer most of what makes a mailbox opaque, and they are free.
+If the project stopped after lot 2 it would still have been worth doing.
 
 ## Still open
 
