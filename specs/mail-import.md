@@ -238,18 +238,30 @@ but it must be *said*: "three or four nights", not "tomorrow morning".
 
 ---
 
-## Telling the member before spending
+## Telling the member before reading — and not about money
 
 1. Envelope pass — free, minutes.
 2. Triage on headers — free or near enough.
 3. Calibrate bytes → tokens on ~100 real bodies. Do not guess it.
-4. Price from `services/pricing.ts`.
-5. Present a **range**, never a point, with a **hard ceiling** on the job.
-   Crossing it stops and asks again. Never "it turned out to cost more".
+4. Price from `services/pricing.ts` — **for the operator**: the log, the
+   ledger, later the console. Never for the member.
+5. Ask the member — for consent to read, not for a purchase.
 
-> 47 200 messages, 12 400 of them real correspondence, 4 100 in the last three
-> years. Reading those: **between 0.60 € and 1.10 €**, about two nights.
-> Go ahead?
+> 47 200 messages in all, 41 000 of them newsletters and notifications. Over
+> the last three years I count 4 100 real exchanges. I can read them, over
+> two or three nights, and tell you who matters to you and what is going on.
+> Shall I read them?
+
+**No money in front of a member** (Candide, 26 September 2026, after reading
+the first real opening, which quoted "between 0.02 € and 0.87 €"): spending
+is abstract to a member — tokens, euros per million — and every app spares
+them the subject by setting a ceiling so high it never shows. The only
+ceiling is the household's, `spend_cap_system_daily`, the operator's
+business and invisible to members. **No per-job or per-night cap, no range
+in the message, no "it turned out to cost more".** The range still exists
+(`readingCost` in `services/mailOpener.ts`) and is written to the log when
+the conversation opens; it is the operator's view of the reading, kept apart
+from chat spend by `job_id` on the ledger (lot 3).
 
 ### Metering
 
@@ -455,24 +467,24 @@ does, from `pricing.ts`. On the owner's Gmail on the day: 164 194 messages —
 years, 466 of them to read; 18.9 tokens per kB on the wire, 139 tokens in a
 preview.
 
-**The conversation Maurice opens** (settled 26 September 2026;
-`services/mailOpener.ts`). Opened **late** — only when the walk is done —
-and made of **numbers, nothing else**: messages in all and correspondence,
-the same over the last three years, the cost as a **range** (low: the light
-pass alone on mistral-small; high: the light pass plus every body read whole
-by the household's everyday model; zero on Ollama, and "I have no price"
-when the sheet does not know the model — never a silent zero), the nights in
-words ("three or four nights", never "tomorrow morning"), and the question
-"shall I read? yes or no". No top senders, no unanswered threads. Rendered by
-the server in the member's language, no model. Once per member, and **past
-the opening guard** (`force`): a mailbox walked is worth the exception, and
-the numbers wait for nobody's fifteen days. The night runs the chain after a
-walk that is done: reconcile (weekly, per member), triage, calibrate,
-estimate, open — recorded in `mail-nightly.json`. The "yes" itself and the
-spend are lot 3.
+**The conversation Maurice opens** (settled 26 September 2026, reshaped the
+same evening; `services/mailOpener.ts`). Opened **late** — only when the walk
+is done — and short: what the box holds (messages in all, how many of them
+newsletters and notifications), how many real exchanges the last three years
+hold, what reading them gives ("who matters to you and what is going on")
+and the nights in words ("three or four nights", never "tomorrow morning"),
+and the question "shall I read them? yes or no". **No money** (above). No top
+senders, no unanswered threads. Rendered by the server in the member's
+language, no model. Once per member, and **past the opening guard**
+(`force`): a mailbox walked is worth the exception, and the numbers wait for
+nobody's fifteen days. The night runs the chain after a walk that is done:
+reconcile (weekly, per member), triage, calibrate, estimate, open — recorded
+in `mail-nightly.json`, the cost range in the log. The "yes" itself is lot 3.
 
-**Lot 3 — the quote and the approval.** `job_id` on `spend_ledger` first (see
-*Metering*), then the range, the hard ceiling, and the member's yes.
+**Lot 3 — the approval.** `job_id` on `spend_ledger` first (see *Metering*,
+so the operator sees the reading apart from chat), then the member's yes in
+the conversation — consent to read, nothing about money; no ceiling per job,
+the household's cap is the only one.
 
 **Lot 4 — the two reading passes.** The light model over the first ~600
 characters of the survivors, then the larger one over what it keeps.
@@ -493,7 +505,8 @@ If the project stopped after lot 2 it would still have been worth doing.
 - **The tokenizer is a proxy** (`tiktoken`, `o200k_base`), not Mistral's; the
   range absorbs the difference, and the calibration says so.
 - **A night's capacity is assumed** (1 500 messages) until the reading
-  passes of lot 4 exist to measure it.
+  passes of lot 4 exist to measure it — and then it is measured on the first
+  real night and kept beside the calibration, never derived from a spend cap.
 - **What happens on a second run.** A fiche or digest already deleted must not
   be silently rewritten the next night. Keying the refusal on the *source* — no
   more artefacts from message X, or from person Y after three refusals — is

@@ -39,40 +39,37 @@ test("the range: the light pass at the low end, a full reading on top at the hig
   expect(opener.readingCost({ ...est, tokens: null }, "mistral-medium-latest")).toBeNull();
 });
 
-test("the message: numbers, the range, the nights in words, the question — and nobody", () => {
-  const cost = { low: 0.0123, high: 0.87, light_model: "x", full_model: "y" };
-  const fr = plain(opener.renderMailOpening({ locale: "fr", estimate: est, cost }));
+test("the message: what the box holds, the real exchanges, what reading gives, the nights in words, the question — no money, nobody", () => {
+  const fr = plain(opener.renderMailOpening({ locale: "fr", estimate: est }));
   expect(fr).toBe(
-    "J'ai relevé les en-têtes de ta boîte : 164 194 messages, dont 19 825 de correspondance.\n\n" +
-      "Sur les 3 dernières années : 2 131 messages, dont 36 de correspondance.\n\n" +
-      "Les lire coûterait entre 0,02 € et 0,87 €, sur trois ou quatre nuits.\n\n" +
+    "J'ai relevé les en-têtes de ta boîte : 164 194 messages en tout, dont 134 488 lettres d'information et notifications.\n\n" +
+      "Sur les 3 dernières années, j'y compte 466 vrais échanges.\n\n" +
+      "Je peux les lire, sur trois ou quatre nuits, et te dire qui compte pour toi et ce qui est en cours.\n\n" +
       "Je lis ? Oui ou non.",
   );
-  const en = plain(opener.renderMailOpening({ locale: "en", estimate: est, cost }));
-  expect(en).toContain("164,194 messages, 19,825 of them correspondence");
-  expect(en).toContain("between €0.02 and €0.87, over three or four nights");
+  const en = plain(opener.renderMailOpening({ locale: "en", estimate: est }));
+  expect(en).toContain("164,194 messages in all, 134,488 of them newsletters and notifications");
+  expect(en).toContain("I count 466 real exchanges");
+  expect(en).toContain("over three or four nights");
   expect(en).toContain("Shall I read them? Yes or no.");
   expect(opener.mailOpeningTitle("fr")).toBe("Ta boîte mail, en chiffres");
   // Never "tomorrow morning": more than ten nights are digits, still a range.
-  expect(plain(opener.renderMailOpening({ locale: "fr", estimate: { ...est, nights: { low: 12, high: 13 } }, cost }))).toContain("sur 12 ou 13 nuits");
-  // No name, no address, no subject.
-  for (const text of [fr, en]) expect(text).not.toMatch(/@|facebook|uber/i);
+  expect(plain(opener.renderMailOpening({ locale: "fr", estimate: { ...est, nights: { low: 12, high: 13 } } }))).toContain("sur 12 ou 13 nuits");
+  // No name, no address, no subject — and no euro, no token.
+  for (const text of [fr, en]) expect(text).not.toMatch(/@|facebook|uber|€|token/i);
 });
 
-test("free on Ollama, said so; unpriced, said so; nothing to read, said so", () => {
-  const free = opener.renderMailOpening({ locale: "fr", estimate: est, cost: { low: 0, high: 0, light_model: "x", full_model: "y" } });
-  expect(free).toContain("ne coûte rien sur ce foyer ; il faudrait trois ou quatre nuits");
-  const unpriced = opener.renderMailOpening({ locale: "fr", estimate: est, cost: null });
-  expect(unpriced).toContain("Je n'ai pas le prix du modèle");
-  expect(unpriced).toContain("Je lis ? Oui ou non.");
-  const nothing = opener.renderMailOpening({ locale: "de", estimate: { ...est, to_read: 0, tokens: null, nights: { low: 0, high: 0 } }, cost: null });
-  expect(nothing).toContain("In diesem Zeitraum gibt es nichts zu lesen.");
+test("nothing to read, said so; the cost line is for the log alone", () => {
+  const nothing = opener.renderMailOpening({ locale: "de", estimate: { ...est, to_read: 0, tokens: null, nights: { low: 0, high: 0 } } });
+  expect(nothing).toContain("In den letzten 3 Jahren finde ich keinen echten Wechsel zum Lesen.");
   expect(nothing).not.toContain("Ja oder nein");
+  expect(opener.describeCost(null)).toBe("cost: unpriced model");
+  expect(opener.describeCost({ low: 0.0123, high: 0.87, light_model: "x", full_model: "y" })).toBe("cost: 0.012–0.870 € (x → y)");
 });
 
 test("every language renders, with its own number format", () => {
   for (const locale of Object.keys(opener.MAIL_OPENER_STRINGS)) {
-    const text = opener.renderMailOpening({ locale, estimate: est, cost: { low: 0.5, high: 1.5, light_model: "x", full_model: "y" } });
+    const text = opener.renderMailOpening({ locale, estimate: est });
     expect(text.split("\n\n")).toHaveLength(4);
     expect(text).toContain(opener.formatCount(164194, locale));
     expect(text).toContain(opener.mailOpenerStrings(locale).question);

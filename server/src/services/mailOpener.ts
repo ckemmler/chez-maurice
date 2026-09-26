@@ -2,14 +2,20 @@ import { getModel, householdDefaultModel } from "./models";
 import { newUsage, priceFor, priceUsage } from "./pricing";
 
 // The conversation Maurice opens once a member's mailbox has been walked
-// (specs/mail-import.md, settled 26 September 2026). Opened late — only
-// when the header walk is done — and made of numbers, nothing else: how
-// many messages, how many of them correspondence, the same over the last
-// three years, what reading those would cost (a range, never a figure), how
-// many nights it would take ("three or four nights", never "tomorrow
-// morning"), and the question. No top senders, no unanswered threads: that
-// is the report, a deliverable of its own. The "yes" itself and the spend
-// are lot 3.
+// (specs/mail-import.md, settled 26 September 2026, reshaped the same
+// evening). Opened late — only when the header walk is done — and short:
+// what the box holds (messages, and how many are newsletters and
+// notifications), how many real exchanges the last three years hold, what
+// reading them would give and how many nights it would take ("three or four
+// nights", never "tomorrow morning"), and the question. No top senders, no
+// unanswered threads: that is the report, a deliverable of its own.
+//
+// **No money.** Candide's direction, 26 September 2026: spending is abstract
+// to a member and every app spares them the subject; the only ceiling is
+// the household's, the operator's business. So the cost range computed
+// below is never in the message — it goes to the log and, later, the
+// console; the member's "yes" is consent to read, not a purchase. The yes
+// itself is lot 3.
 //
 // Rendered by the server, deterministically, in the member's language, as
 // the domain opener is — no model writes it, so it never depends on one.
@@ -57,7 +63,8 @@ function eurosFor(model: string, tokensIn: number, tokensOut: number): number | 
 }
 
 /** Low: the light pass alone. High: the light pass, then every body read
- *  whole by the member's everyday model. Both from the calibration's tokens. */
+ *  whole by the member's everyday model. Both from the calibration's tokens.
+ *  For the operator — the log, the console — never for the member. */
 export function readingCost(est: ReadingEstimate, fullModel: string = householdDefaultModel()): CostRange | null {
   if (!est.tokens) return null;
   const light = eurosFor(LIGHT_MODEL, est.tokens.light, est.to_read * LIGHT_OUTPUT_TOKENS_PER_MESSAGE);
@@ -70,21 +77,17 @@ export function readingCost(est: ReadingEstimate, fullModel: string = householdD
 
 export interface MailOpenerStrings {
   title: string;
-  /** %1 messages in all, %2 of them correspondence. */
+  /** %1 messages in all, %2 of them newsletters and notifications. */
   all: string;
-  /** %1 years, %2 messages, %3 of them correspondence. */
+  /** %1 years, %2 real exchanges. */
   window: string;
-  /** %1 low, %2 high (euros, formatted), %3 nights. */
-  cost: string;
-  /** %3 nights alone, when the household pays nothing (Ollama). */
-  free: string;
-  /** When the model's price is unknown: %3 nights. */
-  unpriced: string;
+  /** What reading gives, over %1 nights. */
+  offer: string;
   /** %1 low, %2 high nights, as words. */
   nights: string;
   question: string;
+  /** %1 years: nothing to read. */
   nothing: string;
-  years: string[];
   numbers: string[];
 }
 
@@ -101,93 +104,72 @@ const NUMBERS: Record<string, string[]> = {
 export const MAIL_OPENER_STRINGS: Record<string, MailOpenerStrings> = {
   en: {
     title: "Your mailbox, in numbers",
-    all: "I have walked the headers of your mailbox: %1 messages, %2 of them correspondence.",
-    window: "Over the last %1 years: %2 messages, %3 of them correspondence.",
-    cost: "Reading those would cost between %1 and %2, over %3.",
-    free: "Reading those costs nothing on this household; it would take %3.",
-    unpriced: "I do not have a price for the model this household reads with; it would take %3.",
+    all: "I have walked the headers of your mailbox: %1 messages in all, %2 of them newsletters and notifications.",
+    window: "Over the last %1 years I count %2 real exchanges.",
+    offer: "I can read them, over %1, and tell you who matters to you and what is going on.",
     nights: "%1 or %2 nights",
     question: "Shall I read them? Yes or no.",
-    nothing: "There is nothing to read over that window.",
-    years: ["years", "year"],
+    nothing: "Over the last %1 years I find no real exchange to read.",
     numbers: NUMBERS.en!,
   },
   fr: {
     title: "Ta boîte mail, en chiffres",
-    all: "J'ai relevé les en-têtes de ta boîte : %1 messages, dont %2 de correspondance.",
-    window: "Sur les %1 dernières années : %2 messages, dont %3 de correspondance.",
-    cost: "Les lire coûterait entre %1 et %2, sur %3.",
-    free: "Les lire ne coûte rien sur ce foyer ; il faudrait %3.",
-    unpriced: "Je n'ai pas le prix du modèle avec lequel ce foyer lit ; il faudrait %3.",
+    all: "J'ai relevé les en-têtes de ta boîte : %1 messages en tout, dont %2 lettres d'information et notifications.",
+    window: "Sur les %1 dernières années, j'y compte %2 vrais échanges.",
+    offer: "Je peux les lire, sur %1, et te dire qui compte pour toi et ce qui est en cours.",
     nights: "%1 ou %2 nuits",
     question: "Je lis ? Oui ou non.",
-    nothing: "Il n'y a rien à lire sur cette période.",
-    years: ["années", "année"],
+    nothing: "Sur les %1 dernières années, je n'y trouve aucun vrai échange à lire.",
     numbers: NUMBERS.fr!,
   },
   it: {
     title: "La tua casella, in cifre",
-    all: "Ho raccolto le intestazioni della tua casella: %1 messaggi, di cui %2 di corrispondenza.",
-    window: "Negli ultimi %1 anni: %2 messaggi, di cui %3 di corrispondenza.",
-    cost: "Leggerli costerebbe tra %1 e %2, in %3.",
-    free: "Leggerli non costa nulla in questa casa; ci vorrebbero %3.",
-    unpriced: "Non ho il prezzo del modello con cui questa casa legge; ci vorrebbero %3.",
+    all: "Ho raccolto le intestazioni della tua casella: %1 messaggi in tutto, di cui %2 newsletter e notifiche.",
+    window: "Negli ultimi %1 anni ci conto %2 scambi veri.",
+    offer: "Posso leggerli, in %1, e dirti chi conta per te e cosa è in corso.",
     nights: "%1 o %2 notti",
     question: "Li leggo? Sì o no.",
-    nothing: "Non c'è nulla da leggere in questo periodo.",
-    years: ["anni", "anno"],
+    nothing: "Negli ultimi %1 anni non ci trovo nessuno scambio vero da leggere.",
     numbers: NUMBERS.it!,
   },
   de: {
     title: "Dein Postfach, in Zahlen",
-    all: "Ich habe die Kopfzeilen deines Postfachs erfasst: %1 Nachrichten, davon %2 Korrespondenz.",
-    window: "In den letzten %1 Jahren: %2 Nachrichten, davon %3 Korrespondenz.",
-    cost: "Sie zu lesen würde zwischen %1 und %2 kosten, über %3.",
-    free: "Sie zu lesen kostet in diesem Haushalt nichts; es bräuchte %3.",
-    unpriced: "Ich habe keinen Preis für das Modell, mit dem dieser Haushalt liest; es bräuchte %3.",
+    all: "Ich habe die Kopfzeilen deines Postfachs erfasst: %1 Nachrichten insgesamt, davon %2 Newsletter und Benachrichtigungen.",
+    window: "In den letzten %1 Jahren zähle ich %2 echte Wechsel.",
+    offer: "Ich kann sie lesen, über %1, und dir sagen, wer für dich zählt und was gerade läuft.",
     nights: "%1 oder %2 Nächte",
     question: "Soll ich sie lesen? Ja oder nein.",
-    nothing: "In diesem Zeitraum gibt es nichts zu lesen.",
-    years: ["Jahren", "Jahr"],
+    nothing: "In den letzten %1 Jahren finde ich keinen echten Wechsel zum Lesen.",
     numbers: NUMBERS.de!,
   },
   es: {
     title: "Tu buzón, en cifras",
-    all: "He recorrido las cabeceras de tu buzón: %1 mensajes, %2 de ellos de correspondencia.",
-    window: "En los últimos %1 años: %2 mensajes, %3 de ellos de correspondencia.",
-    cost: "Leerlos costaría entre %1 y %2, en %3.",
-    free: "Leerlos no cuesta nada en este hogar; harían falta %3.",
-    unpriced: "No tengo el precio del modelo con el que lee este hogar; harían falta %3.",
+    all: "He recorrido las cabeceras de tu buzón: %1 mensajes en total, %2 de ellos boletines y notificaciones.",
+    window: "En los últimos %1 años cuento %2 intercambios reales.",
+    offer: "Puedo leerlos, en %1, y decirte quién cuenta para ti y qué está en marcha.",
     nights: "%1 o %2 noches",
     question: "¿Los leo? Sí o no.",
-    nothing: "No hay nada que leer en ese periodo.",
-    years: ["años", "año"],
+    nothing: "En los últimos %1 años no encuentro ningún intercambio real que leer.",
     numbers: NUMBERS.es!,
   },
   pt: {
     title: "A tua caixa, em números",
-    all: "Levantei os cabeçalhos da tua caixa: %1 mensagens, %2 delas de correspondência.",
-    window: "Nos últimos %1 anos: %2 mensagens, %3 delas de correspondência.",
-    cost: "Lê-las custaria entre %1 e %2, em %3.",
-    free: "Lê-las não custa nada nesta casa; levaria %3.",
-    unpriced: "Não tenho o preço do modelo com que esta casa lê; levaria %3.",
+    all: "Levantei os cabeçalhos da tua caixa: %1 mensagens ao todo, %2 delas newsletters e notificações.",
+    window: "Nos últimos %1 anos conto %2 trocas reais.",
+    offer: "Posso lê-las, em %1, e dizer-te quem conta para ti e o que está em curso.",
     nights: "%1 ou %2 noites",
     question: "Leio? Sim ou não.",
-    nothing: "Não há nada para ler nesse período.",
-    years: ["anos", "ano"],
+    nothing: "Nos últimos %1 anos não encontro nenhuma troca real para ler.",
     numbers: NUMBERS.pt!,
   },
   nl: {
     title: "Je mailbox, in cijfers",
-    all: "Ik heb de koppen van je mailbox doorlopen: %1 berichten, waarvan %2 correspondentie.",
-    window: "Over de laatste %1 jaar: %2 berichten, waarvan %3 correspondentie.",
-    cost: "Ze lezen zou tussen %1 en %2 kosten, in %3.",
-    free: "Ze lezen kost niets in dit huishouden; het zou %3 duren.",
-    unpriced: "Ik heb geen prijs voor het model waarmee dit huishouden leest; het zou %3 duren.",
+    all: "Ik heb de koppen van je mailbox doorlopen: %1 berichten in totaal, waarvan %2 nieuwsbrieven en meldingen.",
+    window: "Over de laatste %1 jaar tel ik %2 echte uitwisselingen.",
+    offer: "Ik kan ze lezen, in %1, en je zeggen wie voor jou telt en wat er speelt.",
     nights: "%1 of %2 nachten",
     question: "Zal ik ze lezen? Ja of nee.",
-    nothing: "Er is niets te lezen in die periode.",
-    years: ["jaar", "jaar"],
+    nothing: "Over de laatste %1 jaar vind ik geen echte uitwisseling om te lezen.",
     numbers: NUMBERS.nl!,
   },
 };
@@ -223,33 +205,35 @@ export function nightsPhrase(low: number, high: number, t: MailOpenerStrings): s
 export interface MailOpeningInput {
   locale: string;
   estimate: ReadingEstimate;
-  /** Null when the model is unpriced; low = high = 0 when it is free. */
-  cost: CostRange | null;
 }
 
 /**
- * The opening message: the mailbox in all, the window, the cost and the
- * nights, the question. Four short paragraphs, every one of them a number
- * or the question — and nothing about anyone.
+ * The opening message: what the box holds, the real exchanges of the
+ * window, what reading them gives and how many nights, the question. Four
+ * short paragraphs — no money, and nothing about anyone.
  */
 export function renderMailOpening(input: MailOpeningInput): string {
   const t = mailOpenerStrings(input.locale);
   const e = input.estimate;
   const n = (v: number) => formatCount(v, input.locale);
-  const allCorrespondence = e.all ? e.all.correspondence : null;
+  const bulk = e.all?.bulk ?? null;
   const blocks: string[] = [];
-  blocks.push(allCorrespondence === null ? fmt(t.all, n(e.messages), "—").replace(", — ", " ") : fmt(t.all, n(e.messages), n(allCorrespondence)));
-  blocks.push(fmt(t.window, n(e.years), n(e.window.messages), n(e.window.correspondence)));
+  blocks.push(bulk === null ? fmt(t.all, n(e.messages), n(0)).replace(/,[^.]*$/, ".") : fmt(t.all, n(e.messages), n(bulk)));
   if (!e.to_read) {
-    blocks.push(t.nothing);
+    blocks.push(fmt(t.nothing, n(e.years)));
     return blocks.join("\n\n");
   }
-  const nights = nightsPhrase(e.nights.low, e.nights.high, t);
-  if (input.cost === null) blocks.push(fmt(t.unpriced, "", "", nights));
-  else if (input.cost.high <= 0) blocks.push(fmt(t.free, "", "", nights));
-  else blocks.push(fmt(t.cost, formatEuros(input.cost.low, input.locale), formatEuros(input.cost.high, input.locale), nights));
+  blocks.push(fmt(t.window, n(e.years), n(e.to_read)));
+  blocks.push(fmt(t.offer, nightsPhrase(e.nights.low, e.nights.high, t)));
   blocks.push(t.question);
   return blocks.join("\n\n");
+}
+
+/** One line for the log and the console: the operator's view of what a
+ *  reading would cost. Never shown to the member. */
+export function describeCost(cost: CostRange | null): string {
+  if (!cost) return "cost: unpriced model";
+  return `cost: ${cost.low.toFixed(3)}–${cost.high.toFixed(3)} € (${cost.light_model} → ${cost.full_model})`;
 }
 
 export function mailOpeningTitle(locale: string): string {

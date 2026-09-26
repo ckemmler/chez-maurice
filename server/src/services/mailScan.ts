@@ -3,7 +3,7 @@ import { dirname, join } from "node:path";
 import { getAppDir } from "../../lib/appDir";
 import { isDue } from "./corpusNightly";
 import { memberLocale } from "./domainBriefs";
-import { mailOpeningTitle, readingCost, renderMailOpening, type ReadingEstimate } from "./mailOpener";
+import { describeCost, mailOpeningTitle, readingCost, renderMailOpening, type ReadingEstimate } from "./mailOpener";
 import { corpusCall } from "./mcpClient";
 import { openConversation, type OpenRequest, type OpenResult } from "./openedConversations";
 import { listUsers } from "./users";
@@ -325,12 +325,13 @@ async function announce(memberId: string, est: ReadingEstimate, d: MailScanDeps,
   const ms = memberState(memberId);
   if (ms.announced_at) return false;
   const locale = d.locale(memberId);
-  const text = renderMailOpening({ locale, estimate: est, cost: readingCost(est) });
+  const text = renderMailOpening({ locale, estimate: est });
   const opened = await d.open({ memberId, text, title: mailOpeningTitle(locale), force: true });
   if (!opened.ok) throw new Error(`the conversation could not be opened: ${opened.reason}`);
   ms.announced_at = now.toISOString();
   ms.conversation_id = opened.conversation.id;
-  console.log(`[mail] nightly: conversation ${opened.conversation.id} opened for ${memberId} with the numbers`);
+  // What it would cost is the operator's to know, not the member's.
+  console.log(`[mail] nightly: conversation ${opened.conversation.id} opened for ${memberId} with the numbers; ${est.to_read} to read, ${describeCost(readingCost(est))}`);
   return true;
 }
 

@@ -296,8 +296,13 @@ is about 449 000 tokens, the light pass 93 000, one or two nights.
 
 **Then Maurice opens the conversation** ([[maurice-chat]] has the surface;
 `services/mailOpener.ts` the text): once per member, only when the walk is
-done, past the opening guard by decision, and made of numbers and nothing
-else — see [[maurice-chat]]. The "yes" and the spend are lot 3, not built.
+done, past the opening guard by decision, short, and **with no money in it**
+— the cost range the server computes from the calibration and `pricing.ts`
+goes to the log alone (`[mail] nightly: … 466 to read, cost: 0.014–0.250 €
+(mistral-small → mistral-medium)`), the operator's view; the member is asked
+for consent to read, not for a purchase (Candide, 26 September 2026: spending
+is abstract to a member, the household's cap is the only ceiling). The "yes"
+is lot 3, not built.
 
 **Why a mail answer takes as long as it does** (25 September 2026). *Relis-moi
 le mail à Jean* took 58 s: 23 s in `search`, 10 s in `get_message`, 25 s across
@@ -557,7 +562,7 @@ when imapclient ships the fix.
 - **`email` cannot reach Outlook.com.** Microsoft takes only OAuth over IMAP; not built. Nor does it index mail: search is IMAP's own (Gmail's is good, others' less so). The header store (above) is not a search index either: bodies are never kept, and a subject can only be read by unsealing it.
 - **The triage knows no contacts.** `triage_mailbox` takes a list of addresses and nobody passes one: the `contacts` tool is private (vCard, `maurice-tools`) and the public `email` tool cannot import it. A single reconciled list of a member's contacts is a design of its own (26 September 2026); until then only "replied" and "sent" make a person, and a contact who never got a reply is "other".
 - **The calibration's tokenizer is a proxy** (`tiktoken`), not Mistral's; **a night's reading capacity is assumed** (1 500 messages) until lot 4 exists. The range is wide enough for the first; nothing yet checks the second.
-- **The "yes" is not built.** The conversation asks; a reply is an ordinary turn and nothing reads a body or spends a cent (lot 3: `job_id` on `spend_ledger`, the ceiling, then the reading). The Settings card shows the walk, not the reconciliation or the triage.
+- **The "yes" is not built.** The conversation asks; a reply is an ordinary turn and nothing reads a body or spends a cent (lot 3: `job_id` on `spend_ledger` so the operator sees the reading apart from chat, then the reading; no per-job ceiling — the household's cap is the only one, by decision). The Settings card shows the walk, not the reconciliation or the triage; the cost range lives in the log only, no console card yet.
 - **`web` and `signals` can't be turned off.** They're re-unioned into every resolution, so unticking them in the picker does nothing.
 - **Family selection is coarser than it looks.** `toolInFamilies` still accepts the parent prefix for back-compat, so a conversation holding `"garden"` opens all 54 garden tools at once, sub-families included.
 - **No per-tool sandboxing.** A tool runs with the gateway's process privileges; the only access control is the member contextvar and tool-family gating, not OS-level isolation.

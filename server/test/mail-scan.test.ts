@@ -221,11 +221,11 @@ test("the conversation opens once, when the walk is done, past the guard, with n
   expect(opened).toHaveLength(1);
   const req = opened[0];
   expect(req).toMatchObject({ memberId: "m-anna", force: true, title: "Ta boîte mail, en chiffres" });
-  expect(req.text).toContain("100 messages, dont 30 de correspondance");
-  expect(req.text).toContain("Sur les 3 dernières années : 40 messages, dont 15 de correspondance");
-  expect(req.text).toContain("une ou deux nuits");
+  expect(req.text).toContain("100 messages en tout, dont 60 lettres d'information et notifications");
+  expect(req.text).toContain("Sur les 3 dernières années, j'y compte 20 vrais échanges");
+  expect(req.text).toContain("sur une ou deux nuits");
   expect(req.text).toContain("Je lis ? Oui ou non.");
-  expect(req.text).not.toMatch(/@/); // nobody is named
+  expect(req.text).not.toMatch(/@|€/); // nobody is named, no money
   // The second night: the walk is done again, nothing is opened again, and
   // the reconciliation waits for its week.
   calls = [];
@@ -258,5 +258,5 @@ test("a calibration with nothing to read does not stop the numbers", async () =>
     }),
   });
   expect(await scan.runMailNightly(deps)).toBe("walked");
-  expect(opened[0].text).toContain("Il n'y a rien à lire");
+  expect(opened[0].text).toContain("je n'y trouve aucun vrai échange à lire");
 });
