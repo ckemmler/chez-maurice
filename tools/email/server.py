@@ -171,7 +171,8 @@ async def list_tools() -> list[Tool]:
             name="scan_status",
             description=(
                 "The current or last header scan: state, counts, where it is, what the store holds — "
-                "and the last reconciliation. `running` is true while either is going."
+                "the last reconciliation, and the member's word on the reading (`reading`: approved or "
+                "declined, or null when not asked yet). `running` is true while anything is going."
             ),
             inputSchema={"type": "object", "properties": {}},
         ),
@@ -235,6 +236,24 @@ async def list_tools() -> list[Tool]:
                 "the nights it would take. No price: the server prices. Nothing is read or spent."
             ),
             inputSchema={"type": "object", "properties": {"years": {"type": "integer", "description": "The window, in years (default 3)."}}},
+        ),
+        Tool(
+            name="approve_reading",
+            description=(
+                "Record the member's yes to Maurice reading the real exchanges of their mailbox over the "
+                "last years — a consent, kept as a `reading` job the night will run; nothing is read now. "
+                "Called by the server on the member's explicit word, in the conversation that asked or from "
+                "Settings → Mail; a second yes changes nothing."
+            ),
+            inputSchema={"type": "object", "properties": {"years": {"type": "integer", "description": "The window, in years (default 3)."}}},
+        ),
+        Tool(
+            name="decline_reading",
+            description=(
+                "Record the member's no to the reading, so that they are not asked again. The member can "
+                "come back on it later. Called by the server on the member's explicit word."
+            ),
+            inputSchema={"type": "object", "properties": {}},
         ),
         Tool(
             name="stats",
@@ -318,6 +337,10 @@ def dispatch(service: EmailService, name: str, args: dict[str, Any], *, member_i
         return service.calibrate(accounts, years=args.get("years") or 3, sample=args.get("sample"))
     if name == "estimate_reading":
         return service.estimate(accounts, years=args.get("years") or 3)
+    if name == "approve_reading":
+        return service.approve_reading(accounts, years=args.get("years"))
+    if name == "decline_reading":
+        return service.decline_reading(accounts)
     if name == "stats":
         return service.stats(
             accounts,

@@ -59,7 +59,7 @@ CREATE TABLE IF NOT EXISTS jobs (
   id            TEXT PRIMARY KEY,
   member_id     TEXT NOT NULL,
   kind          TEXT NOT NULL,
-  state         TEXT NOT NULL,           -- running | paused | done | failed
+  state         TEXT NOT NULL,           -- JOB_STATES below
   budget_eur    REAL,
   spent_eur     REAL NOT NULL DEFAULT 0,
   cursor        TEXT,                    -- JSON: where it is (account, folder, uid)
@@ -135,7 +135,12 @@ MIGRATIONS = (
     ("messages", "gone_at", "TEXT"),
 )
 
-JOB_STATES = ("running", "paused", "done", "failed")
+# The walk and the reconciliation move through the first four. The reading
+# (lot 3) adds two that are the member's word, not the machine's: ``approved``
+# is a consent given and not yet acted on, ``declined`` a refusal that is
+# never asked about again. Lot 4 will take an approved job through
+# ``running`` and ``done`` like the others.
+JOB_STATES = ("running", "paused", "done", "failed", "approved", "declined")
 # A running job whose checkpoint is older than this is taken for dead. A batch
 # of 500 takes a few seconds; a connection that hangs times out in 30.
 STALE_AFTER = 10 * 60
@@ -292,14 +297,20 @@ class MailStore:
             )
 
     # ── jobs ─────────────────────────────────────────────────────────────
-    def create_job(self, member_id: str, kind: str, *, budget_eur: float | None = None) -> dict[str, Any]:
+    def create_job(
+        self, member_id: str, kind: str, *, budget_eur: float | None = None, state: str = "running", cursor: Any = None
+    ) -> dict[str, Any]:
+        if state not in JOB_STATES:
+            raise ValueError(f"not a job state: {state!r}")
+        if cursor is not None and not isinstance(cursor, str):
+            cursor = json.dumps(cursor, ensure_ascii=False)
         at = now_iso()
         job_id = f"job_{uuid.uuid4().hex[:12]}"
         with self._transaction() as conn:
             conn.execute(
                 """INSERT INTO jobs (id, member_id, kind, state, budget_eur, cursor, counts, created_at, updated_at)
-                   VALUES (?, ?, ?, 'running', ?, NULL, '{}', ?, ?)""",
-                (job_id, member_id, kind, budget_eur, at, at),
+                   VALUES (?, ?, ?, ?, ?, ?, '{}', ?, ?)""",
+                (job_id, member_id, kind, state, budget_eur, cursor, at, at),
             )
         return self.job(job_id)  # type: ignore[return-value]
 

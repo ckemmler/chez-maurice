@@ -57,7 +57,8 @@ Index: `messages(conversation_id, created_at)` and `conversations(user_id, updat
 
 | Table | Key columns | Notes |
 |---|---|---|
-| `spend_ledger` | `id`, `at`, `provider`, `model`, `cost_usd`, `user_id` | A row per billed turn, written by `addMessage` alongside `messages.usage` — and, since 19 September 2026, a row per night call of the domain briefs, with `user_id = 'system'`: Maurice's own spending, on nobody's turn, under the night's cap (`households.spend_cap_system_daily_usd`). Duplicated on purpose: summing a JSON column across every message an instance ever held is the wrong shape for something consulted *before each agentic round*, and a deleted message must not un-spend its money. Read only by the spending fuse (see [[maurice-server]]); a household with no cap set writes to it and never reads it. |
+| `spend_ledger` | `id`, `at`, `provider`, `model`, `cost_usd`, `user_id`, `job_id` | A row per billed turn, written by `addMessage` alongside `messages.usage` — and, since 19 September 2026, a row per night call of the domain briefs, with `user_id = 'system'`: Maurice's own spending, on nobody's turn, under the night's cap (`households.spend_cap_system_daily_usd`). Duplicated on purpose: summing a JSON column across every message an instance ever held is the wrong shape for something consulted *before each agentic round*, and a deleted message must not un-spend its money. Read only by the spending fuse (see [[maurice-server]]); a household with no cap set writes to it and never reads it. Since 26 September 2026 (lot 3 of the mail import) `job_id TEXT` (indexed with `at`) says which job spent it when a job did — the mail reading of lot 4 will write its rows under the id of the `reading` job in the member's own store, as the member — and `spentOnJob(jobId)` sums one job over its life for the operator; a chat turn leaves it null, and the caps still count every row. |
+| `mail_conversations` | `member_id` (PK), `conversation_id`, `opened_at`, `reading` ∈ `pending`/`approved`/`declined`, `decided_at` | The conversation Maurice opened with a member's mailbox numbers (26 September 2026, `services/mailApproval.ts`), one per member: written by the night when it opens one, filled once at boot from `mail-nightly.json` for those opened before. It is the grant of the native `mail__approve_reading` tool — the tool exists in that conversation and nowhere else — and `reading` mirrors, by the server's hand alone, the word the `email` tool recorded in the member's store, so a turn knows where things stand without a gateway call. The job itself is the tool's row, never one here. No foreign key on `member_id`, like the ledger's `user_id`. |
 
 The ledger is what makes an answer possible to the question §4 of
 [[maurice-commercialisation]] says nothing can answer today — *what has this
@@ -134,10 +135,16 @@ table (`message`, `kind` ∈ `bulk`/`correspondence`/`other`, `reason`,
 measured on a hundred bodies, nothing of the bodies), and `messages.gone_at`
 (a guarded `ALTER`), set by the weekly reconciliation on a message left with
 no location and cleared when the walk meets it again. `jobs.kind` is now
-`headers` or `reconcile`, one running per store at a time. The server keeps
-nothing of this in `maurice.db`: the night's own memory — last run, last
+`headers` or `reconcile`, one running per store at a time — and, since the
+evening (lot 3), `reading`: one row per member holding the member's word,
+`approved` or `declined` (two states added to the job's), `budget_eur` NULL
+by decision (no ceiling per job), the window in `cursor` as `{"years": N}`,
+re-marked on a second word rather than duplicated; lot 4 will take it
+through `running` to `done` and spend under its id. The server keeps nothing
+of the job in `maurice.db`: the night's own memory — last run, last
 reconciliation and the conversation opened per member — is
-`<app dir>/mail-nightly.json`.
+`<app dir>/mail-nightly.json`, and `mail_conversations` (above) holds only
+the link to that conversation and a mirror of the word.
 
 ## The data-api's databases
 

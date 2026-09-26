@@ -925,6 +925,26 @@ db.run(`
   )
 `);
 
+// The conversation Maurice opened with a member's mailbox numbers, and the
+// member's word on the reading (26 September 2026, lot 3 of
+// specs/mail-import.md; services/mailApproval.ts). One row per member: the
+// conversation the night opened (also kept in mail-nightly.json, which this
+// table is filled from at boot), and `reading` — `pending` until the member
+// answers, then `approved` or `declined` — a mirror of what the `email` tool
+// recorded in the member's own store, written by the server alone, so a
+// turn in that conversation knows where things stand without a gateway
+// call. The job itself is the tool's row, never one of ours.
+db.run(`
+  CREATE TABLE IF NOT EXISTS mail_conversations (
+    member_id       TEXT PRIMARY KEY,
+    conversation_id TEXT NOT NULL,
+    opened_at       TEXT NOT NULL DEFAULT (datetime('now')),
+    reading         TEXT NOT NULL DEFAULT 'pending' CHECK (reading IN ('pending', 'approved', 'declined')),
+    decided_at      TEXT
+  )
+`);
+db.run(`CREATE INDEX IF NOT EXISTS idx_mail_conversations_conversation ON mail_conversations(conversation_id)`);
+
 // The brief's own one-liner (20 September 2026). The everyday prompt carries an
 // *index* of the member's domains — a name and a sentence each — rather than
 // every brief in full, and loads a brief only when a question falls into it

@@ -88,6 +88,9 @@ export interface MailOpenerStrings {
   question: string;
   /** %1 years: nothing to read. */
   nothing: string;
+  /** What Maurice says when the yes, or the no, came from the app (lot 3). */
+  approved: string;
+  declined: string;
   numbers: string[];
 }
 
@@ -110,6 +113,8 @@ export const MAIL_OPENER_STRINGS: Record<string, MailOpenerStrings> = {
     nights: "%1 or %2 nights",
     question: "Shall I read them? Yes or no.",
     nothing: "Over the last %1 years I find no real exchange to read.",
+    approved: "Understood: I will read them, from the next night on, and come back here with what I understood.",
+    declined: "Understood: I will not read them, and I will not ask again. If you change your mind, say so here or in Settings → Mail.",
     numbers: NUMBERS.en!,
   },
   fr: {
@@ -120,6 +125,8 @@ export const MAIL_OPENER_STRINGS: Record<string, MailOpenerStrings> = {
     nights: "%1 ou %2 nuits",
     question: "Je lis ? Oui ou non.",
     nothing: "Sur les %1 dernières années, je n'y trouve aucun vrai échange à lire.",
+    approved: "Entendu : je les lis, dès la nuit prochaine, et je reviens ici avec ce que j'ai compris.",
+    declined: "Entendu : je ne les lis pas, et je ne redemanderai pas. Si tu changes d'avis, dis-le ici ou dans Réglages → Mail.",
     numbers: NUMBERS.fr!,
   },
   it: {
@@ -130,6 +137,8 @@ export const MAIL_OPENER_STRINGS: Record<string, MailOpenerStrings> = {
     nights: "%1 o %2 notti",
     question: "Li leggo? Sì o no.",
     nothing: "Negli ultimi %1 anni non ci trovo nessuno scambio vero da leggere.",
+    approved: "Capito: li leggo, dalla prossima notte, e torno qui con quello che ho capito.",
+    declined: "Capito: non li leggo, e non lo chiederò più. Se cambi idea, dimmelo qui o in Impostazioni → Mail.",
     numbers: NUMBERS.it!,
   },
   de: {
@@ -140,6 +149,8 @@ export const MAIL_OPENER_STRINGS: Record<string, MailOpenerStrings> = {
     nights: "%1 oder %2 Nächte",
     question: "Soll ich sie lesen? Ja oder nein.",
     nothing: "In den letzten %1 Jahren finde ich keinen echten Wechsel zum Lesen.",
+    approved: "Verstanden: ich lese sie, ab der nächsten Nacht, und komme hier mit dem zurück, was ich verstanden habe.",
+    declined: "Verstanden: ich lese sie nicht, und ich frage nicht noch einmal. Wenn du es dir anders überlegst, sag es hier oder unter Einstellungen → Mail.",
     numbers: NUMBERS.de!,
   },
   es: {
@@ -150,6 +161,8 @@ export const MAIL_OPENER_STRINGS: Record<string, MailOpenerStrings> = {
     nights: "%1 o %2 noches",
     question: "¿Los leo? Sí o no.",
     nothing: "En los últimos %1 años no encuentro ningún intercambio real que leer.",
+    approved: "Entendido: los leo, a partir de la próxima noche, y vuelvo aquí con lo que haya entendido.",
+    declined: "Entendido: no los leo, y no volveré a preguntar. Si cambias de idea, dímelo aquí o en Ajustes → Correo.",
     numbers: NUMBERS.es!,
   },
   pt: {
@@ -160,6 +173,8 @@ export const MAIL_OPENER_STRINGS: Record<string, MailOpenerStrings> = {
     nights: "%1 ou %2 noites",
     question: "Leio? Sim ou não.",
     nothing: "Nos últimos %1 anos não encontro nenhuma troca real para ler.",
+    approved: "Entendido: leio-as, a partir da próxima noite, e volto aqui com o que tiver entendido.",
+    declined: "Entendido: não as leio, e não volto a perguntar. Se mudares de ideias, diz-me aqui ou em Definições → Mail.",
     numbers: NUMBERS.pt!,
   },
   nl: {
@@ -170,6 +185,8 @@ export const MAIL_OPENER_STRINGS: Record<string, MailOpenerStrings> = {
     nights: "%1 of %2 nachten",
     question: "Zal ik ze lezen? Ja of nee.",
     nothing: "Over de laatste %1 jaar vind ik geen echte uitwisseling om te lezen.",
+    approved: "Begrepen: ik lees ze, vanaf de volgende nacht, en kom hier terug met wat ik begrepen heb.",
+    declined: "Begrepen: ik lees ze niet, en ik vraag het niet opnieuw. Als je van gedachten verandert, zeg het hier of in Instellingen → Mail.",
     numbers: NUMBERS.nl!,
   },
 };

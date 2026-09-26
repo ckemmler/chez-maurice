@@ -65,6 +65,19 @@ const CORPUS_ADMIN = [
   "corpus__import_history",
 ];
 
+// The `email` tool's two words on the reading (lot 3 of specs/mail-import.md)
+// are the server's to call, never the model's: the member's yes is taken by
+// the native `mail__approve_reading`, which exists in exactly one conversation
+// (services/mailApproval.ts), or by the app's Settings → Mail. Handed to a
+// model, these two would let any conversation with the family approve a
+// reading on a hint. Never offered, whatever the selection says.
+const EMAIL_SERVER_ONLY = ["email__approve_reading", "email__decline_reading"];
+
+/** True for a tool the server calls itself and a model may never hold. */
+export function isServerOnlyTool(toolName: string): boolean {
+  return CORPUS_ADMIN.includes(toolName) || EMAIL_SERVER_ONLY.includes(toolName);
+}
+
 // What "remembering" needs and no more: ask the index a question, then widen
 // around a passage that answered it. These two ride in every private turn now
 // that the family is always on, so they are also two more tool definitions in

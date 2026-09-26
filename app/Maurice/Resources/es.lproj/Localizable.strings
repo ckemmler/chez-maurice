@@ -671,3 +671,15 @@
 "mail.scan.resume" = "Reanudar";
 "mail.scan.refresh" = "Recoger el correo nuevo";
 "mail.scan.help" = "Recorre las cabeceras desde el último punto alcanzado. No se lee ni se envía nada.";
+"mail.reading.title" = "La lectura";
+"mail.reading.loading" = "Lectura: …";
+"mail.reading.none" = "Lectura: aún no pedida";
+"mail.reading.pending" = "Lectura: esperando tu respuesta";
+"mail.reading.approved" = "Lectura: aprobada el %@";
+"mail.reading.declined" = "Lectura: rechazada";
+"mail.reading.running" = "Lectura: en curso";
+"mail.reading.done" = "Lectura: terminada";
+"mail.reading.approve" = "Dejar leer a Maurice";
+"mail.reading.withdraw" = "Retirar la aprobación";
+"mail.reading.help" = "Maurice lee los intercambios reales de los últimos años, por la noche, y te dice quién cuenta para ti y qué está en marcha. No se envía nada ni se cambia nada en tu buzón.";
+"mail.reading.caption" = "La lectura es un sí que das tú — aquí o en la conversación que Maurice abrió. Puedes retirarlo en cualquier momento.";

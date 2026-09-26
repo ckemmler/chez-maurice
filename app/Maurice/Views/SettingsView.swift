@@ -906,7 +906,17 @@ struct MailScanStatus: Decodable, Equatable {
     let seen: Int
     let last_error: String?
     let error: String?
+    /// The member's word on the reading (lot 3): nil until asked and
+    /// answered; then approved or declined, and the job's own states once
+    /// the night runs it.
+    let reading: MailReading?
 }
+struct MailReading: Decodable, Equatable {
+    let state: String
+    let decided_at: String?
+    let years: Int?
+}
+private struct ReadingAction: Encodable { let action: String }
 private struct EmptyBody: Encodable {}
 private struct NewMailAccount: Encodable {
     let address: String
@@ -995,6 +1005,8 @@ private struct MailPane: View {
     /// Where the header walk is (GET /api/mail-accounts/scan); nil until read.
     @State private var scan: MailScanStatus?
     @State private var scanBusy = false
+    @State private var readingBusy = false
+    @State private var readingError: String?
 
     private var api: APIClient? { session.serverURL.map { APIClient(baseURL: $0) } }
 
@@ -1020,6 +1032,10 @@ private struct MailPane: View {
                     scanCard
                 }
                 SetCaption(session.localized("mail.scan.caption"))
+                SetGroup(session.localized("mail.reading.title")) {
+                    readingCard
+                }
+                SetCaption(session.localized("mail.reading.caption"))
             }
 
             SetGroup(session.localized("mail.add")) {
@@ -1158,6 +1174,88 @@ private struct MailPane: View {
                 }
             }
             .padding(13)
+        }
+    }
+
+    // The reading is a yes the member gives — in the conversation Maurice
+    // opened with the numbers, or here, without it. This card says where
+    // the word stands and lets them give it or take it back. A consent,
+    // nothing else: the card never speaks of what it costs.
+
+    private var readingCard: some View {
+        SetCard {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(spacing: 11) {
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .fill(accent.opacity(0.14)).frame(width: 26, height: 26)
+                        .overlay(Image(systemName: readingApproved ? "book.closed.fill" : "book.closed")
+                            .font(.system(size: 13)).foregroundStyle(accent.legible(onDark: theme.isDark)))
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(readingLine).font(.system(size: 13.5)).foregroundStyle(theme.ink)
+                        if let readingError {
+                            Text(readingError).font(.system(size: 11, design: .monospaced)).foregroundStyle(theme.inkMute)
+                                .lineLimit(3).textSelection(.enabled)
+                        }
+                    }
+                    Spacer(minLength: 0)
+                }
+                HStack(spacing: 8) {
+                    Button {
+                        Task { await decideReading(readingApproved ? "decline" : "approve") }
+                    } label: {
+                        HStack(spacing: 8) {
+                            Image(systemName: readingApproved ? "xmark" : "checkmark").font(.system(size: 11, weight: .medium))
+                            Text(session.localized(readingApproved ? "mail.reading.withdraw" : "mail.reading.approve"))
+                                .font(.system(size: 13, weight: .medium))
+                        }
+                        .padding(.horizontal, 14).padding(.vertical, 8)
+                    }
+                    .glassProminentButton()
+                    .tint(session.activeDeviceUser?.color ?? .blue)
+                    .disabled(readingBusy || scan == nil || readingRunning)
+                    .help(session.localized("mail.reading.help"))
+                    if readingBusy { ProgressView().controlSize(.small) }
+                    Spacer(minLength: 0)
+                }
+            }
+            .padding(13)
+        }
+    }
+
+    private var readingApproved: Bool { scan?.reading?.state == "approved" }
+    private var readingRunning: Bool { ["running", "paused"].contains(scan?.reading?.state ?? "") }
+
+    private var readingLine: String {
+        guard let scan else { return session.localized("mail.reading.loading") }
+        guard let r = scan.reading else { return session.localized("mail.reading.none") }
+        switch r.state {
+        case "approved": return session.localized("mail.reading.approved", Self.day(r.decided_at))
+        case "declined": return session.localized("mail.reading.declined")
+        case "running", "paused": return session.localized("mail.reading.running")
+        case "done": return session.localized("mail.reading.done")
+        default: return session.localized("mail.reading.pending")
+        }
+    }
+
+    /// The tool's ISO instant as a short local date.
+    private static func day(_ iso: String?) -> String {
+        guard let iso else { return "" }
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime]
+        let date = f.date(from: iso) ?? { f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]; return f.date(from: iso) }()
+        guard let date else { return String(iso.prefix(10)) }
+        return date.formatted(date: .long, time: .omitted)
+    }
+
+    private func decideReading(_ action: String) async {
+        guard let api, let token = session.tokenForActiveUser else { return }
+        readingBusy = true; readingError = nil
+        defer { readingBusy = false }
+        do {
+            let s: MailScanStatus = try await api.post("/api/mail-accounts/reading", body: ReadingAction(action: action), token: token)
+            scan = s
+        } catch {
+            if case APIError.server(_, let message) = error { readingError = message } else { readingError = error.localizedDescription }
         }
     }
 

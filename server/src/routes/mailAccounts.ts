@@ -11,6 +11,7 @@ import {
   type MailAccount,
 } from "../services/mailAccounts";
 import { mailScanStatus, startMailScan, startMailScanInBackground } from "../services/mailScan";
+import { decideReading, mailConversationOf, sayReadingDecided, type ReadingAction } from "../services/mailApproval";
 
 // The signed-in member's own mail accounts (services/mailAccounts.ts). Every
 // route acts on the caller's accounts only; another member's account is not
@@ -25,6 +26,12 @@ import { mailScanStatus, startMailScan, startMailScanInBackground } from "../ser
 // Once the login worked, the header walk starts on its own (services/
 // mailScan.ts): free, no body read, the member's own file only. Settings →
 // Mail reads where it is at GET /scan and restarts it at POST /scan.
+//
+// The member's word on the reading (lot 3, services/mailApproval.ts) has
+// its second door here: POST /reading with `action` approves or declines
+// without the conversation, and Maurice says in that conversation what was
+// done. A consent, nothing about money; the household's cap is the only
+// ceiling and it is not this route's business.
 
 const accounts = new Hono();
 
@@ -81,6 +88,26 @@ accounts.get("/scan", async (c) => c.json(await mailScanStatus(c.get("userId")))
 /** Start the walk again — after a pause, or to pick up new mail now rather
  *  than tonight. A walk already going is joined, not doubled. */
 accounts.post("/scan", async (c) => c.json(await startMailScan(c.get("userId"))));
+
+/** The member's word on the reading, from the card: `{ action: "approve" |
+ *  "decline" }`. Records it in their store through the tool, mirrors it,
+ *  says it in the mail conversation in Maurice's voice, and answers with
+ *  the walk's view (its `reading` now current). 422 when the tool refuses. */
+accounts.post("/reading", async (c) => {
+  const uid = c.get("userId");
+  const body = await c.req.json().catch(() => ({}));
+  const action = body?.action;
+  if (action !== "approve" && action !== "decline") return c.json({ error: "action must be approve or decline" }, 400);
+  try {
+    const d = await decideReading(uid, action as ReadingAction);
+    // Said once: a second identical word changes nothing and says nothing.
+    const said = d.already ? null : sayReadingDecided(uid, action as ReadingAction);
+    const view = await mailScanStatus(uid);
+    return c.json({ ...view, decision: { ...d, said, conversation_id: mailConversationOf(uid)?.conversation_id ?? null } });
+  } catch (err) {
+    return c.json({ error: (err as Error).message }, 422);
+  }
+});
 
 /** A new password — after the old app password was revoked. Checked the same
  *  way; a password that does not work leaves the previous one in place. */

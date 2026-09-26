@@ -232,3 +232,22 @@ test("a member's own view: spent, tightest daily cap, headroom", async () => {
   // ... but the household's 3.00 - 2.50 is the tighter headroom.
   expect(u.remaining_usd).toBeCloseTo(0.5, 5);
 });
+
+test("a job's spend is kept apart from chat: job_id on the row, summed by spentOnJob, still counted in the member's day", async () => {
+  const b = await budget();
+  const db = (await import("../src/db")).default;
+  // A chat turn: no job. A night's reading: the job's id, as the member.
+  b.recordSpend(turn(0.2), ANNA);
+  b.recordSpend(turn(0.3), ANNA, "job_reading_1");
+  b.recordSpend(turn(0.1), ANNA, "job_reading_1");
+  b.recordSpend(turn(0.4), BEN, "job_reading_2");
+  const rows = db.query(`SELECT user_id, job_id, cost_usd FROM spend_ledger ORDER BY id`).all() as any[];
+  expect(rows.map((r) => r.job_id)).toEqual([null, "job_reading_1", "job_reading_1", "job_reading_2"]);
+  expect(b.spentOnJob("job_reading_1")).toBeCloseTo(0.4, 5);
+  expect(b.spentOnJob("job_reading_2")).toBeCloseTo(0.4, 5);
+  expect(b.spentOnJob("job_nobody")).toBe(0);
+  // The member's day and the household's still see every row: the job is a
+  // dimension, not an exemption from the caps.
+  expect(b.spentTodayUsd(ANNA)).toBeCloseTo(0.6, 5);
+  expect(b.spentTodayUsd()).toBeCloseTo(1.0, 5);
+});

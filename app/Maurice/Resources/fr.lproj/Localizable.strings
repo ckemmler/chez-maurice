@@ -671,3 +671,15 @@
 "mail.scan.resume" = "Reprendre";
 "mail.scan.refresh" = "Relever le nouveau courrier";
 "mail.scan.help" = "Relève les en-têtes depuis le dernier point atteint. Rien n'est lu, rien n'est envoyé.";
+"mail.reading.title" = "La lecture";
+"mail.reading.loading" = "Lecture : …";
+"mail.reading.none" = "Lecture : pas encore demandée";
+"mail.reading.pending" = "Lecture : en attente de votre réponse";
+"mail.reading.approved" = "Lecture : approuvée le %@";
+"mail.reading.declined" = "Lecture : refusée";
+"mail.reading.running" = "Lecture : en cours";
+"mail.reading.done" = "Lecture : terminée";
+"mail.reading.approve" = "Laisser Maurice lire";
+"mail.reading.withdraw" = "Retirer l'approbation";
+"mail.reading.help" = "Maurice lit les vrais échanges des dernières années, la nuit, et vous dit qui compte pour vous et ce qui est en cours. Rien n'est envoyé, rien n'est modifié dans votre boîte.";
+"mail.reading.caption" = "La lecture est un oui que vous donnez — ici ou dans la conversation que Maurice a ouverte. Vous pouvez le retirer à tout moment.";

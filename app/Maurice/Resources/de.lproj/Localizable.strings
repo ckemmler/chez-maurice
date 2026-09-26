@@ -671,3 +671,15 @@
 "mail.scan.resume" = "Fortsetzen";
 "mail.scan.refresh" = "Neue Post erfassen";
 "mail.scan.help" = "Erfasst die Kopfzeilen ab dem zuletzt erreichten Punkt. Nichts wird gelesen, nichts gesendet.";
+"mail.reading.title" = "Das Lesen";
+"mail.reading.loading" = "Lesen: …";
+"mail.reading.none" = "Lesen: noch nicht gefragt";
+"mail.reading.pending" = "Lesen: wartet auf deine Antwort";
+"mail.reading.approved" = "Lesen: freigegeben am %@";
+"mail.reading.declined" = "Lesen: abgelehnt";
+"mail.reading.running" = "Lesen: läuft";
+"mail.reading.done" = "Lesen: abgeschlossen";
+"mail.reading.approve" = "Maurice lesen lassen";
+"mail.reading.withdraw" = "Freigabe zurückziehen";
+"mail.reading.help" = "Maurice liest nachts die echten Wechsel der letzten Jahre und sagt dir, wer für dich zählt und was gerade läuft. Nichts wird gesendet, nichts in deinem Postfach verändert.";
+"mail.reading.caption" = "Das Lesen ist ein Ja, das du gibst — hier oder in dem Gespräch, das Maurice eröffnet hat. Du kannst es jederzeit zurückziehen.";

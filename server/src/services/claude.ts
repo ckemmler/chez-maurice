@@ -18,12 +18,13 @@ import { factsForPrompt, isRememberFactTool, rememberFactTool, runRememberFactTo
 import { importHintSection } from "./chatImport";
 import { MAURICE_DOCS_TOOL_NAME, askMauriceDocs, mauriceDocsTool } from "./mauriceDocsTool";
 import { domainToolsFor, isDomainTool, proposalPromptSection, runDomainTool } from "./domainProposals";
+import { isMailTool, mailPromptSection, mailToolsFor, runMailTool } from "./mailApproval";
 import { ensureUserFirst } from "./openedConversations";
 import { resolveModelId, getModel } from "./models";
 import { resolveUsableModel, getEverydayModel } from "./modelAccess";
 import { ollamaTurn, OLLAMA_NUM_CTX, type OllamaToolCall } from "./ollama";
 import { openaiTurn, PROMPT_CACHE_KEY_PROVIDERS, type OpenAIToolCall } from "./openaiChat";
-import { resolveFamilies, toolInFamilies, canUseExperimental, isExperimentalTool, isPrivateOnlyTool, corpusToolAllowed, selectedFamilies, familyTitles } from "./toolFamilies";
+import { resolveFamilies, toolInFamilies, canUseExperimental, isExperimentalTool, isPrivateOnlyTool, isServerOnlyTool, corpusToolAllowed, selectedFamilies, familyTitles } from "./toolFamilies";
 import { t, userLocale } from "./i18n";
 import { newUsage, priceUsage, hasUsage, type TurnUsage } from "./pricing";
 import { verdict as budgetVerdict } from "./budget";
@@ -540,6 +541,11 @@ async function executeTool(
       // that check is made again inside, on the conversation itself.
       if (isDomainTool(name)) {
         return await runDomainTool(name, input || {}, ctx.conversationId);
+      }
+      // The member's yes to reading their mail (services/mailApproval.ts):
+      // native, in the one conversation that asked; checked again inside.
+      if (isMailTool(name)) {
+        return await runMailTool(input || {}, ctx.conversationId);
       }
       if (mcp) {
         // Same budget on the other side: three layers is three searches, and
@@ -1249,6 +1255,9 @@ function trackedBooks(
       // proposals it carries and the rules of the three tools. Empty
       // everywhere else.
       systemPrompt += proposalPromptSection(conversationId, userDisplayName, memberLocale(memberId));
+      // The conversation Maurice opened with the mailbox numbers (lot 3):
+      // the question, where the answer stands, the one tool. Empty elsewhere.
+      systemPrompt += mailPromptSection(conversationId, memberId, userDisplayName);
 
       // Library binaries (img/pdf) → real content blocks on the latest user turn.
       const attSeen = new Set<string>();
@@ -1336,6 +1345,7 @@ function trackedBooks(
         .filter((t) => expOK || !isExperimentalTool(t.name)) // never hand experimental tools to ungated members
         .filter((t) => !isRoom || !isPrivateOnlyTool(t.name))
         .filter((t) => corpusToolAllowed(t.name, corpusExplicit))
+        .filter((t) => !isServerOnlyTool(t.name)) // the server's own calls, never a model's
         // Tools render at the very front of the cached prefix, so their order has
         // to be stable: the MCP server makes no ordering promise, and a roster
         // that reshuffles between turns would invalidate the whole cache.
@@ -1353,6 +1363,9 @@ function trackedBooks(
   // ordinary conversation does not move.
   const domainTools: McpTool[] = memberId ? domainToolsFor(conversationId, memberId) : [];
   mcpTools = [...mcpTools, ...domainTools];
+  // And the one that takes the member's yes to reading their mail, in the
+  // conversation that asked (services/mailApproval.ts).
+  mcpTools = [...mcpTools, ...(memberId ? mailToolsFor(conversationId, memberId) : [])];
   // And the two that go with them: reading a brief, and writing down a fact.
   if (carriesDomainIndex) mcpTools = [...mcpTools, domainBriefTool(), rememberFactTool()];
 

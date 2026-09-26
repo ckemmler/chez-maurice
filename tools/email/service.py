@@ -20,6 +20,7 @@ from .imap import AccountUnavailable, MailboxError, Session, build_criteria, def
 from . import calibrate as calibrate_mod
 from . import sealing
 from . import triage as triage_mod
+from . import reading as reading_mod
 from .reconcile import KIND as RECONCILE_KIND, Reconciler
 from .scan import KIND as SCAN_KIND, Scanner
 from .store import MailStore
@@ -291,8 +292,9 @@ class EmailService:
             store.orphan_running_jobs()
         job = store.latest_job(SCAN_KIND)
         reconcile = store.latest_job(RECONCILE_KIND)
-        running = any(j and j["state"] == "running" for j in (job, reconcile))
-        return {"running": running, "job": job, "reconcile": reconcile, **self._scan_summary(store)}
+        reading = reading_mod.status(store)
+        running = any(j and j["state"] == "running" for j in (job, reconcile, reading))
+        return {"running": running, "job": job, "reconcile": reconcile, "reading": reading, **self._scan_summary(store)}
 
     @staticmethod
     def _scan_summary(store: MailStore) -> dict[str, Any]:
@@ -331,6 +333,18 @@ class EmailService:
         if not store.triage_counts()["counts"]:
             self.triage(accounts)
         return calibrate_mod.estimate(store, years=max(1, int(years or 3)))
+
+    # ── lot 3: the member's word on the reading ──────────────────────────
+    def approve_reading(self, accounts: list[Account], years: int | None = None) -> dict[str, Any]:
+        """The yes: a job of kind ``reading`` left ``approved`` for the night
+        (lot 4) to run. Nothing is read or opened here."""
+        member_id, store = self._member_store(accounts)
+        return reading_mod.approve(store, member_id, years)
+
+    def decline_reading(self, accounts: list[Account]) -> dict[str, Any]:
+        """The no, kept so that it is not asked again."""
+        member_id, store = self._member_store(accounts)
+        return reading_mod.decline(store, member_id)
 
     # ── tools ────────────────────────────────────────────────────────────
     def list_accounts(self, accounts: list[Account]) -> dict[str, Any]:

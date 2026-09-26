@@ -7,6 +7,7 @@ import { describeCost, mailOpeningTitle, readingCost, renderMailOpening, type Re
 import { corpusCall } from "./mcpClient";
 import { openConversation, type OpenRequest, type OpenResult } from "./openedConversations";
 import { listUsers } from "./users";
+import { backfillMailConversations, linkMailConversation } from "./mailApproval";
 
 // The header walk, driven from the server (specs/mail-import.md, the wiring
 // of lot 1, settled 26 September 2026).
@@ -34,7 +35,9 @@ import { listUsers } from "./users";
 // once per member, Maurice opens a conversation with the numbers and the
 // question — settled 26 September 2026: opened late, only when the walk
 // is done; numbers and nothing else; past the opening guard, this once.
-// The "yes" is lot 3.
+// The "yes" is lot 3 (services/mailApproval.ts): the conversation opened
+// here is linked to its member in `mail_conversations`, which is what
+// grants the tool that takes the yes.
 //
 // The nightly keeps its last run, and per member the last reconciliation
 // and the conversation opened, in a small file on the app dir, like the
@@ -65,6 +68,10 @@ export interface ScanView {
   last_error: string | null;
   /** The tool's own words when it refused or failed to answer. */
   error: string | null;
+  /** The member's word on the reading (lot 3): `pending` until asked and
+   *  answered, then `approved` or `declined` — and, once lot 4 runs it,
+   *  the job's own states. `decided_at` is when the word was given. */
+  reading: { state: string; decided_at: string | null; years: number | null; job_id: string } | null;
 }
 
 /** What the run needs from the world, replaceable by a test. */
@@ -84,6 +91,13 @@ const RECONCILE_EVERY_MS = 7 * 24 * 60 * 60 * 1000;
 /** The gateway namespaces the tool's calls `email__<tool>`; corpusCall
  *  passes a name that already carries its family through unchanged. */
 const emailCall = (memberId: string, tool: string, args: any) => corpusCall(memberId, `email__${tool}`, args ?? {});
+
+/** Call an `email` tool as the member through whatever the deps say — the
+ *  gateway, or a test's stub. What the approval (services/mailApproval.ts)
+ *  uses, so a test of the yes swaps the same thing as a test of the night. */
+export function mailToolCall(memberId: string, tool: string, args: any): Promise<any> {
+  return deps.call(memberId, tool, args ?? {});
+}
 
 const defaultDeps: MailScanDeps = { call: emailCall, members: () => listUsers(), open: openConversation, locale: memberLocale };
 let deps: MailScanDeps = defaultDeps;
@@ -126,7 +140,14 @@ export function scanView(payload: any): ScanView {
     updated_at: job?.updated_at ?? null,
     last_error: job?.last_error ?? null,
     error: error ? String(error) : null,
+    reading: readingView(payload?.reading),
   };
+}
+
+function readingView(job: any): ScanView["reading"] {
+  if (!job || typeof job !== "object" || !job.id) return null;
+  const years = job.cursor && typeof job.cursor === "object" ? Number(job.cursor.years) : NaN;
+  return { state: String(job.state), decided_at: job.updated_at ?? null, years: Number.isFinite(years) ? years : null, job_id: String(job.id) };
 }
 
 /** The member's walk as it stands. Never throws: a gateway that cannot be
@@ -330,6 +351,8 @@ async function announce(memberId: string, est: ReadingEstimate, d: MailScanDeps,
   if (!opened.ok) throw new Error(`the conversation could not be opened: ${opened.reason}`);
   ms.announced_at = now.toISOString();
   ms.conversation_id = opened.conversation.id;
+  // The link that grants the tool taking the yes (services/mailApproval.ts).
+  linkMailConversation(memberId, opened.conversation.id);
   // What it would cost is the operator's to know, not the member's.
   console.log(`[mail] nightly: conversation ${opened.conversation.id} opened for ${memberId} with the numbers; ${est.to_read} to read, ${describeCost(readingCost(est))}`);
   return true;
@@ -404,6 +427,14 @@ export function runMailNightly(d: MailScanDeps = deps): Promise<MailNightlyOutco
 
 /** Tick every ten minutes; run once per local day from HOUR on. */
 export function scheduleMailNightly(): void {
+  // The conversations opened before `mail_conversations` existed are linked
+  // from the night's own record, once; nothing to do afterwards.
+  try {
+    const added = backfillMailConversations(loadState().members);
+    if (added) console.log(`[mail] ${added} mail conversation(s) linked from the nightly record`);
+  } catch (err) {
+    console.warn(`[mail] could not link the mail conversations: ${(err as Error).message}`);
+  }
   if (!mailNightlyOn()) {
     console.log("[mail] nightly header walk off");
     return;

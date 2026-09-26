@@ -302,7 +302,49 @@ goes to the log alone (`[mail] nightly: … 466 to read, cost: 0.014–0.250 €
 (mistral-small → mistral-medium)`), the operator's view; the member is asked
 for consent to read, not for a purchase (Candide, 26 September 2026: spending
 is abstract to a member, the household's cap is the only ceiling). The "yes"
-is lot 3, not built.
+is lot 3, below.
+
+### The yes — lot 3 (26 September 2026, evening)
+
+Decisions of the day, built the same evening (`specs/mail-import.md`, lot 3;
+`server/src/services/mailApproval.ts`, `tools/email/reading.py`). The yes is
+a **consent to read the bodies, not a purchase**: no money in the message,
+the tool, the prompt or the app; no ceiling per job — `spend_cap_system_daily`
+is the household's only one and the member never sees it. It is given **in
+the conversation Maurice opened** ("Your mailbox, in numbers"), by one native
+tool granted by that conversation and nowhere else, on the exact model of
+`domains__adopt`: **`mail__approve_reading`** (`action` ∈ `approve` /
+`decline`), in the roster only when the turn's conversation is the member's
+mail one. The link that grants it is `mail_conversations` in `maurice.db`
+([[maurice-data-model]]) — written when the night opens the conversation,
+filled once at boot from `mail-nightly.json` for the ones opened before, and
+mirroring the reading's state (`pending` / `approved` / `declined`) so the
+prompt section can say where things stand without a gateway call. The prompt
+section carries the domains' rule: never on a hint, an "ok" to something
+else, a question or the model's own judgement — an explicit yes only — and,
+after a no, **never ask again** (the member may still say yes later,
+unprompted, here or in the app; the tool then turns the same job around).
+
+On the tool side, two words join the `email` tool — `approve_reading` and
+`decline_reading` (service, MCP, CLI `approve-reading` / `decline-reading`)
+— which create or re-mark **one** `reading` job per member in their store:
+`JOB_STATES` gains `approved` and `declined`, `budget_eur` stays NULL, the
+window sits in `cursor` as `{"years": N}`, and `scan_status` reports it under
+`reading`. A second yes marks the same row; a job already running (lot 4) is
+left alone. Those two MCP tools are **the server's alone**
+(`isServerOnlyTool` in `toolFamilies.ts`, beside the corpus's admin tools):
+never in a model's roster, whatever the families say, so no other
+conversation can approve on a hint. The second door is the card under
+*Settings → Mail* — "Reading: not asked yet / waiting for your answer /
+approved on … / declined", one button to approve or withdraw, in the seven
+languages — on `POST /api/mail-accounts/reading {action}`; the server then
+says in the conversation, in Maurice's voice and rendered without a model in
+the member's language, what was done. **What the yes triggers: nothing that
+costs.** It leaves the job `approved` for lot 4 — the two reading passes —
+and Maurice answers that the reading happens at night, starting the next
+one, over a few nights, and that he will come back with what he understood.
+Measured spend will land on `spend_ledger.job_id` (built in the same lot) so
+the operator sees a reading apart from chat.
 
 **Why a mail answer takes as long as it does** (25 September 2026). *Relis-moi
 le mail à Jean* took 58 s: 23 s in `search`, 10 s in `get_message`, 25 s across
@@ -557,12 +599,12 @@ when imapclient ships the fix.
 
 ## Gaps & notes
 
-- **The gateway enforces none of this.** Families and the experimental flag live only in the Bun server. A client that authenticates straight to the MCP gateway — a member token, an OAuth custom connector — gets the *complete* mounted roster, whatever the member was granted in the app. Closing that is its own piece of work. (The native tools — `maurice_docs`, the three `domains__*` — are the exception by construction: they live in the server's loop and the gateway never sees them; `corpus__map_conversations`, though, is mounted like any corpus tool and reads whatever member the caller claims.)
+- **The gateway enforces none of this.** Families and the experimental flag live only in the Bun server. A client that authenticates straight to the MCP gateway — a member token, an OAuth custom connector — gets the *complete* mounted roster, whatever the member was granted in the app. Closing that is its own piece of work. (The native tools — `maurice_docs`, the four `domains__*`, `mail__approve_reading` — are the exception by construction: they live in the server's loop and the gateway never sees them; the two `email__*_reading` words, though, are mounted like any tool and a caller with a member token could speak them for that member; `corpus__map_conversations`, though, is mounted like any corpus tool and reads whatever member the caller claims.)
 - **A hosted household's gateway answered anyone, until 25 September 2026.** The server proxies `/mcp` to the gateway verbatim, and `start-mcp-gateway.sh` turns auth on only when `MAURICE_MCP_TOKEN` (or an OAuth password) is set — which nothing set in the container. So `https://<household>/mcp` accepted MCP calls with no credentials at all, for whatever member id a caller put in `X-Maurice-Member-Id`: every member's garden and corpus were readable from the internet (found while wiring the mail tool, before any mailbox was added on the fleet). `infra/container/entrypoint.sh` now gives each household a key of its own (`~/.maurice/mcp.token` in the volume, generated once, exported before supervisord); verified the same day: anonymous `/mcp` is 401 on both hosted households, the server's own calls 200. Nothing records whether the hole was used before — the gateway logged requests but not their origin.
 - **`email` cannot reach Outlook.com.** Microsoft takes only OAuth over IMAP; not built. Nor does it index mail: search is IMAP's own (Gmail's is good, others' less so). The header store (above) is not a search index either: bodies are never kept, and a subject can only be read by unsealing it.
 - **The triage knows no contacts.** `triage_mailbox` takes a list of addresses and nobody passes one: the `contacts` tool is private (vCard, `maurice-tools`) and the public `email` tool cannot import it. A single reconciled list of a member's contacts is a design of its own (26 September 2026); until then only "replied" and "sent" make a person, and a contact who never got a reply is "other".
 - **The calibration's tokenizer is a proxy** (`tiktoken`), not Mistral's; **a night's reading capacity is assumed** (1 500 messages) until lot 4 exists. The range is wide enough for the first; nothing yet checks the second.
-- **The "yes" is not built.** The conversation asks; a reply is an ordinary turn and nothing reads a body or spends a cent (lot 3: `job_id` on `spend_ledger` so the operator sees the reading apart from chat, then the reading; no per-job ceiling — the household's cap is the only one, by decision). The Settings card shows the walk, not the reconciliation or the triage; the cost range lives in the log only, no console card yet.
+- **The reading itself is not built** (lot 4). The yes is taken and kept — in the conversation or from the card — and leaves an `approved` job that nothing runs yet; Maurice promises "the next night" and the night does not read. `spend_ledger.job_id` is there and no row carries one yet. The Settings card shows the walk and the word, not the reconciliation or the triage; the cost range lives in the log only, no console card and no `spentOnJob` view yet. A member's yes given from the card before any conversation was opened is kept but said nowhere.
 - **`web` and `signals` can't be turned off.** They're re-unioned into every resolution, so unticking them in the picker does nothing.
 - **Family selection is coarser than it looks.** `toolInFamilies` still accepts the parent prefix for back-compat, so a conversation holding `"garden"` opens all 54 garden tools at once, sub-families included.
 - **No per-tool sandboxing.** A tool runs with the gateway's process privileges; the only access control is the member contextvar and tool-family gating, not OS-level isolation.

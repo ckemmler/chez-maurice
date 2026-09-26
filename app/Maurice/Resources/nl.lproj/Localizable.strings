@@ -671,3 +671,15 @@
 "mail.scan.resume" = "Hervatten";
 "mail.scan.refresh" = "Nieuwe post ophalen";
 "mail.scan.help" = "Loopt de koppen door vanaf het laatst bereikte punt. Er wordt niets gelezen, niets verzonden.";
+"mail.reading.title" = "Het lezen";
+"mail.reading.loading" = "Lezen: …";
+"mail.reading.none" = "Lezen: nog niet gevraagd";
+"mail.reading.pending" = "Lezen: wacht op je antwoord";
+"mail.reading.approved" = "Lezen: goedgekeurd op %@";
+"mail.reading.declined" = "Lezen: geweigerd";
+"mail.reading.running" = "Lezen: bezig";
+"mail.reading.done" = "Lezen: klaar";
+"mail.reading.approve" = "Maurice laten lezen";
+"mail.reading.withdraw" = "Goedkeuring intrekken";
+"mail.reading.help" = "Maurice leest 's nachts de echte uitwisselingen van de laatste jaren en zegt je wie voor jou telt en wat er speelt. Er wordt niets verzonden, niets in je mailbox veranderd.";
+"mail.reading.caption" = "Het lezen is een ja dat jij geeft — hier of in het gesprek dat Maurice opende. Je kunt het altijd intrekken.";

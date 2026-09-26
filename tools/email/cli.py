@@ -14,6 +14,8 @@ check it before Maurice uses it.
     .venv/bin/python -m tools.email.cli --member candide report --years 3
     .venv/bin/python -m tools.email.cli --member candide calibrate
     .venv/bin/python -m tools.email.cli --member candide estimate
+    .venv/bin/python -m tools.email.cli --member candide approve-reading --years 3
+    .venv/bin/python -m tools.email.cli --member candide decline-reading
 
 Run from the repo root. ``--member`` is a username: the CLI acts for one member
 exactly as the gateway does, it is not a way to see everyone's mail.
@@ -97,6 +99,11 @@ def main(argv: list[str] | None = None) -> int:
     p = sub.add_parser("estimate", help="the numbers behind the quote (no price)")
     p.add_argument("--years", type=int, default=3)
 
+    p = sub.add_parser("approve-reading", help="record the member's yes to the reading (a job left for the night)")
+    p.add_argument("--years", type=int, default=None)
+
+    sub.add_parser("decline-reading", help="record the member's no, so it is not asked again")
+
     args = parser.parse_args(argv)
     service: EmailService | None = None
     try:
@@ -145,6 +152,10 @@ def main(argv: list[str] | None = None) -> int:
             out = service.calibrate(accounts, years=args.years, sample=args.sample)
         elif args.command == "estimate":
             out = service.estimate(accounts, years=args.years)
+        elif args.command == "approve-reading":
+            out = service.approve_reading(accounts, years=args.years)
+        elif args.command == "decline-reading":
+            out = service.decline_reading(accounts)
         else:
             out = service.stats(accounts, account=args.account, since=args.since, before=args.before, folder=args.folder)
     except (ConfigError, AccessDenied, AccountUnavailable, MailboxError) as exc:

@@ -1,4 +1,4 @@
-# Making a large mailbox useful — design, lots 1 and 2 built
+# Making a large mailbox useful — design, lots 1 to 3 built
 
 A member arrives with years of mail. What should Maurice do with it?
 
@@ -6,7 +6,9 @@ Designed 25–26 September 2026 around Aline's mailbox, and settled in
 conversation with Candide. Lot 1 (the job, the cursor, the header store), its
 wiring to the night and to the account's creation, and lot 2 (the triage, the
 report, the reconciliation, the calibration, the conversation with the
-numbers) were built on 26 September; everything from lot 3 on is design.
+numbers) were built on 26 September, and lot 3 (the approval — `job_id` on the
+ledger, the member's yes) the same evening; everything from lot 4 on is
+design.
 Numbers are measured where they say so and estimated where they say that
 instead.
 
@@ -266,9 +268,14 @@ from chat spend by `job_id` on the ledger (lot 3).
 ### Metering
 
 `spend_ledger` is `(at, provider, model, cost_usd, user_id)` — `cost_usd` holds
-euros, historically misnamed. It has **no job dimension**, so an import would
-drown chat spend in the same table and make "what did I spend this month"
-meaningless. **Add `job_id` or `kind` before the first import.**
+euros, historically misnamed. It had **no job dimension**, so an import would
+have drowned chat spend in the same table and made "what did I spend this
+month" meaningless. *Built, 26 September 2026 (lot 3):* `job_id TEXT`,
+indexed with `at`; `recordSpend(usage, spender, jobId?)`; `spentOnJob(jobId)`
+for the console and for lot 4. A chat turn leaves it null; nothing existing
+changed. The job is the tool's row (the `reading` job in the member's store,
+below), never one of `maurice.db`'s: only its id crosses over, on every
+ledger row the reading writes.
 
 Meter what is not money too: seconds, bytes, messages. On a free local path the
 euro cost is zero and the cost to the person is not; presenting a six-hour job
@@ -481,10 +488,37 @@ nobody's fifteen days. The night runs the chain after a walk that is done:
 reconcile (weekly, per member), triage, calibrate, estimate, open — recorded
 in `mail-nightly.json`, the cost range in the log. The "yes" itself is lot 3.
 
-**Lot 3 — the approval.** `job_id` on `spend_ledger` first (see *Metering*,
-so the operator sees the reading apart from chat), then the member's yes in
-the conversation — consent to read, nothing about money; no ceiling per job,
-the household's cap is the only one.
+**Lot 3 — the approval.** *Built, 26 September 2026, on decisions of the
+same day.* `job_id` on `spend_ledger` first (see *Metering*), then the
+member's yes — a **consent** to read, nothing about money, no ceiling per
+job: the household's cap is the only one and it is invisible. The yes is
+given **in the conversation Maurice opened**, by one native tool granted by
+that conversation and nowhere else, on the exact model of `domains__adopt`
+(`server/src/services/mailApproval.ts`): `mail__approve_reading`, `action`
+`approve` | `decline`, in the roster only when the turn's conversation is
+the member's mail one — the link is `mail_conversations` in `maurice.db`
+(member → conversation, written when the night opens it, backfilled from
+`mail-nightly.json` at boot, and mirroring the reading's state so the prompt
+knows it without a gateway call). The prompt section says the domains'
+rule — never on a hint, an "ok" to something else, or the model's own
+judgement; an explicit yes only — and, after a no, never to ask again (the
+member may still say yes later, here or in the app). The tool calls the
+`email` tool as the member: `approve_reading` / `decline_reading` (service,
+MCP, CLI `approve-reading` / `decline-reading`) create or re-mark **one**
+`reading` job per member (`tools/email/reading.py`; states `approved` |
+`declined` added to `JOB_STATES`; `budget_eur` NULL; the window in `cursor`
+as `{"years": N}`), which `scan_status` reports under `reading`. Those two
+MCP tools are the server's alone (`isServerOnlyTool`, like the corpus's
+admin tools): never in a model's roster. The second door is the card under
+*Settings → Mail* — "Reading: not asked yet / waiting for your answer /
+approved on … / declined", one button to approve or withdraw — on
+`POST /api/mail-accounts/reading {action}`, after which Maurice says in the
+conversation, in his voice and rendered by the server in the member's
+language, what was done ("Understood: I will read them, from the next night
+on, and come back here with what I understood"). **What the yes triggers:
+nothing that costs.** It leaves the job `approved` for lot 4; Maurice
+answers that the reading happens at night, starting the next one, and that
+he will come back with what he understood.
 
 **Lot 4 — the two reading passes.** The light model over the first ~600
 characters of the survivors, then the larger one over what it keeps.
@@ -504,9 +538,12 @@ If the project stopped after lot 2 it would still have been worth doing.
   26 September 2026); until then only "replied" and "sent" make a person.
 - **The tokenizer is a proxy** (`tiktoken`, `o200k_base`), not Mistral's; the
   range absorbs the difference, and the calibration says so.
-- **A night's capacity is assumed** (1 500 messages) until the reading
-  passes of lot 4 exist to measure it — and then it is measured on the first
-  real night and kept beside the calibration, never derived from a spend cap.
+- **A night's capacity is assumed** (1 500 messages, the figure the
+  estimate declares) until the reading passes of lot 4 exist to measure it —
+  and then it is measured on the first real night and kept beside the
+  calibration, in the member's store, **never derived from a spend cap**: the
+  household's cap says when to stop, not how much a night can do. Unchanged
+  by lot 3, by decision.
 - **What happens on a second run.** A fiche or digest already deleted must not
   be silently rewritten the next night. Keying the refusal on the *source* — no
   more artefacts from message X, or from person Y after three refusals — is

@@ -671,3 +671,15 @@
 "mail.scan.resume" = "Resume";
 "mail.scan.refresh" = "Pick up new mail";
 "mail.scan.help" = "Walks the headers from the last point reached. Nothing is read, nothing is sent.";
+"mail.reading.title" = "The reading";
+"mail.reading.loading" = "Reading: …";
+"mail.reading.none" = "Reading: not asked yet";
+"mail.reading.pending" = "Reading: waiting for your answer";
+"mail.reading.approved" = "Reading: approved on %@";
+"mail.reading.declined" = "Reading: declined";
+"mail.reading.running" = "Reading: under way";
+"mail.reading.done" = "Reading: done";
+"mail.reading.approve" = "Let Maurice read";
+"mail.reading.withdraw" = "Withdraw the approval";
+"mail.reading.help" = "Maurice reads the real exchanges of the last years, at night, and tells you who matters to you and what is going on. Nothing is sent, nothing is changed in your mailbox.";
+"mail.reading.caption" = "Reading is a yes you give — here or in the conversation Maurice opened. You can withdraw it at any time.";

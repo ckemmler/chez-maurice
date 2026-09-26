@@ -170,18 +170,37 @@ db.run(`CREATE INDEX IF NOT EXISTS idx_spend_ledger_at ON spend_ledger(at)`);
 // message Maurice answered). Null on rows from before this column existed.
 try { db.run(`ALTER TABLE spend_ledger ADD COLUMN user_id TEXT`); } catch {}
 db.run(`CREATE INDEX IF NOT EXISTS idx_spend_ledger_user_at ON spend_ledger(user_id, at)`);
+// Which job spent it, when a job did (26 September 2026, specs/mail-import.md,
+// "Metering"): the mail reading of lot 4 will spend over several nights, as
+// the member, and without this dimension it would drown their chat spend in
+// the same sums. A chat turn has no job and leaves the column null. The job
+// itself is not a row of this database: it lives in the tool that runs it
+// (the `email` tool's per-member store), and only its id crosses over.
+try { db.run(`ALTER TABLE spend_ledger ADD COLUMN job_id TEXT`); } catch {}
+db.run(`CREATE INDEX IF NOT EXISTS idx_spend_ledger_job_at ON spend_ledger(job_id, at)`);
 
-/** Record what a completed turn cost, and whose turn it was. Called wherever
- *  usage is persisted, so every turn is counted once regardless of which
- *  route produced it. */
-export function recordSpend(u: TurnUsage | null | undefined, spenderId?: string | null): void {
+/** Record what a completed turn cost, whose turn it was, and — for a night's
+ *  job rather than a turn — which job. Called wherever usage is persisted,
+ *  so every turn is counted once regardless of which route produced it. */
+export function recordSpend(u: TurnUsage | null | undefined, spenderId?: string | null, jobId?: string | null): void {
   if (!u || u.cost == null || u.cost <= 0) return;
-  db.run(`INSERT INTO spend_ledger (provider, model, cost_usd, user_id) VALUES (?, ?, ?, ?)`, [
+  db.run(`INSERT INTO spend_ledger (provider, model, cost_usd, user_id, job_id) VALUES (?, ?, ?, ?, ?)`, [
     u.provider,
     u.model,
     u.cost,
     spenderId ?? null,
+    jobId ?? null,
   ]);
+}
+
+/** Euros spent on one job over its whole life — the operator's view of a
+ *  reading, apart from chat (the console, and lot 4's own accounting).
+ *  Never a cap: the household's daily cap is the only ceiling. */
+export function spentOnJob(jobId: string): number {
+  const row = db
+    .query<{ total: number | null }, [string]>(`SELECT sum(cost_usd) AS total FROM spend_ledger WHERE job_id = ?`)
+    .get(jobId);
+  return row?.total ?? 0;
 }
 
 /** Sum of the ledger since `since` (an SQLite datetime expression), for one
