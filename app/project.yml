@@ -105,9 +105,10 @@ targets:
         ENABLE_HARDENED_RUNTIME: YES
         AUTOMATION_APPLE_EVENTS: NO
         # The sandbox capabilities as Xcode records them: the camera is for the
-        # profile photo, and nothing else is granted.
+        # profile photo, the microphone for dictation, and nothing else is granted.
         ENABLE_RESOURCE_ACCESS_CAMERA: YES
-        ENABLE_RESOURCE_ACCESS_AUDIO_INPUT: NO
+        # Dictation in the composer needs the microphone.
+        ENABLE_RESOURCE_ACCESS_AUDIO_INPUT: YES
         ENABLE_RESOURCE_ACCESS_CALENDARS: NO
         ENABLE_RESOURCE_ACCESS_CONTACTS: NO
         ENABLE_RESOURCE_ACCESS_LOCATION: NO

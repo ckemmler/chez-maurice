@@ -89,9 +89,6 @@ struct ChatView: View {
             .background(theme.surface)
             .safeAreaInset(edge: .bottom, spacing: 0) { composerDock }
             .toolbar { macToolbar }
-            // Our own toggle (in macToolbar) replaces the automatic one, so the
-            // button is always there and never doubled.
-            .toolbar(removing: .sidebarToggle)
             #endif
         }
         .sheet(isPresented: $showAddContext) {
@@ -153,13 +150,10 @@ struct ChatView: View {
     /// first message.
     @ToolbarContentBuilder
     private var macToolbar: some ToolbarContent {
-        // Show/hide the sidebar — leading, where the system's own toggle sits.
-        ToolbarItem(placement: .navigation) {
-            Button { onToggleSidebar() } label: {
-                Image(systemName: "sidebar.leading")
-            }
-            .help(session.localized("chat.back_to_conversations"))
-        }
+        // Leading: nothing. Like iPad, the sidebar column carries the system's
+        // own toggle; adding ours next to it put two identical buttons in the
+        // bar (removing the system one from the detail's scope never took —
+        // the toggle belongs to the split view, not to this column).
         if let convo = chat.activeConversation {
             // A flexible spacer pins the actions to the trailing edge, as on iOS.
             if #available(macOS 26.0, *) {
@@ -3039,7 +3033,6 @@ private struct ComposerBar: View {
                     // the left cluster, just after the action icons.
                     modelPill
 
-                    #if os(iOS)
                     // While listening, the gap up to the mic carries what the
                     // mic hears — proof it is listening, and to you.
                     if dictation.isListening {
@@ -3051,9 +3044,6 @@ private struct ComposerBar: View {
                     } else {
                         Spacer()
                     }
-                    #else
-                    Spacer()
-                    #endif
 
                     #if os(macOS)
                     // Return sends, Shift-Return breaks the line — said once, in
@@ -3073,10 +3063,9 @@ private struct ComposerBar: View {
                     // mishears, and a mishearing that sent itself would cost a
                     // whole turn to undo.
                     //
-                    // iOS only: macOS would need the audio-input entitlement the
-                    // sandboxed target doesn't carry, so the button would be
-                    // present and fail every time.
-                    #if os(iOS)
+                    // Both platforms: the Mac target now carries the sandbox's
+                    // audio-input capability, and Dictation itself already ran
+                    // there (no AVAudioSession, AVCaptureDevice for permission).
                     Button {
                         if dictation.isListening {
                             dictation.stop(userStopped: true)
@@ -3117,7 +3106,6 @@ private struct ComposerBar: View {
                     .glassControl(theme, in: Circle(), fallbackFill: .clear)
                     .disabled(chat.isStreaming)
                     .help(session.localized(dictation.isListening ? "chat.dictate_stop" : "chat.dictate"))
-                    #endif
 
                     // The send row reads as a sentence:
                     // ➤ ask Maurice · 💬 just say it to the room.
