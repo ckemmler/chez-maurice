@@ -229,7 +229,9 @@ export async function runMailReading(memberId: string, opts: ReadingRunOptions =
 
   const control = async (state: string, error: string | null) => {
     const measured = { messages: run.judged + run.read, seconds: Math.round((now() - started) / 1000) };
-    const r = await d.call(memberId, "reading_control", { state, error, measured, seconds: measured.seconds });
+    // The gateway validates the schema: a null is not a string, so an
+    // absent error is left out rather than sent as null.
+    const r = await d.call(memberId, "reading_control", { state, ...(error ? { error } : {}), measured, seconds: measured.seconds });
     if (r?.error || r?.raw) console.warn(`[mail] reading for ${memberId}: reading_control(${state}) answered ${r.error ?? r.raw}`);
   };
 
@@ -251,7 +253,7 @@ export async function runMailReading(memberId: string, opts: ReadingRunOptions =
   };
 
   try {
-    await d.call(memberId, "reading_control", { state: "running", error: null });
+    await d.call(memberId, "reading_control", { state: "running" });
 
     // 1. The light pass.
     let stalled = 0;
@@ -272,7 +274,7 @@ export async function runMailReading(memberId: string, opts: ReadingRunOptions =
       const verdicts = parseVerdicts(r.text, ids);
       const per = tokensOf(r.usage);
       const rec = await d.call(memberId, "reading_record", {
-        verdicts: verdicts.map((v) => ({ ...v, tokens: per === null ? null : Math.round(per / ids.length) })),
+        verdicts: verdicts.map((v) => ({ ...v, ...(per === null ? {} : { tokens: Math.round(per / ids.length) }) })),
       });
       if (rec?.error || rec?.raw) throw new Error(String(rec.error ?? rec.raw));
       run.judged += verdicts.length;
@@ -303,7 +305,8 @@ export async function runMailReading(memberId: string, opts: ReadingRunOptions =
           console.warn(`[mail] reading for ${memberId}: no usable reading for ${m.id} (${r.stop})`);
           continue;
         }
-        readings.push({ id: m.id, reading: { ...reading, model: r.model, truncated: !!m.truncated }, tokens: tokensOf(r.usage) });
+        const tokens = tokensOf(r.usage);
+        readings.push({ id: m.id, reading: { ...reading, model: r.model, truncated: !!m.truncated }, ...(tokens === null ? {} : { tokens }) });
       }
       if (readings.length) {
         const rec = await d.call(memberId, "reading_record", { readings });
