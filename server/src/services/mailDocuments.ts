@@ -96,7 +96,9 @@ export interface DocumentsRun {
   outcome: "written" | "nothing" | "capped" | "failed";
   member_id: string;
   written: WrittenNote[];
-  skipped: { unchanged: number; deleted: number; too_few: number };
+  /** `declined`: senders the writer judged not to be a person (a service,
+   *  a shop, a platform) — no fiche, and not asked again. */
+  skipped: { unchanged: number; deleted: number; too_few: number; declined: number };
   cost: number;
   model: string;
   error: string | null;
@@ -236,9 +238,13 @@ export interface Group {
 
 /** People: the other party of each message — the sender when it is not
  *  the member, else the first recipient who is not. Threads: the root. */
-export function groupMaterial(messages: MaterialMessage[], memberAddresses: Set<string>): { people: Group[]; threads: Group[] } {
+export function groupMaterial(messages: MaterialMessage[], memberAddresses: Set<string>, memberName = ""): { people: Group[]; threads: Group[] } {
   const people = new Map<string, Group>();
   const threads = new Map<string, Group>();
+  // The member on another address of theirs — the store knows only the
+  // accounts added in the app — is still the member: their display name
+  // says so, and a fiche on oneself is not a correspondent.
+  const isMember = (addr: string, name: string) => memberAddresses.has(addr) || (!!memberName && name.trim().toLowerCase() === memberName.trim().toLowerCase());
   const add = (map: Map<string, Group>, key: string, name: string, m: MaterialMessage) => {
     const g = map.get(key) ?? { key, name, messages: [] };
     if (!g.name && name) g.name = name;
@@ -249,11 +255,11 @@ export function groupMaterial(messages: MaterialMessage[], memberAddresses: Set<
     const from = bare(m.from ?? m.from_address);
     let counterpart: string | null = null;
     let name = "";
-    if (from && !memberAddresses.has(from)) {
+    if (from && !isMember(from, displayName(m.from))) {
       counterpart = from;
       name = displayName(m.from);
     } else {
-      const other = [...m.to, ...m.cc].find((a) => !memberAddresses.has(bare(a)));
+      const other = [...m.to, ...m.cc].find((a) => !isMember(bare(a), displayName(a)));
       if (other) {
         counterpart = bare(other);
         name = displayName(other);
@@ -298,17 +304,18 @@ function materialBlock(messages: MaterialMessage[]): string {
 function personSystem(member: string, language: string): string {
   return (
     `You write, for ${member}, a fiche on one person from what their mail with ${member} said — a relationship, not a portrait: since when, who they are to ${member}, how the exchange goes, what is going on now, what was promised and by whom, what is left open. ` +
-    `Write in ${language}, plainly, in the second person to ${member}; do not assume ${member}'s gender, use their name. Be concrete and short. Do not invent and do not soften: "did not answer" is not "refused". ` +
+    `First decide whether the correspondent is a person at all: a company, a shop, a platform, a team or a service writing notices, receipts, security advisories or offers is not — answer {"is_person": false, "why": "..."} and nothing else. ` +
+    `Write in ${language}, plainly, addressing ${member} in the second person and in the familiar register the language has (in French, tu, never vous); do not assume ${member}'s gender, use their name. Be concrete and short. Do not invent and do not soften: "did not answer" is not "refused". ` +
     `EVERY line of the lists ends with the numbers of the messages it comes from, in brackets, like [3] or [1][4]; a line you cannot source, do not write. The relationship paragraph also cites its sources. ` +
     `${UNTRUSTED} ` +
-    `Answer with JSON only: {"title": "the person's name as ${member} would say it", "relationship": "two to four sentences [n]", "going_on": ["... [n]"], "promised": ["who promised what, by when [n]"], "open": ["... [n]"]}. Empty lists are fine.`
+    `Answer with JSON only: {"is_person": true, "title": "the person's name as ${member} would say it", "relationship": "two to four sentences [n]", "going_on": ["... [n]"], "promised": ["who promised what, by when [n]"], "open": ["... [n]"]}. Empty lists are fine.`
   );
 }
 
 function threadSystem(member: string, language: string): string {
   return (
     `You write, for ${member}, a digest of one mail thread: what it is about, a dated timeline of what was said, promised, missed and decided, the decisions, and what is left open. ` +
-    `Write in ${language}, plainly, in the second person to ${member}; do not assume ${member}'s gender, use their name. Be concrete and short. Do not invent and do not soften: "did not answer" is not "refused" — in a file this may be read by a lawyer, a wrong date or a promise misattributed is not an imprecision. ` +
+    `Write in ${language}, plainly, addressing ${member} in the second person and in the familiar register the language has (in French, tu, never vous); do not assume ${member}'s gender, use their name. Be concrete and short. Do not invent and do not soften: "did not answer" is not "refused" — in a file this may be read by a lawyer, a wrong date or a promise misattributed is not an imprecision. ` +
     `EVERY entry ends with the numbers of the messages it comes from, in brackets, like [2] or [1][3]; an entry you cannot source, do not write. ` +
     `${UNTRUSTED} ` +
     `Answer with JSON only: {"title": "the matter, in a few words", "about": "one paragraph [n]", "timeline": ["YYYY-MM-DD — what happened [n]"], "decided": ["... [n]"], "open": ["... [n]"]}. Empty lists are fine.`
@@ -342,8 +349,9 @@ interface Rendered {
   ids: string[];
 }
 
-function renderPerson(text: string, g: Group, w: Words, locale: string): Rendered | null {
+function renderPerson(text: string, g: Group, w: Words, locale: string): Rendered | "not_a_person" | null {
   const d = parseJsonObject(text);
+  if (d && d.is_person === false) return "not_a_person";
   if (!d || typeof d.relationship !== "string") return null;
   const msgs = g.messages.slice(-MAX_PER_NOTE);
   const ids = new Set<string>();
@@ -426,7 +434,7 @@ class Capped extends Error {}
 export async function writeMailDocuments(memberId: string, d: MailDocumentsDeps = deps): Promise<DocumentsRun> {
   const now = d.now?.() ?? new Date();
   const model = ancillaryModel(WRITE_INVOCATION);
-  const run: DocumentsRun = { outcome: "nothing", member_id: memberId, written: [], skipped: { unchanged: 0, deleted: 0, too_few: 0 }, cost: 0, model, error: null, said: null };
+  const run: DocumentsRun = { outcome: "nothing", member_id: memberId, written: [], skipped: { unchanged: 0, deleted: 0, too_few: 0, declined: 0 }, cost: 0, model, error: null, said: null };
   const fail = (outcome: DocumentsRun["outcome"], error: string): DocumentsRun => { run.outcome = outcome; run.error = error; return run; };
 
   const garden = gardenFor(memberId);
@@ -449,10 +457,11 @@ export async function writeMailDocuments(memberId: string, d: MailDocumentsDeps 
   const byKey = new Map(artefacts.map((a) => [`${a.kind}:${a.key}`, a]));
   if (!messages.length) return run;
 
-  const { people, threads } = groupMaterial(messages, memberAddresses);
+  const { people, threads } = groupMaterial(messages, memberAddresses, name);
   const files: string[] = [];
   const recorded: any[] = [];
   const deleted: any[] = [];
+  const declined: any[] = [];
   const taken = new Set<string>();
 
   /** What to do with a group, from the artefacts: write, or why not. */
@@ -507,6 +516,12 @@ export async function writeMailDocuments(memberId: string, d: MailDocumentsDeps 
       const msgs = g.messages.slice(-MAX_PER_NOTE);
       const r = await ask(kind === "person" ? personSystem(name, language) : threadSystem(name, language), materialBlock(msgs));
       const rendered = kind === "person" ? renderPerson(r.text, g, w, locale) : renderThread(r.text, g, w, locale);
+      if (rendered === "not_a_person") {
+        // A service, not a person: no fiche, and not asked again.
+        declined.push({ kind, key: g.key, sources: msgs.map((m) => m.id) });
+        run.skipped.declined++;
+        continue;
+      }
       if (!rendered) {
         console.warn(`[mail] documents for ${memberId}: nothing usable for ${kind} ${g.key} (${r.stop})`);
         continue;
@@ -553,9 +568,9 @@ export async function writeMailDocuments(memberId: string, d: MailDocumentsDeps 
     }
     invalidateNotes(memberId);
   }
-  if (recorded.length || deleted.length) {
+  if (recorded.length || deleted.length || declined.length) {
     try {
-      const rec = await d.call(memberId, "documents_record", { written: recorded, deleted });
+      const rec = await d.call(memberId, "documents_record", { written: recorded, deleted, declined });
       if (rec?.error || rec?.raw) console.warn(`[mail] documents for ${memberId}: documents_record answered ${rec.error ?? rec.raw}`);
     } catch (err) {
       console.warn(`[mail] documents for ${memberId}: documents_record failed: ${(err as Error).message}`);
@@ -567,7 +582,7 @@ export async function writeMailDocuments(memberId: string, d: MailDocumentsDeps 
   }
   console.log(
     `[mail] documents for ${memberId}: ${run.written.length} note(s) written (${run.written.filter((n) => n.kind === "person").length} fiche(s), ${run.written.filter((n) => n.kind === "thread").length} digest(s)), ` +
-      `${run.skipped.unchanged} unchanged, ${run.skipped.deleted} left deleted, ${run.cost.toFixed(4)} € with ${model}${run.error ? `; ${run.outcome}: ${run.error}` : ""}`,
+      `${run.skipped.unchanged} unchanged, ${run.skipped.deleted} left deleted, ${run.skipped.declined} not a person, ${run.cost.toFixed(4)} € with ${model}${run.error ? `; ${run.outcome}: ${run.error}` : ""}`,
   );
   return run;
 }

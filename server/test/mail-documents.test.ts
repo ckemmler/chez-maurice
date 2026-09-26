@@ -51,6 +51,12 @@ function seed() {
     msg("m2", "Anna <anna@gmail.com>", ["jean@x.org"], "2026-09-02T10:00:00+02:00", "Re: Jeudi ?", "<t1@x>", "Anna accepte jeudi."),
     msg("m3", "Jean Derély <jean@x.org>", ["anna@gmail.com"], "2026-09-10T10:00:00+02:00", "Le livre", "<t3@x>", "Jean promet de rendre le livre avant octobre."),
     msg("m4", "Erlend <e@y.org>", ["anna@gmail.com"], "2026-06-25T10:00:00+02:00", "Tabouret", "<t4@x>", "Erlend demande si le tabouret est disponible."),
+    // Anna on her other address, writing to herself: not a correspondent.
+    msg("m6", "Anna <anna@work.example>", ["anna@gmail.com"], "2026-04-15T10:00:00+02:00", "test", "<t6@x>", "Un test."),
+    msg("m7", "Anna <anna@work.example>", ["anna@gmail.com"], "2026-04-16T10:00:00+02:00", "test 2", "<t7@x>", "Un autre test."),
+    // A service with two notices: the writer declines it.
+    msg("m8", "Atlas Team <team@atlas.example>", ["anna@gmail.com"], "2026-05-01T10:00:00+02:00", "Upgrade", "<t8@x>", "Votre cluster sera mis à niveau."),
+    msg("m9", "Atlas Team <team@atlas.example>", ["anna@gmail.com"], "2026-06-01T10:00:00+02:00", "Security", "<t9@x>", "Avis de sécurité."),
   ];
   artefacts = [];
 }
@@ -66,7 +72,8 @@ async function tool(_m: string, name: string, args: any) {
       if (i >= 0) artefacts[i] = row; else artefacts.push(row);
     }
     for (const d of args.deleted ?? []) { const a = artefacts.find((x) => x.kind === d.kind && x.key === d.key); if (a) a.deleted_at = "now"; }
-    return { recorded: { written: args.written?.length ?? 0, deleted: args.deleted?.length ?? 0 }, artefacts };
+    for (const d of args.declined ?? []) artefacts.push({ ...d, slug: "", locale: "", title: null, written_at: "now", deleted_at: "now" });
+    return { recorded: { written: args.written?.length ?? 0, deleted: args.deleted?.length ?? 0, declined: args.declined?.length ?? 0 }, artefacts };
   }
   throw new Error(`unexpected tool ${name}`);
 }
@@ -75,6 +82,7 @@ const usage = () => ({ provider: "scaleway", model: NIGHT, rounds: 1, input: 150
 
 let answer: (req: any) => string = (req) => {
   if (req.system.includes("a fiche on one person")) {
+    if (req.prompt.includes("Atlas Team")) return JSON.stringify({ is_person: false, why: "a service" });
     return JSON.stringify({
       title: "Jean Derély",
       relationship: "Jean t'écrit depuis septembre 2026 ; vous vous voyez à Bruxelles [1][2].",
@@ -129,9 +137,10 @@ test("a fiche for the person with two messages, a digest for the thread with two
   const r = await docs.writeMailDocuments(ANNA);
   expect(r.outcome).toBe("written");
   expect(r.written.map((n) => [n.kind, n.slug])).toEqual([["hub", "mon-courrier"], ["person", "jean-derely"], ["thread", "jeudi"]]);
-  expect(r.skipped).toEqual({ unchanged: 0, deleted: 0, too_few: 0 });
-  // Erlend, one message: no fiche.
-  expect(writes).toHaveLength(2);
+  expect(r.skipped).toEqual({ unchanged: 0, deleted: 0, too_few: 0, declined: 1 });
+  // Erlend, one message: no fiche. Anna on her other address: not a correspondent. Atlas: asked once, declined.
+  expect(writes).toHaveLength(3);
+  expect(writes[0]!.system).toContain("in French, tu, never vous");
   expect(writes[0]!.prompt).toContain("[3] 2026-09-10");
   expect(writes[0]!.system).toContain("do not assume Anna's gender");
   const fiche = read("jean-derely");
@@ -159,11 +168,11 @@ test("a fiche for the person with two messages, a digest for the thread with two
   expect(hub).toContain("## Fils\n\n- [[jeudi|Jeudi]]");
   // The artefacts, keyed on the source; the ledger as Anna under the reading job.
   expect(calls.filter((c) => c.tool === "documents_record")).toHaveLength(1);
-  expect(artefacts.map((a) => [a.kind, a.key, a.slug])).toEqual([["person", "jean@x.org", "jean-derely"], ["thread", "<t1@x>", "jeudi"], ["hub", "hub", "mon-courrier"]]);
+  expect(artefacts.map((a) => [a.kind, a.key, a.slug])).toEqual([["person", "jean@x.org", "jean-derely"], ["thread", "<t1@x>", "jeudi"], ["hub", "hub", "mon-courrier"], ["person", "team@atlas.example", ""]]);
   const ledger = db.query(`SELECT job_id FROM spend_ledger WHERE user_id = ?`).all(ANNA) as any[];
-  expect(ledger).toHaveLength(2);
+  expect(ledger).toHaveLength(3);
   expect(ledger.every((l) => l.job_id === "job_r1")).toBe(true);
-  expect(r.cost).toBeCloseTo(0.004, 6);
+  expect(r.cost).toBeCloseTo(0.006, 6);
   expect(r.said).toBeNull(); // no mail conversation yet
 });
 
@@ -173,14 +182,14 @@ test("a second run rewrites nothing unchanged, a thrown-away note is never writt
   const again = await docs.writeMailDocuments(ANNA);
   expect(again.outcome).toBe("nothing");
   expect(again.written).toEqual([]);
-  expect(again.skipped).toEqual({ unchanged: 2, deleted: 0, too_few: 0 });
+  expect(again.skipped).toEqual({ unchanged: 2, deleted: 1, too_few: 0, declined: 0 }); // Atlas stays declined, never asked again
   expect(writes).toHaveLength(0);
   // The member throws the digest away: found missing once, marked, left alone.
   fs.rmSync(path.join(notesDir, "jeudi.md"));
   material.push(msg("m5", "Jean Derély <jean@x.org>", ["anna@gmail.com"], "2026-09-20T10:00:00+02:00", "Re: Jeudi ?", "<t1@x>", "Jean confirme."));
   const third = await docs.writeMailDocuments(ANNA);
   expect(third.written.map((n) => n.kind)).toEqual(["hub", "person"]); // the fiche has a new source; the digest is not rewritten
-  expect(third.skipped.deleted).toBe(1);
+  expect(third.skipped.deleted).toBe(2); // the digest thrown away, and Atlas declined
   expect(fs.existsSync(path.join(notesDir, "jeudi.md"))).toBe(false);
   expect(artefacts.find((a) => a.kind === "thread")!.deleted_at).toBeTruthy();
   // The new message is in the provenance; the frontmatter's sources stay what the model cited.
@@ -188,7 +197,7 @@ test("a second run rewrites nothing unchanged, a thrown-away note is never writt
   const hub = read("mon-courrier");
   expect(hub).not.toContain("[[jeudi|");
   const fourth = await docs.writeMailDocuments(ANNA);
-  expect(fourth.skipped).toEqual({ unchanged: 1, deleted: 1, too_few: 0 });
+  expect(fourth.skipped).toEqual({ unchanged: 1, deleted: 2, too_few: 0, declined: 0 });
 });
 
 test("the member's cap stops the run before the call; a model answer with no sources writes nothing", async () => {
@@ -200,7 +209,7 @@ test("the member's cap stops the run before the call; a model answer with no sou
   budget.setMemberDailyCap(ANNA, null);
   fs.rmSync(gardenRoot, { recursive: true, force: true }); fs.mkdirSync(notesDir, { recursive: true });
   artefacts = [];
-  answer = () => JSON.stringify({ title: "x", relationship: "no source here", going_on: ["nor here"], about: "none", timeline: [] });
+  answer = () => JSON.stringify({ is_person: true, title: "x", relationship: "no source here", going_on: ["nor here"], about: "none", timeline: [] });
   const none = await docs.writeMailDocuments(ANNA);
   expect(none.outcome).toBe("nothing");
   expect(none.written).toEqual([]);
@@ -209,7 +218,7 @@ test("the member's cap stops the run before the call; a model answer with no sou
 
 test("Maurice says in the mail conversation what he wrote, with the hub's path and the notes' titles", async () => {
   answer = (req) => req.system.includes("a fiche on one person")
-    ? JSON.stringify({ title: "Jean Derély", relationship: "Un ami [1].", going_on: [], promised: [], open: [] })
+    ? req.prompt.includes("Atlas Team") ? JSON.stringify({ is_person: false }) : JSON.stringify({ title: "Jean Derély", relationship: "Un ami [1].", going_on: [], promised: [], open: [] })
     : JSON.stringify({ title: "Jeudi", about: "Un rendez-vous [1].", timeline: [], decided: [], open: [] });
   const c = createConversation(ANNA, null, { openedBy: "maurice" }).id;
   approval.linkMailConversation(ANNA, c);

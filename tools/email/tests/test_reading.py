@@ -315,9 +315,14 @@ def test_artefacts_are_keyed_on_the_source_and_a_deleted_one_is_remembered(tmp_p
         {"kind": "thread", "key": "<t@x>", "slug": "le-diner", "locale": "fr", "title": "Le dîner", "sources": ["a"]},
         {"kind": "hub", "key": "x"},  # no slug: ignored
     ])
-    assert r["recorded"] == {"written": 2, "deleted": 0} and len(r["artefacts"]) == 2
+    assert r["recorded"] == {"written": 2, "deleted": 0, "declined": 0} and len(r["artefacts"]) == 2
     r = svc.documents_record(acc, deleted=[{"kind": "person", "key": "ami1@example.org"}, {"kind": "person", "key": "nobody"}])
-    assert r["recorded"] == {"written": 0, "deleted": 1}
+    assert r["recorded"] == {"written": 0, "deleted": 1, "declined": 0}
+    # A sender the writer declined (a service, not a person): a deleted artefact with no note.
+    r = svc.documents_record(acc, declined=[{"kind": "person", "key": "team@service.example", "sources": ["z"]}])
+    assert r["recorded"]["declined"] == 1
+    svc_row = next(a for a in r["artefacts"] if a["key"] == "team@service.example")
+    assert svc_row["deleted_at"] and svc_row["slug"] == "" and svc_row["sources"] == ["z"]
     gone = next(a for a in r["artefacts"] if a["kind"] == "person")
     assert gone["deleted_at"] and gone["sources"] == ["a", "b"]
     # Written again (the member asked): the key comes back to life on the same row.

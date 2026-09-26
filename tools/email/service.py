@@ -383,12 +383,20 @@ class EmailService:
         return reading_mod.reset_truncated(store)
 
     def documents_record(
-        self, accounts: list[Account], *, written: list[dict[str, Any]] | None = None, deleted: list[dict[str, Any]] | None = None
+        self,
+        accounts: list[Account],
+        *,
+        written: list[dict[str, Any]] | None = None,
+        deleted: list[dict[str, Any]] | None = None,
+        declined: list[dict[str, Any]] | None = None,
     ) -> dict[str, Any]:
         """What the documents pass wrote (``{kind, key, slug, locale, title,
-        sources}``) and what it found gone (``{kind, key}``)."""
+        sources}``), what it found gone (``{kind, key}``), and what it
+        declined to write (``{kind, key, sources}``: a sender that is a
+        service, not a person) — kept as a deleted artefact with no note, so
+        the same key is not asked about again."""
         _member_id, store = self._member_store(accounts)
-        n_written = n_deleted = 0
+        n_written = n_deleted = n_declined = 0
         for w in written or []:
             if not w.get("kind") or not w.get("key") or not w.get("slug"):
                 continue
@@ -398,7 +406,13 @@ class EmailService:
         for d in deleted or []:
             if d.get("kind") and d.get("key") and store.mark_artefact_deleted(str(d["kind"]), str(d["key"])):
                 n_deleted += 1
-        return {"recorded": {"written": n_written, "deleted": n_deleted}, "artefacts": store.artefacts()}
+        for d in declined or []:
+            if not d.get("kind") or not d.get("key"):
+                continue
+            store.record_artefact(str(d["kind"]), str(d["key"]), slug="", locale="", title=None, sources=[str(s) for s in (d.get("sources") or [])])
+            store.mark_artefact_deleted(str(d["kind"]), str(d["key"]))
+            n_declined += 1
+        return {"recorded": {"written": n_written, "deleted": n_deleted, "declined": n_declined}, "artefacts": store.artefacts()}
 
     def get_by_id(self, accounts: list[Account], message: str, max_bytes: int = 8000) -> dict[str, Any]:
         """One message by the id a note's source carries: its store row says
