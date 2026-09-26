@@ -208,6 +208,49 @@ test("a second run rewrites nothing unchanged, a thrown-away note is never writt
   expect(fifth.skipped.deleted).toBe(3);
 });
 
+test("an alias of the member is not a correspondent, even one the app knows nothing about", async () => {
+  // Anna's own alias: it wrote once under her name, and she sends mail to it.
+  // Without the pass that reads her addresses off the mailbox, those two make
+  // the alias a "correspondent" and she gets a fiche on herself.
+  material.push(msg("m10", "Anna <anna@alias.example>", ["anna@gmail.com"], "2026-03-01T10:00:00+02:00", "Pour moi", "<t10@x>", "Anna se transfère un mot."));
+  material.push(msg("m11", "Anna <anna@gmail.com>", ["anna@alias.example"], "2026-03-02T10:00:00+02:00", "Encore", "<t11@x>", "Anna se transfère un autre mot."));
+  material.push(msg("m12", "Anna <anna@gmail.com>", ["anna@alias.example"], "2026-03-03T10:00:00+02:00", "Et encore", "<t12@x>", "Et un troisième."));
+  const r = await docs.writeMailDocuments(ANNA);
+  expect(r.written.map((n) => n.slug)).toEqual(["mon-courrier", "jean-derely", "jeudi"]);
+  expect(writes.some((wr) => wr.prompt.includes("anna@alias.example"))).toBe(false);
+  // And the writer is told to decline one it is asked about all the same.
+  expect(writes[0]!.system).toContain("neither is Anna themselves on another address of theirs");
+});
+
+test("a second pass that names the person otherwise moves the note and keeps what the member did to it", async () => {
+  await docs.writeMailDocuments(ANNA);
+  // The member opens the fiche: the marker goes away.
+  const file = path.join(notesDir, "jean-derely.md");
+  fs.writeFileSync(file, fs.readFileSync(file, "utf8").replace(/\n\s{2}opened: false/, ""));
+  material.push(msg("m5", "Jean Derély <jean@x.org>", ["anna@gmail.com"], "2026-09-20T10:00:00+02:00", "Re: Jeudi ?", "<t1@x>", "Jean confirme."));
+  const previous = answer;
+  answer = (req) =>
+    req.system.includes("a fiche on one person")
+      ? JSON.stringify({ title: "Jean-Baptiste Derély", relationship: "Jean-Baptiste t'écrit depuis septembre [1].", going_on: [], promised: [], open: [] })
+      : previous(req);
+  let r!: Awaited<ReturnType<typeof docs.writeMailDocuments>>;
+  try {
+    r = await docs.writeMailDocuments(ANNA);
+  } finally {
+    answer = previous;
+  }
+  expect(r.written.map((n) => [n.kind, n.slug])).toEqual([["hub", "mon-courrier"], ["person", "jean-baptiste-derely"], ["thread", "jeudi"]]);
+  expect(fs.existsSync(file)).toBe(false);
+  const moved = read("jean-baptiste-derely");
+  expect(moved).toContain("title: Jean-Baptiste Derély");
+  expect(moved).toContain("key: jean@x.org");
+  expect(moved).not.toContain("opened: false"); // the member read it: a rewrite is not a new draft
+  expect(artefacts.find((a) => a.kind === "person" && a.key === "jean@x.org")!.slug).toBe("jean-baptiste-derely");
+  const hub = read("mon-courrier");
+  expect(hub).toContain("[[jean-baptiste-derely|Jean-Baptiste Derély]]");
+  expect(hub).not.toContain("[[jean-derely|");
+});
+
 test("the member's cap stops the run before the call; a model answer with no sources writes nothing", async () => {
   budget.setMemberDailyCap(ANNA, 0.001);
   const r = await docs.writeMailDocuments(ANNA);

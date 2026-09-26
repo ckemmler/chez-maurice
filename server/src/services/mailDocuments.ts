@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import { atomicWrite, autoCommit, dumpFrontmatter, gardenFor, type GardenRef } from "../../data-api/services/gardenFiche";
+import { atomicWrite, autoCommit, dumpFrontmatter, gardenFor, isOpened, parseFiche, type GardenRef } from "../../data-api/services/gardenFiche";
 import { slugify } from "../../data-api/services/articleExtract";
 import { ancillaryComplete, ancillaryModel, type AncillaryRequest, type AncillaryResult } from "./ancillary";
 import { recordSpend, verdict as budgetVerdict } from "./budget";
@@ -241,10 +241,24 @@ export interface Group {
 export function groupMaterial(messages: MaterialMessage[], memberAddresses: Set<string>, memberName = ""): { people: Group[]; threads: Group[] } {
   const people = new Map<string, Group>();
   const threads = new Map<string, Group>();
-  // The member on another address of theirs — the store knows only the
-  // accounts added in the app — is still the member: their display name
-  // says so, and a fiche on oneself is not a correspondent.
-  const isMember = (addr: string, name: string) => memberAddresses.has(addr) || (!!memberName && name.trim().toLowerCase() === memberName.trim().toLowerCase());
+  const sameName = (name: string) => !!memberName && name.trim().toLowerCase() === memberName.trim().toLowerCase();
+  // The member's other addresses, read off the mailbox itself: the store
+  // knows only the accounts added in the app, but an address that sent under
+  // the member's own display name is theirs. Without this pass, mail the
+  // member sent from one of their aliases to another of their addresses makes
+  // the alias a "correspondent" — one fiche on oneself, keyed on an address,
+  // mixing everyone that address ever wrote to.
+  const own = new Set(memberAddresses);
+  if (memberName) {
+    for (const m of messages) {
+      const from = bare(m.from ?? m.from_address);
+      if (from && sameName(displayName(m.from))) own.add(from);
+    }
+  }
+  // The member on another address of theirs is still the member: an alias
+  // above, or their display name here, and a fiche on oneself is not a
+  // correspondent.
+  const isMember = (addr: string, name: string) => own.has(addr) || sameName(name);
   const add = (map: Map<string, Group>, key: string, name: string, m: MaterialMessage) => {
     const g = map.get(key) ?? { key, name, messages: [] };
     if (!g.name && name) g.name = name;
@@ -304,7 +318,7 @@ function materialBlock(messages: MaterialMessage[]): string {
 function personSystem(member: string, language: string): string {
   return (
     `You write, for ${member}, a fiche on one person from what their mail with ${member} said — a relationship, not a portrait: since when, who they are to ${member}, how the exchange goes, what is going on now, what was promised and by whom, what is left open. ` +
-    `First decide whether the correspondent is a person at all: a company, a shop, a platform, a team or a service writing notices, receipts, security advisories or offers is not — answer {"is_person": false, "why": "..."} and nothing else. ` +
+    `First decide whether the correspondent is a person at all: a company, a shop, a platform, a team or a service writing notices, receipts, security advisories or offers is not, and neither is ${member} themselves on another address of theirs — an alias, a forward, a copy sent to oneself, mail signed by ${member} — answer {"is_person": false, "why": "..."} and nothing else. ` +
     `Write in ${language}, plainly, addressing ${member} in the second person and in the familiar register the language has (in French, tu, never vous); do not assume ${member}'s gender, use their name. Be concrete and short. Do not invent and do not soften: "did not answer" is not "refused". ` +
     `EVERY line of the lists ends with the numbers of the messages it comes from, in brackets, like [3] or [1][4]; a line you cannot source, do not write. The relationship paragraph also cites its sources. ` +
     `${UNTRUSTED} ` +
@@ -401,6 +415,14 @@ function writeNote(
   garden: GardenRef, locale: string, slug: string, title: string, body: string,
   opts: { kind: "person" | "thread" | "hub"; key: string; parent: string | null; sources: string[]; model: string; now: Date; flags?: string[]; description?: string },
 ): string {
+  const file = noteFile(garden, locale, slug);
+  // A note the member has already opened keeps that: a rewrite brings new
+  // messages, it does not turn what they read back into an unread draft.
+  const reviewed = (() => {
+    if (!fs.existsSync(file)) return false;
+    const p = parseFiche(fs.readFileSync(file, "utf-8"));
+    return !!p && isOpened(p.frontmatter);
+  })();
   const fm: Record<string, unknown> = {
     title,
     date: opts.now.toISOString().slice(0, 10),
@@ -410,7 +432,7 @@ function writeNote(
     ...(opts.parent ? { parent: opts.parent } : {}),
     ...(opts.description ? { description: opts.description } : {}),
     meta: {
-      opened: false,
+      ...(reviewed ? {} : { opened: false }),
       author: "maurice",
       origin: "mail",
       kind: opts.kind,
@@ -420,7 +442,6 @@ function writeNote(
       sources: opts.sources,
     },
   };
-  const file = noteFile(garden, locale, slug);
   fs.mkdirSync(path.dirname(file), { recursive: true });
   atomicWrite(file, `---\n${dumpFrontmatter(fm as any)}\n---\n\n${body}\n`);
   return file;
@@ -526,9 +547,36 @@ export async function writeMailDocuments(memberId: string, d: MailDocumentsDeps 
         console.warn(`[mail] documents for ${memberId}: nothing usable for ${kind} ${g.key} (${r.stop})`);
         continue;
       }
-      const existing = byKey.get(`${kind}:${g.key}`);
-      const slug = existing && !existing.deleted_at ? existing.slug : freeSlug(garden, slugify(rendered.title) || `${kind}-${g.messages.length}`, taken);
-      taken.add(slug);
+      // The file name follows the title. A second pass that names the person
+      // or the matter otherwise — the first pass had fewer messages to go on —
+      // must not leave the note under the old name: the slug is the reader's,
+      // the key in the store is the identity.
+      const existing = byKey.get(`${kind}:${g.key}`) ?? null;
+      const kept = existing && !existing.deleted_at ? existing : null;
+      const base = slugify(rendered.title) || `${kind}-${g.messages.length}`;
+      let slug: string;
+      let renamedFrom: string | null = null;
+      if (kept && base === kept.slug.replace(/-\d+$/, "")) {
+        slug = kept.slug;
+        taken.add(slug);
+      } else {
+        slug = freeSlug(garden, base, taken);
+        if (kept) renamedFrom = kept.slug;
+      }
+      // Moved before it is rewritten, so what the member did to it — opening
+      // it — is read off the file and kept.
+      if (renamedFrom && kept) {
+        const old = noteFile(garden, kept.locale, renamedFrom);
+        try {
+          if (fs.existsSync(old)) {
+            fs.mkdirSync(path.dirname(noteFile(garden, locale, slug)), { recursive: true });
+            fs.renameSync(old, noteFile(garden, locale, slug));
+          }
+          files.push(old);
+        } catch (err) {
+          console.warn(`[mail] documents for ${memberId}: could not move ${renamedFrom} to ${slug}: ${(err as Error).message}`);
+        }
+      }
       const body = `${rendered.body}\n\n${provenance(w, msgs, r.model, locale, now)}`;
       files.push(writeNote(garden, locale, slug, rendered.title, body, { kind, key: g.key, parent: hubSlug, sources: rendered.ids, model: r.model, now }));
       recorded.push({ kind, key: g.key, slug, locale, title: rendered.title, sources: msgs.map((m) => m.id) });
