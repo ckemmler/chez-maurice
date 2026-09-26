@@ -139,8 +139,16 @@ no location and cleared when the walk meets it again. `jobs.kind` is now
 evening (lot 3), `reading`: one row per member holding the member's word,
 `approved` or `declined` (two states added to the job's), `budget_eur` NULL
 by decision (no ceiling per job), the window in `cursor` as `{"years": N}`,
-re-marked on a second word rather than duplicated; lot 4 will take it
-through `running` to `done` and spend under its id. The server keeps nothing
+re-marked on a second word rather than duplicated; lot 4 takes it
+through `running` to `done` (or `paused`, with work left) and spends under
+its id. Lot 4 (the same night) adds `readings` — one row per message the
+passes touched: `light` ∈ `keep`/`skip` with `light_reason`, and for the
+kept ones `reading_sealed`, the model's structured reading as JSON **sealed
+under the household key** like the subject (derived from the body, never
+the body, and not in clear on the disk either), with the tokens each pass
+spent — and `capacity`, a row per run of the passes (`job`, `messages`,
+`seconds`, `measured_at`), from which the estimate takes its nights once a
+run of a hundred messages or more exists. The server keeps nothing
 of the job in `maurice.db`: the night's own memory — last run, last
 reconciliation and the conversation opened per member — is
 `<app dir>/mail-nightly.json`, and `mail_conversations` (above) holds only

@@ -233,6 +233,8 @@ Resolution is forced: a **pin** for that invocation (`ancillary_models`) → the
 
 **The preferred lists are European.** Z.ai was out for size; Anthropic and OpenAI are out by decision — American, and dear for work a small model does as well. Scaleway leads every tier, Mistral follows, and a household whose only keys are the American ones is advised nothing, keeps its own model, and is told which key would change that. That is home's own case today: its pins still read Haiku and Sonnet, which nothing moves until a Scaleway key is added there. Aline, who has one, runs her summaries on GPT-OSS 120B, her signal parsing and her garden functions on Mistral Small 3.2, and her flashcards on Qwen 3.5 397B.
 
+**Two more invocations for the mail reading** (26 September 2026, lot 4 of the mail import, [[maurice-tools]]): `mail_read_light`, the sorting pass, with a preference of its own for Mistral Small 3.2 on Scaleway then Mistral's own Small — pinned at boot like the night's functions — and `mail_read_full`, the reading pass, with a computed default like `maurice_docs`: the household's everyday model, the one the member's cost range was priced on. Both run in the member's name and under their reading job's id on the ledger.
+
 The section itself sits at the bottom of the dashboard, collapsed, under *Advanced*: a thing to know exists, not a thing to open.
 
 ## Multi-human rooms

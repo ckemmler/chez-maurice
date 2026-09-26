@@ -8,6 +8,7 @@ import { corpusCall } from "./mcpClient";
 import { openConversation, type OpenRequest, type OpenResult } from "./openedConversations";
 import { listUsers } from "./users";
 import { backfillMailConversations, linkMailConversation } from "./mailApproval";
+import { readingWanted, runMailReading } from "./mailReading";
 
 // The header walk, driven from the server (specs/mail-import.md, the wiring
 // of lot 1, settled 26 September 2026).
@@ -84,6 +85,9 @@ export interface MailScanDeps {
   now?: () => Date;
   pollMs?: number;
   maxWaitMs?: number;
+  /** The reading passes (services/mailReading.ts); a test stubs them. */
+  read?: (memberId: string) => Promise<{ outcome: string; judged: number; read: number; cost: number; error: string | null }>;
+  wantsReading?: (memberId: string) => boolean;
 }
 
 const RECONCILE_EVERY_MS = 7 * 24 * 60 * 60 * 1000;
@@ -99,7 +103,10 @@ export function mailToolCall(memberId: string, tool: string, args: any): Promise
   return deps.call(memberId, tool, args ?? {});
 }
 
-const defaultDeps: MailScanDeps = { call: emailCall, members: () => listUsers(), open: openConversation, locale: memberLocale };
+const defaultDeps: MailScanDeps = {
+  call: emailCall, members: () => listUsers(), open: openConversation, locale: memberLocale,
+  read: (memberId) => runMailReading(memberId), wantsReading: readingWanted,
+};
 let deps: MailScanDeps = defaultDeps;
 
 /** Tests swap the gateway and the member list for stubs. */
@@ -200,6 +207,8 @@ export interface MailNightlyStats {
   reconciled: number;
   /** Conversations opened tonight with the numbers. */
   opened: number;
+  /** Members whose reading ran tonight (lot 4), and what it got through. */
+  reading?: { members: number; judged: number; read: number; cost: number };
 }
 
 /** What the night remembers of one member. */
@@ -393,6 +402,20 @@ async function doRun(d: MailScanDeps): Promise<MailNightlyOutcome> {
         if (await reconcileIfDue(m.id, d, now())) stats.reconciled++;
         const est = await measure(m.id, d);
         if (await announce(m.id, est, d, now())) stats.opened++;
+        // The member said yes (lot 3): the reading passes, as far as the
+        // night allows (lot 4). Its own failures are its own; the job says.
+        if (d.wantsReading?.(m.id) && d.read) {
+          const r = await d.read(m.id);
+          stats.reading ??= { members: 0, judged: 0, read: 0, cost: 0 };
+          stats.reading.members++;
+          stats.reading.judged += r.judged;
+          stats.reading.read += r.read;
+          stats.reading.cost += r.cost;
+          if (r.outcome === "failed" && r.error) {
+            lastError = `${m.id}: reading — ${r.error}`;
+            console.warn(`[mail] nightly: ${lastError}`);
+          }
+        }
       } else {
         // Paused (the member said stop) or failed: named, and tried again
         // tomorrow from the cursor.
@@ -409,7 +432,9 @@ async function doRun(d: MailScanDeps): Promise<MailNightlyOutcome> {
   const ms = now().getTime() - started.getTime();
   console.log(
     `[mail] nightly: ${stats.walked} mailbox(es) walked, ${stats.skipped} member(s) without mail, ${stats.failed} failed, ` +
-      `${stats.messages} message(s) in the stores, ${stats.reconciled} reconciled, ${stats.opened} conversation(s) opened, in ${Math.round(ms / 1000)}s`,
+      `${stats.messages} message(s) in the stores, ${stats.reconciled} reconciled, ${stats.opened} conversation(s) opened` +
+      (stats.reading ? `, ${stats.reading.members} reading(s): ${stats.reading.judged} judged, ${stats.reading.read} read, ${stats.reading.cost.toFixed(3)} €` : "") +
+      `, in ${Math.round(ms / 1000)}s`,
   );
   return finish(stats.failed ? "failed" : "walked", lastError, stats);
 }

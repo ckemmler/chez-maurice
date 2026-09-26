@@ -256,6 +256,57 @@ async def list_tools() -> list[Tool]:
             inputSchema={"type": "object", "properties": {}},
         ),
         Tool(
+            name="reading_next",
+            description=(
+                "Server-side, for the reading passes: the next messages of the approved window — `stage` "
+                "`light` gives headers and the first 600 characters, `full` gives the text of what the light "
+                "pass kept. Fetched with PEEK, nothing stored, nothing marked read."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "stage": {"type": "string", "enum": ["light", "full"]},
+                    "limit": {"type": "integer", "description": "How many (default 20, at most 100)."},
+                },
+            },
+        ),
+        Tool(
+            name="reading_record",
+            description=(
+                "Server-side: keep what a pass decided — light `verdicts` ({id, keep, reason, tokens}) and full "
+                "`readings` ({id, reading, tokens}), the reading sealed under the household key before the disk."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "verdicts": {"type": "array", "items": {"type": "object"}},
+                    "readings": {"type": "array", "items": {"type": "object"}},
+                },
+            },
+        ),
+        Tool(
+            name="reading_control",
+            description=(
+                "Server-side: move the reading job (running | paused | done | failed), with the reason and the "
+                "run's measure ({messages, seconds}) kept as the night's capacity."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "state": {"type": "string", "enum": ["running", "paused", "done", "failed"]},
+                    "error": {"type": "string"},
+                    "measured": {"type": "object"},
+                    "seconds": {"type": "number"},
+                },
+                "required": ["state"],
+            },
+        ),
+        Tool(
+            name="reading_progress",
+            description="The reading job, where the passes are over the window (to judge, kept, skipped, to read, read), and the measured capacity.",
+            inputSchema={"type": "object", "properties": {}},
+        ),
+        Tool(
             name="stats",
             description=(
                 "An overview of one account without reading any message: counts per main "
@@ -341,6 +392,16 @@ def dispatch(service: EmailService, name: str, args: dict[str, Any], *, member_i
         return service.approve_reading(accounts, years=args.get("years"))
     if name == "decline_reading":
         return service.decline_reading(accounts)
+    if name == "reading_next":
+        return service.reading_next(accounts, stage=args.get("stage") or "light", limit=args.get("limit") or 20)
+    if name == "reading_record":
+        return service.reading_record(accounts, verdicts=args.get("verdicts"), readings=args.get("readings"))
+    if name == "reading_control":
+        return service.reading_control(
+            accounts, str(args["state"]), error=args.get("error"), measured=args.get("measured"), seconds=args.get("seconds")
+        )
+    if name == "reading_progress":
+        return service.reading_progress(accounts)
     if name == "stats":
         return service.stats(
             accounts,

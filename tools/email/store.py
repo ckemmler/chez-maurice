@@ -29,6 +29,15 @@ Shape of the thing:
   kilobyte of this member's mail turns out to be, measured on a sample.
 * ``messages.gone_at`` (lot 2) marks a message that no longer has a location
   after a reconciliation: the row is kept, the message is "no longer seen".
+* ``readings`` (lot 4) is what the two reading passes leave per message: the
+  light pass's verdict (``keep`` or ``skip``, with its reason) and, for the
+  kept ones, the full reading — a structured summary the server's model
+  wrote, **sealed** under the household key like the subject: derived from
+  the body, never the body, and not in clear on the disk either.
+* ``capacity`` (lot 4) is what a night's reading actually got through —
+  messages and seconds per run — measured, beside the calibration, and never
+  derived from a spend cap: the estimate's "nights" rest on it once it
+  exists.
 
 Every batch writes its rows, its locations and its cursor in ONE transaction,
 and every write is idempotent (``INSERT … ON CONFLICT DO UPDATE``, which is
@@ -96,6 +105,24 @@ CREATE TABLE IF NOT EXISTS messages (
   size             INTEGER,
   first_seen_at    TEXT NOT NULL,
   updated_at       TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS readings (
+  message        TEXT PRIMARY KEY REFERENCES messages (id),
+  light          TEXT,                  -- keep | skip
+  light_reason   TEXT,
+  light_at       TEXT,
+  reading_sealed TEXT,                  -- sealing.py: the full reading, JSON
+  read_at        TEXT,
+  tokens_light   INTEGER,
+  tokens_full    INTEGER
+);
+CREATE INDEX IF NOT EXISTS readings_light ON readings (light);
+CREATE TABLE IF NOT EXISTS capacity (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  job         TEXT,
+  messages    INTEGER NOT NULL,
+  seconds     REAL NOT NULL,
+  measured_at TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS messages_sender ON messages (sender_address);
 CREATE INDEX IF NOT EXISTS messages_date ON messages (date);
@@ -546,6 +573,95 @@ class MailStore:
         out = dict(row)
         out.pop("id", None)
         return out
+
+    # ── the reading (lot 4) ──────────────────────────────────────────────
+    def reading_candidates(self, kinds: tuple[str, ...], since: str, stage: str, limit: int) -> list[dict[str, Any]]:
+        """What the next batch of a pass is made of, newest first, one
+        location each: for ``light``, the messages of the window not yet
+        judged; for ``full``, those the light pass kept and not yet read."""
+        where = (
+            "r.message IS NULL OR r.light IS NULL" if stage == "light"
+            else "r.light = 'keep' AND r.reading_sealed IS NULL"
+        )
+        with self._connect() as conn:
+            rows = conn.execute(
+                f"""SELECT m.id, m.size, m.sender, m.recipients, m.cc, m.date, m.subject_sealed, m.message_id,
+                           l.address, l.folder, l.uid
+                    FROM messages m JOIN triage t ON t.message = m.id JOIN locations l ON l.message = m.id
+                    LEFT JOIN readings r ON r.message = m.id
+                    WHERE t.kind IN ({','.join('?' * len(kinds))}) AND m.date >= ? AND m.date < '3000'
+                      AND m.gone_at IS NULL AND ({where})
+                    GROUP BY m.id ORDER BY m.date DESC LIMIT ?""",
+                (*kinds, since, max(1, int(limit))),
+            ).fetchall()
+        return [dict(r) for r in rows]
+
+    def reading_progress(self, kinds: tuple[str, ...], since: str) -> dict[str, int]:
+        """Where the passes are over the window: still to judge, kept,
+        skipped, still to read, read."""
+        with self._connect() as conn:
+            row = conn.execute(
+                f"""SELECT
+                      SUM(CASE WHEN r.light IS NULL THEN 1 ELSE 0 END) AS to_light,
+                      SUM(CASE WHEN r.light = 'keep' THEN 1 ELSE 0 END) AS kept,
+                      SUM(CASE WHEN r.light = 'skip' THEN 1 ELSE 0 END) AS skipped,
+                      SUM(CASE WHEN r.light = 'keep' AND r.reading_sealed IS NULL THEN 1 ELSE 0 END) AS to_read,
+                      SUM(CASE WHEN r.reading_sealed IS NOT NULL THEN 1 ELSE 0 END) AS read,
+                      COUNT(*) AS messages
+                    FROM messages m JOIN triage t ON t.message = m.id LEFT JOIN readings r ON r.message = m.id
+                    WHERE t.kind IN ({','.join('?' * len(kinds))}) AND m.date >= ? AND m.date < '3000' AND m.gone_at IS NULL""",
+                (*kinds, since),
+            ).fetchone()
+        return {k: int(row[k] or 0) for k in ("messages", "to_light", "kept", "skipped", "to_read", "read")}
+
+    def write_light(self, verdicts: list[tuple[str, str, str, int | None, str]]) -> None:
+        """``(message, keep|skip, reason, tokens, at)`` per message judged."""
+        with self._transaction() as conn:
+            conn.executemany(
+                """INSERT INTO readings (message, light, light_reason, tokens_light, light_at) VALUES (?, ?, ?, ?, ?)
+                   ON CONFLICT (message) DO UPDATE SET light = excluded.light, light_reason = excluded.light_reason,
+                     tokens_light = excluded.tokens_light, light_at = excluded.light_at""",
+                verdicts,
+            )
+
+    def write_readings(self, rows: list[tuple[str, str, int | None, str]]) -> None:
+        """``(message, reading_sealed, tokens, at)`` per message read whole."""
+        with self._transaction() as conn:
+            conn.executemany(
+                """INSERT INTO readings (message, light, reading_sealed, tokens_full, read_at) VALUES (?, 'keep', ?, ?, ?)
+                   ON CONFLICT (message) DO UPDATE SET reading_sealed = excluded.reading_sealed,
+                     tokens_full = excluded.tokens_full, read_at = excluded.read_at""",
+                rows,
+            )
+
+    def readings(self, *, kept_only: bool = True) -> list[dict[str, Any]]:
+        """The rows the passes left, sealed as they are; lot 5 unseals."""
+        with self._connect() as conn:
+            q = "SELECT * FROM readings" + (" WHERE reading_sealed IS NOT NULL" if kept_only else "") + " ORDER BY read_at, message"
+            return [dict(r) for r in conn.execute(q).fetchall()]
+
+    def add_capacity(self, job: str | None, messages: int, seconds: float) -> None:
+        with self._transaction() as conn:
+            conn.execute(
+                "INSERT INTO capacity (job, messages, seconds, measured_at) VALUES (?, ?, ?, ?)",
+                (job, int(messages), float(seconds), now_iso()),
+            )
+
+    def capacity(self) -> dict[str, Any] | None:
+        """The measured nightly capacity: the last runs' messages per hour,
+        as the estimate's messages per night. None until a run measured
+        something worth the name (a hundred messages at least)."""
+        with self._connect() as conn:
+            rows = conn.execute(
+                "SELECT messages, seconds, measured_at FROM capacity WHERE messages >= 100 ORDER BY id DESC LIMIT 5"
+            ).fetchall()
+        if not rows:
+            return None
+        messages = sum(int(r["messages"]) for r in rows)
+        seconds = sum(float(r["seconds"]) for r in rows)
+        if seconds <= 0:
+            return None
+        return {"messages": messages, "seconds": seconds, "per_hour": round(messages / (seconds / 3600)), "measured_at": rows[0]["measured_at"], "runs": len(rows)}
 
     def locations(self, message_id: str | None = None) -> list[dict[str, Any]]:
         with self._connect() as conn:

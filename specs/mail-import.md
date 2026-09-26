@@ -1,4 +1,4 @@
-# Making a large mailbox useful — design, lots 1 to 3 built
+# Making a large mailbox useful — design, lots 1 to 4 built
 
 A member arrives with years of mail. What should Maurice do with it?
 
@@ -6,9 +6,9 @@ Designed 25–26 September 2026 around Aline's mailbox, and settled in
 conversation with Candide. Lot 1 (the job, the cursor, the header store), its
 wiring to the night and to the account's creation, and lot 2 (the triage, the
 report, the reconciliation, the calibration, the conversation with the
-numbers) were built on 26 September, and lot 3 (the approval — `job_id` on the
-ledger, the member's yes) the same evening; everything from lot 4 on is
-design.
+numbers) were built on 26 September, lot 3 (the approval — `job_id` on the
+ledger, the member's yes) the same evening, and lot 4 (the two reading
+passes) right after; lot 5 is design.
 Numbers are measured where they say so and estimated where they say that
 instead.
 
@@ -520,8 +520,44 @@ nothing that costs.** It leaves the job `approved` for lot 4; Maurice
 answers that the reading happens at night, starting the next one, and that
 he will come back with what he understood.
 
-**Lot 4 — the two reading passes.** The light model over the first ~600
-characters of the survivors, then the larger one over what it keeps.
+**Lot 4 — the two reading passes.** *Built, 26 September 2026, late
+evening.* Settled with Candide first: **the server reads, the tool
+provides** — the tool has no model and no ledger, the server has both and
+already runs the night; and **the full reading leaves one sealed reading
+per message** in the store (`readings`, a JSON under the household key like
+the subject: derived from the body, never the body), so lot 5 aggregates
+without reading the bodies again. Four more server-only words on the
+`email` tool (`tools/email/reading.py`): `reading_next` (`stage` `light`:
+the next messages of the window not yet judged, newest first, with headers,
+the subject unsealed in transit, and the first 600 characters; `full`: the
+kept ones not yet read, with the first 16 kB of text — `BODY.PEEK` in one
+FETCH per folder, nothing stored, nothing marked read), `reading_record`
+(the verdicts, and the readings sealed before the disk; the job's counts
+move), `reading_control` (`running` / `paused` / `done` / `failed`, the
+reason, and the run's measure kept in `capacity`) and `reading_progress`.
+The server (`services/mailReading.ts`, `runMailReading`): the **light
+pass** on `mail_read_light` — mistral-small, a new invocation with that
+preference, pinned at boot like the night's — in batches of twenty,
+answering `{verdicts: [{id, keep, reason}]}`, a missing verdict kept rather
+than lost; the **full pass** on `mail_read_full` — a new invocation whose
+computed default is the household's everyday model, the one the range was
+priced on — one call per kept message, answering one structured reading
+(summary, kind, people, said, promised, decided, asked, dates, open,
+thread) in the member's language, stamped with the model and whether the
+text was cut. Every call is checked against the household's cap before it
+is made (a refusal pauses the job, it does not fail it) and recorded after
+it **as the member, under the job's id**. A run ends `done` when the window
+has nothing left, `paused` when a limit, the four-hour night or the cap
+stopped it with work left; the next run carries on from the store. A job
+`done` is run again when the window holds new mail: the daily case. The
+night runs it after the numbers, for every member whose word is yes
+(`mail_conversations.reading`, no gateway call to know); the operator runs
+it by hand with `POST /api/admin/mail/reading/run {member_id | username,
+limit?, wait?}` and reads `GET /api/admin/mail/reading/:member_id`. **The
+capacity is measured**: each run of a hundred messages or more leaves
+`messages` and `seconds` in `capacity`, and the estimate's nights use the
+last runs' messages per hour over a four-hour night instead of the 1 500
+assumption (`nights.measured` says which).
 
 **Lot 5 — the documents.** Fiches and digests written as drafts, with the
 disclaimer and per-line sourcing.
@@ -538,12 +574,15 @@ If the project stopped after lot 2 it would still have been worth doing.
   26 September 2026); until then only "replied" and "sent" make a person.
 - **The tokenizer is a proxy** (`tiktoken`, `o200k_base`), not Mistral's; the
   range absorbs the difference, and the calibration says so.
-- **A night's capacity is assumed** (1 500 messages, the figure the
-  estimate declares) until the reading passes of lot 4 exist to measure it —
-  and then it is measured on the first real night and kept beside the
-  calibration, in the member's store, **never derived from a spend cap**: the
-  household's cap says when to stop, not how much a night can do. Unchanged
-  by lot 3, by decision.
+- **A night's capacity is measured, not assumed, once a run of a hundred
+  messages or more has happened** (lot 4): the last five such runs' messages
+  per hour, over a four-hour night, kept in `capacity` beside the
+  calibration, **never derived from a spend cap** — the household's cap says
+  when to stop, not how much a night can do. Until then the estimate says
+  1 500 and `measured: false`.
+- **A reading the model cannot shape is left to read**, twice per batch and
+  then for another night; nothing retries it within a run, and nothing yet
+  says how many nights a message may be left before it is skipped for good.
 - **What happens on a second run.** A fiche or digest already deleted must not
   be silently rewritten the next night. Keying the refusal on the *source* — no
   more artefacts from message X, or from person Y after three refusals — is

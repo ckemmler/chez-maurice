@@ -85,7 +85,7 @@ def test_the_estimate_turns_counts_and_ratio_into_tokens_and_nights(tmp_path, mo
     per_kb = out["calibration"]["tokens_per_kb"]
     assert out["tokens"]["full"] == int(out["bytes_to_read"] / 1024 * per_kb)
     assert out["tokens"]["light"] == int(20 * (cal.HEADER_TOKENS + out["calibration"]["preview_tokens"]))
-    assert out["nights"] == {"low": 3, "high": 4, "per_night": 8}
+    assert out["nights"] == {"low": 3, "high": 4, "per_night": 8, "measured": False}
 
 
 def test_a_window_with_nothing_to_read_says_so(tmp_path):
@@ -95,7 +95,7 @@ def test_a_window_with_nothing_to_read_says_so(tmp_path):
     with pytest.raises(MailboxError, match="nothing to read"):
         svc.calibrate(svc.accounts(member_id="id-alex"), years=3)
     out = svc.estimate(svc.accounts(member_id="id-alex"), years=3)
-    assert out["to_read"] == 0 and out["nights"] == {"low": 0, "high": 0, "per_night": cal.NIGHT_MESSAGES}
+    assert out["to_read"] == 0 and out["nights"] == {"low": 0, "high": 0, "per_night": cal.NIGHT_MESSAGES, "measured": False}
 
 
 def test_the_sample_is_random_but_reproducible_with_a_seed(tmp_path):

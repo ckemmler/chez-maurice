@@ -46,6 +46,8 @@ HEADER_TOKENS = 60
 # the reading passes are lot 4, and this is what "three or four nights"
 # rests on until they exist. Said in the output.
 NIGHT_MESSAGES = 1500
+# What a night is, once the capacity is measured in messages per hour.
+NIGHT_HOURS = 4
 TOKENIZER = "tiktoken/o200k_base (a proxy for Mistral's, within ten to twenty percent)"
 READ_KINDS = ("correspondence", "other")
 
@@ -160,6 +162,11 @@ def estimate(store: MailStore, *, years: int = 3, now: datetime | None = None) -
     else:
         out["tokens"] = None
         out["note"] = "not calibrated yet: run calibrate first"
-    nights = max(1, math.ceil(to_read / NIGHT_MESSAGES)) if to_read else 0
-    out["nights"] = {"low": nights, "high": nights + 1 if nights else 0, "per_night": NIGHT_MESSAGES}
+    # A night's capacity: measured once the reading passes ran (lot 4, a
+    # night being taken as four hours of reading), assumed until then.
+    cap = store.capacity()
+    per_night = int(cap["per_hour"] * NIGHT_HOURS) if cap else NIGHT_MESSAGES
+    per_night = max(1, per_night)
+    nights = max(1, math.ceil(to_read / per_night)) if to_read else 0
+    out["nights"] = {"low": nights, "high": nights + 1 if nights else 0, "per_night": per_night, "measured": bool(cap)}
     return out

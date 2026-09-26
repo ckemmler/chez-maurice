@@ -130,6 +130,18 @@ export const ANCILLARY_INVOCATIONS: AncillaryInvocation[] = [
   { id: "domain_seed", side: "server", tier: "standard", label: "Domain notes",
     blurb: "The notes Maurice writes in the garden when a member adopts a domain and asks for them — marked as not yet reviewed.",
     prefer: NIGHT_MODELS },
+  // The mail reading (services/mailReading.ts, lot 4 of the mail import): two
+  // passes over a member's approved window, in their name and under their
+  // reading job's id. The light one sorts on the first 600 characters —
+  // mistral-small, the spec's choice, cheap enough to see every survivor;
+  // the full one reads what it kept on the household's everyday model, the
+  // one the member's cost range was priced on.
+  { id: "mail_read_light", side: "server", tier: "light", label: "Mail sorting",
+    blurb: "The light pass of the mail reading: keep or skip, from the headers and the first characters of each message.",
+    prefer: ["mistral-small-3.2-24b-instruct-2506", "mistral-small-latest"] },
+  { id: "mail_read_full", side: "server", tier: "standard", label: "Mail reading",
+    blurb: "The full pass of the mail reading: one structured reading per kept message, sealed in the member's mail store.",
+    defaultModel: () => householdDefaultModel() },
   // The documentation tool (services/mauriceDocsTool.ts): a question about
   // Maurice himself, answered from the system documentation in a sub-turn of
   // the member's own turn, charged to that member. The model was Maurice

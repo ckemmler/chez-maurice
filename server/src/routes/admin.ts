@@ -10,6 +10,7 @@ import { corpusNightlyStatus, reconcileCorpus } from "../services/corpusNightly"
 import { listProposals, proposalCard, type ProposalState } from "../services/domainProposals";
 import { canUseMaurice } from "../services/maurices";
 import { getUser, getUserByUsername } from "../services/users";
+import { mailReadingStatus, startMailReading } from "../services/mailReading";
 import db from "../db";
 
 const admin = new Hono();
@@ -147,6 +148,34 @@ admin.get("/export", (c) => {
     return c.json({ error: e instanceof ArchiveError ? e.message : "Export failed" }, 500);
   }
 });
+
+// ── The mail reading, by hand (lot 4, services/mailReading.ts) ─────────
+// POST /api/admin/mail/reading/run { member_id | username, limit?, wait? }
+// runs the passes for a member who said yes — in the background unless
+// `wait` — and GET /api/admin/mail/reading/:member_id says whether a run is
+// going and what the last one got through. The operator's hand on what the
+// night does on its own; nothing here the member sees.
+
+function memberOf(body: any) {
+  return body?.member_id
+    ? getUser(String(body.member_id))
+    : body?.username
+      ? (() => { const u = getUserByUsername(String(body.username)); return u ? getUser(u.id) : null; })()
+      : null;
+}
+
+admin.post("/mail/reading/run", async (c) => {
+  const body = await c.req.json().catch(() => ({}));
+  const member = memberOf(body);
+  if (!member) return c.json({ error: "Unknown member" }, 404);
+  const limit = Number.isFinite(Number(body.limit)) && Number(body.limit) > 0 ? Math.floor(Number(body.limit)) : undefined;
+  const p = startMailReading(member.id, { limit });
+  if (body.wait) return c.json(await p);
+  p.catch(() => {});
+  return c.json({ started: true, member_id: member.id, limit: limit ?? null, ...mailReadingStatus(member.id) }, 202);
+});
+
+admin.get("/mail/reading/:member_id", (c) => c.json(mailReadingStatus(c.req.param("member_id"))));
 
 // ── POST /api/admin/conversations/open ──────────────────────────
 // Open a conversation for a member, in Maurice's voice — the operator's hand

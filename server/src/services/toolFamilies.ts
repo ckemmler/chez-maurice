@@ -71,7 +71,12 @@ const CORPUS_ADMIN = [
 // (services/mailApproval.ts), or by the app's Settings → Mail. Handed to a
 // model, these two would let any conversation with the family approve a
 // reading on a hint. Never offered, whatever the selection says.
-const EMAIL_SERVER_ONLY = ["email__approve_reading", "email__decline_reading"];
+const EMAIL_SERVER_ONLY = [
+  "email__approve_reading", "email__decline_reading",
+  // And the passes' material (lot 4, services/mailReading.ts): bodies for
+  // the server's own reading, never for a conversation's model.
+  "email__reading_next", "email__reading_record", "email__reading_control", "email__reading_progress",
+];
 
 /** True for a tool the server calls itself and a model may never hold. */
 export function isServerOnlyTool(toolName: string): boolean {

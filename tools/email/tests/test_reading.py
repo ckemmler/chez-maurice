@@ -122,3 +122,134 @@ def test_nothing_the_member_could_see_speaks_of_money():
     for name in ("approve_reading", "decline_reading", "scan_status"):
         text = tools[name].description + json.dumps(tools[name].inputSchema)
         assert not re.search(r"€|euro|cost|price|token|budget", text, re.I), name
+
+
+# ── lot 4: the passes' material ──────────────────────────────────────────
+
+from tools.email import sealing  # noqa: E402
+from tools.email.calibrate import estimate  # noqa: E402
+
+from .fakes import build_raw  # noqa: E402
+
+
+def words(n):
+    return " ".join(f"mot{i}" for i in range(n))
+
+
+def corpus(n: int = 12) -> dict[int, bytes]:
+    """Correspondence of this month, a newsletter, and one old message."""
+    out = {}
+    for uid in range(1, n + 1):
+        bulk = uid % 4 == 0
+        out[uid] = build_raw(f"Sujet {uid}", "News <news@list.example>" if bulk else f"Ami {uid} <ami{uid}@example.org>",
+                             words(300 if uid == 1 else 40), date=f"Mon, 0{uid % 7 + 1} Sep 2026 09:00:00 +0200",
+                             message_id=f"<m{uid}@x>", headers={"List-Id": "<news.list.example>"} if bulk else None)
+    out[n + 1] = build_raw("Vieux", "vieux@example.org", words(50), date="Mon, 01 Jan 2018 09:00:00 +0100", message_id="<old@x>")
+    return out
+
+
+def ready(tmp_path):
+    """A walked, triaged, approved store; the fake client that serves it."""
+    client = FakeIMAPClient({"INBOX": corpus()})
+    svc = make_service(tmp_path, {"alex@icloud.com": client})
+    from .test_scan import scan as walk
+    walk(svc)
+    svc.triage(alex(svc))
+    svc.approve_reading(alex(svc), years=3)
+    return svc, client
+
+
+def test_the_light_pass_gets_previews_of_the_window_newest_first_and_stores_nothing(tmp_path):
+    svc, client = ready(tmp_path)
+    batch = svc.reading_next(alex(svc), stage="light", limit=5)
+    assert batch["stage"] == "light" and len(batch["messages"]) == 5 and batch["missing"] == []
+    m = batch["messages"][0]
+    assert set(m) >= {"id", "from", "to", "date", "subject", "preview"}
+    assert m["subject"].startswith("Sujet") and "mot0" in m["preview"] and len(m["preview"]) <= 600
+    dates = [x["date"] for x in batch["messages"]]
+    assert dates == sorted(dates, reverse=True)
+    # Nine correspondence messages in the window (12 minus 3 newsletters), none judged yet.
+    assert batch["progress"] == {"messages": 9, "to_light": 9, "kept": 0, "skipped": 0, "to_read": 0, "read": 0}
+    # Peeked, and nothing of it in the store.
+    assert not any(c[0] == "store_flags" or c[0] == "add_flags" for c in client.calls)
+    assert store().readings(kept_only=False) == []
+
+
+def test_verdicts_and_readings_are_kept_the_reading_sealed_and_the_job_counts_move(tmp_path):
+    svc, _client = ready(tmp_path)
+    batch = svc.reading_next(alex(svc), stage="light", limit=9)
+    ids = [m["id"] for m in batch["messages"]]
+    keep, skip = ids[:3], ids[3:]
+    r = svc.reading_record(alex(svc), verdicts=[{"id": i, "keep": True, "reason": "a real exchange", "tokens": 90} for i in keep]
+                           + [{"id": i, "keep": False, "reason": "an automatic reply"} for i in skip])
+    assert r["recorded"] == {"verdicts": 9, "readings": 0}
+    assert r["progress"] == {"messages": 9, "to_light": 0, "kept": 3, "skipped": 6, "to_read": 3, "read": 0}
+    assert r["job"]["counts"] == {"judged": 9, "kept": 3, "skipped": 6, "read": 0}
+    # The full pass sees the kept ones only, with their text.
+    full = svc.reading_next(alex(svc), stage="full", limit=10)
+    assert sorted(m["id"] for m in full["messages"]) == sorted(keep)
+    assert all("body" in m and m["truncated"] is False for m in full["messages"])
+    reading = {"summary": "Ami 1 propose un dîner", "people": [{"name": "Ami 1", "role": "friend"}], "promises": []}
+    r = svc.reading_record(alex(svc), readings=[{"id": keep[0], "reading": reading, "tokens": 400}])
+    assert r["recorded"] == {"verdicts": 0, "readings": 1} and r["progress"]["to_read"] == 2 and r["progress"]["read"] == 1
+    rows = store().readings()
+    assert len(rows) == 1 and rows[0]["reading_sealed"].startswith("v1:") and "dîner" not in rows[0]["reading_sealed"]
+    assert json.loads(sealing.unseal(rows[0]["reading_sealed"])) == reading
+    assert rows[0]["tokens_full"] == 400 and rows[0]["tokens_light"] == 90
+    # Read ones leave the full batch; a second record of the same id replaces, never doubles.
+    assert sorted(m["id"] for m in svc.reading_next(alex(svc), stage="full")["messages"]) == sorted(keep[1:])
+    svc.reading_record(alex(svc), readings=[{"id": keep[0], "reading": {"summary": "bis"}}])
+    assert len(store().readings()) == 1
+
+
+def test_control_moves_the_job_and_measures_the_capacity_that_the_estimate_then_uses(tmp_path):
+    svc, _client = ready(tmp_path)
+    acc = alex(svc)
+    assert svc.reading_progress(acc)["capacity"] is None
+    before = estimate(store(), years=3)
+    assert before["nights"]["measured"] is False and before["nights"]["per_night"] == 1500
+    r = svc.reading_control(acc, "running")
+    assert r["job"]["state"] == "running"
+    # A small run measures nothing worth the name; a real one does.
+    svc.reading_control(acc, "paused", measured={"messages": 9, "seconds": 30}, seconds=30)
+    assert svc.reading_progress(acc)["capacity"] is None
+    r = svc.reading_control(acc, "done", measured={"messages": 360, "seconds": 1800}, seconds=1800)
+    assert r["job"]["state"] == "done" and r["job"]["seconds_spent"] == 1830
+    assert r["capacity"]["per_hour"] == 720 and r["capacity"]["runs"] == 1
+    after = estimate(store(), years=3)
+    assert after["nights"] == {"low": 1, "high": 2, "per_night": 720 * 4, "measured": True}
+    with pytest.raises(ValueError):
+        svc.reading_control(acc, "approved")
+
+
+def test_without_a_yes_the_passes_get_nothing(tmp_path):
+    svc = service(tmp_path)
+    with pytest.raises(Exception, match="not approved"):
+        svc.reading_next(alex(svc))
+    svc.decline_reading(alex(svc))
+    with pytest.raises(Exception, match="not approved"):
+        svc.reading_record(alex(svc), verdicts=[])
+
+
+def test_the_pass_tools_are_reachable_and_a_refusing_folder_leaves_its_messages_for_later(tmp_path, monkeypatch):
+    svc, client = ready(tmp_path)
+    monkeypatch.setattr(server, "_service", svc)
+    monkeypatch.setattr(server, "get_member_id", lambda: "id-alex")
+
+    def call(name, args=None):
+        return json.loads(asyncio.run(server.call_tool(name, args or {}))[0].text)
+
+    assert call("reading_progress")["job"]["state"] == "approved"
+    real = FakeIMAPClient.fetch
+
+    def broken(self, uids, parts):
+        if any(str(p).startswith("BODY.PEEK[TEXT]") for p in parts):
+            raise RuntimeError("boom")
+        return real(self, uids, parts)
+
+    monkeypatch.setattr(FakeIMAPClient, "fetch", broken)
+    out = call("reading_next", {"stage": "light", "limit": 3})
+    assert out["messages"] == [] and len(out["missing"]) == 3 and out["errors"]
+    monkeypatch.setattr(FakeIMAPClient, "fetch", real)
+    assert len(call("reading_next", {"stage": "light", "limit": 3})["messages"]) == 3
+    assert call("reading_control", {"state": "running"})["job"]["state"] == "running"

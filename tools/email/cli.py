@@ -16,6 +16,7 @@ check it before Maurice uses it.
     .venv/bin/python -m tools.email.cli --member candide estimate
     .venv/bin/python -m tools.email.cli --member candide approve-reading --years 3
     .venv/bin/python -m tools.email.cli --member candide decline-reading
+    .venv/bin/python -m tools.email.cli --member candide reading-progress
 
 Run from the repo root. ``--member`` is a username: the CLI acts for one member
 exactly as the gateway does, it is not a way to see everyone's mail.
@@ -104,6 +105,8 @@ def main(argv: list[str] | None = None) -> int:
 
     sub.add_parser("decline-reading", help="record the member's no, so it is not asked again")
 
+    sub.add_parser("reading-progress", help="the reading job, the passes' progress, the measured capacity")
+
     args = parser.parse_args(argv)
     service: EmailService | None = None
     try:
@@ -156,6 +159,8 @@ def main(argv: list[str] | None = None) -> int:
             out = service.approve_reading(accounts, years=args.years)
         elif args.command == "decline-reading":
             out = service.decline_reading(accounts)
+        elif args.command == "reading-progress":
+            out = service.reading_progress(accounts)
         else:
             out = service.stats(accounts, account=args.account, since=args.since, before=args.before, folder=args.folder)
     except (ConfigError, AccessDenied, AccountUnavailable, MailboxError) as exc:

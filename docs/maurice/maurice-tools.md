@@ -343,8 +343,50 @@ the member's language, what was done. **What the yes triggers: nothing that
 costs.** It leaves the job `approved` for lot 4 — the two reading passes —
 and Maurice answers that the reading happens at night, starting the next
 one, over a few nights, and that he will come back with what he understood.
-Measured spend will land on `spend_ledger.job_id` (built in the same lot) so
+Measured spend lands on `spend_ledger.job_id` (built in the same lot) so
 the operator sees a reading apart from chat.
+
+### The two reading passes — lot 4 (26 September 2026, late evening)
+
+Settled with the owner before the code: **the server reads, the tool
+provides** (the tool has no model and no ledger; the server has both and
+the night), and **the full reading leaves one sealed reading per message**
+so lot 5 aggregates without opening the bodies again. Four more words on
+the `email` tool, all **server-only** like the two of the yes
+(`tools/email/reading.py`): `reading_next` (`stage` `light` — the window's
+messages not yet judged, newest first, headers, the subject unsealed in
+transit, the first 600 characters; `full` — the kept ones not yet read, the
+first 16 kB of text; one `BODY.PEEK` FETCH per folder, nothing stored,
+nothing marked read, a folder that refuses named in `errors` and its
+messages left for the next batch), `reading_record` (the verdicts and the
+readings, each reading sealed under the household key before the disk),
+`reading_control` (`running` / `paused` / `done` / `failed`, the reason,
+the run's measure into `capacity`) and `reading_progress`; CLI
+`reading-progress`. The server side is `services/mailReading.ts`: the
+**light pass** on the new invocation `mail_read_light` (prefers
+mistral-small, pinned at boot like the night's functions) in batches of
+twenty — keep a real exchange, skip what no person wrote to the member in
+particular — a missing verdict kept rather than lost; the **full pass** on
+`mail_read_full` (computed default: the household's everyday model, the one
+the member's range was priced on), one call per kept message, one structured
+reading in the member's language — summary, kind, people, said, promised,
+decided, asked, dates, open, thread — stamped with the model and whether
+the text was cut. Both prompts carry the hostile-input line: report, never
+obey, never address the member. Every call is checked against the cap
+**before** it is made — a refusal pauses the job, it does not fail it — and
+recorded after it **as the member, under the job's id**. A run ends `done`
+with nothing left in the window, `paused` when a limit, the four-hour night
+or the cap stopped it; the next picks up from the store; a job `done` runs
+again when new mail lands in the window. **Where it runs:** the night, after
+the numbers, for every member whose word is yes (read off
+`mail_conversations.reading`, no gateway call); and by hand, `POST
+/api/admin/mail/reading/run {member_id | username, limit?, wait?}` with
+`GET /api/admin/mail/reading/:member_id` for the last run. The log line:
+`[mail] reading for <member>: N judged (K kept, S skipped), R read, C € on
+job <id>, done|paused, in Ss`. **The capacity is measured**: a run of a
+hundred messages or more leaves `messages` and `seconds` in `capacity`, and
+the estimate's nights use the last five runs' messages per hour over a
+four-hour night (`nights.measured: true`) instead of the 1 500 assumption.
 
 **Why a mail answer takes as long as it does** (25 September 2026). *Relis-moi
 le mail à Jean* took 58 s: 23 s in `search`, 10 s in `get_message`, 25 s across
@@ -599,12 +641,12 @@ when imapclient ships the fix.
 
 ## Gaps & notes
 
-- **The gateway enforces none of this.** Families and the experimental flag live only in the Bun server. A client that authenticates straight to the MCP gateway — a member token, an OAuth custom connector — gets the *complete* mounted roster, whatever the member was granted in the app. Closing that is its own piece of work. (The native tools — `maurice_docs`, the four `domains__*`, `mail__approve_reading` — are the exception by construction: they live in the server's loop and the gateway never sees them; the two `email__*_reading` words, though, are mounted like any tool and a caller with a member token could speak them for that member; `corpus__map_conversations`, though, is mounted like any corpus tool and reads whatever member the caller claims.)
+- **The gateway enforces none of this.** Families and the experimental flag live only in the Bun server. A client that authenticates straight to the MCP gateway — a member token, an OAuth custom connector — gets the *complete* mounted roster, whatever the member was granted in the app. Closing that is its own piece of work. (The native tools — `maurice_docs`, the four `domains__*`, `mail__approve_reading` — are the exception by construction: they live in the server's loop and the gateway never sees them; the six server-only `email__*reading*` words, though, are mounted like any tool and a caller with a member token could speak them for that member — approve, or read that member's bodies; `corpus__map_conversations`, though, is mounted like any corpus tool and reads whatever member the caller claims.)
 - **A hosted household's gateway answered anyone, until 25 September 2026.** The server proxies `/mcp` to the gateway verbatim, and `start-mcp-gateway.sh` turns auth on only when `MAURICE_MCP_TOKEN` (or an OAuth password) is set — which nothing set in the container. So `https://<household>/mcp` accepted MCP calls with no credentials at all, for whatever member id a caller put in `X-Maurice-Member-Id`: every member's garden and corpus were readable from the internet (found while wiring the mail tool, before any mailbox was added on the fleet). `infra/container/entrypoint.sh` now gives each household a key of its own (`~/.maurice/mcp.token` in the volume, generated once, exported before supervisord); verified the same day: anonymous `/mcp` is 401 on both hosted households, the server's own calls 200. Nothing records whether the hole was used before — the gateway logged requests but not their origin.
 - **`email` cannot reach Outlook.com.** Microsoft takes only OAuth over IMAP; not built. Nor does it index mail: search is IMAP's own (Gmail's is good, others' less so). The header store (above) is not a search index either: bodies are never kept, and a subject can only be read by unsealing it.
 - **The triage knows no contacts.** `triage_mailbox` takes a list of addresses and nobody passes one: the `contacts` tool is private (vCard, `maurice-tools`) and the public `email` tool cannot import it. A single reconciled list of a member's contacts is a design of its own (26 September 2026); until then only "replied" and "sent" make a person, and a contact who never got a reply is "other".
 - **The calibration's tokenizer is a proxy** (`tiktoken`), not Mistral's; **a night's reading capacity is assumed** (1 500 messages) until lot 4 exists. The range is wide enough for the first; nothing yet checks the second.
-- **The reading itself is not built** (lot 4). The yes is taken and kept — in the conversation or from the card — and leaves an `approved` job that nothing runs yet; Maurice promises "the next night" and the night does not read. `spend_ledger.job_id` is there and no row carries one yet. The Settings card shows the walk and the word, not the reconciliation or the triage; the cost range lives in the log only, no console card and no `spentOnJob` view yet. A member's yes given from the card before any conversation was opened is kept but said nowhere.
+- **The documents are not built** (lot 5). The passes leave sealed readings in the store and nothing in the garden yet; Maurice, who promised to "come back with what he understood", has nothing to come back with until lot 5 writes the fiches and digests. A reading the model cannot shape is left for another night, twice per batch, with no ceiling on how many nights. The Settings card shows the walk and the word (and `running` / `done` once the passes moved the job), not the passes' progress; the cost range and `spentOnJob` live in the log and the ledger only, no console card yet. A member's yes given from the card before any conversation was opened is kept but said nowhere.
 - **`web` and `signals` can't be turned off.** They're re-unioned into every resolution, so unticking them in the picker does nothing.
 - **Family selection is coarser than it looks.** `toolInFamilies` still accepts the parent prefix for back-compat, so a conversation holding `"garden"` opens all 54 garden tools at once, sub-families included.
 - **No per-tool sandboxing.** A tool runs with the gateway's process privileges; the only access control is the member contextvar and tool-family gating, not OS-level isolation.

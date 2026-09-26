@@ -346,6 +346,38 @@ class EmailService:
         member_id, store = self._member_store(accounts)
         return reading_mod.decline(store, member_id)
 
+    # ── lot 4: the passes' material, kept for the server ─────────────────
+    def _reading_job(self, store: MailStore) -> dict[str, Any]:
+        job = reading_mod.status(store)
+        if job is None or job["state"] == "declined":
+            raise AccessDenied("the member has not approved the reading of their mail")
+        return job
+
+    def reading_next(self, accounts: list[Account], stage: str = "light", limit: int = 20) -> dict[str, Any]:
+        """The next batch of a pass: previews for `light`, bodies for
+        `full`. Nothing stored, nothing marked read."""
+        _member_id, store = self._member_store(accounts)
+        job = self._reading_job(store)
+        sessions = {a.address.lower(): self._session(a) for a in accounts}
+        return reading_mod.next_batch(store, sessions, job, stage, limit)
+
+    def reading_record(
+        self, accounts: list[Account], *, verdicts: list[dict[str, Any]] | None = None, readings: list[dict[str, Any]] | None = None
+    ) -> dict[str, Any]:
+        _member_id, store = self._member_store(accounts)
+        return reading_mod.record(store, self._reading_job(store), verdicts=verdicts, readings=readings)
+
+    def reading_control(
+        self, accounts: list[Account], state: str, *, error: str | None = None, measured: dict[str, Any] | None = None, seconds: float | None = None
+    ) -> dict[str, Any]:
+        _member_id, store = self._member_store(accounts)
+        return reading_mod.control(store, self._reading_job(store), state, error=error, measured=measured, seconds=seconds)
+
+    def reading_progress(self, accounts: list[Account]) -> dict[str, Any]:
+        _member_id, store = self._member_store(accounts)
+        job = reading_mod.status(store)
+        return {"job": job, "progress": reading_mod.progress(store, job), "capacity": store.capacity()}
+
     # ── tools ────────────────────────────────────────────────────────────
     def list_accounts(self, accounts: list[Account]) -> dict[str, Any]:
         out = []
