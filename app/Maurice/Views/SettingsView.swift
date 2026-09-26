@@ -1222,7 +1222,13 @@ private struct MailPane: View {
         }
     }
 
-    private var readingApproved: Bool { scan?.reading?.state == "approved" }
+    /// The word is yes for as long as it was not taken back: approved, and
+    /// every state the passes then take the job through — running, paused,
+    /// done, failed. Only `declined`, or no job, is a no.
+    private var readingApproved: Bool {
+        guard let state = scan?.reading?.state else { return false }
+        return state != "declined"
+    }
     private var readingRunning: Bool { ["running", "paused"].contains(scan?.reading?.state ?? "") }
 
     private var readingLine: String {
