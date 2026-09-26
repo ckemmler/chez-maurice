@@ -218,8 +218,9 @@ export async function runMailReading(memberId: string, opts: ReadingRunOptions =
   if (p?.error || p?.raw) return finish("failed", String(p.error ?? p.raw));
   const job = p?.job;
   // A job `done` is read again when the window has new mail in it — the
-  // daily case, once the first nights are past; declined, nothing.
-  if (!job || !["approved", "paused", "running", "done"].includes(job.state)) return finish("nothing", job ? `the reading job is ${job.state}` : "no reading job");
+  // daily case, once the first nights are past; `failed` is tried again (a
+  // tool that could not be reached is tomorrow's success); declined, nothing.
+  if (!job || !["approved", "paused", "running", "done", "failed"].includes(job.state)) return finish("nothing", job ? `the reading job is ${job.state}` : "no reading job");
   run.job_id = job.id;
   run.progress = p.progress ?? null;
   if (run.progress && run.progress.to_light === 0 && run.progress.to_read === 0) {

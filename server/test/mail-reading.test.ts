@@ -211,6 +211,10 @@ test("a missing verdict keeps the message; an unusable reading leaves it to read
   expect(f.outcome).toBe("failed");
   expect(f.error).toContain("disk full");
   expect(job!.state).toBe("failed");
+  // A failure is tried again: the next run takes the job back to running.
+  const again = await reading.runMailReading(ANNA);
+  expect(again.outcome).toBe("done");
+  expect(job!.state).toBe("done");
 });
 
 test("a folder that refuses is retried once, then the pass moves on", async () => {
