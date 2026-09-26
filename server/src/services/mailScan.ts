@@ -10,6 +10,8 @@ import { listUsers } from "./users";
 import { backfillMailConversations, linkMailConversation } from "./mailApproval";
 import { readingWanted, runMailReading } from "./mailReading";
 import { writeMailDocuments } from "./mailDocuments";
+import { contactAddresses, listContactAccounts, syncContacts } from "./contactAccounts";
+import { listMailAccounts } from "./mailAccounts";
 
 // The header walk, driven from the server (specs/mail-import.md, the wiring
 // of lot 1, settled 26 September 2026).
@@ -91,6 +93,16 @@ export interface MailScanDeps {
   wantsReading?: (memberId: string) => boolean;
   /** The documents (services/mailDocuments.ts), after a reading that read. */
   document?: (memberId: string) => Promise<{ outcome: string; written: unknown[]; cost: number; error: string | null }>;
+  /** The member's contacts, read again, as the addresses the triage counts
+   *  as people (services/contactAccounts.ts, lot 2 of specs/contacts.md). */
+  contacts?: (memberId: string) => Promise<string[]>;
+}
+
+/** Read the member's address books, then give every address in them. A
+ *  book that cannot be read tonight keeps its last cards. */
+async function freshContacts(memberId: string): Promise<string[]> {
+  if (listContactAccounts(memberId).length) await syncContacts(memberId);
+  return contactAddresses(memberId);
 }
 
 const RECONCILE_EVERY_MS = 7 * 24 * 60 * 60 * 1000;
@@ -110,6 +122,7 @@ const defaultDeps: MailScanDeps = {
   call: emailCall, members: () => listUsers(), open: openConversation, locale: memberLocale,
   read: (memberId) => runMailReading(memberId), wantsReading: readingWanted,
   document: (memberId) => writeMailDocuments(memberId),
+  contacts: freshContacts,
 };
 let deps: MailScanDeps = defaultDeps;
 
@@ -191,6 +204,21 @@ export function startMailScanInBackground(memberId: string): void {
       else console.log(`[mail] scan for ${memberId}: ${v.state} (${v.messages} message(s) in the store)`);
     })
     .catch((err) => console.warn(`[mail] scan for ${memberId}: ${(err as Error).message}`));
+}
+
+/** Sort the member's mail again with their contacts as they stand — after
+ *  an address book was added or read by hand. Free, headers only; nothing
+ *  to do for a member without mail. Does not wait. */
+export function retriageInBackground(memberId: string): void {
+  if (!listMailAccounts(memberId).length) return;
+  const contacts = contactAddresses(memberId);
+  deps
+    .call(memberId, "triage_mailbox", { contacts })
+    .then((t) => {
+      if (t?.error || t?.raw) console.warn(`[mail] triage for ${memberId} with ${contacts.length} contact address(es): ${t.error ?? t.raw}`);
+      else console.log(`[mail] triage for ${memberId} with ${contacts.length} contact address(es): ${JSON.stringify(t?.counts ?? {})}`);
+    })
+    .catch((err) => console.warn(`[mail] triage for ${memberId}: ${(err as Error).message}`));
 }
 
 // ── The night ────────────────────────────────────────────────────────────
@@ -344,7 +372,16 @@ async function reconcileIfDue(memberId: string, d: MailScanDeps, now: Date): Pro
 
 /** The free work of lot 2, in order; the estimate at the end. */
 async function measure(memberId: string, d: MailScanDeps): Promise<ReadingEstimate> {
-  const t = await d.call(memberId, "triage_mailbox", {});
+  // The contacts first: a sender in them is a person before any bulk
+  // marker is looked at. Their failure is theirs; the triage goes on with
+  // what was kept.
+  let contacts: string[] = [];
+  try {
+    contacts = d.contacts ? await d.contacts(memberId) : [];
+  } catch (err) {
+    console.warn(`[mail] nightly: contacts for ${memberId}: ${(err as Error).message}`);
+  }
+  const t = await d.call(memberId, "triage_mailbox", { contacts });
   if (t?.error || t?.raw) failed(t, "triage_mailbox");
   const c = await d.call(memberId, "calibrate_reading", {});
   // A window with nothing to read cannot be calibrated, and need not be:

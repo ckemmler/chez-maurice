@@ -945,6 +945,54 @@ db.run(`
 `);
 db.run(`CREATE INDEX IF NOT EXISTS idx_mail_conversations_conversation ON mail_conversations(conversation_id)`);
 
+// A member's address books (27 September 2026, lot 2 of specs/contacts.md;
+// services/contactAccounts.ts): a CardDAV login, entered from the app, only
+// ever seen or changed by the member. `secret` is the password sealed with
+// the household's key, as for the mail accounts; `url` is null when the
+// provider's own address is used (iCloud, Fastmail, Mailfence). `cards` and
+// `synced_at` say what the last read brought.
+db.run(`
+  CREATE TABLE IF NOT EXISTS contact_accounts (
+    id          TEXT PRIMARY KEY,
+    member_id   TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    url         TEXT,
+    username    TEXT NOT NULL,
+    name        TEXT,
+    provider    TEXT,
+    secret      TEXT NOT NULL,
+    state       TEXT NOT NULL DEFAULT 'unchecked' CHECK (state IN ('unchecked', 'ok', 'error')),
+    last_error  TEXT,
+    checked_at  TEXT,
+    synced_at   TEXT,
+    cards       INTEGER NOT NULL DEFAULT 0,
+    created_at  TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at  TEXT NOT NULL DEFAULT (datetime('now'))
+  )
+`);
+db.run(`CREATE INDEX IF NOT EXISTS idx_contact_accounts_member ON contact_accounts(member_id)`);
+
+// The cards those address books hold, as last read — replaced whole at every
+// read of an account, never edited here (nothing is written back to the
+// server). Only what a person fiche and the triage need: the names, the
+// addresses, the phones, the organisation, the card's UID.
+db.run(`
+  CREATE TABLE IF NOT EXISTS contact_cards (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    account_id  TEXT NOT NULL REFERENCES contact_accounts(id) ON DELETE CASCADE,
+    member_id   TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    href        TEXT NOT NULL,
+    etag        TEXT,
+    uid         TEXT,
+    full_name   TEXT,
+    nickname    TEXT NOT NULL DEFAULT '[]',
+    org         TEXT,
+    emails      TEXT NOT NULL DEFAULT '[]',
+    phones      TEXT NOT NULL DEFAULT '[]'
+  )
+`);
+db.run(`CREATE INDEX IF NOT EXISTS idx_contact_cards_member ON contact_cards(member_id)`);
+db.run(`CREATE INDEX IF NOT EXISTS idx_contact_cards_account ON contact_cards(account_id)`);
+
 // The brief's own one-liner (20 September 2026). The everyday prompt carries an
 // *index* of the member's domains — a name and a sentence each — rather than
 // every brief in full, and loads a brief only when a question falls into it

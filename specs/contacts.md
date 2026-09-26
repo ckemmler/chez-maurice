@@ -1,4 +1,4 @@
-# People and mailboxes — design, lot 1 built
+# People and mailboxes — design, lots 1 and 2 built
 
 Settled with Candide on 26 September 2026, after the first full mail import
 (Gmail and Proton, `specs/mail-import.md`, lots 1 to 5). Two refinements of
@@ -228,7 +228,8 @@ rides with the hit: *"Jean Dupont — colleague at Acme, 2021 → March 2026
 **A CardDAV account per member in Settings** (settled), like the mail
 accounts: the secret sealed under the household's key, read every night
 before the triage, public — every member has it. Covers Mailfence, iCloud,
-Fastmail, Nextcloud; Google with an app password. The addresses feed the
+Fastmail, Nextcloud and any CardDAV server; **not Google**, whose CardDAV takes
+a sign-in with Google (OAuth) and refuses app passwords. The addresses feed the
 triage (`classify` already ranks a contact before the bulk markers); the
 entries feed the identities. The device's address book (the app reading iOS
 or macOS Contacts) is later, a project of its own.
@@ -257,8 +258,11 @@ new documents.
    `reading_material`, the pointer as a `maurice-mail:` link with the
    mailbox's label, the digests with it, the count per mailbox in "where it
    comes from", `meta.mailboxes`. Nothing opens the link yet.
-2. **Contact accounts.** CardDAV per member (route, sealed secret, Settings
-   pane), the nightly read, the addresses into the triage.
+2. **Contact accounts.** *Built 27 September 2026.* CardDAV per member
+   (`services/carddav.ts`, `services/contactAccounts.ts`,
+   `/api/contact-accounts`, `contact_accounts` + `contact_cards`, the
+   Contacts pane under Settings → Mail), read before the triage every night
+   and the mail sorted again when a book is added or read by hand.
 3. **Person fiches.** The hub, identities, relation, fragments per
    *(address, mailbox)*, statuses, `written_hash`, the relation given to the
    writer, the rewrite on correction. Erase Candide's documents, triage, read

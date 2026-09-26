@@ -13,7 +13,7 @@ struct SettingsView: View {
     @Environment(\.mauriceTheme) private var theme
     @Environment(\.dismiss) private var dismiss
 
-    enum Pane: Hashable { case appearance, language, household, members, garden, token, files, importChats, mail }
+    enum Pane: Hashable { case appearance, language, household, members, garden, token, files, importChats, mail, contacts }
     @State private var pane: Pane? = nil
 
     // MCP token (loaded once; the root row copies, the token pane manages).
@@ -50,6 +50,8 @@ struct SettingsView: View {
     @State private var importSummary = ImportSummary()
     /// The member's mailboxes (MailPane); nil until loaded.
     @State private var mailAccounts: [MailAccountRow]?
+    /// The member's address books (ContactsPane); nil until loaded.
+    @State private var contactAccounts: [ContactAccountRow]?
 
     private var locales: [(id: String?, label: String)] {
         [(nil, session.localized("settings.locale.system")),
@@ -79,6 +81,7 @@ struct SettingsView: View {
         .task { await loadFiles() }
         .task { if !session.activeIsGuest { importSummary = await ImportSummary.load(session: session) } }
         .task { if !session.activeIsGuest { await loadMailAccounts() } }
+        .task { if !session.activeIsGuest { await loadContactAccounts() } }
         .onChange(of: avatarItem) { _, item in prepareCrop(item) }
         .confirmationDialog(session.localized("settings.avatar.hint"), isPresented: $showSourceDialog, titleVisibility: .hidden) {
             Button(session.localized("settings.avatar.take_photo")) { showCamera = true }
@@ -159,6 +162,9 @@ struct SettingsView: View {
                             SetCard {
                                 IndexRow(icon: "envelope", label: session.localized("mail.title"),
                                          value: mailValue, accent: accent) { pane = .mail }
+                                SetDivider()
+                                IndexRow(icon: "person.crop.circle", label: session.localized("contacts.title"),
+                                         value: contactsValue, accent: accent) { pane = .contacts }
                             }
                             SetCaption(session.localized("mail.caption"))
                         }
@@ -324,6 +330,7 @@ struct SettingsView: View {
                     case .files:      FilesLibraryView(accent: accent, library: $filesLibrary)
                     case .importChats: ImportConversationsView(accent: accent, summary: $importSummary)
                     case .mail:       MailPane(accent: accent, accounts: $mailAccounts)
+                    case .contacts:   ContactsPane(accent: accent, accounts: $contactAccounts)
                     }
                 }
                 .padding(.horizontal, 18).padding(.top, 14).padding(.bottom, 18)
@@ -336,6 +343,19 @@ struct SettingsView: View {
         guard let mailAccounts else { return nil }
         return mailAccounts.isEmpty ? session.localized("mail.value.none")
             : session.localized("mail.value.count", mailAccounts.count)
+    }
+
+    private var contactsValue: String? {
+        guard let contactAccounts else { return nil }
+        return contactAccounts.isEmpty ? session.localized("mail.value.none")
+            : session.localized("mail.value.count", contactAccounts.reduce(0) { $0 + $1.cards })
+    }
+
+    private func loadContactAccounts() async {
+        guard let url = session.serverURL, let token = session.tokenForActiveUser else { return }
+        if let r: ContactAccountsResponse = try? await APIClient(baseURL: url).get("/api/contact-accounts", token: token) {
+            contactAccounts = r.accounts
+        }
     }
 
     private func loadMailAccounts() async {
@@ -356,6 +376,7 @@ struct SettingsView: View {
         case .files:      return session.localized("settings.files.title")
         case .importChats: return session.localized("settings.import.title")
         case .mail:       return session.localized("mail.title")
+        case .contacts:   return session.localized("contacts.title")
         }
     }
 
@@ -1470,6 +1491,329 @@ private struct MailPane: View {
     }
 
     private func replace(_ row: MailAccountRow) {
+        guard let i = accounts?.firstIndex(where: { $0.id == row.id }) else { return }
+        accounts?[i] = row
+    }
+}
+
+// MARK: - Address books (lot 2 of specs/contacts.md)
+
+/// An address book the member added (`/api/contact-accounts`): a CardDAV
+/// login. The password never comes back.
+struct ContactAccountRow: Decodable, Identifiable, Equatable {
+    let id: String
+    let url: String?
+    let username: String
+    let provider: String?
+    let state: String        // unchecked | ok | error
+    let last_error: String?
+    let synced_at: String?
+    let cards: Int
+}
+struct ContactAccountsResponse: Decodable { let accounts: [ContactAccountRow] }
+private struct NewContactAccount: Encodable {
+    let username: String
+    let password: String
+    let url: String?
+}
+
+/// What the username's domain says about where the address book lives — the
+/// server's table (services/carddav.ts), for the help shown while typing.
+enum ContactProvider: Equatable {
+    case icloud, fastmail, mailfence, google, other
+
+    static func of(_ username: String) -> ContactProvider {
+        guard let at = username.lastIndex(of: "@") else { return .other }
+        switch username[username.index(after: at)...].lowercased() {
+        case "icloud.com", "me.com", "mac.com": return .icloud
+        case "fastmail.com", "fastmail.fm": return .fastmail
+        case "mailfence.com": return .mailfence
+        case "gmail.com", "googlemail.com": return .google
+        default: return .other
+        }
+    }
+
+    var helpKey: String {
+        switch self {
+        case .icloud: "contacts.help.icloud"
+        case .fastmail: "contacts.help.fastmail"
+        case .mailfence: "contacts.help.mailfence"
+        case .google: "contacts.help.google"
+        case .other: "contacts.help.other"
+        }
+    }
+
+    var page: (key: String, url: URL)? {
+        self == .icloud ? ("mail.help.icloud.open", URL(string: "https://account.apple.com")!) : nil
+    }
+
+    /// Google's CardDAV takes a sign-in with Google only.
+    var possible: Bool { self != .google }
+    /// A server address is needed when the domain names none.
+    var needsServer: Bool { self == .other }
+}
+
+/// The member's own address books: read every night, never written to. What
+/// they are for, today: a sender in them is a person, so their mail is read
+/// even when it comes through a mailing tool. Adding one reads it first: a
+/// login the server refuses is not kept, and its reason is shown here.
+private struct ContactsPane: View {
+    @Environment(SessionStore.self) private var session
+    @Environment(\.mauriceTheme) private var theme
+    let accent: Color
+    @Binding var accounts: [ContactAccountRow]?
+
+    @State private var username = ""
+    @State private var password = ""
+    @State private var server = ""
+    @State private var otherServer = false
+    @State private var busy = false
+    @State private var error: String?
+    @State private var detail: String?
+    @State private var added: String?
+    @State private var renewing: String?
+    @State private var newPassword = ""
+    @State private var removing: ContactAccountRow?
+
+    private var api: APIClient? { session.serverURL.map { APIClient(baseURL: $0) } }
+    private var provider: ContactProvider { ContactProvider.of(username.trimmingCharacters(in: .whitespaces)) }
+    private var showsServer: Bool { provider.needsServer || otherServer }
+
+    private var canConnect: Bool {
+        guard provider.possible || otherServer, !busy,
+              !username.trimmingCharacters(in: .whitespaces).isEmpty,
+              !password.trimmingCharacters(in: .whitespaces).isEmpty else { return false }
+        return !showsServer || !server.trimmingCharacters(in: .whitespaces).isEmpty
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            SetCaption(session.localized("contacts.intro"))
+            if let accounts, !accounts.isEmpty {
+                SetGroup(session.localized("contacts.yours")) {
+                    ForEach(accounts) { account in accountCard(account) }
+                }
+            }
+            SetGroup(session.localized("contacts.add")) { addForm }
+            SetCaption(session.localized("contacts.privacy"))
+        }
+        .task { await load() }
+        .confirmationDialog(session.localized("mail.remove"), isPresented: Binding(
+            get: { removing != nil }, set: { if !$0 { removing = nil } }
+        ), titleVisibility: .visible, presenting: removing) { account in
+            Button(session.localized("mail.remove"), role: .destructive) { Task { await remove(account) } }
+            Button(L("common.cancel"), role: .cancel) {}
+        } message: { account in
+            Text(session.localized("contacts.remove.confirm", account.username))
+        }
+    }
+
+    private func accountCard(_ account: ContactAccountRow) -> some View {
+        SetCard {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(spacing: 11) {
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .fill(accent.opacity(0.14)).frame(width: 26, height: 26)
+                        .overlay(Image(systemName: "person.crop.circle").font(.system(size: 13))
+                            .foregroundStyle(accent.legible(onDark: theme.isDark)))
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(account.username).font(.system(size: 13.5)).foregroundStyle(theme.ink)
+                            .lineLimit(1).truncationMode(.middle)
+                        stateLine(account)
+                    }
+                    Spacer(minLength: 0)
+                }
+                if account.state == "error", let reason = account.last_error {
+                    Text(reason).font(.system(size: 11, design: .monospaced)).foregroundStyle(theme.inkMute)
+                        .textSelection(.enabled)
+                }
+                if renewing == account.id {
+                    HStack(spacing: 8) {
+                        SecureField(session.localized("mail.password"), text: $newPassword)
+                            .textFieldStyle(.roundedBorder)
+                        Button(session.localized("mail.save")) { Task { await renew(account) } }
+                            .glassProminentButton()
+                            .disabled(busy || newPassword.trimmingCharacters(in: .whitespaces).isEmpty)
+                    }
+                }
+                HStack(spacing: 8) {
+                    Button(session.localized("contacts.sync")) { Task { await sync(account) } }
+                        .glassBorderedButton().disabled(busy)
+                    Button(session.localized("mail.new_password")) {
+                        newPassword = ""
+                        renewing = renewing == account.id ? nil : account.id
+                    }
+                    .glassBorderedButton().disabled(busy)
+                    Spacer(minLength: 0)
+                    Button(session.localized("mail.remove"), role: .destructive) { removing = account }
+                        .glassBorderedButton().disabled(busy)
+                }
+                .font(.system(size: 12))
+            }
+            .padding(13)
+        }
+    }
+
+    @ViewBuilder private func stateLine(_ account: ContactAccountRow) -> some View {
+        switch account.state {
+        case "ok":
+            Label(session.localized("contacts.state.ok", account.cards), systemImage: "checkmark.circle.fill")
+                .font(.system(size: 11.5)).foregroundStyle(.green)
+        case "error":
+            Label(session.localized("contacts.state.error", account.cards), systemImage: "exclamationmark.triangle.fill")
+                .font(.system(size: 11.5)).foregroundStyle(.orange)
+        default:
+            Text(session.localized("mail.state.unchecked")).font(.system(size: 11.5)).foregroundStyle(theme.inkMute)
+        }
+    }
+
+    private var addForm: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            field(session.localized("contacts.username"), text: $username, email: true)
+            if !username.trimmingCharacters(in: .whitespaces).isEmpty {
+                help(provider)
+                if !provider.needsServer {
+                    SetCheckRow(label: session.localized("contacts.other_server"), on: otherServer, accent: accent) {
+                        otherServer.toggle()
+                    }
+                    .background(theme.surfaceAlt, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                }
+                if showsServer {
+                    field(session.localized("contacts.server"), text: $server, email: false)
+                }
+                if provider.possible || otherServer {
+                    SecureField(session.localized(provider == .icloud || provider == .fastmail ? "mail.password" : "mail.password.plain"),
+                                text: $password)
+                        .textFieldStyle(.roundedBorder)
+                        .onSubmit { if canConnect { Task { await add() } } }
+                    Button {
+                        Task { await add() }
+                    } label: {
+                        HStack(spacing: 8) {
+                            if busy { ProgressView().controlSize(.small) }
+                            Text(session.localized(busy ? "contacts.checking" : "mail.connect"))
+                        }
+                        .font(.system(size: 14, weight: .medium))
+                        .frame(maxWidth: .infinity).padding(.vertical, 10)
+                    }
+                    .glassProminentButton()
+                    .disabled(!canConnect)
+                }
+            }
+            if let added {
+                Label(added, systemImage: "checkmark.circle.fill").font(.system(size: 12.5)).foregroundStyle(.green)
+            }
+            if let error {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(error).font(.system(size: 12.5, weight: .medium)).foregroundStyle(.red)
+                    if let detail {
+                        Text(detail).font(.system(size: 11, design: .monospaced)).foregroundStyle(theme.inkMute)
+                            .textSelection(.enabled)
+                    }
+                }
+            }
+        }
+    }
+
+    private func field(_ placeholder: String, text: Binding<String>, email: Bool) -> some View {
+        TextField(placeholder, text: text)
+            .textFieldStyle(.roundedBorder)
+            .autocorrectionDisabled()
+            #if os(iOS)
+            .textInputAutocapitalization(.never)
+            .keyboardType(email ? .emailAddress : .URL)
+            .textContentType(email ? .username : .URL)
+            #endif
+    }
+
+    private func help(_ provider: ContactProvider) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(session.localized(provider.helpKey))
+                .font(.system(size: 12.5)).foregroundStyle(provider.possible ? theme.inkSoft : .orange)
+                .fixedSize(horizontal: false, vertical: true)
+            if let page = provider.page {
+                Link(destination: page.url) {
+                    Label(session.localized(page.key), systemImage: "arrow.up.forward.square")
+                        .font(.system(size: 12.5, weight: .medium))
+                        .foregroundStyle(accent.legible(onDark: theme.isDark))
+                }
+            }
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(theme.surfaceAlt, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(theme.rule, lineWidth: 0.5))
+    }
+
+    private func load() async {
+        guard let api, let token = session.tokenForActiveUser else { return }
+        if let r: ContactAccountsResponse = try? await api.get("/api/contact-accounts", token: token) {
+            accounts = r.accounts
+        }
+    }
+
+    private func show(_ err: Error) {
+        if case APIError.server(let code, let message) = err {
+            let refused = message.contains("refused the login")
+            error = session.localized(code != 422 ? "mail.failed" : refused ? "contacts.refused" : "contacts.unreachable")
+            detail = message
+        } else {
+            error = session.localized("mail.failed")
+            detail = err.localizedDescription
+        }
+    }
+
+    private func add() async {
+        guard let api, let token = session.tokenForActiveUser else { return }
+        busy = true; error = nil; detail = nil; added = nil
+        defer { busy = false }
+        let trimmedServer = server.trimmingCharacters(in: .whitespaces)
+        let body = NewContactAccount(username: username.trimmingCharacters(in: .whitespaces), password: password,
+                                     url: showsServer && !trimmedServer.isEmpty ? trimmedServer : nil)
+        do {
+            let row: ContactAccountRow = try await api.post("/api/contact-accounts", body: body, token: token)
+            accounts = (accounts ?? []) + [row]
+            added = session.localized("contacts.added", row.cards)
+            username = ""; password = ""; server = ""; otherServer = false
+        } catch {
+            password = ""
+            show(error)
+        }
+    }
+
+    private func sync(_ account: ContactAccountRow) async {
+        guard let api, let token = session.tokenForActiveUser else { return }
+        busy = true; defer { busy = false }
+        do {
+            let row: ContactAccountRow = try await api.post("/api/contact-accounts/\(account.id)/sync",
+                                                            body: [String: String](), token: token)
+            replace(row)
+        } catch { show(error) }
+    }
+
+    private func renew(_ account: ContactAccountRow) async {
+        guard let api, let token = session.tokenForActiveUser else { return }
+        busy = true; error = nil; detail = nil
+        defer { busy = false }
+        do {
+            let row: ContactAccountRow = try await api.put("/api/contact-accounts/\(account.id)/password",
+                                                           body: NewMailPassword(password: newPassword), token: token)
+            replace(row)
+            renewing = nil
+        } catch { show(error) }
+        newPassword = ""
+    }
+
+    private func remove(_ account: ContactAccountRow) async {
+        guard let api, let token = session.tokenForActiveUser else { return }
+        do {
+            try await api.delete("/api/contact-accounts/\(account.id)", token: token)
+            accounts?.removeAll { $0.id == account.id }
+        } catch { show(error) }
+        removing = nil
+    }
+
+    private func replace(_ row: ContactAccountRow) {
         guard let i = accounts?.firstIndex(where: { $0.id == row.id }) else { return }
         accounts?[i] = row
     }
