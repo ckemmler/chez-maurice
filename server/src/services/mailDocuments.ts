@@ -546,9 +546,10 @@ export async function writeMailDocuments(memberId: string, d: MailDocumentsDeps 
     }
   }
 
-  // The hub: refreshed whenever something was written or found gone, so it
-  // never lists a note that is not there — unless it was thrown away itself.
-  if ((run.written.length || deleted.length) && !hubDeleted) {
+  // The hub: computed from what is on disk at every run and rewritten only
+  // when it changed, so it never lists a note that is not there, whatever
+  // was written or found gone tonight — unless it was thrown away itself.
+  if (!hubDeleted && (recorded.length || artefacts.some((a) => !a.deleted_at))) {
     const all = artefacts.filter((a) => !a.deleted_at && (a.kind === "person" || a.kind === "thread") && !recorded.some((r) => r.kind === a.kind && r.key === a.key) && fs.existsSync(noteFile(garden, a.locale, a.slug)));
     const entries = [...recorded, ...all.map((a) => ({ kind: a.kind, slug: a.slug, title: a.title ?? a.slug }))];
     const section = (kind: string, head: string) => {
@@ -556,9 +557,13 @@ export async function writeMailDocuments(memberId: string, d: MailDocumentsDeps 
       return items.length ? `## ${head}\n\n${items.join("\n")}` : "";
     };
     const body = [w.hubIntro, section("person", w.correspondents), section("thread", w.threads)].filter(Boolean).join("\n\n");
-    files.push(writeNote(garden, locale, hubSlug, w.hub, body, { kind: "hub", key: "hub", parent: null, sources: [], model, now, flags: ["moc"] }));
-    recorded.push({ kind: "hub", key: "hub", slug: hubSlug, locale, title: w.hub, sources: [] });
-    run.written.unshift({ kind: "hub", key: "hub", slug: hubSlug, title: w.hub, web_path: noteWebPath(garden.username, locale, hubSlug), sources: 0 });
+    const hubFile = noteFile(garden, locale, hubSlug);
+    const current = fs.existsSync(hubFile) ? fs.readFileSync(hubFile, "utf8").replace(/^---[\s\S]*?\n---\n\n?/, "").trim() : null;
+    if (current !== body.trim()) {
+      files.push(writeNote(garden, locale, hubSlug, w.hub, body, { kind: "hub", key: "hub", parent: null, sources: [], model, now, flags: ["moc"] }));
+      recorded.push({ kind: "hub", key: "hub", slug: hubSlug, locale, title: w.hub, sources: [] });
+      run.written.unshift({ kind: "hub", key: "hub", slug: hubSlug, title: w.hub, web_path: noteWebPath(garden.username, locale, hubSlug), sources: 0 });
+    }
   }
 
   if (files.length) {
