@@ -11,7 +11,7 @@ import { listProposals, proposalCard, type ProposalState } from "../services/dom
 import { canUseMaurice } from "../services/maurices";
 import { getUser, getUserByUsername } from "../services/users";
 import { mailReadingStatus, startMailReading } from "../services/mailReading";
-import { mailDocumentsStatus, startMailDocuments } from "../services/mailDocuments";
+import { eraseMailDocuments, mailDocumentsStatus, startMailDocuments } from "../services/mailDocuments";
 import db from "../db";
 
 const admin = new Hono();
@@ -192,6 +192,16 @@ admin.post("/mail/documents/run", async (c) => {
 });
 
 admin.get("/mail/documents/:member_id", (c) => c.json(mailDocumentsStatus(c.req.param("member_id"))));
+
+// POST /api/admin/mail/documents/reset { member_id | username } erases what
+// the documents pass wrote in the member's garden and forgets it in their
+// store, so the next run writes everything again (specs/contacts.md, lot 3).
+admin.post("/mail/documents/reset", async (c) => {
+  const body = await c.req.json().catch(() => ({}));
+  const member = memberOf(body);
+  if (!member) return c.json({ error: "Unknown member" }, 404);
+  return c.json({ member_id: member.id, ...(await eraseMailDocuments(member.id)) });
+});
 
 // ── POST /api/admin/conversations/open ──────────────────────────
 // Open a conversation for a member, in Maurice's voice — the operator's hand

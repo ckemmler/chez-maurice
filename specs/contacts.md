@@ -1,4 +1,4 @@
-# People and mailboxes — design, lots 1 and 2 built
+# People and mailboxes — design, lots 1 to 3 built
 
 Settled with Candide on 26 September 2026, after the first full mail import
 (Gmail and Proton, `specs/mail-import.md`, lots 1 to 5). Two refinements of
@@ -263,10 +263,13 @@ new documents.
    `/api/contact-accounts`, `contact_accounts` + `contact_cards`, the
    Contacts pane under Settings → Mail), read before the triage every night
    and the mail sorted again when a book is added or read by hand.
-3. **Person fiches.** The hub, identities, relation, fragments per
-   *(address, mailbox)*, statuses, `written_hash`, the relation given to the
-   writer, the rewrite on correction. Erase Candide's documents, triage, read
-   what is rescued, write.
+3. **Person fiches.** *Built 27 September 2026* (`services/mailPeople.ts`).
+   The hub, identities, relation, fragments per *(address, mailbox)*,
+   statuses, `written_hash`, the relation given to the writer, the rewrite
+   on correction; the garden tool keeps a fragment's frontmatter through an
+   edit and an edit through it stays pending; `POST
+   /api/admin/mail/documents/reset` erases what the pass wrote. Then erase
+   Candide's documents and write again.
 4. **The footer and the page.** Pending marks on every path in (garden
    tools, corpus, composer), the per-turn collection, the rendered block;
    the fiche's page rendering fragments, statuses and mailboxes, with the

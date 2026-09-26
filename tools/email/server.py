@@ -333,6 +333,11 @@ async def list_tools() -> list[Tool]:
             inputSchema={"type": "object", "properties": {}},
         ),
         Tool(
+            name="documents_reset",
+            description="Server-side: forget what the documents pass wrote (not its refusals), after the notes were erased.",
+            inputSchema={"type": "object", "properties": {}},
+        ),
+        Tool(
             name="documents_record",
             description="Server-side: what the documents pass wrote in the garden (`written`) and found gone (`deleted`), keyed on the source.",
             inputSchema={
@@ -446,6 +451,8 @@ def dispatch(service: EmailService, name: str, args: dict[str, Any], *, member_i
         return service.reading_material(accounts, limit=args.get("limit") or 5000)
     if name == "reading_reset":
         return service.reading_reset(accounts)
+    if name == "documents_reset":
+        return service.documents_reset(accounts)
     if name == "documents_record":
         return service.documents_record(accounts, written=args.get("written"), deleted=args.get("deleted"), declined=args.get("declined"))
     if name == "stats":

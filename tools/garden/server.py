@@ -454,21 +454,41 @@ def _next_fragment_num(fdir: Path) -> int:
 _FRAGMENT_FM_RE = re.compile(r"^---\n(.*?)\n---\n?(.*)", re.DOTALL)
 
 
-def _parse_fragment(path: Path) -> tuple[str, str]:
-    """Return (summary, body) from a fragment file."""
+def _parse_fragment_full(path: Path) -> tuple[dict[str, Any], str]:
+    """Return (frontmatter, body) from a fragment file."""
     text = path.read_text(encoding="utf-8")
     m = _FRAGMENT_FM_RE.match(text)
     if m:
         fm = yaml.safe_load(m.group(1)) or {}
-        return fm.get("summary", ""), m.group(2)
-    return "", text
+        return (fm if isinstance(fm, dict) else {}), m.group(2)
+    return {}, text
 
 
-def _write_fragment(path: Path, summary: str, body: str) -> None:
+def _parse_fragment(path: Path) -> tuple[str, str]:
+    """Return (summary, body) from a fragment file."""
+    fm, body = _parse_fragment_full(path)
+    return str(fm.get("summary", "") or ""), body
+
+
+def fragment_hash(body: str) -> str:
+    """What a fragment's ``written_hash`` holds: the first 16 hex of the
+    SHA-256 of its body, trimmed. The Bun side (services/mailPeople.ts)
+    computes the same, and a body that no longer matches was edited by the
+    member — which confirms it (specs/contacts.md)."""
+    import hashlib
+
+    return hashlib.sha256(body.strip().encode("utf-8")).hexdigest()[:16]
+
+
+def _write_fragment(path: Path, summary: str, body: str, extra: dict[str, Any] | None = None) -> None:
     # Backslash first, then quotes, and no newline survives inside a
-    # double-quoted scalar — the Bun side writes the same shape.
+    # double-quoted scalar — the Bun side writes the same shape. The other
+    # fields a fragment carries (a mail fragment's status, mailbox, sources,
+    # hash) follow the summary and are kept through every rewrite.
     escaped = summary.replace("\\", "\\\\").replace('"', '\\"').replace("\n", " ").replace("\r", " ")
-    _atomic_write(path, f'---\nsummary: "{escaped}"\n---\n{body}')
+    rest = {k: v for k, v in (extra or {}).items() if k != "summary"}
+    more = yaml.safe_dump(rest, allow_unicode=True, sort_keys=False, default_flow_style=False) if rest else ""
+    _atomic_write(path, f'---\nsummary: "{escaped}"\n{more}---\n{body}')
     _push_note_to_corpus(path)
 
 
@@ -3528,8 +3548,14 @@ def _handle_update_fragment(args: dict[str, Any]) -> dict[str, Any]:
     if not fpath.exists():
         raise ValueError(f"Fragment not found at {fpath}")
 
-    summary, _ = _parse_fragment(fpath)
-    _write_fragment(fpath, summary, args["content"])
+    fm, _ = _parse_fragment_full(fpath)
+    # A fragment Maurice wrote from mail and Maurice edits stays Maurice's:
+    # the new body becomes the reference, so the edit is not taken for the
+    # member's — only the member confirms (specs/contacts.md).
+    if "written_hash" in fm:
+        fm["written_hash"] = fragment_hash(args["content"])
+        fm["edited_by"] = "maurice"
+    _write_fragment(fpath, str(fm.get("summary", "") or ""), args["content"], fm)
     pid = args["parent_id"]
     _auto_commit([fpath], f"Update fragment {args['fragment_id']} of {pid}")
     return {"parent_id": pid, "fragment_id": args["fragment_id"], "updated": True}
@@ -3556,8 +3582,8 @@ def _handle_update_fragment_summary(args: dict[str, Any]) -> dict[str, Any]:
     if not fpath.exists():
         raise ValueError(f"Fragment not found at {fpath}")
 
-    _, body = _parse_fragment(fpath)
-    _write_fragment(fpath, args["summary"], body)
+    fm, body = _parse_fragment_full(fpath)
+    _write_fragment(fpath, args["summary"], body, fm)
     pid = args["parent_id"]
     _auto_commit([fpath], f"Update summary of fragment {args['fragment_id']} of {pid}")
     return {"parent_id": pid, "fragment_id": args["fragment_id"], "summary": args["summary"], "updated": True}

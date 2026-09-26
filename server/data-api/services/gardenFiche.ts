@@ -113,7 +113,9 @@ function yamlValue(value: Yamlish, indent: string): string {
   if (typeof value === "string") return yamlScalar(value);
   if (Array.isArray(value)) {
     if (value.length === 0) return "[]";
-    return "\n" + value.map((v) => `${indent}- ${yamlValue(v, indent + "  ").replace(/^\n/, "")}`).join("\n");
+    // An object in a list opens on the dash's line: its first key loses the
+    // indentation the others keep (`- address: …` then `  mailboxes: …`).
+    return "\n" + value.map((v) => `${indent}- ${yamlValue(v, indent + "  ").replace(/^\n[ ]*/, "")}`).join("\n");
   }
   const keys = Object.keys(value).filter((k) => value[k] !== undefined);
   if (keys.length === 0) return "{}";

@@ -1,6 +1,6 @@
 ---
 title: Knowledge capabilities
-date: '2026-09-21'
+date: '2026-09-27'
 flags: []
 locale: en
 description: 'What Maurice can do with knowledge: the garden (notes, media, journal),
@@ -41,6 +41,8 @@ Since August 2026 a garden entry for a book, a film, an article, a person is one
 - the **card** (`<slug>.md`) — the published face, what the site renders: the reader's verdict;
 - the **fiche** (`<slug>-fiche.md`) — the working face, "the back of the card": provider metadata under `meta:`, the reader's comments under `## Commentaire`, résonances under `## Résonances`, and beside it a `_fragments/` directory for long material such as an article's full text;
 - the **flashcards** (`<slug>-fiche/_cards/`) — see below.
+
+**A person's fiche is a hub** (27 September 2026, lot 3 of `specs/contacts.md`). `people/<locale>/<slug>-fiche.md` is where the mail pass writes about a person now, never a note: the frontmatter carries `status` (pending / confirmed / rejected — confirmed for someone in the member's address book or a fiche the member wrote), `carddav_uid`, `identities` (each address with the mailboxes it writes to, its status, `source: vcard | mail`, and a `conflict` when the mail contradicts the card — another name, two cards), and `relation` (status, `since`, `until`, sources, `written_hash`); the body opens with a `## La relation` section — who this person is to the member, once — and the interactions are **fragments**, one per address and mailbox, `origin: mail`, `status`, `mailbox`, `sources`, `written_hash`. **Touching confirms**: a fragment or a relation whose text no longer matches its hash was corrected by the member, is never rewritten, and a corrected relation is given to every later pass as a fact and sends that person's pending fragments back to be rewritten with it. An edit through the garden tool (`update_fragment`, i.e. Maurice) moves the hash with it and records `edited_by: maurice`: only the member confirms. A link the member marks `rejected` in `identities` is never made again. The member's own fiche keeps its title, body and marks; the relation section is put first.
 
 Two rules keep this honest. **A fiche is *opened* by a deliberate gesture** — `open_fiche` for a book or a film, writing on it for an article. **An article share is a weak signal**, so the fiche it writes automatically carries `meta.opened: false` until the reader writes on it: a comment at share time or later, a résonance filed on it or sent from it, a highlight with a note. Unopened fiches stay out of the Garden section and out of the résonance target search; the articles shelf still lists them. The absence of the marker means opened, so every fiche written before the rule existed is one.
 

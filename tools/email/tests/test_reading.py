@@ -330,6 +330,9 @@ def test_artefacts_are_keyed_on_the_source_and_a_deleted_one_is_remembered(tmp_p
     r = svc.documents_record(acc, written=[{"kind": "person", "key": "ami1@example.org", "slug": "ami-1-bis", "locale": "fr", "sources": ["c"]}])
     again = next(a for a in r["artefacts"] if a["kind"] == "person")
     assert again["deleted_at"] is None and again["slug"] == "ami-1-bis" and again["sources"] == ["c"]
+    # The notes erased: everything written is forgotten, the refusal stays.
+    r = svc.documents_reset(acc)
+    assert r["reset"] == 2 and [a["key"] for a in r["artefacts"]] == ["team@service.example"]
 
 
 def test_get_by_id_reads_the_message_where_the_store_last_saw_it(tmp_path, monkeypatch):

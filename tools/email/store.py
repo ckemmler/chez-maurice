@@ -712,6 +712,14 @@ class MailStore:
                 (kind, key, slug, locale, title, json.dumps(sorted(set(sources)), ensure_ascii=False), now_iso()),
             )
 
+    def reset_artefacts(self) -> int:
+        """Forget what the documents pass wrote, so the next pass writes
+        everything again — after the member's notes were erased. The
+        refusals stay: a key declined as not a person (no slug) is a
+        decision, not a document."""
+        with self._transaction() as conn:
+            return int(conn.execute("DELETE FROM artefacts WHERE slug != ''").rowcount)
+
     def mark_artefact_deleted(self, kind: str, key: str) -> bool:
         with self._transaction() as conn:
             n = conn.execute(

@@ -77,7 +77,7 @@ const EMAIL_SERVER_ONLY = [
   // the server's own reading, never for a conversation's model.
   "email__reading_next", "email__reading_record", "email__reading_control", "email__reading_progress",
   // And the documents' (lot 5, services/mailDocuments.ts).
-  "email__reading_material", "email__reading_reset", "email__documents_record",
+  "email__reading_material", "email__reading_reset", "email__documents_record", "email__documents_reset",
 ];
 
 /** True for a tool the server calls itself and a model may never hold. */

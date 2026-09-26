@@ -414,6 +414,11 @@ class EmailService:
             n_declined += 1
         return {"recorded": {"written": n_written, "deleted": n_deleted, "declined": n_declined}, "artefacts": store.artefacts()}
 
+    def documents_reset(self, accounts: list[Account]) -> dict[str, Any]:
+        """Forget every artefact but the refusals (``reset_artefacts``)."""
+        _member_id, store = self._member_store(accounts)
+        return {"reset": store.reset_artefacts(), "artefacts": store.artefacts()}
+
     def get_by_id(self, accounts: list[Account], message: str, max_bytes: int = 8000) -> dict[str, Any]:
         """One message by the id a note's source carries: its store row says
         where it was last seen, and the mailbox is asked for it there."""
