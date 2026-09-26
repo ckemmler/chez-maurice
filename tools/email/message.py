@@ -121,8 +121,19 @@ def _addresses(msg: EmailMessage, header: str) -> list[str]:
     for name, address in getaddresses([str(v) for v in values]):
         if not address and not name:
             continue
-        out.append(formataddr((name, address)) if address else name)
+        out.append(_format_mailbox(name, address) if address else name)
     return out
+
+
+def _format_mailbox(name: str, address: str) -> str:
+    """``formataddr`` refuses an address with a non-ASCII character in it
+    (an internationalised local part, or simply a mangled header — met on a
+    real Proton archive: one such To killed a walk of 200 000 messages). A
+    header is reported, not validated: format it by hand in that case."""
+    try:
+        return formataddr((name, address))
+    except UnicodeEncodeError:
+        return f"{name} <{address}>" if name else address
 
 
 def envelope_summary(msg: EmailMessage) -> dict[str, Any]:

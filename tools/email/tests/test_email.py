@@ -428,3 +428,12 @@ def test_a_refused_login_is_not_called_unreachable(tmp_path):
     entry = svc.list_accounts(svc.accounts(member_id="id-sam"))["accounts"][0]
     assert entry["state"] == "refused"
     assert "refused the login" in entry["error"] and "reached" not in entry["error"]
+
+
+def test_a_non_ascii_address_in_a_header_is_reported_not_refused():
+    """formataddr raises on 'cœur@example.org'; a walk must not die on it."""
+    from tools.email.message import envelope_summary, parse_message
+    from .fakes import build_raw
+    raw = build_raw("Sujet", "Ami <ami@example.org>", "corps", headers={"To": "Cœur <cœur@example.org>, plain@example.org"})
+    env = envelope_summary(parse_message(raw))
+    assert env["to"] == ["Cœur <cœur@example.org>", "plain@example.org"]
