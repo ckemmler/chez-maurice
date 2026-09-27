@@ -15,7 +15,7 @@ import { mailConversationOf } from "./mailApproval";
 import { mailOpenerStrings } from "./mailOpener";
 import { mailToolCall } from "./mailScan";
 import { contactCards, type ContactCard } from "./contactAccounts";
-import { eraseMailFiles, indexPeopleFiches, resolvePeople, writePerson } from "./mailPeople";
+import { consolidate, eraseMailFiles, indexPeopleFiches, resolvePeople, writePerson } from "./mailPeople";
 import { indexGardenPaths, unindexGardenPath } from "../../data-api/services/gardenIndex";
 import { getModel } from "./models";
 import { publishToRoom } from "./roomBus";
@@ -537,11 +537,12 @@ export async function writeMailDocuments(memberId: string, d: MailDocumentsDeps 
 
   const { people: addressGroups, threads } = groupMaterial(messages, memberAddresses, memberNames, { everyAddress: true });
   const fiches = indexPeopleFiches(garden);
-  const people = resolvePeople(addressGroups, cards.filter((_, i) => !own.has(i)), fiches.rejected);
+  const people = resolvePeople(addressGroups, cards.filter((_, i) => !own.has(i)), fiches.rejected, fiches);
   const files: string[] = [];
   const recorded: any[] = [];
   const deleted: any[] = [];
   const declined: any[] = [];
+  const forgotten: any[] = [];
   const taken = new Set<string>();
 
   /** What to do with a thread, from the artefacts: write, or why not. */
@@ -586,10 +587,23 @@ export async function writeMailDocuments(memberId: string, d: MailDocumentsDeps 
     // The people: a fiche in `people/` per person, their addresses joined by
     // the address book, fragments per address and mailbox
     // (services/mailPeople.ts, lot 3 of specs/contacts.md).
+    // People found to be one (lot 7): their fiches folded into one before
+    // anything is written; the absorbed keys forgotten in the store.
+    for (const p of people) {
+      const c = consolidate(garden, fiches, (k) => byKey.get(`person:${k}`) ?? null, p);
+      files.push(...c.files);
+      for (const k of c.forget) {
+        forgotten.push({ kind: "person", key: k });
+        byKey.delete(`person:${k}`);
+      }
+    }
     for (const p of people) {
       const artefact = byKey.get(`person:${p.key}`) ?? null;
       const o = await writePerson({ garden, locale, language, member: name, w, labels, now, index: fiches, artefact, ask }, p);
-      if (o.kind === "unchanged") run.skipped.unchanged++;
+      if (o.kind === "unchanged") {
+        run.skipped.unchanged++;
+        if (o.files) files.push(...o.files);
+      }
       else if (o.kind === "deleted") {
         run.skipped.deleted++;
         if (o.found) deleted.push({ kind: "person", key: p.key });
@@ -700,9 +714,9 @@ export async function writeMailDocuments(memberId: string, d: MailDocumentsDeps 
     invalidateNotes(memberId);
     syncCorpus(memberId, files);
   }
-  if (recorded.length || deleted.length || declined.length) {
+  if (recorded.length || deleted.length || declined.length || forgotten.length) {
     try {
-      const rec = await d.call(memberId, "documents_record", { written: recorded, deleted, declined });
+      const rec = await d.call(memberId, "documents_record", { written: recorded, deleted, declined, forgotten });
       if (rec?.error || rec?.raw) console.warn(`[mail] documents for ${memberId}: documents_record answered ${rec.error ?? rec.raw}`);
     } catch (err) {
       console.warn(`[mail] documents for ${memberId}: documents_record failed: ${(err as Error).message}`);
@@ -771,12 +785,13 @@ export async function previewPeople(memberId: string, d: MailDocumentsDeps = dep
   const messages: MaterialMessage[] = (mat.messages ?? []).map((m: any) => ({ ...m, to: m.to ?? [], cc: m.cc ?? [], reading: m.reading ?? {}, mailboxes: m.mailboxes ?? [] }));
   const garden = gardenFor(memberId);
   const { people: groups, threads } = groupMaterial(messages, memberAddresses, memberNames, { everyAddress: true });
-  const people = resolvePeople(groups, cards.filter((_, i) => !own.has(i)), garden ? indexPeopleFiches(garden).rejected : new Map());
+  const index = garden ? indexPeopleFiches(garden) : undefined;
+  const people = resolvePeople(groups, cards.filter((_, i) => !own.has(i)), index?.rejected ?? new Map(), index);
   return {
     member_names: memberNames,
     member_addresses: memberAddresses.size,
     threads: threads.length,
-    people: people.map((p) => ({ key: p.key, name: p.name, card: !!p.card, messages: p.messages.length, identities: p.identities })),
+    people: people.map((p) => ({ key: p.key, name: p.name, card: !!p.card, messages: p.messages.length, identities: p.identities, ...(p.absorbed?.length ? { absorbed: p.absorbed } : {}) })),
   };
 }
 

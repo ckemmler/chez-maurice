@@ -720,6 +720,13 @@ class MailStore:
         with self._transaction() as conn:
             return int(conn.execute("DELETE FROM artefacts WHERE slug != ''").rowcount)
 
+    def forget_artefact(self, kind: str, key: str) -> bool:
+        """Drop an artefact's row: its person was folded into another
+        (lot 7 of specs/contacts.md), and if the member splits it back out
+        it must be written again, not taken for thrown away."""
+        with self._transaction() as conn:
+            return conn.execute("DELETE FROM artefacts WHERE kind = ? AND key = ?", (kind, key)).rowcount > 0
+
     def mark_artefact_deleted(self, kind: str, key: str) -> bool:
         with self._transaction() as conn:
             n = conn.execute(

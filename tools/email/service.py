@@ -389,6 +389,7 @@ class EmailService:
         written: list[dict[str, Any]] | None = None,
         deleted: list[dict[str, Any]] | None = None,
         declined: list[dict[str, Any]] | None = None,
+        forgotten: list[dict[str, Any]] | None = None,
     ) -> dict[str, Any]:
         """What the documents pass wrote (``{kind, key, slug, locale, title,
         sources}``), what it found gone (``{kind, key}``), and what it
@@ -396,7 +397,10 @@ class EmailService:
         service, not a person) — kept as a deleted artefact with no note, so
         the same key is not asked about again."""
         _member_id, store = self._member_store(accounts)
-        n_written = n_deleted = n_declined = 0
+        n_written = n_deleted = n_declined = n_forgotten = 0
+        for f in forgotten or []:
+            if f.get("kind") and f.get("key") and store.forget_artefact(str(f["kind"]), str(f["key"])):
+                n_forgotten += 1
         for w in written or []:
             if not w.get("kind") or not w.get("key") or not w.get("slug"):
                 continue
@@ -412,7 +416,7 @@ class EmailService:
             store.record_artefact(str(d["kind"]), str(d["key"]), slug="", locale="", title=None, sources=[str(s) for s in (d.get("sources") or [])])
             store.mark_artefact_deleted(str(d["kind"]), str(d["key"]))
             n_declined += 1
-        return {"recorded": {"written": n_written, "deleted": n_deleted, "declined": n_declined}, "artefacts": store.artefacts()}
+        return {"recorded": {"written": n_written, "deleted": n_deleted, "declined": n_declined, "forgotten": n_forgotten}, "artefacts": store.artefacts()}
 
     def documents_reset(self, accounts: list[Account]) -> dict[str, Any]:
         """Forget every artefact but the refusals (``reset_artefacts``)."""

@@ -326,9 +326,9 @@ def test_artefacts_are_keyed_on_the_source_and_a_deleted_one_is_remembered(tmp_p
         {"kind": "thread", "key": "<t@x>", "slug": "le-diner", "locale": "fr", "title": "Le dîner", "sources": ["a"]},
         {"kind": "hub", "key": "x"},  # no slug: ignored
     ])
-    assert r["recorded"] == {"written": 2, "deleted": 0, "declined": 0} and len(r["artefacts"]) == 2
+    assert r["recorded"] == {"written": 2, "deleted": 0, "declined": 0, "forgotten": 0} and len(r["artefacts"]) == 2
     r = svc.documents_record(acc, deleted=[{"kind": "person", "key": "ami1@example.org"}, {"kind": "person", "key": "nobody"}])
-    assert r["recorded"] == {"written": 0, "deleted": 1, "declined": 0}
+    assert r["recorded"] == {"written": 0, "deleted": 1, "declined": 0, "forgotten": 0}
     # A sender the writer declined (a service, not a person): a deleted artefact with no note.
     r = svc.documents_record(acc, declined=[{"kind": "person", "key": "team@service.example", "sources": ["z"]}])
     assert r["recorded"]["declined"] == 1
@@ -340,6 +340,10 @@ def test_artefacts_are_keyed_on_the_source_and_a_deleted_one_is_remembered(tmp_p
     r = svc.documents_record(acc, written=[{"kind": "person", "key": "ami1@example.org", "slug": "ami-1-bis", "locale": "fr", "sources": ["c"]}])
     again = next(a for a in r["artefacts"] if a["kind"] == "person")
     assert again["deleted_at"] is None and again["slug"] == "ami-1-bis" and again["sources"] == ["c"]
+    # A person folded into another: its row goes, so a split writes it again.
+    svc.documents_record(acc, written=[{"kind": "person", "key": "old@x", "slug": "old-fiche", "locale": "fr", "sources": ["q"]}])
+    r = svc.documents_record(acc, forgotten=[{"kind": "person", "key": "old@x"}, {"kind": "person", "key": "none@x"}])
+    assert r["recorded"]["forgotten"] == 1 and not any(a["key"] == "old@x" for a in r["artefacts"])
     # The notes erased: everything written is forgotten, the refusal stays.
     r = svc.documents_reset(acc)
     assert r["reset"] == 2 and [a["key"] for a in r["artefacts"]] == ["team@service.example"]

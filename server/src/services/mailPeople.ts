@@ -59,8 +59,13 @@ export interface Identity {
   address: string;
   mailboxes: string[];
   status: Status;
-  source: "vcard" | "mail";
+  /** `guess`: joined to this person on the mail's own evidence (lot 7). */
+  source: "vcard" | "mail" | "guess";
   conflict?: string;
+  /** The names the address wrote under, or was written to under. */
+  names?: string[];
+  /** Why a guessed link was made. */
+  guess?: string;
 }
 
 export interface Person {
@@ -72,6 +77,9 @@ export interface Person {
   messages: MaterialMessage[];
   /** Message id → the address of this person it was exchanged with. */
   addressOf: Map<string, string>;
+  /** The keys of the people this one absorbed (lot 7): their fiches are
+   *  folded into this one's before it is written. */
+  absorbed?: string[];
 }
 
 /** The first 16 hex of the SHA-256 of a text, trimmed — the garden tool's
@@ -104,7 +112,7 @@ const personKeyOf = (c: ContactCard, address: string): string => `vcard:${c.uid 
 
 /** Group the per-address groups into people, with the address book. Only
  *  people with enough messages come back, most messages first. */
-export function resolvePeople(groups: Group[], cards: ContactCard[], rejected: Map<string, Set<string>> = new Map()): Person[] {
+export function resolvePeople(groups: Group[], cards: ContactCard[], rejected: Map<string, Set<string>> = new Map(), index?: FicheIndex): Person[] {
   const byAddress = new Map<string, ContactCard[]>();
   for (const c of cards) {
     for (const e of c.emails) {
@@ -128,12 +136,14 @@ export function resolvePeople(groups: Group[], cards: ContactCard[], rejected: M
     }
     const key = card ? personKeyOf(card, address) : address;
     const p: Person = people.get(key) ?? { key, card, name: card?.full_name || g.name || address, identities: [], messages: [], addressOf: new Map() };
+    const seenAs = names.length ? names : g.name && !g.name.includes("@") ? [g.name] : [];
     p.identities.push({
       address,
       mailboxes: [...new Set(g.messages.flatMap((m) => m.mailboxes ?? []))].sort(),
       status: card && !conflict ? "confirmed" : "pending",
       source: card ? "vcard" : "mail",
       ...(conflict ? { conflict } : {}),
+      ...(seenAs.length ? { names: seenAs.slice(0, 4) } : {}),
     });
     for (const m of g.messages) {
       if (p.addressOf.has(m.id)) continue;
@@ -142,10 +152,107 @@ export function resolvePeople(groups: Group[], cards: ContactCard[], rejected: M
     }
     people.set(key, p);
   }
-  return [...people.values()]
+  return mergeGuessed([...people.values()], cards, rejected, index)
     .map((p) => ({ ...p, messages: p.messages.sort((a, b) => (a.date ?? "").localeCompare(b.date ?? "") || a.id.localeCompare(b.id)) }))
     .filter((p) => p.messages.length >= MIN_MESSAGES)
     .sort((a, b) => b.messages.length - a.messages.length);
+}
+
+// ── Guessed links (lot 7) ────────────────────────────────────────────────
+//
+// Two people are one when the mail says so twice: the same full name (two
+// words at least, in any order, accents and case aside) AND one more strong
+// signal — every address of both spells that name (`paola.magi@`,
+// `magipaola@`, `brosse@` for Jonathan Brosse), or the two wrote in the same
+// thread, or both are cards of the member's address book under that name
+// (a duplicated card). The body of a message is not kept, so a signature or
+// a phone number cannot be the second signal. The name alone joins nothing,
+// and a link the member rejected is never made again. The joined addresses
+// are pending, `source: guess`, with the reason; one ✗ on the fiche splits
+// an address back out (splitAddress below).
+
+const nameKey = (n: string): string => [...tokens(n)].sort().join(" ");
+
+function personNames(p: Person): Set<string> {
+  const out = new Set<string>();
+  for (const n of [p.card?.full_name ?? "", ...(p.card?.nickname ?? []), ...p.identities.flatMap((i) => i.names ?? [])]) {
+    const k = nameKey(n);
+    if (k.split(" ").length >= 2) out.add(k);
+  }
+  return out;
+}
+
+/** Whether an address's local part spells a name: its words are words of
+ *  the name (`paola.magi`, `brosse`), or it is the name's words run together
+ *  in some order (`magipaola`). */
+export function spellsName(address: string, key: string): boolean {
+  const local = (address.split("@")[0] ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  const parts = local.split(/[^a-z]+/).filter((x) => x.length >= 2);
+  const name = key.split(" ");
+  if (parts.length && parts.every((x) => name.includes(x))) return true;
+  const joined = local.replace(/[^a-z]/g, "");
+  // An initial and another word of the name: `pmagi`, `jbrosse`, `magip`.
+  if (name.some((x) => name.some((y) => y !== x && (joined === x[0] + y || joined === y + x[0])))) return true;
+  const perms = (xs: string[]): string[][] => (xs.length <= 1 ? [xs] : xs.flatMap((x, i) => perms([...xs.slice(0, i), ...xs.slice(i + 1)]).map((r) => [x, ...r])));
+  return name.length <= 4 && perms(name).some((ps) => ps.join("") === joined);
+}
+
+function mergeGuessed(people: Person[], cards: ContactCard[], rejected: Map<string, Set<string>>, index?: FicheIndex): Person[] {
+  const names = people.map(personNames);
+  const threads = people.map((p) => new Set(p.messages.map((m) => m.thread).filter(Boolean) as string[]));
+  const parent = people.map((_, i) => i);
+  const find = (i: number): number => (parent[i] === i ? i : (parent[i] = find(parent[i]!)));
+  const why = new Map<number, string>();
+  for (let i = 0; i < people.length; i++) {
+    for (let j = i + 1; j < people.length; j++) {
+      const shared = [...names[i]!].find((k) => names[j]!.has(k));
+      if (!shared) continue;
+      const a = people[i]!, b = people[j]!;
+      const spell = [...a.identities, ...b.identities].every((id) => spellsName(id.address, shared));
+      const thread = [...threads[i]!].some((t) => threads[j]!.has(t));
+      const cardsAlike = !!a.card && !!b.card && nameKey(a.card.full_name ?? "") === shared && nameKey(b.card.full_name ?? "") === shared;
+      if (!spell && !thread && !cardsAlike) continue;
+      parent[find(j)] = find(i);
+      why.set(j, `same name « ${shared} » and ${spell ? "every address spells it" : thread ? "a thread in common" : "two cards of the address book under it"}`);
+      why.set(i, why.get(i) ?? why.get(j)!);
+    }
+  }
+  const clusters = new Map<number, number[]>();
+  people.forEach((_, i) => clusters.set(find(i), [...(clusters.get(find(i)) ?? []), i]));
+  const out: Person[] = [];
+  for (const members of clusters.values()) {
+    if (members.length === 1) { out.push(people[members[0]!]!); continue; }
+    // The one the others fold into: a fiche the member wrote, then a person
+    // of the address book, then one with a fiche already, then the most mail.
+    const rank = (p: Person) => {
+      const ref = index?.byKey.get(p.key) ?? (p.card?.uid ? index?.byUid.get(p.card.uid) : undefined);
+      return [ref && ref.fm.meta?.author !== "maurice" ? 1 : 0, p.card ? 1 : 0, ref ? 1 : 0, p.messages.length];
+    };
+    const sorted = [...members].sort((x, y) => {
+      const a = rank(people[x]!), b = rank(people[y]!);
+      for (let k = 0; k < a.length; k++) if (a[k] !== b[k]) return b[k]! - a[k]!;
+      return 0;
+    });
+    const target = people[sorted[0]!]!;
+    const merged: Person = { ...target, identities: [...target.identities], messages: [...target.messages], addressOf: new Map(target.addressOf), absorbed: [] };
+    for (const i of sorted.slice(1)) {
+      const other = people[i]!;
+      // A link the member rejected stays apart.
+      if (other.identities.some((id) => rejected.get(id.address)?.has(target.key))) { out.push(other); continue; }
+      merged.absorbed!.push(other.key);
+      for (const id of other.identities) {
+        const cardSame = id.source === "vcard" && target.card && other.card?.uid === target.card.uid;
+        merged.identities.push(cardSame ? id : { ...id, status: "pending", source: "guess", guess: why.get(i) ?? "same name" });
+      }
+      for (const m of other.messages) {
+        if (merged.addressOf.has(m.id)) continue;
+        merged.addressOf.set(m.id, other.addressOf.get(m.id)!);
+        merged.messages.push(m);
+      }
+    }
+    out.push(merged);
+  }
+  return out;
 }
 
 // ── The fiches already in the garden ─────────────────────────────────────
@@ -166,10 +273,11 @@ export interface FicheIndex {
   rejected: Map<string, Set<string>>;
   /** Basenames taken, per locale, so two new people never share one. */
   taken: Set<string>;
+  all: FicheRef[];
 }
 
 export function indexPeopleFiches(garden: GardenRef): FicheIndex {
-  const idx: FicheIndex = { byUid: new Map(), byKey: new Map(), rejected: new Map(), taken: new Set() };
+  const idx: FicheIndex = { byUid: new Map(), byKey: new Map(), rejected: new Map(), taken: new Set(), all: [] };
   const root = path.join(garden.root, "people");
   if (!fs.existsSync(root)) return idx;
   for (const locale of fs.readdirSync(root)) {
@@ -182,6 +290,7 @@ export function indexPeopleFiches(garden: GardenRef): FicheIndex {
       if (!parsed) continue;
       const ref: FicheRef = { file, basename: f.slice(0, -3), locale, fm: parsed.frontmatter, body: parsed.body };
       idx.taken.add(`${locale}/${ref.basename}`);
+      idx.all.push(ref);
       const uid = ref.fm.carddav_uid ? String(ref.fm.carddav_uid) : null;
       if (uid && !idx.byUid.has(uid)) idx.byUid.set(uid, ref);
       const key = ref.fm.meta?.person_key ? String(ref.fm.meta.person_key) : uid ? `vcard:${uid}` : null;
@@ -264,6 +373,122 @@ function nextFragmentFile(ficheFile: string, taken: Set<string>): string {
   return file;
 }
 
+/** The fiche's addresses with what the mail says now: a status the member
+ *  gave (confirmed, rejected) is kept; a pending one follows the evidence. */
+function mergeIdentities(priorRaw: unknown, current: Identity[]): Identity[] {
+  const prior: Identity[] = Array.isArray(priorRaw) ? (priorRaw as Identity[]) : [];
+  const identities: Identity[] = prior.map((i) => ({ ...i }));
+  for (const id of current) {
+    const same = identities.find((i) => String(i.address).toLowerCase() === id.address);
+    if (!same) identities.push({ ...id });
+    else {
+      same.mailboxes = [...new Set([...(same.mailboxes ?? []), ...id.mailboxes])].sort();
+      if (id.names?.length) same.names = [...new Set([...(same.names ?? []), ...id.names])].slice(0, 4);
+      if (same.status === "pending") Object.assign(same, { status: id.status, source: id.source, conflict: id.conflict, guess: id.guess });
+      if (!same.conflict) delete same.conflict;
+      if (!same.guess) delete same.guess;
+    }
+  }
+  return identities;
+}
+
+// ── Folding the fiches of people found to be one (lot 7) ─────────────────
+
+/** Before a merged person is written: the fiche it is written into (its
+ *  own, else the member's fiche on that name, else one of the absorbed
+ *  people's), the absorbed people's mail fragments moved into it, their
+ *  fiches removed when Maurice made them. Returns the files touched and the
+ *  store keys to forget. */
+export function consolidate(garden: GardenRef, index: FicheIndex, artefactOf: (key: string) => Artefact | null, p: Person): { files: string[]; forget: string[] } {
+  const files: string[] = [];
+  const forget: string[] = [];
+  const locate = (key: string, uid?: string | null): FicheRef | null => {
+    const a = artefactOf(key);
+    if (a && !a.deleted_at && a.slug) {
+      const file = path.join(garden.root, "people", a.locale, `${a.slug}.md`);
+      if (fs.existsSync(file)) {
+        const parsed = parseFiche(fs.readFileSync(file, "utf8"));
+        if (parsed) return { file, basename: a.slug, locale: a.locale, fm: parsed.frontmatter, body: parsed.body };
+      }
+    }
+    return index.byKey.get(key) ?? (uid ? index.byUid.get(uid) ?? null : null);
+  };
+  let target = locate(p.key, p.card?.uid);
+  // The member's own fiche on this name, with a card of the same name: the
+  // person is theirs already.
+  if (!target) {
+    const names = personNames(p);
+    const spelt = p.identities.every((id) => [...names].some((k) => spellsName(id.address, k)));
+    target = index.all.find((r) => r.fm.meta?.author !== "maurice" && r.fm.carddav_uid && names.has(nameKey(String(r.fm.title ?? ""))) && (spelt || !!p.card)) ?? null;
+    if (target) {
+      target.fm = { ...target.fm, meta: { ...(target.fm.meta ?? {}), person_key: p.key } };
+      atomicWrite(target.file, `---\n${dumpFrontmatter(target.fm)}\n---\n\n${target.body.replace(/^\n+/, "")}`);
+      files.push(target.file);
+    }
+  }
+  for (const key of p.absorbed ?? []) {
+    const ref = locate(key);
+    forget.push(key);
+    if (!ref || ref.file === target?.file) continue;
+    if (!target) {
+      // The first absorbed fiche becomes the person's.
+      target = ref;
+      target.fm = { ...ref.fm, meta: { ...(ref.fm.meta ?? {}), person_key: p.key }, ...(p.card?.uid && !ref.fm.carddav_uid ? { carddav_uid: p.card.uid } : {}) };
+      atomicWrite(target.file, `---\n${dumpFrontmatter(target.fm)}\n---\n\n${target.body.replace(/^\n+/, "")}`);
+      files.push(target.file);
+      continue;
+    }
+    const taken = new Set<string>();
+    for (const f of readMailFragments(ref.file)) {
+      const dest = nextFragmentFile(target.file, taken);
+      fs.mkdirSync(path.dirname(dest), { recursive: true });
+      fs.renameSync(f.file, dest);
+      files.push(f.file, dest);
+    }
+    if (ref.fm.meta?.author === "maurice") {
+      const dir = path.join(path.dirname(ref.file), ref.basename);
+      for (const x of fs.existsSync(path.join(dir, "_fragments")) ? fs.readdirSync(path.join(dir, "_fragments")) : []) files.push(path.join(dir, "_fragments", x));
+      fs.rmSync(dir, { recursive: true, force: true });
+      fs.rmSync(ref.file, { force: true });
+      files.push(ref.file);
+      index.byKey.delete(key);
+    }
+  }
+  if (target) index.byKey.set(p.key, target);
+  return { files, forget };
+}
+
+/** The member rejected an address on a fiche: that address is somebody
+ *  else. Its mail fragments move to a fiche of its own — pending, keyed on
+ *  the address — so the next pass carries on there; the rejected link stays
+ *  on the first fiche so it is never made again. Returns the files touched. */
+export function splitAddress(garden: GardenRef, ficheFile: string, locale: string, address: string, names: string[], disclaimer: { heading: string; text: string }): string[] {
+  const frags = readMailFragments(ficheFile).filter((f) => String(f.fm.address ?? "").toLowerCase() === address.toLowerCase());
+  // Nothing written from it: the next pass will make its fiche if it earns one.
+  if (!frags.length) return [];
+  const title = names.find((n) => n && !n.includes("@")) || address;
+  const base = slugify(title) || slugify(address.split("@")[0] ?? "") || "personne";
+  let slug = base;
+  for (let i = 2; fs.existsSync(fichePath(garden, "people", locale, slug)); i++) slug = `${base}-${i}`;
+  const file = fichePath(garden, "people", locale, slug);
+  const fm = {
+    title, resource_collection: "people", resource_id: slug, date: new Date().toISOString().slice(0, 10), tags: ["mail"], locale,
+    status: "pending",
+    identities: [{ address, mailboxes: [...new Set(frags.map((f) => String(f.fm.mailbox ?? "")).filter(Boolean))].sort(), status: "pending", source: "mail", ...(names.length ? { names } : {}) }],
+    meta: { opened: false, author: "maurice", origin: "mail", person_key: address.toLowerCase() },
+  };
+  atomicWrite(file, `---\n${dumpFrontmatter(fm as any)}\n---\n\n## ${disclaimer.heading}\n\n${disclaimer.text}\n`);
+  const out = [file];
+  const taken = new Set<string>();
+  for (const f of frags) {
+    const dest = nextFragmentFile(file, taken);
+    fs.mkdirSync(path.dirname(dest), { recursive: true });
+    fs.renameSync(f.file, dest);
+    out.push(f.file, dest);
+  }
+  return out;
+}
+
 // ── The prompt ───────────────────────────────────────────────────────────
 
 export function personSystem(member: string, language: string, opts: { known: boolean; relation: string | null }): string {
@@ -301,7 +526,7 @@ export interface PersonContext {
 }
 
 export type PersonOutcome =
-  | { kind: "unchanged" }
+  | { kind: "unchanged"; files?: string[] }
   | { kind: "deleted"; found: boolean }
   | { kind: "declined"; sources: string[] }
   | { kind: "empty"; stop: string }
@@ -345,7 +570,18 @@ export async function writePerson(ctx: PersonContext, p: Person): Promise<Person
 
   const covered = new Set<string>([...(a?.sources ?? []), ...fragments.flatMap((f) => f.sources)]);
   const fresh = p.messages.filter((m) => !covered.has(m.id));
-  if (!fresh.length && !force) return { kind: "unchanged" };
+  if (!fresh.length && !force) {
+    // Nothing new to read — but the addresses may have moved (a guessed link,
+    // an address newly in the book): the frontmatter follows.
+    if (ref) {
+      const ids = mergeIdentities(ref.fm.identities, p.identities);
+      if (JSON.stringify(ids) !== JSON.stringify(ref.fm.identities ?? [])) {
+        atomicWrite(ref.file, `---\n${dumpFrontmatter({ ...ref.fm, identities: ids as any })}\n---\n\n${ref.body.replace(/^\n+/, "")}`);
+        return { kind: "unchanged", files: [ref.file] };
+      }
+    }
+    return { kind: "unchanged" };
+  }
 
   const redo = new Set(pending.flatMap((f) => f.sources));
   const material = p.messages.filter((m) => !covered.has(m.id) || redo.has(m.id)).slice(-MAX_PER_NOTE);
@@ -464,17 +700,7 @@ export async function writePerson(ctx: PersonContext, p: Person): Promise<Person
   if (!ref) body = `${body.trimEnd()}\n\n## ${w.provenance}\n\n${w.disclaimer}\n`;
 
   // The frontmatter: the member's own fiche keeps everything it had.
-  const prior: Identity[] = Array.isArray(ref?.fm.identities) ? ref!.fm.identities : [];
-  const identities: Identity[] = [...prior.map((i) => ({ ...i }))];
-  for (const id of p.identities) {
-    const same = identities.find((i) => String(i.address).toLowerCase() === id.address);
-    if (!same) identities.push(id);
-    else {
-      same.mailboxes = [...new Set([...(same.mailboxes ?? []), ...id.mailboxes])].sort();
-      if (same.status === "pending") Object.assign(same, { status: id.status, source: id.source, conflict: id.conflict });
-      if (!same.conflict) delete same.conflict;
-    }
-  }
+  const identities = mergeIdentities(ref?.fm.identities, p.identities);
   const fm: Record<string, any> = ref ? { ...ref.fm } : {
     title,
     resource_collection: "people",

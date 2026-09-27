@@ -346,6 +346,7 @@ async def list_tools() -> list[Tool]:
                     "written": {"type": "array", "items": {"type": "object"}},
                     "deleted": {"type": "array", "items": {"type": "object"}},
                     "declined": {"type": "array", "items": {"type": "object"}},
+                    "forgotten": {"type": "array", "items": {"type": "object"}},
                 },
             },
         ),
@@ -454,7 +455,7 @@ def dispatch(service: EmailService, name: str, args: dict[str, Any], *, member_i
     if name == "documents_reset":
         return service.documents_reset(accounts)
     if name == "documents_record":
-        return service.documents_record(accounts, written=args.get("written"), deleted=args.get("deleted"), declined=args.get("declined"))
+        return service.documents_record(accounts, written=args.get("written"), deleted=args.get("deleted"), declined=args.get("declined"), forgotten=args.get("forgotten"))
     if name == "stats":
         return service.stats(
             accounts,

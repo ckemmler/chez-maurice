@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { atomicWrite, autoCommit, dumpFrontmatter, fichePath, fragmentsDir, parseFiche, type GardenRef } from "../../data-api/services/gardenFiche";
 import { invalidateNotes } from "./composer/notes";
-import { fragmentHash, sectionOf, withSection, type Status } from "./mailPeople";
+import { fragmentHash, sectionOf, splitAddress, withSection, type Status } from "./mailPeople";
 import { syncCorpus, wordsFor } from "./mailDocuments";
 
 // The member's word on a person fiche — lot 4 of specs/contacts.md,
@@ -187,6 +187,14 @@ export function review(
     if (action === "edit") throw new ReviewError("an address is confirmed or rejected");
     i.status = action === "confirm" ? "confirmed" : "rejected";
     what = `${i.address} ${i.status}`;
+    // Rejected: that address is somebody else — its mail fragments leave
+    // for a fiche of their own (lot 7), and the link stays rejected here.
+    if (i.status === "rejected") {
+      writeFiche(file, fm, body);
+      touched.push(...splitAddress(garden, file, locale, String(i.address), Array.isArray(i.names) ? i.names.map(String) : [], { heading: w.provenance, text: w.disclaimer }));
+      finish(memberId, garden, touched, `People: ${basename}, ${what}, split out`);
+      return personView(garden, locale, basename);
+    }
   } else if (target === "fragment") {
     if (!FRAG.test(String(req.id ?? ""))) throw new ReviewError("a fragment is named by its number");
     const f = path.join(fragmentsDir(file), `${req.id}.frag`);

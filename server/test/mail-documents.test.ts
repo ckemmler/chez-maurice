@@ -81,6 +81,7 @@ async function tool(_m: string, name: string, args: any) {
     }
     for (const d of args.deleted ?? []) { const a = artefacts.find((x) => x.kind === d.kind && x.key === d.key); if (a) a.deleted_at = "now"; }
     for (const d of args.declined ?? []) artefacts.push({ ...d, slug: "", locale: "", title: null, written_at: "now", deleted_at: "now" });
+    for (const f of args.forgotten ?? []) artefacts = artefacts.filter((x) => !(x.kind === f.kind && x.key === f.key));
     return { recorded: { written: args.written?.length ?? 0, deleted: args.deleted?.length ?? 0, declined: args.declined?.length ?? 0 }, artefacts };
   }
   if (name === "documents_reset") {
@@ -472,6 +473,80 @@ test("the admin routes write and erase by hand; the tool words are the server's"
   expect(erased.error).toBeNull();
   for (const t of ["reading_material", "reading_reset", "documents_record", "documents_reset"]) expect(isServerOnlyTool(`email__${t}`)).toBe(true);
   expect(isServerOnlyTool("email__get_by_id")).toBe(false);
+});
+
+test("an address spells a name: its words are the name's, or the name run together", () => {
+  expect(people.spellsName("paola.magi@pm.me", "magi paola")).toBe(true);
+  expect(people.spellsName("magipaola@hotmail.com", "magi paola")).toBe(true);
+  expect(people.spellsName("brosse@axeco.immo", "brosse jonathan")).toBe(true);
+  expect(people.spellsName("contact@shop.example", "brosse jonathan")).toBe(false);
+  expect(people.spellsName("pmagi75@x.org", "magi paola")).toBe(true);
+  expect(people.spellsName("j@x.org", "brosse jonathan")).toBe(false);
+});
+
+const JB = (n: number, addr: string, name: string, thread: string, mailboxes = GMAIL) =>
+  msg(`jb${n}-${addr}`, `${name} <${addr}>`, ["anna@gmail.com"], `2026-0${n}-10T10:00:00+02:00`, `Dossier ${n}`, thread, `Jonathan parle du dossier ${n}.`, mailboxes);
+
+test("the same full name and every address spelling it make one person; the name alone does not; the old fiches fold into one", async () => {
+  // First, Jonathan's second address signs otherwise: two people, two fiches.
+  material.push(JB(1, "brosse@axeco.immo", "Jonathan Brosse", "<j1@x>"), JB(2, "brosse@axeco.immo", "Jonathan Brosse", "<j2@x>"), JB(6, "brosse@axeco.immo", "Jonathan Brosse", "<j6@x>"));
+  material.push(JB(3, "brosse@jiceco.be", "JB Immo", "<j3@x>", PROTON), JB(4, "brosse@jiceco.be", "JB Immo", "<j4@x>", PROTON));
+  // A homonym whose address says nothing: never joined.
+  material.push(msg("h1", "Jonathan Brosse <contact@shop.example>", ["anna@gmail.com"], "2026-05-01T10:00:00+02:00", "Commande", "<h1@x>", "Une commande."));
+  material.push(msg("h2", "Jonathan Brosse <contact@shop.example>", ["anna@gmail.com"], "2026-05-02T10:00:00+02:00", "Livraison", "<h2@x>", "Une livraison."));
+  answer = (req) => {
+    if (!req.system.includes(PERSON) || !req.prompt.includes("Jonathan")) return defaultAnswer(req);
+    const lines = req.prompt.split("\n").filter((l: string) => /^\[\d+\]/.test(l)).map((l: string) => `Un échange ${l.match(/^\[\d+\]/)![0]}`);
+    return JSON.stringify({ title: "Jonathan Brosse", relation: { text: "Ton agent immobilier [1]." }, going_on: lines, promised: [], open: [] });
+  };
+  await docs.writeMailDocuments(ANNA);
+  expect(fs.readdirSync(peopleDir).filter((f) => f.startsWith("jonathan-brosse") && f.endsWith(".md")).sort()).toEqual(["jonathan-brosse-2-fiche.md", "jonathan-brosse-3-fiche.md", "jonathan-brosse-fiche.md"]);
+  // Then he signs his second address with his name: the two are one.
+  material = material.map((m) => (m.from_address === "brosse@jiceco.be" ? { ...m, from: "Jonathan Brosse <brosse@jiceco.be>" } : m));
+  const r = await docs.writeMailDocuments(ANNA);
+  const left = fs.readdirSync(peopleDir).filter((f) => f.startsWith("jonathan-brosse") && f.endsWith(".md")).sort();
+  expect(left).toHaveLength(2); // one Jonathan, and the homonym
+  const one = left.map((f) => fs.readFileSync(path.join(peopleDir, f), "utf8")).find((t) => t.includes("brosse@jiceco.be"))!;
+  expect(one).toContain("- address: brosse@axeco.immo");
+  expect(one).toMatch(/- address: brosse@jiceco\.be\n[\s\S]*?status: pending\n\s+source: guess[\s\S]*?guess: same name « brosse jonathan » and every address spells it/);
+  expect(one).not.toContain("contact@shop.example");
+  const base = left.find((f) => fs.readFileSync(path.join(peopleDir, f), "utf8").includes("brosse@jiceco.be"))!.slice(0, -3);
+  const mailboxes = frags(base).map((f) => frag(base, f.slice(0, 3)).match(/mailbox: (\S+)/)![1]).sort();
+  expect(mailboxes).toEqual(["anna@gmail.com", "anna@proton.me"]); // both addresses' fragments, in one fiche
+  // The absorbed key is forgotten in the store, not marked thrown away.
+  expect(artefacts.some((a) => a.key === "brosse@jiceco.be")).toBe(false);
+  expect(calls.find((c) => c.tool === "documents_record" && c.args.forgotten?.length)!.args.forgotten).toEqual([{ kind: "person", key: "brosse@jiceco.be" }]);
+  expect(r.outcome).not.toBe("failed");
+
+  // Anna rejects the guessed address: it splits back out, its fragments with it, and stays apart.
+  const ficheLocale = "fr";
+  const { review } = await import("../src/services/personReview");
+  review(ANNA, { root: gardenRoot, username: ANNA }, ficheLocale, base, { target: "identity", action: "reject", id: "brosse@jiceco.be" });
+  const split = fs.readdirSync(peopleDir).filter((f) => f.endsWith(".md")).map((f) => fs.readFileSync(path.join(peopleDir, f), "utf8")).find((t) => t.includes("person_key: brosse@jiceco.be"))!;
+  expect(split).toBeTruthy();
+  expect(frags(base).map((f) => frag(base, f.slice(0, 3)).match(/mailbox: (\S+)/)![1])).toEqual(["anna@gmail.com"]);
+  material.push(JB(5, "brosse@jiceco.be", "Jonathan Brosse", "<j5@x>", PROTON));
+  await docs.writeMailDocuments(ANNA);
+  expect(fiche(base)).toMatch(/- address: brosse@jiceco\.be\n(?:\s+.*\n)*?\s+status: rejected/);
+  expect(frags(base).length).toBe(1); // the new mail went to the split fiche, not here
+});
+
+test("a person named as the member's own fiche with a card of that name is written into it", async () => {
+  addCard({ uid: "u-paola-2", full_name: "Paola Magi", emails: [] });
+  fs.mkdirSync(peopleDir, { recursive: true });
+  fs.writeFileSync(path.join(peopleDir, "paola-magi-fiche.md"), `---\ntitle: Paola Magi\nresource_collection: people\nresource_id: paola-magi\nlocale: fr\ncarddav_uid: u-paola-2\n---\n\n## Journal\n\n- Anniversaire le 4 mai.\n`);
+  material.push(msg("p1", "Paola Magi <paola.magi@pm.me>", ["anna@gmail.com"], "2026-09-03T10:00:00+02:00", "École", "<p1@x>", "Paola parle de l'école."));
+  material.push(msg("p2", "Paola Magi <paola.magi@pm.me>", ["anna@gmail.com"], "2026-09-04T10:00:00+02:00", "Médecin", "<p2@x>", "Paola parle du médecin."));
+  answer = (req) => req.system.includes(PERSON) && req.prompt.includes("Paola")
+    ? JSON.stringify({ title: "Paola", relation: { text: "La mère de tes enfants [1]." }, going_on: ["L'école [1]", "Le médecin [2]"], promised: [], open: [] })
+    : defaultAnswer(req);
+  const r = await docs.writeMailDocuments(ANNA);
+  expect(r.written.map((n) => n.slug)).toContain("paola-magi-fiche");
+  expect(fs.existsSync(path.join(peopleDir, "paola-fiche.md"))).toBe(false);
+  const f = fiche("paola-magi-fiche");
+  expect(f).toContain("- Anniversaire le 4 mai.");
+  expect(f).toContain("person_key: paola.magi@pm.me");
+  expect(frags("paola-magi-fiche").length).toBe(1);
 });
 
 test("a mailbox is called by the account's name, else its provider, else its address; two alike fall back to the addresses", () => {
