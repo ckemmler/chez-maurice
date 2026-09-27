@@ -1,4 +1,4 @@
-# People and mailboxes — design, lots 1 to 4 built
+# People and mailboxes — design, lots 1 to 5 built
 
 Settled with Candide on 26 September 2026, after the first full mail import
 (Gmail and Proton, `specs/mail-import.md`, lots 1 to 5). Two refinements of
@@ -279,8 +279,10 @@ new documents.
    along). Also: `maurice-mail:` links open the message
    (`/api/people/mail/:id`), the app opens garden links signed in, and the
    files the mail pass writes are pushed to the corpus.
-5. **The person beside a hit.** Dated relations; matching a hit to a fiche
-   by link, full name or alias; the attached line.
+5. **The person beside a hit.** *Built 27 September 2026*
+   (`services/personContext.ts`). Dated relations; matching a hit to a
+   fiche by link, full name (either order) or alias; the attached `people`
+   line; a pending one into the footer.
 6. **Forget a mailbox.** The purge, the pruning, the history option (every
    past version pruned).
 7. **Stitching.** Guessed links merged on two strong signals, the split on
