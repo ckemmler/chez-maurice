@@ -20,7 +20,11 @@ import { ReviewError, personView, review, type Action, type Target } from "../se
 
 const people = new Hono();
 
-people.use("/*", requireAuth);
+// The fiche's page calls these from the browser with the session cookie,
+// which the app-wide proxyAuth has already resolved (as for the owner's
+// toolbar, /api/v1/garden-tools); a Bearer token, from the app, goes
+// through requireAuth as everywhere else.
+people.use("/*", async (c, next) => (c.get("userId") ? next() : requireAuth(c, next)));
 
 /** The caller's own garden, or the response that refuses — a guest has none. */
 function mine(c: any): GardenRef | Response {
