@@ -16,6 +16,7 @@ import { mailOpenerStrings } from "./mailOpener";
 import { mailToolCall } from "./mailScan";
 import { contactCards, type ContactCard } from "./contactAccounts";
 import { eraseMailFiles, indexPeopleFiches, resolvePeople, writePerson } from "./mailPeople";
+import { indexGardenPaths, unindexGardenPath } from "../../data-api/services/gardenIndex";
 import { getModel } from "./models";
 import { publishToRoom } from "./roomBus";
 import { getUser } from "./users";
@@ -697,6 +698,7 @@ export async function writeMailDocuments(memberId: string, d: MailDocumentsDeps 
       console.warn(`[mail] documents for ${memberId}: commit failed: ${(err as Error).message}`);
     }
     invalidateNotes(memberId);
+    syncCorpus(memberId, files);
   }
   if (recorded.length || deleted.length || declined.length) {
     try {
@@ -778,6 +780,48 @@ export async function previewPeople(memberId: string, d: MailDocumentsDeps = dep
   };
 }
 
+// ── The corpus ───────────────────────────────────────────────────────────
+
+/** The server writes these files straight to disk, and the corpus watcher is
+ *  off: push each one — indexed if it is there, dropped if it is gone — so
+ *  a fiche is found by a search the same night (data-api/services/gardenIndex.ts). */
+export function syncCorpus(memberId: string, files: string[]): void {
+  const unique = [...new Set(files)];
+  indexGardenPaths(memberId, unique.filter((f) => fs.existsSync(f)));
+  for (const f of unique) if (!fs.existsSync(f) && /\.(md|frag)$/.test(f)) unindexGardenPath(memberId, f);
+}
+
+/** Everything the mail pass wrote in a member's garden, pushed to the corpus
+ *  — after a run written before the push existed. Returns how many. */
+export function indexMailFiles(memberId: string): number {
+  const garden = gardenFor(memberId);
+  if (!garden) return 0;
+  const files: string[] = [];
+  const notes = path.join(garden.root, "notes");
+  for (const locale of fs.existsSync(notes) ? fs.readdirSync(notes) : []) {
+    const dir = path.join(notes, locale);
+    if (!fs.statSync(dir).isDirectory()) continue;
+    for (const f of fs.readdirSync(dir).filter((x) => x.endsWith(".md"))) {
+      const file = path.join(dir, f);
+      if (parseFiche(fs.readFileSync(file, "utf8"))?.frontmatter.meta?.origin === "mail") files.push(file);
+    }
+  }
+  const people = path.join(garden.root, "people");
+  for (const locale of fs.existsSync(people) ? fs.readdirSync(people) : []) {
+    const dir = path.join(people, locale);
+    if (!fs.statSync(dir).isDirectory()) continue;
+    for (const f of fs.readdirSync(dir).filter((x) => x.endsWith("-fiche.md"))) {
+      const file = path.join(dir, f);
+      if (!parseFiche(fs.readFileSync(file, "utf8"))?.frontmatter.meta?.person_key) continue;
+      files.push(file);
+      const frags = path.join(dir, f.slice(0, -3), "_fragments");
+      if (fs.existsSync(frags)) for (const x of fs.readdirSync(frags)) if (x.endsWith(".frag")) files.push(path.join(frags, x));
+    }
+  }
+  indexGardenPaths(memberId, files);
+  return files.length;
+}
+
 // ── Erasing ──────────────────────────────────────────────────────────────
 
 /** The paths of a list that git tracks in the garden's repo — all of them
@@ -804,6 +848,7 @@ export async function eraseMailDocuments(memberId: string, d: MailDocumentsDeps 
       // the whole list.
       const tracked = trackedPaths(garden, removed);
       if (tracked.length) autoCommit(garden, tracked, `Mail documents erased: ${tracked.length} file(s)`);
+      syncCorpus(memberId, removed);
     } catch (err) {
       console.warn(`[mail] erase for ${memberId}: commit failed: ${(err as Error).message}`);
     }

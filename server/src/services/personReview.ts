@@ -3,7 +3,7 @@ import path from "node:path";
 import { atomicWrite, autoCommit, dumpFrontmatter, fichePath, fragmentsDir, parseFiche, type GardenRef } from "../../data-api/services/gardenFiche";
 import { invalidateNotes } from "./composer/notes";
 import { fragmentHash, sectionOf, withSection, type Status } from "./mailPeople";
-import { wordsFor } from "./mailDocuments";
+import { syncCorpus, wordsFor } from "./mailDocuments";
 
 // The member's word on a person fiche — lot 4 of specs/contacts.md,
 // 27 September 2026.
@@ -232,4 +232,5 @@ function finish(memberId: string, garden: GardenRef, paths: string[], message: s
     console.warn(`[people] commit failed: ${(err as Error).message}`);
   }
   invalidateNotes(memberId);
+  syncCorpus(memberId, paths);
 }
