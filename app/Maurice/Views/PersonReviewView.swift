@@ -265,6 +265,9 @@ struct PersonReviewView: View {
     @State private var failed: String?
     @State private var editing: Editing?
     @State private var asking: Asking?
+    /// The `maurice-mail:` pointers after each line, shown or not: the
+    /// prose reads alone, the sources are one tap away (the file keeps both).
+    @State private var showSources = false
 
     private struct Editing {
         let target: String
@@ -398,6 +401,14 @@ struct PersonReviewView: View {
                 }
                 if working { ProgressView().controlSize(.small) }
             }
+            Button {
+                withAnimation { showSources.toggle() }
+            } label: {
+                Label(L(showSources ? "review.hide_sources" : "review.show_sources"), systemImage: "envelope")
+                    .font(.system(size: 12))
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(theme.inkSoft)
             if let f = failed {
                 Text(f).font(.system(size: 12)).foregroundStyle(.red)
             }
@@ -483,7 +494,7 @@ struct PersonReviewView: View {
     private func exchangesSection(_ text: String) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             sectionTitle("review.exchanges")
-            markdown(text)
+            markdown(text, sources: true)
                 .padding(12)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .background(RoundedRectangle(cornerRadius: 8).fill(theme.inkMute.opacity(0.05)))
@@ -509,11 +520,21 @@ struct PersonReviewView: View {
     ) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             content()
-            HStack(spacing: 8) {
-                statusChip(status)
-                Spacer(minLength: 4)
-                actions()
+            // The status and the gestures on one line when they fit; on a
+            // phone, three labelled buttons do not — they go under the status
+            // rather than wrap their words.
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 8) {
+                    statusChip(status)
+                    Spacer(minLength: 4)
+                    HStack(spacing: 8) { actions() }.fixedSize()
+                }
+                VStack(alignment: .leading, spacing: 8) {
+                    statusChip(status)
+                    HStack(spacing: 8) { actions() }.fixedSize()
+                }
             }
+            .lineLimit(1)
         }
         .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -564,8 +585,8 @@ struct PersonReviewView: View {
         }
     }
 
-    private func markdown(_ text: String) -> some View {
-        Markdown(text)
+    private func markdown(_ text: String, sources: Bool = false) -> some View {
+        Markdown(sources || showSources ? text : withoutSources(text))
             .markdownTheme(mauriceMarkdownTheme(theme))
             .font(.system(size: 14))
             #if os(macOS)
@@ -659,4 +680,11 @@ private struct EditElementSheet: View {
         .frame(minWidth: 520, minHeight: 400)
         #endif
     }
+}
+
+/// A line's prose without the pointers the mail pass writes after it —
+/// ` — [date, sender, « subject » · box](maurice-mail:…) ; […](…)` — so the
+/// sentence reads alone. The file keeps them; the screen shows them on demand.
+func withoutSources(_ text: String) -> String {
+    text.replacing(/\s+—\s+\[(?:\\.|[^\]])*\]\(maurice-mail:[^)]*\)(?:\s*;\s*\[(?:\\.|[^\]])*\]\(maurice-mail:[^)]*\))*/, with: "")
 }

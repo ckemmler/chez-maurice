@@ -752,3 +752,5 @@
 "review.failed" = "Ich konnte das nicht speichern.";
 "review.load_failed" = "Ich konnte das Blatt nicht lesen.";
 "review.edit.hint" = "Deine Worte ersetzen die von Maurice und gelten als bestätigt. Es ist Markdown, wie dein Garten es aufbewahrt.";
+"review.show_sources" = "Quellen zeigen";
+"review.hide_sources" = "Quellen ausblenden";

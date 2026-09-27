@@ -752,3 +752,5 @@
 "review.failed" = "No pude guardarlo.";
 "review.load_failed" = "No pude leer la ficha.";
 "review.edit.hint" = "Tus palabras sustituyen a las de Maurice y cuentan como confirmadas. Es markdown, tal como lo guarda tu jardín.";
+"review.show_sources" = "Mostrar las fuentes";
+"review.hide_sources" = "Ocultar las fuentes";
