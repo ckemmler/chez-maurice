@@ -36,6 +36,12 @@ function note(conversationId: string, locale: string, basename: string): void {
   m.set(`${locale}/${basename}`, { locale, basename });
 }
 
+/** A person fiche entered the turn some other way (a relation attached to
+ *  a corpus hit, services/personContext.ts). */
+export function noteFiche(conversationId: string, locale: string, basename: string): void {
+  note(conversationId, locale, basename);
+}
+
 const PEOPLE_FILE = /\/people\/([a-z]{2})\/([a-z0-9-]+-fiche)(?:\.md|\/_fragments\/\d{3}\.frag)$/;
 
 /** A garden path — a corpus hit's `file_path`, a composer fiche id — that

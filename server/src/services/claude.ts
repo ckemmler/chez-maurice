@@ -10,6 +10,7 @@ import { newSearchLedger, allowSearch, recordSearch, type SearchLedger } from ".
 import { McpSession, type McpTool } from "./mcpClient";
 import { resolveToText, resolveAttachments, getSpec } from "./composer/specs";
 import { noteComposer, noteTool, startReview } from "./reviewFooter";
+import { attachPeople } from "./personContext";
 import { resolveBookItem } from "./composer/weights";
 import { type FileAttachment } from "./composer/files";
 import { getConversationMaurice, resolveMauriceContext, resolveMauriceAttachments } from "./maurices";
@@ -215,6 +216,7 @@ function corpusNotice(toolNames: string[]): string {
     `- what they have only read or gathered, and rarely needs asking: filters {"source_type": ["book", "dossier", "thought"]}\n` +
     `The first two are the usual pair. Weigh what comes back in that same order — what they wrote down themselves outranks what they once said in passing, which outranks a page from someone else's book. ` +
     `Say where something came from when it matters, and say when something comes from a brief rather than from a search you just ran.\n` +
+    `A result may carry "people": who someone its passage mentions is to them now, from that person's fiche, dated (since → until). A passage can be years old — a colleague it places at a company may have left since — so where the two differ, the person's line is what holds today; say so. A line marked [not confirmed yet] is Maurice's reading of their mail: use it, and say it is unconfirmed.\n` +
     `Two things it is not. It is not a way to check an outside fact — what a school's app is, what an error code means, what something costs — which the web answers and their own writing does not; ` +
     `search it for what touches them: their life, their people, their projects, what they have decided or said before. ` +
     `And it is not an afterthought: search it in your first round, while it can still shape the answer. ` +
@@ -570,7 +572,10 @@ async function executeTool(
           // A hit in a person fiche the member has not confirmed: the model
           // is told, and the footer will list it (services/reviewFooter.ts).
           const mark = noteTool(ctx.conversationId, ctx.memberId, name, input, narrowed.rows);
-          return { text: narrowed.text + mark, isError: false, data: card ?? data };
+          // Who a person a hit mentions is to the member now, dated, from
+          // their fiche (services/personContext.ts).
+          const withPeople = attachPeople(ctx.conversationId, ctx.memberId, narrowed.text, narrowed.rows);
+          return { text: withPeople + mark, isError: false, data: card ?? data };
         }
         const mark = r.isError ? "" : noteTool(ctx.conversationId, ctx.memberId, name, input, null);
         return { text: text + mark, isError: r.isError, data };
