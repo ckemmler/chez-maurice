@@ -1,4 +1,4 @@
-# People and mailboxes — design, lots 1 to 5 and 7 built
+# People and mailboxes — design, lots 1 to 7 built (fragments from the rest of the garden aside)
 
 Settled with Candide on 26 September 2026, after the first full mail import
 (Gmail and Proton, `specs/mail-import.md`, lots 1 to 5). Two refinements of
@@ -283,8 +283,11 @@ new documents.
    (`services/personContext.ts`). Dated relations; matching a hit to a
    fiche by link, full name (either order) or alias; the attached `people`
    line; a pending one into the footer.
-6. **Forget a mailbox.** The purge, the pruning, the history option (every
-   past version pruned).
+6. **Forget a mailbox.** *Built 27 September 2026* (`services/mailForget.ts`,
+   `forget_mailbox`, `server/scripts/garden_prune_history.py`, the Forget
+   button). The purge, the pruning, the history option (every past version
+   pruned by fast-export/fast-import, the remote force-pushed). Dry-run on
+   a copy of the owner's garden only.
 7. **Stitching.** *Guessed links built 27 September 2026*
    (`mergeGuessed`, `consolidate`, `splitAddress` in
    `services/mailPeople.ts`). The second strong signal is, for want of the
