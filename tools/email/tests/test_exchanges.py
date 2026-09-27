@@ -121,3 +121,28 @@ def test_a_message_without_a_date_does_not_stand_for_the_first_exchange(tmp_path
     out = svc.exchanges(svc.accounts(member_id="id-alex"), party="mela@partfin.be")
     assert out["total"] == 7
     assert out["first"].startswith("2017-12-06") and out["last"].startswith("2026-09-22")
+
+
+def test_a_first_name_for_several_people_gives_the_candidates_not_their_mail_mixed(tmp_path):
+    client = proton_like()
+    client.folders["INBOX"][60] = build_raw("Salut", "Mélanie Durand <md@x.example>", "corps", date="Mon, 01 Jun 2026 08:00:00 +0000", message_id="<md@x.example>")
+    svc = EmailService(load_config(write_config(tmp_path, CONFIG)), client_factory=lambda acc: client.clone())
+    svc.scan_start(svc.accounts(member_id="id-alex"), account="icloud", background=False)
+    alex = svc.accounts(member_id="id-alex")
+    out = svc.exchanges(alex, party="Mélanie")
+    assert out["ambiguous"] is True and "messages" not in out
+    assert {m["address"] for m in out["matched"]} == {"mela@partfin.be", "md@x.example"}
+    assert "full name" in out["note"]
+    assert svc.exchanges(alex, party="Mélanie Fricheteau")["total"] == 6
+
+
+def test_a_service_relaying_many_people_is_not_the_person(tmp_path):
+    client = proton_like()
+    relay = "Loomio <notifications@loomio.example>"
+    for uid, who in [(70, "Mélanie Fricheteau (Loomio)"), (71, "Anne (Loomio)"), (72, "Bob (Loomio)"), (73, "Chloé (Loomio)")]:
+        client.folders["INBOX"][uid] = build_raw(f"Fil {uid}", f"{who} <notifications@loomio.example>", "corps", date="Mon, 01 Jun 2026 08:00:00 +0000", message_id=f"<l{uid}@x.example>")
+    svc = EmailService(load_config(write_config(tmp_path, CONFIG)), client_factory=lambda acc: client.clone())
+    svc.scan_start(svc.accounts(member_id="id-alex"), account="icloud", background=False)
+    out = svc.exchanges(svc.accounts(member_id="id-alex"), party="Mélanie Fricheteau")
+    assert out["addresses"] == ["mela@partfin.be"]
+    assert out["total"] == 6

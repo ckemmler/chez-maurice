@@ -82,12 +82,16 @@ test("each hit carries the people it mentions; the person's own fiche does not; 
     "Magi Paola — La mère de tes enfants. [not confirmed yet]",
   ]);
   expect(out.results[1].people).toBeUndefined();
+  // The person's own fragment carries their fiche's summary instead.
+  expect(out.results[1].person).toBe("Magi Paola — La mère de tes enfants. [not confirmed yet]");
   expect(out.results[2].people).toBeUndefined();
   const f = footer.takeFooter(CONVO, ANNA, "https://home.example", "fr")!;
   expect(f).toContain("[Magi Paola](https://home.example/g/pc-anna/fr/fiches/people/magi-paola-fiche#relation) · la relation : « La mère de tes enfants. »");
   expect(f).not.toContain("Jean Dupont"); // confirmed: nothing to check
   // Nothing to attach, or a shape it does not know: the text as it was.
-  expect(ctx.attachPeople(CONVO, ANNA, narrowed.replace("Jean Dupont", "Jean").replace("Paola Magi", "Paola"), rows.map((r) => ({ ...r, text: "" })))).toBe(narrowed.replace("Jean Dupont", "Jean").replace("Paola Magi", "Paola"));
+  const others = rows.filter((r) => !r.file_path.includes("-fiche"));
+  const plain = JSON.stringify({ results: others.map((r) => ({ source: r.title, kind: "note", passage: r.text.replace("Jean Dupont", "Jean").replace("Paola Magi", "Paola") })) });
+  expect(ctx.attachPeople(CONVO, ANNA, plain, others.map((r) => ({ ...r, text: "" })))).toBe(plain);
   expect(ctx.attachPeople(CONVO, ANNA, "not json", rows)).toBe("not json");
 });
 
@@ -109,4 +113,20 @@ test("an exchanges result carries the fiche its addresses belong to — relation
   expect(ctx.fichesForExchanges("c-ex", ANNA, { addresses: ["nobody@x.org"] })).toBe("");
   expect(ctx.fichesForExchanges("c-ex", null, { addresses: ["mela@partfin.be"] })).toBe("");
   expect(ctx.fichesForExchanges("c-ex", ANNA, null)).toBe("");
+});
+
+test("a hit in a person's own fiche carries its summary — who, the addresses, the last exchange — once per fiche", () => {
+  fiche("thomas-fiche", `title: Thomas Carton de Wiart\nresource_collection: people\nidentities:\n  - address: thomas@studio.example\n    status: confirmed\n  - address: old@x.example\n    status: rejected\nrelation:\n  status: pending\n  since: "2024-02"\n  written_hash: ${fragmentHash("Un ami, des infos tech. — [19 févr. 2024, Thomas, « Les news » · Proton](maurice-mail:m1)")}`,
+    `## La relation\n\nUn ami, des infos tech. — [19 févr. 2024, Thomas, « Les news » · Proton](maurice-mail:m1)\n\n## Les échanges\n\n729 message(s) échangé(s) depuis le 6 févr. 2008 ; le dernier le 22 juil. 2026.\n\n- [22 juil. 2026, Candide Kemmler, « jai compris \\[le\\] chinois » · Proton](maurice-mail:m9)\n- [19 juin 2026, Thomas, « Invitation » · Gmail](maurice-mail:m8)\n`);
+  const rows = [
+    { title: "Thomas Carton de Wiart", text: "## La relation", file_path: `${dir}/thomas-fiche.md` },
+    { title: "", text: "Courrier", file_path: `${dir}/thomas-fiche/_fragments/002.frag` },
+  ];
+  const out = JSON.parse(ctx.attachPeople("c-sum", ANNA, JSON.stringify({ results: rows.map((r) => ({ title: r.title, text: r.text })) }), rows));
+  const p = out.results[0].person as string;
+  expect(p).toStartWith("Thomas Carton de Wiart — Un ami, des infos tech. (2024-02 → …) [not confirmed yet]");
+  expect(p).toContain("Addresses: thomas@studio.example.");
+  expect(p).not.toContain("old@x.example");
+  expect(p).toContain("Their mail: 729 message(s) échangé(s) depuis le 6 févr. 2008 ; le dernier le 22 juil. 2026. Last message: 22 juil. 2026, Candide Kemmler, « jai compris [le] chinois » · Proton.");
+  expect(out.results[1].person).toBeUndefined(); // once per fiche
 });

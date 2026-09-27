@@ -117,6 +117,43 @@ export function personLine(e: PersonEntry): string {
 
 const PEOPLE_PATH = /\/people\/([a-z]{2})\/([a-z0-9-]+-fiche)(?:\.md|\/_fragments\/)/;
 
+/** A link's text without its target: `[22 juil. 2026, Jean, « … »](maurice-mail:…)` → the label. */
+const unlink = (t: string): string => t.replace(/\[((?:\\.|[^\]])*)\]\([^)]*\)/g, (_m, label: string) => label.replace(/\\([\[\]\\])/g, "$1"));
+
+/** One paragraph on a person, from their fiche, without a model: who they
+ *  are to the member (the relation, its dates and status), their addresses,
+ *  and what the exchanges section says — how many messages, since when, the
+ *  last one. Null when the fiche cannot be read. */
+export function ficheSummary(gardenRoot: string, locale: string, basename: string): string | null {
+  const file = path.join(gardenRoot, "people", locale, `${basename}.md`);
+  const parsed = fs.existsSync(file) ? parseFiche(fs.readFileSync(file, "utf8")) : null;
+  if (!parsed) return null;
+  const { frontmatter: fm, body } = parsed;
+  const w = wordsFor(locale);
+  const bits: string[] = [];
+  const relText = sectionOf(body, w.relationship);
+  const rel = fm.relation && typeof fm.relation === "object" ? fm.relation : null;
+  if (relText && rel?.status !== "rejected") {
+    const clean = relText.replace(/\s+—\s+\[[\s\S]*$/, "").replace(/\s+/g, " ").trim();
+    const edited = !!rel?.written_hash && fragmentHash(relText) !== String(rel.written_hash);
+    const dates = rel?.since || rel?.until ? ` (${rel.since ?? "?"} → ${rel.until ?? "…"})` : "";
+    const clip = clean.length > 220 ? `${clean.slice(0, 219)}…` : clean;
+    bits.push(`${clip}${dates}${edited || rel?.status === "confirmed" ? " [confirmed by the member]" : rel ? " [not confirmed yet]" : ""}`);
+  }
+  const addresses = (Array.isArray(fm.identities) ? fm.identities : [])
+    .filter((i: any) => i?.address && i.status !== "rejected").map((i: any) => String(i.address)).slice(0, 4);
+  if (addresses.length) bits.push(`Addresses: ${addresses.join(", ")}.`);
+  const ex = sectionOf(body, w.exchanges);
+  if (ex) {
+    const lines = ex.split("\n").map((l) => l.trim()).filter(Boolean);
+    const count = lines.find((l) => !l.startsWith("-"));
+    const last = lines.find((l) => l.startsWith("- "));
+    bits.push(`Their mail: ${count ?? ""}${last ? ` Last message: ${unlink(last.slice(2))}.` : ""}`.trim());
+  }
+  if (!bits.length) return null;
+  return `${String(fm.title ?? basename)} — ${bits.join(" ")}`;
+}
+
 /** Attach the people each hit mentions to the narrowed corpus text the model
  *  reads (`{results:[…]}`, in the order of `rows`). Returns the text as it
  *  was when there is nothing to attach or the shape is not the known one. */
@@ -130,11 +167,25 @@ export function attachPeople(conversationId: string, memberId: string | null | u
   }
   if (!Array.isArray(payload?.results) || payload.results.length !== rows.length) return narrowed;
   const entries = peopleIndex(memberId);
-  if (!entries.length) return narrowed;
+  const garden = gardenFor(memberId);
   let attached = false;
+  const summarised = new Set<string>();
   payload.results.forEach((r: any, i: number) => {
     const row = rows[i] ?? {};
-    const own = String(row.file_path ?? "").match(PEOPLE_PATH)?.[2] ?? null;
+    const ownMatch = String(row.file_path ?? "").match(PEOPLE_PATH);
+    const own = ownMatch?.[2] ?? null;
+    // A hit in a person's own fiche or fragment: the fiche's summary rides
+    // with the first one — who they are, and when the mail last went between
+    // them — so "when did I last write to Thomas" is answered by the search
+    // that found him, not by the mailbox (27 September 2026).
+    if (own && garden && !summarised.has(`${ownMatch![1]}/${own}`)) {
+      summarised.add(`${ownMatch![1]}/${own}`);
+      const summary = ficheSummary(garden.root, ownMatch![1]!, own);
+      if (summary) {
+        r.person = summary;
+        attached = true;
+      }
+    }
     const text = [row.title, row.text].filter(Boolean).join("\n");
     const people = mentionsIn(text, entries).filter((e) => e.basename !== own);
     if (!people.length) return;

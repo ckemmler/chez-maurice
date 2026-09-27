@@ -67,7 +67,24 @@ test("the corpus notice asks for the people as a layer of their own, and to open
   const n = corpusNotice(["corpus__search", "garden__get_fiche"]);
   expect(n).toContain(`filters {"collection": "people"}`);
   expect(n).toContain(`"my accountant"`);
-  expect(n).toContain("open it (garden__get_fiche");
+  expect(n).toContain("open the fiche (garden__get_fiche");
+  expect(n).toContain("never in the same round");
+  expect(n).toContain("`person`");
   expect(n.indexOf(`{"collection": "people"}`)).toBeLessThan(n.indexOf(`"source_type": ["note"`));
   expect(corpusNotice(["corpus__search"])).not.toContain("garden__get_fiche");
+});
+
+test("a mail tool called in the same round as a look at the people is held back; alone, or after, it runs", async () => {
+  const { heldForPeople, HELD_FOR_PEOPLE } = await import("../src/services/claude");
+  const round = [
+    { name: "email__exchanges", input: { with: "Thomas" } },
+    { name: "corpus__search", input: { query: "Thomas", filters: { collection: "people" } } },
+    { name: "email__search", input: { from: "thomas" } },
+    { name: "corpus__search", input: { query: "Thomas", filters: { source_type: "conversation" } } },
+  ];
+  expect([...heldForPeople(round)]).toEqual([0, 2]);
+  expect([...heldForPeople([{ name: "garden__get_fiche", input: { resource_collection: "people", resource_id: "thomas" } }, round[0]!])]).toEqual([1]);
+  expect([...heldForPeople([round[0]!, round[3]!])]).toEqual([]);
+  expect([...heldForPeople([{ name: "email__exchanges", input: {} }, { name: "corpus__search", input: { query: "x", filters: { collection: ["People"] } } }])]).toEqual([0]);
+  expect(HELD_FOR_PEOPLE).toContain("Not run");
 });

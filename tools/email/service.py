@@ -584,14 +584,32 @@ class EmailService:
                 # in the From header's name, accents and case aside.
                 words = [w for w in _folded(party).replace(",", " ").split() if w]
                 per: dict[str, dict[str, Any]] = {}
+                others: dict[str, set[str]] = {}
                 for row in store.senders():
                     name = (reading_mod._decoded(row["sender"]) or "").rsplit("<", 1)[0].strip().strip('"')
                     if words and all(w in _folded(name) for w in words):
                         entry = per.setdefault(row["sender_address"], {"address": row["sender_address"], "names": set(), "messages": 0})
                         entry["names"].add(name)
                         entry["messages"] += int(row["n"])
-                ranked = sorted(per.values(), key=lambda e: -e["messages"])[:10]
+                    elif name and "@" not in name:
+                        others.setdefault(row["sender_address"], set()).add(_folded(name))
+                # An address that also writes under many other names is a
+                # service relaying people (notifications@loomio.org writes as
+                # "Thomas Carton de Wiart (Loomio)" and as everyone else): its
+                # mail is not the person's. A person's own address may write
+                # under a nickname or two.
+                ranked = sorted((e for e in per.values() if len(others.get(e["address"], ())) <= 2), key=lambda e: -e["messages"])[:10]
                 matched = [{**e, "names": sorted(e["names"])[:4]} for e in ranked]
+                # A first name alone is several people: "Thomas" wrote under
+                # ten names in the owner's box, and one list of all their mail
+                # answers nothing (27 September 2026). A first name matching
+                # more than one address gives the candidates, not a list; a
+                # full name is one person on however many addresses.
+                if len(words) < 2 and len(ranked) > 1:
+                    return {
+                        "notice": UNTRUSTED_ENVELOPES, "ambiguous": True, "matched": matched,
+                        "note": f"{party!r} is several people. Pass the address of the one you mean — their fiche lists it — or their full name.",
+                    }
                 found += [e["address"] for e in ranked]
         found = list(dict.fromkeys(found))
         domains = list(dict.fromkeys(domains))

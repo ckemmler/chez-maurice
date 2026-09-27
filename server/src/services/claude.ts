@@ -223,7 +223,8 @@ export function corpusNotice(toolNames: string[]): string {
     `So ask each layer separately, in the same round, one call per layer you need:\n` +
     `- the people in their life, whenever the question is about someone — by name, or by what they are to them ("my accountant", "Adriano's violin teacher"): filters {"collection": "people"}. ` +
     `A person's fiche is the hub: who they are to them, dated, and — when their mail is read — what is going on with them, what was promised, what is left open, the latest exchanges. ` +
-    `A fiche among the hits is the person${toolNames.includes("garden__get_fiche") ? `: open it (garden__get_fiche, resource_collection "people") before searching anywhere else for them` : ""}.\n` +
+    `A fiche among the hits is the person, and the hit carries \`person\`: who they are, their addresses, and — from their mail — how many messages, since when, and the last one. That answers "when did I last write to them" on its own. ` +
+    `Look at the people before the mailbox, never in the same round: a mail tool called beside this search is not run${toolNames.includes("garden__get_fiche") ? `; for more than the summary, open the fiche (garden__get_fiche, resource_collection "people")` : ""}.\n` +
     `- their garden, what they chose to keep on a subject: filters {"source_type": ["note", "fiche", "card", "fragment"]}\n` +
     `- what they have already said to you: filters {"source_type": "conversation"}\n` +
     `- what they have only read or gathered, and rarely needs asking: filters {"source_type": ["book", "dossier", "thought"]}\n` +
@@ -256,7 +257,7 @@ export function mailNotice(toolNames: string[], memberId: string | null | undefi
   const when = mailNightlyOn() ? "Every night Maurice walks them" : "Maurice walks them";
   const steps = [
     ...(fiches ? [`Their fiche: garden__get_fiche with resource_collection "people" and the slug without "-fiche" (people/fr/jean-dupont-fiche.md is resource_id "jean-dupont", locale "fr"); it comes with its fragments. corpus__search with {"collection": "people"} finds it by their name or by what they are to ${memberName} when you do not know the slug, and a fiche among its hits is the person: open it rather than going to the mailbox.`] : []),
-    `email__exchanges: everything exchanged with an address, a domain or a name, read from the store — instant, newest first, current up to the last walk (its \`as_of\`).`,
+    `email__exchanges${fiches ? ", in a later round and only for what the fiche does not say" : ""}: everything exchanged with an address${fiches ? " (the fiche lists them)" : ""}, a domain or a full name, read from the store — instant, newest first, current up to the last walk (its \`as_of\`).`,
     `The live mailbox (email__search, email__get_message, email__get_by_id), for what the others cannot hold: mail that came in since the last walk, words inside a body, unread or flagged, a message read in full. Seconds per call.`,
   ];
   return (
@@ -529,6 +530,34 @@ function logRound(
   );
 }
 
+// ── The person before the mailbox ────────────────────────────────────────
+//
+// Asked "when did I last exchange with Thomas", the model called
+// email__exchanges and the people search in the same round — the mail first,
+// 9.7 seconds on a bare first name, while his fiche said it in one line
+// (27 September 2026; the member stopped the turn). The prompt says the fiche
+// comes first; this makes it so. A mail tool called in the same round as a
+// look at the people — a corpus search over `collection: people`, a person's
+// fiche — is not run: the model reads the fiche and calls it again next round
+// if the fiche does not answer.
+
+const wantsPeople = (name: string, input: any): boolean => {
+  if (name === "garden__get_fiche") return String(input?.resource_collection ?? "").toLowerCase() === "people";
+  if (name !== "corpus__search") return false;
+  const v = input?.filters?.collection;
+  return (Array.isArray(v) ? v : [v]).some((x) => String(x ?? "").toLowerCase() === "people");
+};
+
+export const HELD_FOR_PEOPLE =
+  "Not run: in the same round you looked at the people. Their fiche comes first — a fiche hit carries `person`: who they are, their addresses, and when you last exchanged. " +
+  "Answer from it; call this again next round only if the fiche is missing or does not answer.";
+
+/** The positions, in one round's calls, of the mail tools held back. */
+export function heldForPeople(batch: Array<{ name: string; input: any }>): Set<number> {
+  if (!batch.some((c) => wantsPeople(c.name, c.input))) return new Set();
+  return new Set(batch.flatMap((c, i) => (c.name.startsWith("email__") ? [i] : [])));
+}
+
 async function executeTool(
   name: string,
   input: any,
@@ -699,10 +728,12 @@ async function* runOllamaAgentic(
       return;
     }
     convo.push({ role: "assistant", content, tool_calls: toolCalls });
-    for (const tc of toolCalls) {
+    const heldO = heldForPeople(toolCalls.map((tc: any) => ({ name: tc.function?.name || "", input: tc.function?.arguments || {} })));
+    for (const [i, tc] of toolCalls.entries()) {
       // A Stop between two tool calls means the rest of the plan is unwanted:
       // a tool that writes (a fragment, a note) must not run for nobody.
       if (signal?.aborted) return;
+      if (heldO.has(i)) { convo.push({ role: "tool", content: HELD_FOR_PEOPLE }); continue; }
       const name = tc.function?.name || "";
       yield { type: "tool_call", tool: name, status: "start" };
       const r = await executeTool(name, tc.function?.arguments || {}, mcp, { conversationId, provider: "ollama", round, memberId, factsProposed, searches });
@@ -893,13 +924,19 @@ async function* runOpenAIAgentic(
       content: content || null,
       tool_calls: toolCalls.map((tc) => ({ id: tc.id, type: "function", function: tc.function })),
     });
-    for (const tc of toolCalls) {
+    const parsed = toolCalls.map((tc) => {
+      let args: any = {};
+      try { args = JSON.parse(tc.function.arguments || "{}"); } catch {}
+      return { name: tc.function.name, input: args };
+    });
+    const heldC = heldForPeople(parsed);
+    for (const [i, tc] of toolCalls.entries()) {
       // Stopped (or the thread deleted under it) between two tool calls: the
       // rest of the plan runs for nobody, and a writing tool would still write.
       if (signal?.aborted) { yield* reportUsage(); return; }
+      if (heldC.has(i)) { convo.push({ role: "tool", tool_call_id: tc.id, content: HELD_FOR_PEOPLE }); continue; }
       const name = tc.function.name;
-      let args: any = {};
-      try { args = JSON.parse(tc.function.arguments || "{}"); } catch {}
+      const args = parsed[i]!.input;
       yield { type: "tool_call", tool: name, status: "start" };
       const r = await executeTool(name, args, mcp, { conversationId, provider, round, memberId, factsProposed, searches });
       yield { type: "tool_call", tool: name, status: "end" };
@@ -1742,7 +1779,12 @@ function trackedBooks(
 
       const toolUses = contentBlocks.filter((b) => b.type === "tool_use");
       const toolResults: any[] = [];
-      for (const tu of toolUses) {
+      const heldA = heldForPeople(toolUses.map((tu: any) => ({ name: tu.name, input: tu.input || {} })));
+      for (const [i, tu] of toolUses.entries()) {
+        if (heldA.has(i)) {
+          toolResults.push({ type: "tool_result", tool_use_id: tu.id, content: HELD_FOR_PEOPLE, is_error: false });
+          continue;
+        }
         yield { type: "tool_call", tool: tu.name, status: "start" };
         const r = await executeTool(tu.name, tu.input || {}, mcp, { conversationId, provider: "anthropic", round, memberId, factsProposed, searches });
         yield { type: "tool_call", tool: tu.name, status: "end" };
