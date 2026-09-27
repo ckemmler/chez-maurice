@@ -24,7 +24,7 @@ covers:
   maurice-domains: '2026-09-20'
   maurice-files: '2026-06-19'
   maurice-households-rooms: '2026-09-25'
-  maurice-knowledge: '2026-09-27'
+  maurice-knowledge: '2026-09-26'
   maurice-life: '2026-09-18'
   maurice-personas-hats: '2026-09-19'
   maurice-server: '2026-09-26'
