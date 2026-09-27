@@ -248,27 +248,13 @@ struct ChatView: View {
                                 if chat.isGeneratingImage {
                                     ImageGeneratingIndicator()
                                 } else {
-                                    // The one line for the turn's progress —
-                                    // the sources found so far, what is done,
-                                    // what is running, the pulse, the clock.
-                                    // It is also the wait for the first word:
-                                    // there is never a second indicator beside
-                                    // it. Gone once a plain answer streams.
-                                    if chat.streamingText.isEmpty || chat.activity.isVisible {
-                                        TurnActivityRow(activity: chat.activity, blocks: chat.streamingData,
-                                                        live: true, withHat: chat.streamingText.isEmpty)
-                                    }
-                                    // The answer cards stream in (often before
-                                    // the prose) — show them live; the sources
-                                    // and the other tools' rows are behind the
-                                    // line above.
-                                    if DataCardStack.hasCards(chat.streamingData) {
-                                        DataCardStack(blocks: chat.streamingData)
-                                    }
-                                    if !chat.streamingText.isEmpty {
-                                        StreamingRow(text: withoutReviewFooter(chat.streamingText, blocks: chat.streamingData),
-                                                     serverBaseURL: session.serverURL ?? "")
-                                    }
+                                    // The turn in progress, laid out as the
+                                    // reply it becomes: the one line for its
+                                    // progress, then the prose, then the
+                                    // answer cards.
+                                    StreamingRow(text: withoutReviewFooter(chat.streamingText, blocks: chat.streamingData),
+                                                 serverBaseURL: session.serverURL ?? "",
+                                                 activity: chat.activity, blocks: chat.streamingData)
                                 }
                             } else if chat.pendingSummon {
                                 // Observer's view: someone else summoned Maurice
@@ -1104,8 +1090,9 @@ private struct MessageRow: View {
         }
     }
 
-    /// Phone: edge-to-edge, no avatars, bigger type. Maurice gets an
-    /// italic-serif label; the user gets a right-aligned bubble.
+    /// Phone: edge-to-edge, no avatars, bigger type. The user gets a
+    /// right-aligned bubble; Maurice's reply is the text on the page, with no
+    /// label over it — who is speaking is plain from the bubble's side.
     private var phoneBody: some View {
         Group {
             if message.role == "user" {
@@ -1129,9 +1116,6 @@ private struct MessageRow: View {
                 }
             } else {
                 VStack(alignment: .leading, spacing: 6) {
-                    Text("Maurice")
-                        .font(.system(size: 13, design: .serif)).italic()
-                        .foregroundStyle(theme.inkMute)
                     messageContent
                     actionRow
                 }
@@ -1289,12 +1273,8 @@ private struct MessageRow: View {
                     .font(.system(size: 11, weight: .semibold))
                     .foregroundStyle((p?.color ?? session.activeDeviceUser?.color ?? Color.primary).legible(onDark: theme.isDark))
                     .tracking(0.5)
-            } else {
-                Text("Maurice")
-                    .font(.system(size: 14, design: .serif))
-                    .italic()
-                    .foregroundStyle(theme.ink)
             }
+            // Maurice is named by the hat in the gutter, not by a label.
 
             Text(formattedTime)
                 .font(.system(size: 11, design: .monospaced))
@@ -1878,6 +1858,10 @@ private struct StreamingRow: View {
     @Environment(\.mauriceTheme) private var theme
     let text: String
     let serverBaseURL: String
+    var activity = TurnActivity()
+    /// The turn's blocks so far: the sources and tool rows behind the line,
+    /// the answer cards under the prose.
+    var blocks: [DataBlock] = []
     @State private var visibleLength: Int = 0
 
     // RunLoop timer — fires reliably independent of SwiftUI rendering
@@ -1907,9 +1891,6 @@ private struct StreamingRow: View {
     private var streamLayout: some View {
         #if os(iOS)
         VStack(alignment: .leading, spacing: 6) {
-            Text("Maurice")
-                .font(.system(size: 13, design: .serif)).italic()
-                .foregroundStyle(theme.inkMute)
             streamContent
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -1918,22 +1899,30 @@ private struct StreamingRow: View {
             BoaterHat(size: 18, color: theme.ink, ribbonColor: theme.surface)
                 .frame(width: 26, height: 20)
             VStack(alignment: .leading, spacing: 4) {
-                Text("Maurice")
-                    .font(.system(size: 14, design: .serif)).italic()
-                    .foregroundStyle(theme.ink)
                 streamContent
             }
+            .padding(.top, 1)
         }
         #endif
     }
 
+    /// The same order as a finished reply (`messageContentCore`), so nothing
+    /// moves when the turn ends. The line is also the wait for the first word
+    /// — there is never a second indicator beside it — and is gone once a
+    /// plain answer streams.
     @ViewBuilder
     private var streamContent: some View {
+        if text.isEmpty || activity.isVisible {
+            TurnActivityRow(activity: activity, blocks: blocks, live: true)
+        }
         if let img = imageInfo {
             ChatImageView(url: serverBaseURL + img.path)
-        } else {
+        } else if !text.isEmpty {
             MarkdownText(text: String(text.prefix(visibleLength)))
                 .opacity(0.85)
+        }
+        if DataCardStack.hasCards(blocks) {
+            DataCardStack(blocks: blocks)
         }
     }
 }
@@ -2072,9 +2061,12 @@ private struct TurnActivityRow: View {
                     .lineLimit(1)
                     .fixedSize(horizontal: true, vertical: false)
             }
-            Image(systemName: "chevron.right")
-                .font(.system(size: 9, weight: .semibold))
-                .foregroundStyle(theme.inkMute)
+            // The way in, once there is a record to open.
+            if !running {
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 9, weight: .semibold))
+                    .foregroundStyle(theme.inkMute)
+            }
         }
         .font(.system(size: 12.5))
         .contentShape(Rectangle())
@@ -2126,11 +2118,6 @@ private struct ImageGeneratingIndicator: View {
                 .frame(width: 26, height: 20)
 
             VStack(alignment: .leading, spacing: 8) {
-                Text("Maurice")
-                    .font(.system(size: 14, design: .serif))
-                    .italic()
-                    .foregroundStyle(theme.ink)
-
                 HStack(spacing: 8) {
                     ProgressView()
                         .controlSize(.small)
@@ -2541,6 +2528,10 @@ private struct ComposerBar: View {
     @State private var lastDictatedText: String?
     #if os(iOS)
     @Environment(\.scenePhase) private var scenePhase
+    /// Whether the on-screen keyboard is up. Focus alone does not say so: a
+    /// hardware keyboard, or a keyboard swiped away with the field still
+    /// focused, leaves focus on and nothing to collapse.
+    @State private var softKeyboardShown = false
     #endif
     @AppStorage(ServerDictationPref.key) private var allowServerDictation = false
     @FocusState var isFocused: Bool
@@ -2716,9 +2707,9 @@ private struct ComposerBar: View {
             }
         } label: {
             Image(systemName: "plus")
-                .font(.system(size: 16, weight: .regular))
+                .font(.system(size: 17, weight: .regular))
                 .foregroundStyle(theme.inkSoft)
-                .frame(width: 34, height: 34)
+                .frame(width: 44, height: 44)
                 .contentShape(Rectangle())
         }
         .menuIndicator(.hidden)
@@ -2783,30 +2774,21 @@ private struct ComposerBar: View {
         return maurices.models.compactMap { seen.insert($0.provider).inserted ? $0.provider : nil }
     }
 
-    /// The ➤ button: Maurice's boater on the member's accent — there is one
-    /// Maurice, so it looks the same whatever the thread is bound to. `sending`
-    /// true → an up-arrow (tap sends); false → the composer is empty and the
-    /// button waits, muted.
+    /// The ➤ button: an up-arrow on the member's accent, the same round as
+    /// the back button and the ⏹ it turns into while Maurice answers. `sending`
+    /// true → a draft is there and a tap sends it; false → the composer is
+    /// empty and the button waits, muted.
     private func actionAvatar(sending: Bool) -> some View {
         let accent = session.activeDeviceUser?.color ?? .blue
-        return ZStack(alignment: .bottomTrailing) {
-            ZStack {
-                Circle().fill(accent.opacity(0.16))
-                // The hat is a foreground glyph — keep it legible when the
-                // user's accent is dark (else it vanishes on a dark surface).
-                BoaterHat(size: 24, color: accent.legible(onDark: theme.isDark))
-            }
-            .overlay(Circle().strokeBorder(theme.ruleHard, lineWidth: 0.75))
+        return Circle()
+            .fill(accent)
             .frame(width: 44, height: 44)
-            if sending {
-                Image(systemName: "arrow.up.circle.fill")
-                    .font(.system(size: 16))
-                    .symbolRenderingMode(.palette)
-                    .foregroundStyle(.white, accent)
-            }
-        }
-        .frame(width: 44, height: 44)
-        .opacity(sending ? 1 : 0.55)
+            .overlay(
+                Image(systemName: "arrow.up")
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundStyle(.white)
+            )
+            .opacity(sending ? 1 : 0.35)
     }
 
     /// What the Return key does. A room is a conversation between people first,
@@ -2964,9 +2946,10 @@ private struct ComposerBar: View {
                     }
 
                     #if os(iOS)
-                    // Dismiss the keyboard from inside the input row (when focused)
-                    // — no floating accessory bar that would cover Send.
-                    if isFocused {
+                    // Dismiss the keyboard from inside the input row (while it
+                    // is on screen) — no floating accessory bar that would
+                    // cover Send.
+                    if isFocused && softKeyboardShown {
                         Button { isFocused = false } label: {
                             Image(systemName: "keyboard.chevron.compact.down")
                                 .font(.system(size: 16))
@@ -3026,11 +3009,11 @@ private struct ComposerBar: View {
                         }
                     } label: {
                         Image(systemName: dictation.isListening ? "mic.fill" : "mic")
-                            .font(.system(size: 16))
+                            .font(.system(size: 17))
                             .foregroundStyle(dictation.isListening
                                              ? (session.activeDeviceUser?.color ?? .blue).legible(onDark: theme.isDark)
                                              : theme.inkSoft)
-                            .frame(width: 34, height: 34)
+                            .frame(width: 44, height: 44)
                             .contentShape(Rectangle())
                             // A cloud while the audio is going to Apple rather
                             // than staying here. Consent was given once; this is
@@ -3040,7 +3023,7 @@ private struct ComposerBar: View {
                                     Image(systemName: "cloud.fill")
                                         .font(.system(size: 8))
                                         .foregroundStyle(theme.inkMute)
-                                        .offset(x: -4, y: 6)
+                                        .offset(x: -9, y: 10)
                                 }
                             }
                             // A quiet pulse is the "I'm listening" tell. Without
@@ -3116,6 +3099,16 @@ private struct ComposerBar: View {
             startDictationIfRequested()
         }
         #if os(iOS)
+        // A hardware keyboard still reports a frame — the shortcut bar at the
+        // bottom of the screen — so "shown" means tall enough to be keys.
+        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillChangeFrameNotification)) { note in
+            guard let frame = note.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect else { return }
+            let screen = UIScreen.main.bounds
+            softKeyboardShown = frame.intersection(screen).height > 120
+        }
+        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in
+            softKeyboardShown = false
+        }
         // The Action Button leaves a note and opens the app; the composer picks
         // it up here. Both hooks are needed: a cold launch arrives through
         // onAppear, a warm one through the scene coming back to the foreground,

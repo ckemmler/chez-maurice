@@ -31,8 +31,14 @@ struct TurnTally: Equatable {
             for block in blocks {
                 switch block.data.cardKind {
                 case "sources": block.data.string("origin") == "web" ? (web += 1) : (memory += 1)
-                // A purpose-built card is drawn under the reply already.
-                case nil: tools += 1
+                // A search that found nothing comes back bare; its tool says
+                // what it was. A purpose-built card is drawn under the reply.
+                case nil:
+                    switch block.tool {
+                    case "web_search": web += 1
+                    case "corpus__search": memory += 1
+                    default: tools += 1
+                    }
                 default: break
                 }
             }
