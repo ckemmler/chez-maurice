@@ -719,3 +719,36 @@
 "contacts.help.mailfence" = "Mailfence: je gebruikelijke gebruikersnaam en wachtwoord.";
 "contacts.help.google" = "Google-contacten vragen een aanmelding met Google, wat Maurice nog niet kan. Voorlopig niet mogelijk.";
 "contacts.help.other" = "Geef het adres van je contactenserver (CardDAV) — voor Nextcloud bijvoorbeeld https://jouw-cloud/remote.php/dav.";
+
+/* The member's word on a person fiche, in-app (PersonReviewView). */
+"review.heading" = "Na te kijken — nog niet door jou bevestigd";
+"review.items" = "%d punten na te kijken";
+"review.one_item" = "1 punt na te kijken";
+"review.all_checked" = "Alles nagekeken";
+"review.by_maurice" = "Door Maurice geschreven uit je post. Wat je bevestigt, afwijst of verbetert, wordt in je tuin geschreven.";
+"review.confirm" = "Bevestigen";
+"review.reject" = "Afwijzen";
+"review.edit" = "Verbeteren";
+"review.confirm_all" = "Alles bevestigen";
+"review.relation" = "De relatie";
+"review.no_relation" = "Nog geen relatie geschreven.";
+"review.addresses" = "Adressen";
+"review.fragments" = "Wat de post zegt";
+"review.exchanges" = "De uitwisseling";
+"review.status.pending" = "na te kijken";
+"review.status.confirmed" = "bevestigd";
+"review.status.rejected" = "afgewezen";
+"review.mailboxes" = "Mailboxen: %@";
+"review.reject_relation.title" = "De relatie afwijzen?";
+"review.reject_relation.message" = "Maurice stelt ze niet meer voor. Je kunt ze ook verbeteren.";
+"review.reject_address.title" = "Dit adres is niet deze persoon?";
+"review.reject_address.message" = "Het wordt van de kaart losgemaakt, de fragmenten gaan naar een eigen kaart, en de koppeling wordt niet meer voorgesteld.";
+"review.reject_fragment.title" = "Dit fragment afwijzen?";
+"review.reject_fragment.message" = "Het wordt verwijderd en niet meer geschreven.";
+"review.reject_fiche.title" = "Deze kaart verwijderen?";
+"review.reject_fiche.message" = "Maurice schrijft ze niet meer.";
+"review.not_person" = "Dit is geen persoon";
+"review.open_garden" = "Openen in de tuin";
+"review.failed" = "Ik kon het niet opslaan.";
+"review.load_failed" = "Ik kon de kaart niet lezen.";
+"review.edit.hint" = "Jouw woorden vervangen die van Maurice en gelden als bevestigd. Het is markdown, zoals je tuin het bewaart.";

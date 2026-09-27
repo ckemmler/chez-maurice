@@ -719,3 +719,36 @@
 "contacts.help.mailfence" = "Mailfence: dein üblicher Benutzername und dein Passwort.";
 "contacts.help.google" = "Google-Kontakte verlangen eine Anmeldung mit Google, die Maurice noch nicht kann. Vorerst nicht möglich.";
 "contacts.help.other" = "Gib die Adresse deines Kontakte-Servers (CardDAV) an — für Nextcloud zum Beispiel https://deine-cloud/remote.php/dav.";
+
+/* The member's word on a person fiche, in-app (PersonReviewView). */
+"review.heading" = "Zu prüfen — noch nicht von dir bestätigt";
+"review.items" = "%d Punkte zu prüfen";
+"review.one_item" = "1 Punkt zu prüfen";
+"review.all_checked" = "Alles geprüft";
+"review.by_maurice" = "Von Maurice aus deiner Post geschrieben. Was du bestätigst, ablehnst oder korrigierst, wird in deinen Garten geschrieben.";
+"review.confirm" = "Bestätigen";
+"review.reject" = "Ablehnen";
+"review.edit" = "Korrigieren";
+"review.confirm_all" = "Alles bestätigen";
+"review.relation" = "Die Beziehung";
+"review.no_relation" = "Noch keine Beziehung geschrieben.";
+"review.addresses" = "Adressen";
+"review.fragments" = "Was die Post sagt";
+"review.exchanges" = "Der Austausch";
+"review.status.pending" = "zu prüfen";
+"review.status.confirmed" = "bestätigt";
+"review.status.rejected" = "abgelehnt";
+"review.mailboxes" = "Postfächer: %@";
+"review.reject_relation.title" = "Beziehung ablehnen?";
+"review.reject_relation.message" = "Maurice schlägt sie nicht mehr vor. Du kannst sie auch korrigieren.";
+"review.reject_address.title" = "Diese Adresse gehört nicht zu dieser Person?";
+"review.reject_address.message" = "Sie wird vom Blatt gelöst, ihre Fragmente kommen auf ein eigenes Blatt, und die Verknüpfung wird nicht mehr vorgeschlagen.";
+"review.reject_fragment.title" = "Dieses Fragment ablehnen?";
+"review.reject_fragment.message" = "Es wird gelöscht und nicht mehr geschrieben.";
+"review.reject_fiche.title" = "Dieses Blatt löschen?";
+"review.reject_fiche.message" = "Maurice schreibt es nicht mehr.";
+"review.not_person" = "Das ist keine Person";
+"review.open_garden" = "Im Garten öffnen";
+"review.failed" = "Ich konnte das nicht speichern.";
+"review.load_failed" = "Ich konnte das Blatt nicht lesen.";
+"review.edit.hint" = "Deine Worte ersetzen die von Maurice und gelten als bestätigt. Es ist Markdown, wie dein Garten es aufbewahrt.";

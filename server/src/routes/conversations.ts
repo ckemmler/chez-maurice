@@ -32,7 +32,7 @@ import { publishToRoom, publishToUser, userHasSocket } from "../services/roomBus
 import { pushToUser } from "../services/push";
 import { indexConversationInBackground } from "../services/mcpClient";
 import { searchConversations } from "../services/conversationSearch";
-import { takeFooter } from "../services/reviewFooter";
+import { takeReview } from "../services/reviewFooter";
 import { memberLocale } from "../services/domainBriefs";
 import {
   beginTurn,
@@ -445,10 +445,16 @@ conversations.post("/:id/messages", async (c) => {
         const appendFooter = async () => {
           if (footed || isRoom || !fullResponse) return;
           footed = true;
-          const footer = takeFooter(convoId, userId, origin, memberLocale(userId));
-          if (!footer) return;
-          fullResponse += footer;
-          await send({ type: "text_delta", text: footer });
+          const review = takeReview(convoId, userId, origin, memberLocale(userId));
+          if (!review) return;
+          // The same list twice: as the reply's last text, which the garden,
+          // the other clients and the stored message read as markdown; and as
+          // a block the app draws — a card that opens each fiche in-app —
+          // leaving the text out when it does (the block carries it).
+          dataBlocks.push({ tool: "review", data: review.block });
+          await send({ type: "tool_data", tool: "review", data: review.block } as TurnEvent);
+          fullResponse += review.text;
+          await send({ type: "text_delta", text: review.text });
         };
 
         // Persist Maurice's reply (idempotent). Called on normal completion and

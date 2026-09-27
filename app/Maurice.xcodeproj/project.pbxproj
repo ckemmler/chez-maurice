@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		01BF41C8D7454D75BCFE569A /* MauriceApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A0683126686701347E9871B /* MauriceApp.swift */; };
+		036F8670BB903EA771E48BF9 /* PersonReviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E787764ABF2A58E353CC45C2 /* PersonReviewView.swift */; };
 		13534AB1DC9B63D211D638DA /* SortMenu.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC55EBC69472BBED58BC1614 /* SortMenu.swift */; };
 		13D7AEF70186BD458531FA85 /* PairingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00B700626149A3D1C0D6D5CB /* PairingView.swift */; };
 		159E0D9DFBCB74432ABCE781 /* DomainEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0D1A322B73BEA06F034F1718 /* DomainEditorView.swift */; };
@@ -30,6 +31,7 @@
 		6E245195E6CD90C3C83CB1BD /* SwiftMath in Frameworks */ = {isa = PBXBuildFile; productRef = D1B845FF866B55501A5D0C68 /* SwiftMath */; };
 		6E60BACFAEB5A57C921B21BE /* Glass.swift in Sources */ = {isa = PBXBuildFile; fileRef = C5ABD3D073D2DB74064F5A13 /* Glass.swift */; };
 		707E1F5D159DC0ED0841E5D0 /* UserPickerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB58402567AEED97404D604C /* UserPickerView.swift */; };
+		7085533CD7B70C78BF91892F /* PersonReviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E787764ABF2A58E353CC45C2 /* PersonReviewView.swift */; };
 		72B46D7608456B22303FB423 /* MauriceStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8C96937F0554878BAF247D3F /* MauriceStore.swift */; };
 		7416ECF23A6705C449F95A51 /* MauriceApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A0683126686701347E9871B /* MauriceApp.swift */; };
 		773B899803CBAAF839CDE0C1 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E0D0DF979284275260F31D2 /* SettingsView.swift */; };
@@ -114,6 +116,7 @@
 		D8EA76446DB39E558173EA2A /* de */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = de; path = de.lproj/Localizable.strings; sourceTree = "<group>"; };
 		D91B47992093B9201D94B7D7 /* Maurice_iOS.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Maurice_iOS.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		DCDEAA0E48CC14C7C18BE8FD /* Hats.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Hats.swift; sourceTree = "<group>"; };
+		E787764ABF2A58E353CC45C2 /* PersonReviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PersonReviewView.swift; sourceTree = "<group>"; };
 		EDFA39C22354B093CDDBB691 /* ChatService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatService.swift; sourceTree = "<group>"; };
 		EE3170FDE5751A81E295CF2E /* BoaterHat.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BoaterHat.swift; sourceTree = "<group>"; };
 		F2BCD320C3B31E341073ED84 /* DomainsViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DomainsViews.swift; sourceTree = "<group>"; };
@@ -197,6 +200,7 @@
 				3B5F6F2E3C5F7D8FFDE02630 /* ImportConversationsView.swift */,
 				FD148722F24F06001FE66540 /* LifeFactCard.swift */,
 				00B700626149A3D1C0D6D5CB /* PairingView.swift */,
+				E787764ABF2A58E353CC45C2 /* PersonReviewView.swift */,
 				68242686E76201D100B8C3A9 /* ScopePickerView.swift */,
 				4E0D0DF979284275260F31D2 /* SettingsView.swift */,
 				CC55EBC69472BBED58BC1614 /* SortMenu.swift */,
@@ -384,6 +388,7 @@
 				72B46D7608456B22303FB423 /* MauriceStore.swift in Sources */,
 				5DF005A2A1E5A2B26E0DBCF4 /* MauriceTheme.swift in Sources */,
 				13D7AEF70186BD458531FA85 /* PairingView.swift in Sources */,
+				7085533CD7B70C78BF91892F /* PersonReviewView.swift in Sources */,
 				32D68A2ACC7ECFB3E37DE97F /* ScopePickerView.swift in Sources */,
 				48A8B2E348C99992B23AA7DF /* SessionStore.swift in Sources */,
 				B5655384F94390632B3335BB /* SettingsView.swift in Sources */,
@@ -418,6 +423,7 @@
 				EE60CB5C6953EB6207373CBA /* MauriceStore.swift in Sources */,
 				775815BED73706273BEE92F3 /* MauriceTheme.swift in Sources */,
 				FF9F6DF88F721A8C74CFAEF4 /* PairingView.swift in Sources */,
+				036F8670BB903EA771E48BF9 /* PersonReviewView.swift in Sources */,
 				F8D5EA6FB79DA0781074F0DA /* ScopePickerView.swift in Sources */,
 				7D338BE53D7A3CA7660BB1C5 /* SessionStore.swift in Sources */,
 				773B899803CBAAF839CDE0C1 /* SettingsView.swift in Sources */,

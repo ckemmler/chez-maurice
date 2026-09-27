@@ -139,7 +139,25 @@ const clip = (s: string, n = 90) => {
 
 /** The footer for what the turn saw, as markdown, or null when nothing
  *  pending. `origin` makes the links absolute (the app opens nothing else). */
-export function takeFooter(conversationId: string, memberId: string, origin: string, locale: string): string | null {
+/** What the review block carries for the app: per fiche, what is pending,
+ *  and the footer's own text, so a client that draws the block can leave
+ *  the text out of the reply it shows. */
+export interface ReviewBlock {
+  card: "review";
+  footer: string;
+  fiches: Array<{
+    title: string;
+    locale: string;
+    basename: string;
+    url: string;
+    items: Array<{ kind: "person" | "relation" | "identity" | "fragment"; id: string | null; label: string; anchor: string }>;
+  }>;
+}
+
+/** The footer, as text, for the reply, and as a block, for the app (27
+ *  September 2026: the in-app review of a person fiche). Taken once per
+ *  turn; null when nothing entered it unconfirmed. */
+export function takeReview(conversationId: string, memberId: string, origin: string, locale: string): { text: string; block: ReviewBlock } | null {
   const seen = turns.get(conversationId);
   turns.delete(conversationId);
   if (!seen?.size) return null;
@@ -147,21 +165,29 @@ export function takeFooter(conversationId: string, memberId: string, origin: str
   if (!garden) return null;
   const w = WORDS[locale] ?? WORDS.en!;
   const lines: string[] = [];
+  const fiches: ReviewBlock["fiches"] = [];
   for (const s of seen.values()) {
     const v = viewOf(garden, s);
     if (!v?.pending) continue;
     const url = `${origin}${ficheWebPath(garden, "people", s.locale, s.basename.replace(/-fiche$/, ""))}`;
-    const items: Array<{ label: string; anchor: string }> = [];
-    if (v.status === "pending" && v.byMaurice) items.push({ label: w.person, anchor: "person" });
-    if (v.relation.status === "pending") items.push({ label: `${w.relation}${v.relation.text ? ` : « ${clip(v.relation.text)} »` : ""}`, anchor: "relation" });
-    v.identities.forEach((i, n) => { if (i.status === "pending") items.push({ label: `${w.address} ${i.address}${i.conflict ? ` (${i.conflict})` : ""}`, anchor: `identity-${n + 1}` }); });
-    for (const f of v.fragments) if (f.status === "pending") items.push({ label: `${w.fragment} ${f.summary || f.id}`, anchor: `fragment-${f.id}` });
+    const items: ReviewBlock["fiches"][number]["items"] = [];
+    if (v.status === "pending" && v.byMaurice) items.push({ kind: "person", id: null, label: w.person, anchor: "person" });
+    if (v.relation.status === "pending") items.push({ kind: "relation", id: null, label: `${w.relation}${v.relation.text ? ` : « ${clip(v.relation.text)} »` : ""}`, anchor: "relation" });
+    v.identities.forEach((i, n) => { if (i.status === "pending") items.push({ kind: "identity", id: i.address, label: `${w.address} ${i.address}${i.conflict ? ` (${i.conflict})` : ""}`, anchor: `identity-${n + 1}` }); });
+    for (const f of v.fragments) if (f.status === "pending") items.push({ kind: "fragment", id: f.id, label: `${w.fragment} ${f.summary || f.id}`, anchor: `fragment-${f.id}` });
     if (!items.length) continue;
     if (items.length > 3) lines.push(`- [${v.title}](${url}#review) — ${w.many(items.length)}`);
     else for (const it of items) lines.push(`- [${v.title}](${url}#${it.anchor}) · ${it.label}`);
+    fiches.push({ title: v.title, locale: s.locale, basename: s.basename, url, items });
   }
   if (!lines.length) return null;
-  return `\n\n---\n\n**${w.head}**\n\n${lines.join("\n")}`;
+  const text = `\n\n---\n\n**${w.head}**\n\n${lines.join("\n")}`;
+  return { text, block: { card: "review", footer: text, fiches } };
+}
+
+/** The footer as text alone. */
+export function takeFooter(conversationId: string, memberId: string, origin: string, locale: string): string | null {
+  return takeReview(conversationId, memberId, origin, locale)?.text ?? null;
 }
 
 export const _test = { turns };

@@ -266,7 +266,8 @@ struct ChatView: View {
                                         DataCardStack(blocks: chat.streamingData)
                                     }
                                     if !chat.streamingText.isEmpty {
-                                        StreamingRow(text: chat.streamingText, serverBaseURL: session.serverURL ?? "")
+                                        StreamingRow(text: withoutReviewFooter(chat.streamingText, blocks: chat.streamingData),
+                                                     serverBaseURL: session.serverURL ?? "")
                                     }
                                 }
                             } else if chat.pendingSummon {
@@ -1074,10 +1075,12 @@ private struct MessageRow: View {
         return (String(match.1), String(match.2))
     }
 
-    /// Text content with image markdown stripped
+    /// Text content with image markdown stripped — and the "À vérifier"
+    /// footer, when the reply carries it as a card (`ReviewCard`).
     private var textContent: String {
         let pattern = /!\[.+?\]\(\/api\/images\/.+?\)\n*/
-        return message.content.replacing(pattern, with: "").trimmingCharacters(in: .whitespacesAndNewlines)
+        let text = withoutReviewFooter(message.content, blocks: message.data ?? [])
+        return text.replacing(pattern, with: "").trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     var body: some View {
@@ -1318,7 +1321,7 @@ private struct MessageRow: View {
 private struct DataCardStack: View {
     let blocks: [DataBlock]
 
-    static let answerKinds: Set<String> = ["candidates", "media", "fact"]
+    static let answerKinds: Set<String> = ["candidates", "media", "fact", "review"]
 
     static func hasCards(_ blocks: [DataBlock]) -> Bool {
         blocks.contains { answerKinds.contains($0.data.cardKind ?? "") }
@@ -1331,6 +1334,7 @@ private struct DataCardStack: View {
                 case "candidates": CandidatePickerCard(data: block.data)
                 case "media": MediaFicheCard(data: block.data)
                 case "fact": LifeFactCard(data: block.data)
+                case "review": ReviewCard(data: block.data)
                 default: EmptyView()
                 }
             }
@@ -2308,6 +2312,8 @@ struct MathBlockImageProvider: ImageProvider {
 private struct SelectableMarkdown: View {
     @Environment(SessionStore.self) private var session
     let text: String
+    /// A person fiche the footer links to, opened in-app (PersonReviewView).
+    @State private var fiche: PersonRef?
     #if os(iOS)
     @State private var showingSelect = false
     @State private var showingMenu = false
@@ -2331,9 +2337,15 @@ private struct SelectableMarkdown: View {
             .sheet(isPresented: $showingSelect) {
                 SelectTextSheet(text: text)
             }
+            .sheet(item: $fiche) { ref in
+                PersonReviewView(ref: ref).environment(session)
+            }
         #else
         MarkdownText(text: text)
             .environment(\.openURL, OpenURLAction { gardenLink($0) })
+            .sheet(item: $fiche) { ref in
+                PersonReviewView(ref: ref).environment(session)
+            }
         #endif
     }
 
@@ -2344,6 +2356,12 @@ private struct SelectableMarkdown: View {
     private func gardenLink(_ url: URL) -> OpenURLAction.Result {
         guard let s = session.serverURL, let server = URL(string: s),
               url.host == server.host, url.path.hasPrefix("/g/") else { return .systemAction }
+        // A person fiche — the "À vérifier" footer's links, in replies
+        // written before the card existed — is reviewed here, not on the web.
+        if let ref = PersonRef(gardenURL: url) {
+            fiche = ref
+            return .handled
+        }
         Task { await openSignedIn(url, server: s) }
         return .handled
     }
@@ -2438,7 +2456,7 @@ private struct SelectableTextView: UIViewRepresentable {
 /// Map the app's semantic tokens onto a swift-markdown-ui Theme. Starts from
 /// the basic theme (sensible defaults for headings/lists/tables/blockquotes)
 /// and recolors text/code/links/rules to match Maurice's palette.
-private func mauriceMarkdownTheme(_ t: MauriceTheme) -> MarkdownUI.Theme {
+func mauriceMarkdownTheme(_ t: MauriceTheme) -> MarkdownUI.Theme {
     MarkdownUI.Theme()
         .text {
             ForegroundColor(t.ink)

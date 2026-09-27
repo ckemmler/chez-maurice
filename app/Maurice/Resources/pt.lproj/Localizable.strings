@@ -719,3 +719,36 @@
 "contacts.help.mailfence" = "Mailfence: o teu utilizador e a tua palavra-passe habituais.";
 "contacts.help.google" = "Os contactos Google exigem um início de sessão com a Google, que o Maurice ainda não sabe fazer. Por agora não é possível.";
 "contacts.help.other" = "Indica o endereço do teu servidor de contactos (CardDAV) — para o Nextcloud, por exemplo https://a-tua-nuvem/remote.php/dav.";
+
+/* The member's word on a person fiche, in-app (PersonReviewView). */
+"review.heading" = "A verificar — ainda não confirmado por ti";
+"review.items" = "%d elementos a verificar";
+"review.one_item" = "1 elemento a verificar";
+"review.all_checked" = "Tudo verificado";
+"review.by_maurice" = "Escrita pelo Maurice a ler o teu correio. O que confirmas, rejeitas ou corriges fica escrito no teu jardim.";
+"review.confirm" = "Confirmar";
+"review.reject" = "Rejeitar";
+"review.edit" = "Corrigir";
+"review.confirm_all" = "Confirmar tudo";
+"review.relation" = "A relação";
+"review.no_relation" = "Ainda não há relação escrita.";
+"review.addresses" = "Endereços";
+"review.fragments" = "O que diz o correio";
+"review.exchanges" = "As trocas";
+"review.status.pending" = "a verificar";
+"review.status.confirmed" = "confirmado";
+"review.status.rejected" = "rejeitado";
+"review.mailboxes" = "Caixas: %@";
+"review.reject_relation.title" = "Rejeitar a relação?";
+"review.reject_relation.message" = "O Maurice não a volta a propor. Também a podes corrigir.";
+"review.reject_address.title" = "Este endereço não é esta pessoa?";
+"review.reject_address.message" = "É separado da ficha, os seus fragmentos passam para uma ficha própria e a ligação não volta a ser proposta.";
+"review.reject_fragment.title" = "Rejeitar este fragmento?";
+"review.reject_fragment.message" = "É apagado e não volta a ser escrito.";
+"review.reject_fiche.title" = "Apagar esta ficha?";
+"review.reject_fiche.message" = "O Maurice não a volta a escrever.";
+"review.not_person" = "Não é uma pessoa";
+"review.open_garden" = "Abrir no jardim";
+"review.failed" = "Não consegui guardar.";
+"review.load_failed" = "Não consegui ler a ficha.";
+"review.edit.hint" = "As tuas palavras substituem as do Maurice e contam como confirmadas. É markdown, tal como o teu jardim o guarda.";

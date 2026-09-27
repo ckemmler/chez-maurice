@@ -719,3 +719,36 @@
 "contacts.help.mailfence" = "Mailfence: il tuo nome utente e la tua password abituali.";
 "contacts.help.google" = "I contatti Google richiedono un accesso con Google, che Maurice non sa ancora fare. Per ora non è possibile.";
 "contacts.help.other" = "Indica l'indirizzo del tuo server dei contatti (CardDAV) — per Nextcloud, per esempio https://il-tuo-cloud/remote.php/dav.";
+
+/* The member's word on a person fiche, in-app (PersonReviewView). */
+"review.heading" = "Da verificare — non ancora confermato da te";
+"review.items" = "%d elementi da verificare";
+"review.one_item" = "1 elemento da verificare";
+"review.all_checked" = "Tutto verificato";
+"review.by_maurice" = "Scritta da Maurice leggendo la tua posta. Ciò che confermi, rifiuti o correggi viene scritto nel tuo giardino.";
+"review.confirm" = "Conferma";
+"review.reject" = "Rifiuta";
+"review.edit" = "Correggi";
+"review.confirm_all" = "Conferma tutto";
+"review.relation" = "La relazione";
+"review.no_relation" = "Nessuna relazione scritta per ora.";
+"review.addresses" = "Indirizzi";
+"review.fragments" = "Cosa dice la posta";
+"review.exchanges" = "Gli scambi";
+"review.status.pending" = "da verificare";
+"review.status.confirmed" = "confermato";
+"review.status.rejected" = "rifiutato";
+"review.mailboxes" = "Caselle: %@";
+"review.reject_relation.title" = "Rifiutare la relazione?";
+"review.reject_relation.message" = "Maurice non la proporrà più. Puoi anche correggerla.";
+"review.reject_address.title" = "Questo indirizzo non è questa persona?";
+"review.reject_address.message" = "Viene staccato dalla scheda, i suoi frammenti vanno su una scheda a parte e il collegamento non sarà più proposto.";
+"review.reject_fragment.title" = "Rifiutare questo frammento?";
+"review.reject_fragment.message" = "Viene eliminato e non sarà più scritto.";
+"review.reject_fiche.title" = "Eliminare questa scheda?";
+"review.reject_fiche.message" = "Maurice non la scriverà più.";
+"review.not_person" = "Non è una persona";
+"review.open_garden" = "Apri nel giardino";
+"review.failed" = "Non sono riuscito a salvare.";
+"review.load_failed" = "Non sono riuscito a leggere la scheda.";
+"review.edit.hint" = "Le tue parole sostituiscono quelle di Maurice e valgono come confermate. È markdown, come lo conserva il tuo giardino.";

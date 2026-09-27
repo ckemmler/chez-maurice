@@ -719,3 +719,36 @@
 "contacts.help.mailfence" = "Mailfence: tu usuario y tu contraseña habituales.";
 "contacts.help.google" = "Los contactos de Google requieren iniciar sesión con Google, algo que Maurice aún no sabe hacer. Por ahora no es posible.";
 "contacts.help.other" = "Indica la dirección de tu servidor de contactos (CardDAV) — para Nextcloud, por ejemplo https://tu-nube/remote.php/dav.";
+
+/* The member's word on a person fiche, in-app (PersonReviewView). */
+"review.heading" = "Por verificar — aún no confirmado por ti";
+"review.items" = "%d elementos por verificar";
+"review.one_item" = "1 elemento por verificar";
+"review.all_checked" = "Todo verificado";
+"review.by_maurice" = "Escrita por Maurice leyendo tu correo. Lo que confirmas, rechazas o corriges se escribe en tu jardín.";
+"review.confirm" = "Confirmar";
+"review.reject" = "Rechazar";
+"review.edit" = "Corregir";
+"review.confirm_all" = "Confirmar todo";
+"review.relation" = "La relación";
+"review.no_relation" = "Todavía no hay relación escrita.";
+"review.addresses" = "Direcciones";
+"review.fragments" = "Lo que dice el correo";
+"review.exchanges" = "Los intercambios";
+"review.status.pending" = "por verificar";
+"review.status.confirmed" = "confirmado";
+"review.status.rejected" = "rechazado";
+"review.mailboxes" = "Buzones: %@";
+"review.reject_relation.title" = "¿Rechazar la relación?";
+"review.reject_relation.message" = "Maurice no la volverá a proponer. También puedes corregirla.";
+"review.reject_address.title" = "¿Esta dirección no es esta persona?";
+"review.reject_address.message" = "Se separa de la ficha, sus fragmentos pasan a una ficha propia y el vínculo no se volverá a proponer.";
+"review.reject_fragment.title" = "¿Rechazar este fragmento?";
+"review.reject_fragment.message" = "Se borra y no se volverá a escribir.";
+"review.reject_fiche.title" = "¿Borrar esta ficha?";
+"review.reject_fiche.message" = "Maurice no la volverá a escribir.";
+"review.not_person" = "No es una persona";
+"review.open_garden" = "Abrir en el jardín";
+"review.failed" = "No pude guardarlo.";
+"review.load_failed" = "No pude leer la ficha.";
+"review.edit.hint" = "Tus palabras sustituyen a las de Maurice y cuentan como confirmadas. Es markdown, tal como lo guarda tu jardín.";

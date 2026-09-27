@@ -166,6 +166,17 @@ test("the footer lists what entered the turn unconfirmed, with links to the elem
   expect(f).toContain(`- [Jean Derély](https://home.example/g/${ANNA}/fr/fiches/people/jean-derely-fiche#review) — 6 éléments à vérifier`);
   // Taken once: a second take says nothing.
   expect(footer.takeFooter(CONVO, ANNA, "https://home.example", "fr")).toBeNull();
+  // The block the app draws carries the same, element by element, and the text.
+  footer.startReview(CONVO);
+  footer.noteTool(CONVO, ANNA, "garden__get_fiche", { resource_collection: "people", resource_id: "jean-derely", locale: "fr" }, null);
+  const r = footer.takeReview(CONVO, ANNA, "https://home.example", "fr")!;
+  expect(r.block.card).toBe("review");
+  expect(r.block.footer).toBe(r.text);
+  expect(r.block.fiches).toHaveLength(1);
+  expect(r.block.fiches[0]!).toMatchObject({ title: "Jean Derély", locale: "fr", basename: "jean-derely-fiche" });
+  expect(r.block.fiches[0]!.items.map((i) => i.kind)).toEqual(["person", "relation", "identity", "identity", "fragment", "fragment"]);
+  expect(r.block.fiches[0]!.items[2]).toMatchObject({ id: "jean@x.org", anchor: "identity-1" });
+  expect(footer.takeFooter(CONVO, ANNA, "https://home.example", "fr")).toBeNull();
   // Three left: one line each, anchored.
   review.review(ANNA, garden(), "fr", "jean-derely-fiche", { target: "fiche", action: "confirm" });
   review.review(ANNA, garden(), "fr", "jean-derely-fiche", { target: "identity", action: "confirm", id: "jean@x.org" });

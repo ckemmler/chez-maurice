@@ -719,3 +719,36 @@
 "contacts.help.mailfence" = "Mailfence: your usual username and password.";
 "contacts.help.google" = "Google contacts need a sign-in with Google, which Maurice cannot do yet. Not possible for now.";
 "contacts.help.other" = "Give the address of your contacts (CardDAV) server — for Nextcloud, for instance https://your-cloud/remote.php/dav.";
+
+/* The member's word on a person fiche, in-app (PersonReviewView). */
+"review.heading" = "To check — not confirmed by you yet";
+"review.items" = "%d items to check";
+"review.one_item" = "1 item to check";
+"review.all_checked" = "All checked";
+"review.by_maurice" = "Written by Maurice from your mail. What you confirm, reject or correct is written into your garden.";
+"review.confirm" = "Confirm";
+"review.reject" = "Reject";
+"review.edit" = "Correct";
+"review.confirm_all" = "Confirm all";
+"review.relation" = "The relationship";
+"review.no_relation" = "No relationship written yet.";
+"review.addresses" = "Addresses";
+"review.fragments" = "What the mail says";
+"review.exchanges" = "The exchanges";
+"review.status.pending" = "to check";
+"review.status.confirmed" = "confirmed";
+"review.status.rejected" = "rejected";
+"review.mailboxes" = "Mailboxes: %@";
+"review.reject_relation.title" = "Reject the relationship?";
+"review.reject_relation.message" = "Maurice will not propose it again. You can also correct it.";
+"review.reject_address.title" = "This address is not this person?";
+"review.reject_address.message" = "It is detached from the fiche, its fragments move to a fiche of their own, and the link is never proposed again.";
+"review.reject_fragment.title" = "Reject this fragment?";
+"review.reject_fragment.message" = "It is deleted and will not be written again.";
+"review.reject_fiche.title" = "Delete this fiche?";
+"review.reject_fiche.message" = "Maurice will not write it again.";
+"review.not_person" = "This is not a person";
+"review.open_garden" = "Open in the garden";
+"review.failed" = "I could not save that.";
+"review.load_failed" = "I could not read the fiche.";
+"review.edit.hint" = "Your words replace Maurice’s and count as confirmed. It is markdown, as your garden keeps it.";

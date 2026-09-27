@@ -56,6 +56,8 @@ export interface PersonView {
   relation: { text: string | null; status: Status | null; since: string | null; until: string | null; edited: boolean };
   identities: Array<{ address: string; mailboxes: string[]; status: Status; source: string; conflict: string | null }>;
   fragments: FragmentView[];
+  /** The exchanges section, as written (read-only: the pass rewrites it). */
+  exchanges: string | null;
   /** Everything still pending — what the footer lists for this fiche. */
   pending: number;
 }
@@ -122,7 +124,7 @@ export function personView(garden: GardenRef, locale: string, basename: string):
     + identities.filter((i) => i.status === "pending").length + fragments.filter((f) => f.status === "pending").length;
   return {
     title: String(fm.title ?? basename), locale, basename, status, byMaurice: fm.meta?.author === "maurice",
-    relation, identities, fragments, pending,
+    relation, identities, fragments, exchanges: sectionOf(body, w.exchanges), pending,
   };
 }
 
