@@ -15,7 +15,7 @@ import { mailConversationOf } from "./mailApproval";
 import { mailOpenerStrings } from "./mailOpener";
 import { mailToolCall } from "./mailScan";
 import { contactCards, type ContactCard } from "./contactAccounts";
-import { consolidate, eraseMailFiles, indexPeopleFiches, resolvePeople, writePerson } from "./mailPeople";
+import { EXCHANGES_SHOWN, consolidate, eraseMailFiles, indexPeopleFiches, resolvePeople, writePerson, type Exchanges } from "./mailPeople";
 import { indexGardenPaths, unindexGardenPath } from "../../data-api/services/gardenIndex";
 import { getModel } from "./models";
 import { publishToRoom } from "./roomBus";
@@ -138,6 +138,9 @@ export interface Words {
   open: string;
   about: string;
   timeline: string;
+  /** A person fiche's section on the mail exchanged, from the headers. */
+  exchanges: string;
+  exchangesCount: (n: number, first: string, last: string) => string;
   decided: string;
   provenance: string;
   mailboxes: string;
@@ -152,7 +155,7 @@ const WORDS: Record<string, Words> = {
   en: {
     hub: "My mail", hubIntro: "What Maurice understood of your mailbox: a fiche per person who matters, a digest per thread. Drafts, private, to keep, correct or throw away.",
     correspondents: "People", threads: "Threads", relationship: "The relationship", goingOn: "What is going on", promised: "What was promised", open: "Left open",
-    about: "What it is about", timeline: "Timeline", decided: "Decided", provenance: "Where it comes from", mailboxes: "Mailboxes", fromMail: "Mail",
+    about: "What it is about", timeline: "Timeline", exchanges: "The exchanges", exchangesCount: (n, f, l) => `${n} message(s) exchanged since ${f}; the last on ${l}.`, decided: "Decided", provenance: "Where it comes from", mailboxes: "Mailboxes", fromMail: "Mail",
     disclaimer: "Part of this note was written by a machine reading your mail. Every line points to the message it comes from.",
     written: (d, n, m) => `Written by Maurice on ${d} from ${n} message(s) of your mail, with ${m}.`,
     unreviewed: "Not reviewed yet: keep it, correct it, or throw it away.",
@@ -160,7 +163,7 @@ const WORDS: Record<string, Words> = {
   fr: {
     hub: "Mon courrier", hubIntro: "Ce que Maurice a compris de ta boîte : une fiche par personne qui compte, un digest par fil. Des brouillons, privés, à garder, corriger ou jeter.",
     correspondents: "Personnes", threads: "Fils", relationship: "La relation", goingOn: "Ce qui est en cours", promised: "Ce qui a été promis", open: "Resté ouvert",
-    about: "De quoi il s'agit", timeline: "Chronologie", decided: "Décidé", provenance: "D'où ça vient", mailboxes: "Boîtes", fromMail: "Courrier",
+    about: "De quoi il s'agit", timeline: "Chronologie", exchanges: "Les échanges", exchangesCount: (n, f, l) => `${n} message(s) échangé(s) depuis le ${f} ; le dernier le ${l}.`, decided: "Décidé", provenance: "D'où ça vient", mailboxes: "Boîtes", fromMail: "Courrier",
     disclaimer: "Une partie de cette note a été écrite par une machine lisant ton courrier. Chaque ligne renvoie au message dont elle vient.",
     written: (d, n, m) => `Écrit par Maurice le ${d} à partir de ${n} message(s) de ton courrier, avec ${m}.`,
     unreviewed: "Pas encore relue : à garder, corriger ou jeter.",
@@ -168,7 +171,7 @@ const WORDS: Record<string, Words> = {
   it: {
     hub: "La mia posta", hubIntro: "Quello che Maurice ha capito della tua casella: una scheda per persona che conta, un riassunto per filo. Bozze, private, da tenere, correggere o buttare.",
     correspondents: "Persone", threads: "Fili", relationship: "La relazione", goingOn: "Cosa è in corso", promised: "Cosa è stato promesso", open: "Rimasto aperto",
-    about: "Di cosa si tratta", timeline: "Cronologia", decided: "Deciso", provenance: "Da dove viene", mailboxes: "Caselle", fromMail: "Posta",
+    about: "Di cosa si tratta", timeline: "Cronologia", exchanges: "Gli scambi", exchangesCount: (n, f, l) => `${n} messaggio/i scambiato/i dal ${f}; l'ultimo il ${l}.`, decided: "Deciso", provenance: "Da dove viene", mailboxes: "Caselle", fromMail: "Posta",
     disclaimer: "Parte di questa nota è stata scritta da una macchina che legge la tua posta. Ogni riga rimanda al messaggio da cui viene.",
     written: (d, n, m) => `Scritto da Maurice il ${d} da ${n} messaggio/i della tua posta, con ${m}.`,
     unreviewed: "Non ancora riletta: da tenere, correggere o buttare.",
@@ -176,7 +179,7 @@ const WORDS: Record<string, Words> = {
   de: {
     hub: "Meine Post", hubIntro: "Was Maurice aus deinem Postfach verstanden hat: ein Blatt je Person, die zählt, eine Zusammenfassung je Faden. Entwürfe, privat, zum Behalten, Berichtigen oder Verwerfen.",
     correspondents: "Personen", threads: "Fäden", relationship: "Die Beziehung", goingOn: "Was gerade läuft", promised: "Was versprochen wurde", open: "Offen geblieben",
-    about: "Worum es geht", timeline: "Zeitleiste", decided: "Entschieden", provenance: "Woher es kommt", mailboxes: "Postfächer", fromMail: "Post",
+    about: "Worum es geht", timeline: "Zeitleiste", exchanges: "Der Austausch", exchangesCount: (n, f, l) => `${n} Nachricht(en) ausgetauscht seit ${f}; die letzte am ${l}.`, decided: "Entschieden", provenance: "Woher es kommt", mailboxes: "Postfächer", fromMail: "Post",
     disclaimer: "Ein Teil dieser Notiz wurde von einer Maschine geschrieben, die deine Post liest. Jede Zeile verweist auf die Nachricht, aus der sie stammt.",
     written: (d, n, m) => `Geschrieben von Maurice am ${d} aus ${n} Nachricht(en) deiner Post, mit ${m}.`,
     unreviewed: "Noch nicht durchgesehen: behalten, korrigieren oder verwerfen.",
@@ -184,7 +187,7 @@ const WORDS: Record<string, Words> = {
   es: {
     hub: "Mi correo", hubIntro: "Lo que Maurice entendió de tu buzón: una ficha por persona que cuenta, un resumen por hilo. Borradores, privados, para guardar, corregir o tirar.",
     correspondents: "Personas", threads: "Hilos", relationship: "La relación", goingOn: "Qué está en marcha", promised: "Qué se prometió", open: "Queda abierto",
-    about: "De qué trata", timeline: "Cronología", decided: "Decidido", provenance: "De dónde viene", mailboxes: "Buzones", fromMail: "Correo",
+    about: "De qué trata", timeline: "Cronología", exchanges: "Los intercambios", exchangesCount: (n, f, l) => `${n} mensaje(s) intercambiado(s) desde el ${f}; el último el ${l}.`, decided: "Decidido", provenance: "De dónde viene", mailboxes: "Buzones", fromMail: "Correo",
     disclaimer: "Parte de esta nota la escribió una máquina leyendo tu correo. Cada línea remite al mensaje del que viene.",
     written: (d, n, m) => `Escrito por Maurice el ${d} a partir de ${n} mensaje(s) de tu correo, con ${m}.`,
     unreviewed: "Aún sin revisar: guardar, corregir o tirar.",
@@ -192,7 +195,7 @@ const WORDS: Record<string, Words> = {
   pt: {
     hub: "O meu correio", hubIntro: "O que o Maurice entendeu da tua caixa: uma ficha por pessoa que conta, um resumo por fio. Rascunhos, privados, para guardar, corrigir ou deitar fora.",
     correspondents: "Pessoas", threads: "Fios", relationship: "A relação", goingOn: "O que está em curso", promised: "O que foi prometido", open: "Em aberto",
-    about: "Do que se trata", timeline: "Cronologia", decided: "Decidido", provenance: "De onde vem", mailboxes: "Caixas", fromMail: "Correio",
+    about: "Do que se trata", timeline: "Cronologia", exchanges: "As trocas", exchangesCount: (n, f, l) => `${n} mensagem(ns) trocada(s) desde ${f}; a última a ${l}.`, decided: "Decidido", provenance: "De onde vem", mailboxes: "Caixas", fromMail: "Correio",
     disclaimer: "Parte desta nota foi escrita por uma máquina a ler o teu correio. Cada linha remete para a mensagem de onde vem.",
     written: (d, n, m) => `Escrito pelo Maurice a ${d} a partir de ${n} mensagem(ns) do teu correio, com ${m}.`,
     unreviewed: "Ainda não revista: guardar, corrigir ou deitar fora.",
@@ -200,7 +203,7 @@ const WORDS: Record<string, Words> = {
   nl: {
     hub: "Mijn post", hubIntro: "Wat Maurice van je mailbox begrepen heeft: een kaart per persoon die telt, een samenvatting per draad. Concepten, privé, om te bewaren, te verbeteren of weg te gooien.",
     correspondents: "Mensen", threads: "Draden", relationship: "De relatie", goingOn: "Wat er speelt", promised: "Wat beloofd is", open: "Nog open",
-    about: "Waar het over gaat", timeline: "Tijdlijn", decided: "Besloten", provenance: "Waar het vandaan komt", mailboxes: "Mailboxen", fromMail: "Post",
+    about: "Waar het over gaat", timeline: "Tijdlijn", exchanges: "De uitwisseling", exchangesCount: (n, f, l) => `${n} bericht(en) uitgewisseld sinds ${f}; het laatste op ${l}.`, decided: "Besloten", provenance: "Waar het vandaan komt", mailboxes: "Mailboxen", fromMail: "Post",
     disclaimer: "Een deel van deze notitie is geschreven door een machine die je post leest. Elke regel verwijst naar het bericht waar hij vandaan komt.",
     written: (d, n, m) => `Geschreven door Maurice op ${d} uit ${n} bericht(en) uit je post, met ${m}.`,
     unreviewed: "Nog niet nagelezen: bewaren, verbeteren of weggooien.",
@@ -391,7 +394,7 @@ function mailboxesOf(m: MaterialMessage, labels: Map<string, string>): string {
  *  from which mailbox, and whose target carries the message's id — so the
  *  line keeps its source through an edit or a move, and a mailbox forgotten
  *  can be pruned line by line (specs/contacts.md). */
-function pointer(m: MaterialMessage, locale: string, labels: Map<string, string>): string {
+export function pointer(m: MaterialMessage, locale: string, labels: Map<string, string>): string {
   const esc = (t: string) => t.replace(/([\\[\]])/g, "\\$1");
   const box = mailboxesOf(m, labels);
   const text = `${shortDate(m.date, locale)}, ${displayName(m.from) || "?"}, « ${(m.subject ?? "").trim() || "—"} »${box ? ` · ${box}` : ""}`;
@@ -501,6 +504,19 @@ function writeNote(
   return file;
 }
 
+/** Everything exchanged with these addresses, from the header store; null
+ *  when the tool cannot say — the fiche's section then stays as it was. */
+async function exchangesWith(d: MailDocumentsDeps, memberId: string, addresses: string[]): Promise<Exchanges | null> {
+  if (!addresses.length) return null;
+  try {
+    const r = await d.call(memberId, "exchanges", { addresses, limit: EXCHANGES_SHOWN });
+    return r && typeof r.total === "number" && Array.isArray(r.messages) ? r : null;
+  } catch (err) {
+    console.warn(`[mail] exchanges for ${memberId}: ${(err as Error).message}`);
+    return null;
+  }
+}
+
 // ── The run ──────────────────────────────────────────────────────────────
 
 class Capped extends Error {}
@@ -599,7 +615,8 @@ export async function writeMailDocuments(memberId: string, d: MailDocumentsDeps 
     }
     for (const p of people) {
       const artefact = byKey.get(`person:${p.key}`) ?? null;
-      const o = await writePerson({ garden, locale, language, member: name, w, labels, now, index: fiches, artefact, ask }, p);
+      const exchanges = await exchangesWith(d, memberId, p.identities.map((i) => i.address).filter((a) => !fiches.rejected.get(a)?.has(p.key)));
+      const o = await writePerson({ garden, locale, language, member: name, w, labels, now, index: fiches, artefact, exchanges, ask }, p);
       if (o.kind === "unchanged") {
         run.skipped.unchanged++;
         if (o.files) files.push(...o.files);

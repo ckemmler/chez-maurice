@@ -5,7 +5,7 @@ import { atomicWrite, autoCommit, dumpFrontmatter, fragmentsDir, gardenFor, pars
 import { invalidateNotes } from "./composer/notes";
 import { mailboxLabels, syncCorpus, wordsFor } from "./mailDocuments";
 import { listMailAccounts } from "./mailAccounts";
-import { fragmentHash, sectionOf, withSection } from "./mailPeople";
+import { fragmentHash, sectionOf, withSection, withoutSection } from "./mailPeople";
 import { mailToolCall } from "./mailScan";
 
 // Forgetting a mailbox — lot 6 of specs/contacts.md, 27 September 2026.
@@ -97,15 +97,6 @@ export function pruneText(text: string, gone: Set<string>, label: string | null)
 }
 
 /** The body without the section under `## <heading>`. */
-function withoutSection(body: string, heading: string): string {
-  const lines = body.split("\n");
-  const start = lines.findIndex((l) => l.trim() === `## ${heading}`);
-  if (start < 0) return body;
-  let end = lines.length;
-  for (let i = start + 1; i < lines.length; i++) if (/^##\s/.test(lines[i]!)) { end = i; break; }
-  return [...lines.slice(0, start), ...lines.slice(end)].join("\n").replace(/^\n+/, "");
-}
-
 const write = (file: string, fm: Record<string, any>, body: string, blankAfter = true) =>
   atomicWrite(file, `---\n${dumpFrontmatter(fm)}\n---\n${blankAfter ? "\n" : ""}${body.replace(/^\n+/, "")}`);
 
@@ -197,6 +188,14 @@ export function pruneGarden(garden: GardenRef, locale: string, gone: Set<string>
           }
           dirty = true;
         }
+      }
+      // The exchanges: headers the next pass rebuilds from the store. A list
+      // that names a forgotten message goes whole, its count with it — the
+      // count would be wrong, and the subjects are that mailbox's.
+      const ex = sectionOf(body, w.exchanges);
+      if (ex !== null && pruneText(ex, gone, label).changed) {
+        body = withoutSection(body, w.exchanges);
+        dirty = true;
       }
       // The addresses: this mailbox leaves their lists; a guessed or mail
       // address with nothing left goes.

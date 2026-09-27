@@ -20,7 +20,11 @@ import { factsForPrompt, isRememberFactTool, rememberFactTool, runRememberFactTo
 import { importHintSection } from "./chatImport";
 import { MAURICE_DOCS_TOOL_NAME, askMauriceDocs, mauriceDocsTool } from "./mauriceDocsTool";
 import { domainToolsFor, isDomainTool, proposalPromptSection, runDomainTool } from "./domainProposals";
-import { isMailTool, mailPromptSection, mailToolsFor, runMailTool } from "./mailApproval";
+import { isMailTool, mailConversationOf, mailPromptSection, mailToolsFor, runMailTool } from "./mailApproval";
+import { listMailAccounts } from "./mailAccounts";
+import { listContactAccounts } from "./contactAccounts";
+import { mailboxLabels } from "./mailDocuments";
+import { mailNightlyOn } from "./mailScan";
 import { ensureUserFirst } from "./openedConversations";
 import { resolveModelId, getModel } from "./models";
 import { resolveUsableModel, getEverydayModel } from "./modelAccess";
@@ -221,6 +225,40 @@ function corpusNotice(toolNames: string[]): string {
     `search it for what touches them: their life, their people, their projects, what they have decided or said before. ` +
     `And it is not an afterthought: search it in your first round, while it can still shape the answer. ` +
     `A search run once the reply is written adds nothing but a row of sources under it, and "I checked and found nothing" is not worth a paragraph — if it found nothing, say nothing about it.`
+  );
+}
+
+/** What Maurice already holds of the member's mail, and where to look first.
+ *  Without it, a question about the accountant's latest mail went straight
+ *  to the live mailbox (27 September 2026): four IMAP searches, 18 seconds,
+ *  and the person's fiche — found by the corpus in the first round, with
+ *  every open question in its fragments — never opened. Said only to a
+ *  member who linked a mailbox, and only what is true for them: the fiches
+ *  exist once they said yes to the reading, the address book once they
+ *  linked one. */
+export function mailNotice(toolNames: string[], memberId: string | null | undefined, memberName: string): string {
+  if (!memberId || !toolNames.includes("email__exchanges")) return "";
+  const accounts = listMailAccounts(memberId);
+  if (!accounts.length) return "";
+  const boxes = [...new Set(mailboxLabels(accounts).values())].join(", ");
+  const book = listContactAccounts(memberId).some((c) => c.cards > 0);
+  const read = mailConversationOf(memberId)?.reading === "approved";
+  const fiches = read && toolNames.includes("garden__get_fiche");
+  const when = mailNightlyOn() ? "Every night Maurice walks them" : "Maurice walks them";
+  const steps = [
+    ...(fiches ? [`Their fiche: garden__get_fiche with resource_collection "people" and the slug without "-fiche" (people/fr/jean-dupont-fiche.md is resource_id "jean-dupont", locale "fr"); it comes with its fragments. corpus__search finds it when you do not know the slug, and a fiche among its hits is the person: open it rather than going to the mailbox.`] : []),
+    `email__exchanges: everything exchanged with an address, a domain or a name, read from the store — instant, newest first, current up to the last walk (its \`as_of\`).`,
+    `The live mailbox (email__search, email__get_message, email__get_by_id), for what the others cannot hold: mail that came in since the last walk, words inside a body, unread or flagged, a message read in full. Seconds per call.`,
+  ];
+  return (
+    `\n\n## ${memberName}'s mail\n` +
+    `${memberName} has linked their mailboxes (${boxes})${book ? " and their address book, which groups a person's addresses" : ""}. ` +
+    `${when} into a header store: who wrote to whom, when, about what, for every message. ` +
+    (read
+      ? `They also said yes to the reading, so the correspondence is read too: each person who matters has a private fiche in their garden (people/<locale>/<slug>-fiche.md) saying who they are to ${memberName}, their addresses, the latest exchanges, and fragments on what is going on, what was promised and what is left open — every line linked to its message. `
+      : "") +
+    `A question about their mail — what is going on with someone, when they last wrote, the latest exchanges with their accountant — is answered from what is already there, in this order:\n` +
+    steps.map((t, i) => `${i + 1}. ${t}`).join("\n")
   );
 }
 
@@ -1390,6 +1428,7 @@ function trackedBooks(
   // Now that the roster is settled, tell the model what it really holds.
   systemPrompt += toolRosterNotice(mcpTools.map((t) => t.name), wantsWeb && hasWebSearch());
   systemPrompt += corpusNotice(mcpTools.map((t) => t.name));
+  systemPrompt += mailNotice(mcpTools.map((t) => t.name), memberId, userDisplayName);
 
   // Fit the conversation to the model's window. `ctx` is what the roster says
   // (k tokens, admin-editable); Ollama is additionally capped by what we ask

@@ -7,7 +7,7 @@ import type { AncillaryResult } from "./ancillary";
 import type { ContactCard } from "./contactAccounts";
 import { parseJsonObject } from "./domainMapping";
 import {
-  MAX_PER_NOTE, MIN_MESSAGES, UNTRUSTED, bare, displayName, materialBlock, shortDate, sourcedLine,
+  MAX_PER_NOTE, MIN_MESSAGES, UNTRUSTED, bare, displayName, materialBlock, pointer, shortDate, sourcedLine, wordsFor,
   type Artefact, type Group, type MaterialMessage, type Words,
 } from "./mailDocuments";
 
@@ -330,6 +330,55 @@ export function withSection(body: string, heading: string, text: string): string
   return [...lines.slice(0, start + 1), "", text, "", ...lines.slice(end)].join("\n").replace(/\n{3,}/g, "\n\n").trimEnd() + "\n";
 }
 
+/** The body without that section, heading and text. */
+export function withoutSection(body: string, heading: string): string {
+  const lines = body.split("\n");
+  const start = lines.findIndex((l) => l.trim() === `## ${heading}`);
+  if (start < 0) return body;
+  let end = lines.length;
+  for (let i = start + 1; i < lines.length; i++) if (/^##\s/.test(lines[i]!)) { end = i; break; }
+  return [...lines.slice(0, start), ...lines.slice(end)].join("\n").replace(/^\n+/, "");
+}
+
+/** The body with that section's text replaced where it stands, else put
+ *  before the `## <before>` section, else at the end — for a section that
+ *  must not open the body, where the relation stands. */
+export function placeSection(body: string, heading: string, text: string, before: string): string {
+  if (sectionOf(body, heading) !== null) return withSection(body, heading, text);
+  const lines = body.replace(/\s+$/, "").split("\n");
+  const at = lines.findIndex((l) => l.trim() === `## ${before}`);
+  const block = [`## ${heading}`, "", text, ""];
+  const out = at < 0 ? [...lines, "", ...block] : [...lines.slice(0, at), ...block, ...lines.slice(at)];
+  return out.join("\n").replace(/^\n+/, "").replace(/\n{3,}/g, "\n\n").trimEnd() + "\n";
+}
+
+// ── The exchanges ────────────────────────────────────────────────────────
+//
+// What the fiche says of the mail itself, beside what it means: how many
+// messages, since when, the last one, and the newest few, each linked to
+// its message. Read from the header store (the email tool's `exchanges`,
+// every message from, to or copied to the person's addresses — not only the
+// ones read), written without a model, and set again on every pass, so the
+// fiche answers "when did we last write" up to the last night walk. A night
+// with no new mail writes the same text, and the file is not touched.
+
+export interface Exchanges {
+  total: number;
+  first: string | null;
+  last: string | null;
+  messages: Array<{ id: string; date: string | null; from: string | null; subject: string | null; mailboxes?: string[] }>;
+}
+
+/** How many of the newest the fiche lists. */
+export const EXCHANGES_SHOWN = 12;
+
+export function exchangesSection(ex: Exchanges, w: Words, locale: string, labels: Map<string, string>): string | null {
+  if (!ex.total || !ex.messages?.length) return null;
+  const lines = ex.messages.slice(0, EXCHANGES_SHOWN).map((m) =>
+    `- ${pointer({ id: m.id, message_id: null, from: m.from, from_address: null, to: [], cc: [], date: m.date, subject: m.subject, thread: null, reading: {}, mailboxes: m.mailboxes ?? [] }, locale, labels)}`);
+  return `${w.exchangesCount(ex.total, shortDate(ex.first, locale), shortDate(ex.last, locale))}\n\n${lines.join("\n")}`;
+}
+
 // ── The fragments on disk ────────────────────────────────────────────────
 
 interface MailFragment {
@@ -551,6 +600,9 @@ export interface PersonContext {
   now: Date;
   index: FicheIndex;
   artefact: Artefact | null;
+  /** What the header store says was exchanged with them; null when it
+   *  could not be read, and the fiche's section is then left as it is. */
+  exchanges?: Exchanges | null;
   ask: (system: string, prompt: string) => Promise<AncillaryResult>;
 }
 
@@ -609,9 +661,20 @@ export async function writePerson(ctx: PersonContext, p: Person): Promise<Person
       touchedIds.push(ref.file);
     }
   }
+  const exchanges = ctx.exchanges ? exchangesSection(ctx.exchanges, w, locale, ctx.labels) : null;
   const covered = new Set<string>([...(a?.sources ?? []), ...fragments.flatMap((f) => f.sources)]);
   const fresh = p.messages.filter((m) => !covered.has(m.id));
-  if (!fresh.length && !force) return { kind: "unchanged", files: touchedIds };
+  if (!fresh.length && !force) {
+    // Nothing new to read, but the exchanges move on their own: mail the
+    // reading passed over still counts, and a fiche written before the
+    // section existed gets it.
+    if (ref && exchanges && sectionOf(ref.body, w.exchanges) !== exchanges) {
+      ref.body = placeSection(ref.body, w.exchanges, exchanges, w.provenance);
+      atomicWrite(ref.file, `---\n${dumpFrontmatter(ref.fm)}\n---\n\n${ref.body.replace(/^\n+/, "")}`);
+      if (!touchedIds.includes(ref.file)) touchedIds.push(ref.file);
+    }
+    return { kind: "unchanged", files: touchedIds };
+  }
 
   const redo = new Set(pending.flatMap((f) => f.sources));
   const material = p.messages.filter((m) => !covered.has(m.id) || redo.has(m.id)).slice(-MAX_PER_NOTE);
@@ -728,6 +791,7 @@ export async function writePerson(ctx: PersonContext, p: Person): Promise<Person
     relation = rest;
   }
   if (!ref) body = `${body.trimEnd()}\n\n## ${w.provenance}\n\n${w.disclaimer}\n`;
+  if (exchanges) body = placeSection(body, w.exchanges, exchanges, w.provenance);
 
   // The frontmatter: the member's own fiche keeps everything it had.
   const identities = mergeIdentities(ref?.fm.identities, p.identities);
@@ -761,8 +825,8 @@ export async function writePerson(ctx: PersonContext, p: Person): Promise<Person
 
 /** Every file the mail pass wrote in a garden — its notes, the fiches it
  *  created, the mail fragments it put on the member's own fiches — removed.
- *  The member's own fiches stay, without their mail fragments. Returns the
- *  paths removed. */
+ *  The member's own fiches stay, without their mail fragments and the
+ *  exchanges section. Returns the paths removed or changed. */
 export function eraseMailFiles(garden: GardenRef): string[] {
   const removed: string[] = [];
   const notes = path.join(garden.root, "notes");
@@ -796,6 +860,13 @@ export function eraseMailFiles(garden: GardenRef): string[] {
         for (const frag of readMailFragments(file)) {
           fs.rmSync(frag.file, { force: true });
           removed.push(frag.file);
+        }
+        // The exchanges the pass wrote into the member's own fiche go too;
+        // the file itself stays.
+        const heading = wordsFor(locale).exchanges;
+        if (sectionOf(p.body, heading) !== null) {
+          atomicWrite(file, `---\n${dumpFrontmatter(p.frontmatter)}\n---\n\n${withoutSection(p.body, heading).replace(/^\n+/, "")}`);
+          removed.push(file);
         }
       }
     }

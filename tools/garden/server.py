@@ -997,7 +997,11 @@ async def list_tools() -> list[Tool]:
         ),
         Tool(
             name="get_fiche",
-            description="Get a fiche's frontmatter and markdown body.",
+            description=(
+                "Get a fiche's frontmatter and markdown body. A person's fiche (people) comes with its "
+                "fragments: what their mail says is going on, promised and left open, each line linked "
+                "to its message; the body holds who they are to the member and the latest exchanges."
+            ),
             inputSchema={
                 "type": "object",
                 "required": ["resource_collection", "resource_id"],
@@ -3415,7 +3419,25 @@ def _handle_get_fiche(args: dict[str, Any]) -> dict[str, Any]:
         raise ValueError(f"Fiche not found at {path}")
 
     fm, body = _parse_note(path)
-    return {"resource_collection": col, "resource_id": rid, "frontmatter": fm, "body": body.strip()}
+    out = {"resource_collection": col, "resource_id": rid, "frontmatter": fm, "body": body.strip()}
+    if col == "people":
+        # A person is a hub (specs/contacts.md): what the mail says of them
+        # lives in the fragments beside the fiche — what is going on, what
+        # was promised, what is left open. Read with it, not on a second call.
+        fdir = _fragments_dir(path)
+        frags = []
+        for f in sorted(fdir.glob("*.frag")) if fdir.exists() else []:
+            if not f.stem.isdigit():
+                continue
+            ffm, fbody = _parse_fragment_full(f)
+            frags.append({
+                "id": f.stem,
+                "summary": str(ffm.get("summary", "") or ""),
+                **({"status": ffm["status"]} if ffm.get("status") else {}),
+                "content": fbody.strip(),
+            })
+        out["fragments"] = frags
+    return out
 
 
 def _handle_update_fiche(args: dict[str, Any]) -> dict[str, Any]:

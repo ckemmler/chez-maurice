@@ -10,6 +10,7 @@ from __future__ import annotations
 import logging
 import threading
 import time
+import unicodedata
 from collections import Counter
 from datetime import datetime, timezone
 from typing import Any, Callable
@@ -23,7 +24,7 @@ from . import triage as triage_mod
 from . import reading as reading_mod
 from .reconcile import KIND as RECONCILE_KIND, Reconciler
 from .scan import KIND as SCAN_KIND, Scanner
-from .store import MailStore
+from .store import MailStore, store_path
 from .message import (
     attachment_parts,
     attachment_text,
@@ -57,16 +58,36 @@ UNTRUSTED_ENVELOPES = (
 )
 
 
-def _when(envelope: dict[str, Any]) -> float:
-    """Sort key: the Date header as an instant. Dates arrive with their own
-    offsets, so comparing the strings would misorder mail across time zones."""
+def _instant(date: str | None) -> float:
+    """A Date header as an instant. Dates arrive with their own offsets, so
+    comparing the strings would misorder mail across time zones."""
     try:
-        moment = datetime.fromisoformat(envelope.get("date") or "")
+        moment = datetime.fromisoformat(date or "")
     except ValueError:
         return 0.0
     if moment.tzinfo is None:
         moment = moment.replace(tzinfo=timezone.utc)
     return moment.timestamp()
+
+
+def _when(envelope: dict[str, Any]) -> float:
+    """Sort key: the envelope's Date header as an instant."""
+    return _instant(envelope.get("date"))
+
+
+def _party(value: str) -> tuple[str | None, str | None]:
+    """``(address, None)``, ``(None, domain)``, or ``(None, None)`` for a name."""
+    v = value.strip().strip("<>").lower()
+    if " " in v or not v:
+        return None, None
+    if "@" in v:
+        local, _, domain = v.rpartition("@")
+        return (v, None) if local else (None, domain or None)
+    return (None, v) if "." in v else (None, None)
+
+
+def _folded(text: str) -> str:
+    return unicodedata.normalize("NFD", text).encode("ascii", "ignore").decode().lower()
 
 
 def _attach_preview(envelope: dict[str, Any]) -> None:
@@ -486,6 +507,122 @@ class EmailService:
                 folders.append(entry)
         return {"account": acc.name, "folders": folders}
 
+    def _existing_store(self, accounts: list[Account]) -> MailStore | None:
+        """The member's header store when a walk has made one — never
+        created from a conversation's read."""
+        member_id = getattr(accounts, "member_id", None)
+        if not member_id:
+            return None
+        store = self._stores.get(member_id)
+        if store is None:
+            if not store_path(member_id).exists():
+                return None
+            store = self._stores[member_id] = self.store_for(member_id)
+        return store
+
+    @staticmethod
+    def _newest(store: MailStore | None, session: Session, folder: str, uids: list[int], limit: int) -> list[int]:
+        """The ``limit`` newest of a folder's matches, by the date the mail
+        bears. The highest UIDs are the last to arrive, which is not the same:
+        an archive imported into Proton in 2026 sits above last week's mail
+        (met on 27 September 2026 — a search for the accountant's mail came
+        back with 2017). The walked store knows every stored UID's date; a UID
+        above its cursor arrived since the walk and is newer than all of them;
+        a folder the store never walked keeps the UID order."""
+        if len(uids) <= limit or store is None:
+            return uids[-limit:]
+        address = session.account.address.lower()
+        try:
+            validity = session.examine(folder)
+            dates = store.uid_dates(address, folder, validity, uids)
+            cursor = store.cursor(address, folder)
+        except Exception:  # noqa: BLE001 — a store that cannot be read orders nothing
+            log.exception("ordering a search by the header store")
+            return uids[-limit:]
+        if not dates:
+            return uids[-limit:]
+        done = cursor[1] if cursor and cursor[0] == validity else 0
+        newer = sorted((u for u in uids if u not in dates and u > done), reverse=True)
+        known = sorted(dates, key=lambda u: _instant(dates[u]), reverse=True)
+        rest = sorted((u for u in uids if u not in dates and u <= done), reverse=True)
+        return sorted((newer + known + rest)[:limit])
+
+    def exchanges(
+        self,
+        accounts: list[Account],
+        *,
+        party: str | None = None,
+        addresses: list[str] | None = None,
+        limit: int = 20,
+    ) -> dict[str, Any]:
+        """What the member exchanged with one person or organisation, from the
+        header store: every mailbox at once, newest first, in milliseconds —
+        current as of the last walk. ``party`` is an address, a domain or a
+        name; ``addresses`` several addresses of one person."""
+        store = self._existing_store(accounts)
+        if store is None:
+            raise MailboxError("no header store yet: the mailbox has not been walked; use search")
+        limit = max(1, min(int(limit or 20), MAX_LIMIT))
+        wanted = [a.strip().strip("<>").lower() for a in (addresses or []) if a and a.strip()]
+        found: list[str] = []
+        domains: list[str] = []
+        matched: list[dict[str, Any]] = []
+        for a in wanted:
+            address, domain = _party(a)
+            if address:
+                found.append(address)
+            elif domain:
+                domains.append(domain)
+        if party:
+            address, domain = _party(party)
+            if address:
+                found.append(address)
+            elif domain:
+                domains.append(domain)
+            else:
+                # A name: the addresses that wrote under it. Every word of it
+                # in the From header's name, accents and case aside.
+                words = [w for w in _folded(party).replace(",", " ").split() if w]
+                per: dict[str, dict[str, Any]] = {}
+                for row in store.senders():
+                    name = (reading_mod._decoded(row["sender"]) or "").rsplit("<", 1)[0].strip().strip('"')
+                    if words and all(w in _folded(name) for w in words):
+                        entry = per.setdefault(row["sender_address"], {"address": row["sender_address"], "names": set(), "messages": 0})
+                        entry["names"].add(name)
+                        entry["messages"] += int(row["n"])
+                ranked = sorted(per.values(), key=lambda e: -e["messages"])[:10]
+                matched = [{**e, "names": sorted(e["names"])[:4]} for e in ranked]
+                found += [e["address"] for e in ranked]
+        found = list(dict.fromkeys(found))
+        domains = list(dict.fromkeys(domains))
+        cursors = [c for c in store.cursors() if c["address"] in {a.address.lower() for a in accounts}]
+        as_of = max((c["updated_at"] for c in cursors), default=None)
+        out: dict[str, Any] = {"notice": UNTRUSTED_ENVELOPES, "as_of": as_of, "addresses": found, "domains": domains}
+        if matched:
+            out["matched"] = matched
+        if not found and not domains:
+            out.update({"total": 0, "messages": [], "note": f"no sender in the store writes as {party!r}; try an address or a domain"})
+            return out
+        got = store.exchanges(found, domains, limit=limit)
+        names = {a.address.lower(): a.name for a in accounts}
+        messages = []
+        for r in got["rows"]:
+            seen = [line.split("\t") for line in (r.pop("seen") or "").split("\n") if line.count("\t") == 2]
+            messages.append({
+                "id": r["id"],
+                "date": r["date"],
+                "from": reading_mod._decoded(r["sender"]),
+                "to": [reading_mod._decoded(a) or a for a in reading_mod._list(r["recipients"])],
+                **({"cc": cc} if (cc := [reading_mod._decoded(a) or a for a in reading_mod._list(r["cc"])]) else {}),
+                "subject": reading_mod._subject(r["subject_sealed"]),
+                "mailboxes": sorted({addr for addr, _, _ in seen}),
+                **({"where": {"account": names.get(seen[0][0], seen[0][0]), "folder": seen[0][1], "uid": int(seen[0][2])}} if seen else {}),
+            })
+        out.update({"total": got["total"], "first": got["first"], "last": got["last"], "returned": len(messages), "messages": messages})
+        if as_of:
+            out["note"] = f"From the header store, walked {as_of}. Anything newer: search with since={as_of[:10]}."
+        return out
+
     def search(
         self,
         accounts: list[Account],
@@ -509,6 +646,7 @@ class EmailService:
         # fetched: whether a preview is worth sending depends on how many the
         # whole search found, not on how many this one folder did.
         pending: list[tuple[Session, str, list[int]]] = []
+        store = self._existing_store(accounts)
         for acc in self._pick(accounts, account):
             session = self._session(acc)
             with session.lock:
@@ -530,7 +668,7 @@ class EmailService:
                                 notes.append(f"{acc.name}: has_attachment ignored, IMAP cannot filter on it")
                             uids = session.search(name, build_criteria(**fields))
                         totals[f"{acc.name}:{name}"] = len(uids)
-                        pending.append((session, name, uids[-limit:]))
+                        pending.append((session, name, self._newest(store, session, name, uids, limit)))
                 except (AccountUnavailable, MailboxError) as exc:
                     errors[acc.name] = str(exc)
         found = sum(len(take) for _, _, take in pending)

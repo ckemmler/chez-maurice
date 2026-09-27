@@ -1,4 +1,4 @@
-# People and mailboxes — design, lots 1 to 7 built (fragments from the rest of the garden aside)
+# People and mailboxes — design, lots 1 to 8 built (fragments from the rest of the garden aside)
 
 Settled with Candide on 26 September 2026, after the first full mail import
 (Gmail and Proton, `specs/mail-import.md`, lots 1 to 5). Two refinements of
@@ -110,6 +110,16 @@ people/<locale>/<slug>-fiche/_fragments/NNN.frag the fragments
 
 **Its body** opens with the relation — *"Adriano's music theory teacher"* —
 then a short synthesis; the fragments follow.
+
+**The exchanges** (added 27 September 2026, after a question about the
+accountant's latest mail went to the live mailbox): a section after the
+relation, written without a model from the header store — how many messages
+were exchanged with the person's addresses (from, to or in copy), since when,
+the last one, and the twelve newest, each a `maurice-mail:` link. Every
+message counts, not only the ones the reading kept; it is set again on every
+pass, so the fiche answers "when did we last write" up to the last night
+walk, and a night with no new mail leaves the file untouched. The email
+tool's `exchanges` gives the same thing to a conversation.
 
 **The relation is dated** — a start and, when there is one, an end:
 *"colleague at Acme, 2021 → March 2026"*. A writing pass that reads a
@@ -296,6 +306,14 @@ new documents.
    own first), a rejected address splits back out with its fragments. **Not
    done: fragments from the rest of the garden** (a note, a conversation
    contributing to a person).
+
+8. **The exchanges.** *Built 27 September 2026.* `exchanges` in the email
+   tool (the header store, by address, domain or name — instant), the
+   fiche's section from it (`exchangesSection` in `services/mailPeople.ts`),
+   `get_fiche` bringing a person's fragments, the "their mail" section of the
+   system prompt (`mailNotice` in `services/claude.ts`: the fiche, then
+   `exchanges`, then the live mailbox), and a live search ordered by the
+   store's dates rather than by UID.
 
 ## Still open
 

@@ -122,6 +122,25 @@ async def list_tools() -> list[Tool]:
             },
         ),
         Tool(
+            name="exchanges",
+            description=(
+                "Everything exchanged with one person or organisation — from them, to them, or with them "
+                "in copy — across every mailbox, newest first, with how many in all and the first and last "
+                "date. Read from the header store the night walk keeps, so it is instant and current up to "
+                "that walk (`as_of`); reach for it before `search` whenever the question is who wrote, when, "
+                "or about what. Each message carries `id` (for get_by_id) and `where` (account, folder, uid "
+                "for get_message). Mail newer than `as_of`: search with since. " + UNTRUSTED_NOTE
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "with": {"type": "string", "description": "An address (mela@partfin.be), a domain (partfin.be) or a name (Mélanie Fricheteau): a name is matched against the names senders wrote under."},
+                    "addresses": {"type": "array", "items": {"type": "string"}, "description": "Several addresses of the same person, as their fiche lists them."},
+                    "limit": {"type": "integer", "description": "How many messages to return (default 20, at most 100)."},
+                },
+            },
+        ),
+        Tool(
             name="get_message",
             description=(
                 "One message: headers, the body as plain text (HTML stripped, nothing loaded "
@@ -403,6 +422,8 @@ def dispatch(service: EmailService, name: str, args: dict[str, Any], *, member_i
             unread=args.get("unread"),
             flagged=args.get("flagged"),
         )
+    if name == "exchanges":
+        return service.exchanges(accounts, party=args.get("with"), addresses=args.get("addresses"), limit=args.get("limit") or 20)
     if name == "get_message":
         return service.get_message(
             accounts,

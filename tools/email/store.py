@@ -804,3 +804,88 @@ class MailStore:
                     "SELECT * FROM locations WHERE message = ? ORDER BY address, folder, uidvalidity, uid", (message_id,)
                 ).fetchall()
         return [dict(r) for r in rows]
+
+    # ── what a conversation reads from the store ─────────────────────────
+    def uid_dates(self, address: str, folder: str, uidvalidity: int, uids: list[int]) -> dict[int, str]:
+        """The Date header of each of these UIDs the walk stored for that
+        folder. A folder's UIDs follow arrival, not the date: an archive
+        imported into a mailbox years later sits above last week's mail, so a
+        live search is ordered by these instead."""
+        out: dict[int, str] = {}
+        with self._connect() as conn:
+            for i in range(0, len(uids), 500):
+                chunk = [int(u) for u in uids[i:i + 500]]
+                rows = conn.execute(
+                    f"""SELECT l.uid, m.date FROM locations l JOIN messages m ON m.id = l.message
+                        WHERE l.address = ? AND l.folder = ? AND l.uidvalidity = ?
+                          AND l.uid IN ({",".join("?" * len(chunk))})""",
+                    (address, folder, uidvalidity, *chunk),
+                ).fetchall()
+                out.update({int(r["uid"]): r["date"] for r in rows if r["date"]})
+        return out
+
+    @staticmethod
+    def _party_clause(addresses: list[str], domains: list[str]) -> tuple[str, list[Any]]:
+        """Messages from, to or copied to these addresses or domains. The
+        recipients are JSON lists of headers as written — ``"Name <a@b>"`` or
+        ``"a@b"`` — so an address is matched between its delimiters, never as
+        a substring (``mela@x`` must not match ``carmela@x``)."""
+        parts: list[str] = []
+        args: list[Any] = []
+        for a in addresses:
+            parts.append("m.sender_address = ?")
+            args.append(a)
+            for col in ("m.recipients", "m.cc"):
+                parts.append(f"(lower({col}) LIKE ? OR lower({col}) LIKE ?)")
+                args += [f"%<{a}>%", f'%"{a}"%']
+        for d in domains:
+            parts.append("m.sender_address LIKE ?")
+            args.append(f"%@{d}")
+            for col in ("m.recipients", "m.cc"):
+                parts.append(f"(lower({col}) LIKE ? OR lower({col}) LIKE ?)")
+                args += [f"%@{d}>%", f'%@{d}"%']
+        return "(" + " OR ".join(parts) + ")", args
+
+    def exchanges(self, addresses: list[str], domains: list[str], *, limit: int = 20) -> dict[str, Any]:
+        """Every message exchanged with these addresses or domains, as the
+        headers say: how many, the first and the last date, and the newest
+        ``limit`` with where each one sits. The subject stays sealed."""
+        if not addresses and not domains:
+            return {"total": 0, "first": None, "last": None, "rows": []}
+        where, args = self._party_clause(addresses, domains)
+        base = f"FROM messages m WHERE m.gone_at IS NULL AND {where}"
+        with self._connect() as conn:
+            head = conn.execute(
+                f"SELECT count(*) AS n {base}", args
+            ).fetchone()
+            rows = conn.execute(
+                f"""SELECT m.id, m.sender, m.sender_address, m.recipients, m.cc, m.date, m.subject_sealed,
+                           (SELECT group_concat(l.address || char(9) || l.folder || char(9) || l.uid, char(10))
+                              FROM locations l WHERE l.message = m.id) AS seen
+                    {base} ORDER BY julianday(m.date) DESC, m.id LIMIT ?""",
+                (*args, max(1, int(limit))),
+            ).fetchall()
+            span = conn.execute(
+                # A message without a readable date sorts first ascending:
+                # it would stand for the first exchange.
+                f"""SELECT (SELECT date {base} AND julianday(m.date) IS NOT NULL ORDER BY julianday(m.date) ASC LIMIT 1) AS first,
+                           (SELECT date {base} AND julianday(m.date) IS NOT NULL ORDER BY julianday(m.date) DESC LIMIT 1) AS last""",
+                (*args, *args),
+            ).fetchone() if head["n"] else None
+        return {
+            "total": int(head["n"] or 0),
+            "first": span["first"] if span else None,
+            "last": span["last"] if span else None,
+            "rows": [dict(r) for r in rows],
+        }
+
+    def senders(self) -> list[dict[str, Any]]:
+        """Every (From header, address) pair the store holds, with how many
+        messages each wrote — for finding a person's address by name."""
+        with self._connect() as conn:
+            rows = conn.execute(
+                """SELECT sender, sender_address, count(*) AS n FROM messages
+                   WHERE gone_at IS NULL AND sender_address IS NOT NULL AND sender IS NOT NULL
+                   GROUP BY sender, sender_address"""
+            ).fetchall()
+        return [dict(r) for r in rows]

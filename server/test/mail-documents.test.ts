@@ -41,6 +41,9 @@ const notesDir = path.join(gardenRoot, "notes", "fr");
 const peopleDir = path.join(gardenRoot, "people", "fr");
 
 let material: any[] = [];
+/** Headers in the store the reading never kept: in the exchanges, not in the material. */
+let unread: any[] = [];
+let exchangesDown = false;
 let artefacts: any[] = [];
 let calls: Array<{ tool: string; args: any }> = [];
 let writes: Array<{ system: string; prompt: string }> = [];
@@ -66,6 +69,8 @@ function seed() {
     msg("m8", "Atlas Team <team@atlas.example>", ["anna@gmail.com"], "2026-05-01T10:00:00+02:00", "Upgrade", "<t8@x>", "Votre cluster sera mis à niveau."),
     msg("m9", "Atlas Team <team@atlas.example>", ["anna@gmail.com"], "2026-06-01T10:00:00+02:00", "Security", "<t9@x>", "Avis de sécurité."),
   ];
+  unread = [];
+  exchangesDown = false;
   artefacts = [];
 }
 
@@ -73,6 +78,13 @@ async function tool(_m: string, name: string, args: any) {
   calls.push({ tool: name, args });
   if (name === "reading_material") return { messages: material, artefacts };
   if (name === "reading_progress") return { job: { id: "job_r1", state: "done" }, progress: {}, capacity: null };
+  if (name === "exchanges") {
+    if (exchangesDown) throw new Error("the store is locked");
+    // The header store holds what was read, and what the reading passed over.
+    const mine = [...material, ...unread].filter((m) => args.addresses.some((a: string) => m.from_address === a || m.to.some((t: string) => t.includes(a))))
+      .sort((a, b) => b.date.localeCompare(a.date));
+    return { total: mine.length, first: mine.at(-1)?.date ?? null, last: mine[0]?.date ?? null, messages: mine.slice(0, args.limit).map((m) => ({ id: m.id, date: m.date, from: m.from, subject: m.subject, mailboxes: m.mailboxes })) };
+  }
   if (name === "documents_record") {
     for (const w of args.written ?? []) {
       const i = artefacts.findIndex((a) => a.kind === w.kind && a.key === w.key);
@@ -231,6 +243,54 @@ test("a fiche in people/ per person: the relation once, the interactions per add
   expect(ledger.every((l) => l.job_id === "job_r1")).toBe(true);
   expect(r.cost).toBeCloseTo(0.006, 6);
   expect(r.said).toBeNull(); // no mail conversation yet
+});
+
+test("the fiche lists the exchanges from the header store, between the relation and the provenance, and keeps them current without a model", async () => {
+  // A message the reading passed over is still an exchange.
+  unread = [msg("u1", "Anna <anna@gmail.com>", ["Jean Derély <jean@x.org>"], "2026-08-15T10:00:00+02:00", "Photos", "<tu1@x>", "")];
+  await docs.writeMailDocuments(ANNA);
+  const exchanges = calls.find((c) => c.tool === "exchanges")!;
+  expect(exchanges.args).toEqual({ addresses: ["jean@x.org"], limit: people.EXCHANGES_SHOWN });
+  let f = fiche("jean-derely-fiche");
+  const section = "## Les échanges\n\n4 message(s) échangé(s) depuis le 15 août 2026 ; le dernier le 10 sept. 2026.\n\n"
+    + "- [10 sept. 2026, Jean Derély, « Le livre » · Proton](maurice-mail:m3)\n"
+    + "- [2 sept. 2026, Anna, « Re: Jeudi ? » · Gmail + Proton](maurice-mail:m2)\n"
+    + "- [1 sept. 2026, Jean Derély, « Jeudi ? » · Gmail](maurice-mail:m1)\n"
+    + "- [15 août 2026, Anna, « Photos » · Gmail](maurice-mail:u1)\n";
+  expect(f).toContain(section);
+  expect(f.indexOf("## La relation")).toBeLessThan(f.indexOf("## Les échanges"));
+  expect(f.indexOf("## Les échanges")).toBeLessThan(f.indexOf("## D'où ça vient"));
+
+  // Nothing new to read, nothing new in the store: the file is not touched.
+  const before = fs.statSync(path.join(peopleDir, "jean-derely-fiche.md")).mtimeMs;
+  writes = [];
+  await docs.writeMailDocuments(ANNA);
+  expect(fs.statSync(path.join(peopleDir, "jean-derely-fiche.md")).mtimeMs).toBe(before);
+
+  // Jean writes, and the reading passes it over: no model call, the section moves on.
+  unread.push(msg("u2", "Jean Derély <jean@x.org>", ["anna@proton.me"], "2026-09-22T10:00:00+02:00", "Bien arrivé", "<tu2@x>", "", PROTON));
+  const again = await docs.writeMailDocuments(ANNA);
+  expect(writes).toHaveLength(0);
+  expect(again.skipped.unchanged).toBe(2);
+  f = fiche("jean-derely-fiche");
+  expect(f).toContain("5 message(s) échangé(s) depuis le 15 août 2026 ; le dernier le 22 sept. 2026.\n\n- [22 sept. 2026, Jean Derély, « Bien arrivé » · Proton](maurice-mail:u2)\n");
+  expect(f.match(/## Les échanges/g)).toHaveLength(1);
+  expect(f).toContain("## La relation\n\nJean, un ami de Bruxelles");
+});
+
+test("a store that cannot be read leaves the fiche without the section, and the pass goes on", async () => {
+  exchangesDown = true;
+  const r = await docs.writeMailDocuments(ANNA);
+  expect(r.outcome).toBe("written");
+  expect(fiche("jean-derely-fiche")).not.toContain("## Les échanges");
+});
+
+test("the exchanges section goes before the provenance, or at the end, and is replaced where it stands", () => {
+  const body = "## La relation\n\nJean.\n\n## D'où ça vient\n\nUne machine.\n";
+  const once = people.placeSection(body, "Les échanges", "2 messages.", "D'où ça vient");
+  expect(once).toBe("## La relation\n\nJean.\n\n## Les échanges\n\n2 messages.\n\n## D'où ça vient\n\nUne machine.\n");
+  expect(people.placeSection(once, "Les échanges", "3 messages.", "D'où ça vient")).toBe(once.replace("2 messages.", "3 messages."));
+  expect(people.placeSection("## Mes notes\n\nÀ moi.\n", "Les échanges", "1 message.", "D'où ça vient")).toBe("## Mes notes\n\nÀ moi.\n\n## Les échanges\n\n1 message.\n");
 });
 
 const withConfirm = (req: any): string => {
@@ -445,6 +505,7 @@ test("erasing removes what the pass wrote, keeps the member's own fiche without 
   await docs.writeMailDocuments(ANNA);
   expect(fs.existsSync(path.join(peopleDir, "chloe-fiche.md"))).toBe(true);
   expect(frags("jean-fiche").length).toBe(3); // hers, and two from the mail
+  expect(fiche("jean-fiche")).toContain("## Les échanges");
   const e = await docs.eraseMailDocuments(ANNA);
   expect(e.error).toBeNull();
   expect(fs.existsSync(path.join(peopleDir, "chloe-fiche.md"))).toBe(false);
@@ -452,6 +513,7 @@ test("erasing removes what the pass wrote, keeps the member's own fiche without 
   expect(fs.existsSync(path.join(notesDir, "jeudi.md"))).toBe(false);
   expect(fs.existsSync(path.join(notesDir, "mon-courrier.md"))).toBe(false);
   expect(fiche("jean-fiche")).toContain("- Jean est venu dîner.");
+  expect(fiche("jean-fiche")).not.toContain("## Les échanges");
   expect(frags("jean-fiche")).toEqual(["001.frag"]); // hers stays
   expect(artefacts.map((a) => a.key)).toEqual(["team@atlas.example"]);
   // And the next pass writes everything again.

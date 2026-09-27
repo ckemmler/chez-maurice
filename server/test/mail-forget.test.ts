@@ -100,6 +100,19 @@ test("the garden pruned: what Maurice alone wrote from the mailbox goes, what th
   expect(fs.existsSync(path.join(people, "paola-fiche", "_fragments", "003.frag"))).toBe(true);
 });
 
+test("an exchanges section naming a forgotten message goes whole, for the next pass to rebuild; one that names none stays", () => {
+  const paola = path.join(people, "paola-fiche.md");
+  fs.writeFileSync(paola, fs.readFileSync(paola, "utf8").replace("## Journal", `## Les échanges\n\n2 message(s) échangé(s) depuis le 1 sept. 2026 ; le dernier le 1 sept. 2026.\n\n- ${L("k1", "Proton")}\n- ${L("g2", "Gmail")}\n\n## Journal`));
+  const kept = `---\ntitle: Léa\nmeta:\n  person_key: lea@x.org\n---\n\n## Les échanges\n\n1 message(s).\n\n- ${L("k1", "Proton")}\n`;
+  fs.writeFileSync(path.join(people, "lea-fiche.md"), kept);
+  forget.pruneGarden({ root, username: ANNA }, "fr", gone, "anna@gmail.com", "Gmail");
+  const after = fs.readFileSync(paola, "utf8");
+  expect(after).not.toContain("## Les échanges");
+  expect(after).not.toContain("maurice-mail:g2");
+  expect(after).toContain("## Journal\n\n- Anniversaire le 4 mai.");
+  expect(fs.readFileSync(path.join(people, "lea-fiche.md"), "utf8")).toBe(kept);
+});
+
 test("every past version pruned when asked, the remote with it; the rest of the history kept", () => {
   const bare = path.join(GARDENS, "remote.git");
   const git = (cwd: string, ...a: string[]) => spawnSync("git", a, { cwd, encoding: "utf8" });
