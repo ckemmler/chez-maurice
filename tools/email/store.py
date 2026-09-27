@@ -720,6 +720,44 @@ class MailStore:
         with self._transaction() as conn:
             return int(conn.execute("DELETE FROM artefacts WHERE slug != ''").rowcount)
 
+    def forget_mailbox(self, address: str) -> dict[str, Any]:
+        """Forget one mailbox (specs/contacts.md, lot 6): every message seen
+        only there goes — its row, its reading, its triage, its locations —
+        and a message also seen in another mailbox loses only this one's
+        locations. The mailbox's cursors go, and the gone ids leave the
+        artefacts' sources. Returns the gone ids and how many were kept."""
+        addr = address.strip().lower()
+        with self._transaction() as conn:
+            here = [r[0] for r in conn.execute("SELECT DISTINCT message FROM locations WHERE lower(address) = ?", (addr,))]
+            gone: list[str] = []
+            kept = 0
+            for mid in here:
+                elsewhere = conn.execute(
+                    "SELECT 1 FROM locations WHERE message = ? AND lower(address) != ? LIMIT 1", (mid, addr)
+                ).fetchone()
+                if elsewhere:
+                    kept += 1
+                else:
+                    gone.append(mid)
+            n_locations = conn.execute("DELETE FROM locations WHERE lower(address) = ?", (addr,)).rowcount
+            for i in range(0, len(gone), 500):
+                chunk = gone[i : i + 500]
+                marks = ",".join("?" * len(chunk))
+                conn.execute(f"DELETE FROM readings WHERE message IN ({marks})", chunk)
+                conn.execute(f"DELETE FROM triage WHERE message IN ({marks})", chunk)
+                conn.execute(f"DELETE FROM messages WHERE id IN ({marks})", chunk)
+            conn.execute("DELETE FROM cursors WHERE lower(address) = ?", (addr,))
+            gone_set = set(gone)
+            for kind, key, sources in conn.execute("SELECT kind, key, sources FROM artefacts").fetchall():
+                try:
+                    ids = json.loads(sources or "[]")
+                except ValueError:
+                    continue
+                left = [x for x in ids if x not in gone_set]
+                if len(left) != len(ids):
+                    conn.execute("UPDATE artefacts SET sources = ? WHERE kind = ? AND key = ?", (json.dumps(left, ensure_ascii=False), kind, key))
+        return {"address": addr, "gone": gone, "kept": kept, "locations": int(n_locations)}
+
     def forget_artefact(self, kind: str, key: str) -> bool:
         """Drop an artefact's row: its person was folded into another
         (lot 7 of specs/contacts.md), and if the member splits it back out

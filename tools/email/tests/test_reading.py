@@ -363,3 +363,29 @@ def test_get_by_id_reads_the_message_where_the_store_last_saw_it(tmp_path, monke
     call = lambda n, a=None: json.loads(asyncio.run(server.call_tool(n, a or {}))[0].text)  # noqa: E731
     assert call("get_by_id", {"id": mid})["uid"] == out["uid"]
     assert call("reading_material")["messages"] == []
+
+
+# ── lot 6 of specs/contacts.md: forgetting a mailbox ──────────────────────
+
+
+def test_forgetting_a_mailbox_drops_what_only_it_held_and_keeps_what_another_holds(tmp_path):
+    svc, _client = ready(tmp_path)
+    acc = alex(svc)
+    _member, store = svc._member_store(acc)
+    with store._connect() as conn:
+        ids = [r[0] for r in conn.execute("SELECT id FROM messages ORDER BY id")]
+    assert len(ids) >= 3
+    shared = ids[0]
+    # One message also sits in another mailbox of the member's.
+    with store._transaction() as conn:
+        conn.execute("INSERT INTO locations (address, folder, uidvalidity, uid, message, seen_at) VALUES ('alex@proton.me', 'INBOX', 1, 99, ?, 'now')", (shared,))
+    svc.documents_record(acc, written=[{"kind": "person", "key": "p", "slug": "p-fiche", "locale": "fr", "sources": ids[:2]}])
+    r = svc.forget_mailbox(acc, "Alex@iCloud.com")
+    assert shared not in r["gone"] and ids[1] in r["gone"] and r["kept"] == 1
+    with store._connect() as conn:
+        left = [x[0] for x in conn.execute("SELECT id FROM messages")]
+        assert left == [shared]
+        assert conn.execute("SELECT count(*) FROM locations WHERE address = 'alex@icloud.com'").fetchone()[0] == 0
+        assert conn.execute("SELECT count(*) FROM cursors WHERE address = 'alex@icloud.com'").fetchone()[0] == 0
+        assert conn.execute("SELECT count(*) FROM triage WHERE message != ?", (shared,)).fetchone()[0] == 0
+    assert next(a for a in store.artefacts() if a["key"] == "p")["sources"] == [shared]

@@ -632,6 +632,11 @@
 "mail.save" = "Guardar";
 "mail.remove" = "Remover";
 "mail.remove.confirm" = "O Maurice deixará de ler %@. Também podes revogar a palavra-passe no teu fornecedor.";
+"mail.forget" = "Esquecer";
+"mail.forget.title" = "Esquecer esta caixa?";
+"mail.forget.message" = "O que o Maurice leu de %@, e de mais nenhum lado, sai do servidor da tua casa, e as linhas que daí vêm saem do teu jardim. O que corrigiste tu é aparado, nunca apagado. Apagar também o histórico reescreve o histórico do teu jardim: uma cópia já obtida noutro lado guarda o antigo.";
+"mail.forget.history" = "Esquecer e apagar o histórico";
+"mail.forget.done" = "Esquecida: %d mensagens, %d ficheiros aparados, %d apagados.";
 "mail.add" = "Adicionar uma caixa";
 "mail.address" = "Endereço de e-mail";
 "mail.password" = "Palavra-passe de aplicação";

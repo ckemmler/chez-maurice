@@ -948,6 +948,8 @@ private struct NewMailAccount: Encodable {
     let username: String?
 }
 private struct NewMailPassword: Encodable { let password: String }
+private struct ForgetRequest: Encodable { let history: Bool }
+private struct ForgetResult: Decodable { let gone: Int; let changed: Int; let removed: Int; let history: String }
 
 /// What the address's domain says about where the mail lives and what password
 /// it wants — the same table as the tool's providers.py, for the help shown
@@ -1023,6 +1025,8 @@ private struct MailPane: View {
     @State private var renewing: String?
     @State private var newPassword = ""
     @State private var removing: MailAccountRow?
+    /// The mailbox being forgotten (lot 6 of specs/contacts.md): asked first.
+    @State private var forgetting: MailAccountRow?
     /// Where the header walk is (GET /api/mail-accounts/scan); nil until read.
     @State private var scan: MailScanStatus?
     @State private var scanBusy = false
@@ -1082,6 +1086,17 @@ private struct MailPane: View {
         } message: { account in
             Text(session.localized("mail.remove.confirm", account.address))
         }
+        // Forgetting is not removing: what was read from this mailbox leaves
+        // the household's server and the garden — and, when asked, its history.
+        .alert(session.localized("mail.forget.title"), isPresented: Binding(
+            get: { forgetting != nil }, set: { if !$0 { forgetting = nil } }
+        ), presenting: forgetting) { account in
+            Button(session.localized("mail.forget"), role: .destructive) { Task { await forget(account, history: false) } }
+            Button(session.localized("mail.forget.history"), role: .destructive) { Task { await forget(account, history: true) } }
+            Button(L("common.cancel"), role: .cancel) {}
+        } message: { account in
+            Text(session.localized("mail.forget.message", account.address))
+        }
     }
 
     // MARK: Accounts
@@ -1124,6 +1139,8 @@ private struct MailPane: View {
                     .glassBorderedButton().disabled(busy)
                     Spacer(minLength: 0)
                     Button(session.localized("mail.remove"), role: .destructive) { removing = account }
+                        .glassBorderedButton().disabled(busy)
+                    Button(session.localized("mail.forget"), role: .destructive) { forgetting = account }
                         .glassBorderedButton().disabled(busy)
                 }
                 .font(.system(size: 12))
@@ -1479,6 +1496,20 @@ private struct MailPane: View {
             renewing = nil
         } catch { show(error) }
         newPassword = ""
+    }
+
+    private func forget(_ account: MailAccountRow, history: Bool) async {
+        guard let api, let token = session.tokenForActiveUser else { return }
+        busy = true; error = nil; detail = nil; added = nil
+        defer { busy = false; forgetting = nil }
+        do {
+            let r: ForgetResult = try await api.post("/api/mail-accounts/\(account.id)/forget",
+                                                     body: ForgetRequest(history: history), token: token)
+            accounts?.removeAll { $0.id == account.id }
+            added = session.localized("mail.forget.done", r.gone, r.changed, r.removed)
+            if history && r.history != "rewritten" { error = session.localized("mail.failed"); detail = r.history }
+            await loadScan()
+        } catch { show(error) }
     }
 
     private func remove(_ account: MailAccountRow) async {

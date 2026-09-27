@@ -418,6 +418,11 @@ class EmailService:
             n_declined += 1
         return {"recorded": {"written": n_written, "deleted": n_deleted, "declined": n_declined, "forgotten": n_forgotten}, "artefacts": store.artefacts()}
 
+    def forget_mailbox(self, accounts: list[Account], address: str) -> dict[str, Any]:
+        """Forget one mailbox of the member's store (``MailStore.forget_mailbox``)."""
+        _member_id, store = self._member_store(accounts)
+        return store.forget_mailbox(address)
+
     def documents_reset(self, accounts: list[Account]) -> dict[str, Any]:
         """Forget every artefact but the refusals (``reset_artefacts``)."""
         _member_id, store = self._member_store(accounts)

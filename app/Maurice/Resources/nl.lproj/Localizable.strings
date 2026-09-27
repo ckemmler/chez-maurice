@@ -632,6 +632,11 @@
 "mail.save" = "Bewaar";
 "mail.remove" = "Verwijderen";
 "mail.remove.confirm" = "Maurice leest %@ niet meer. Je kunt het wachtwoord ook bij je provider intrekken.";
+"mail.forget" = "Vergeten";
+"mail.forget.title" = "Deze mailbox vergeten?";
+"mail.forget.message" = "Wat Maurice uit %@ las, en nergens anders vandaan, verlaat de server van je huishouden, en de regels die eruit komen verlaten je tuin. Wat je zelf verbeterde wordt ingekort, nooit verwijderd. Ook de geschiedenis wissen herschrijft de geschiedenis van je tuin: een kopie die elders al is opgehaald houdt de oude.";
+"mail.forget.history" = "Vergeten en geschiedenis wissen";
+"mail.forget.done" = "Vergeten: %d berichten, %d bestanden ingekort, %d verwijderd.";
 "mail.add" = "Mailbox toevoegen";
 "mail.address" = "E-mailadres";
 "mail.password" = "App-wachtwoord";

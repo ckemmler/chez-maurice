@@ -632,6 +632,11 @@
 "mail.save" = "Enregistrer";
 "mail.remove" = "Retirer";
 "mail.remove.confirm" = "Maurice ne lira plus %@. Vous pouvez aussi révoquer le mot de passe chez votre fournisseur.";
+"mail.forget" = "Oublier";
+"mail.forget.title" = "Oublier cette boîte ?";
+"mail.forget.message" = "Ce que Maurice a lu de %@, et de nulle part ailleurs, est retiré du serveur de votre foyer, et les lignes qui en viennent sont retirées de votre jardin. Ce que vous avez corrigé vous-même est élagué, jamais supprimé. Effacer aussi l'historique réécrit l'historique de votre jardin : une copie déjà récupérée ailleurs garde l'ancien.";
+"mail.forget.history" = "Oublier et effacer l'historique";
+"mail.forget.done" = "Oubliée : %d messages, %d fichiers élagués, %d supprimés.";
 "mail.add" = "Ajouter une boîte";
 "mail.address" = "Adresse e-mail";
 "mail.password" = "Mot de passe d'application";

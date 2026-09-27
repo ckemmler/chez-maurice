@@ -632,6 +632,11 @@
 "mail.save" = "Salva";
 "mail.remove" = "Rimuovi";
 "mail.remove.confirm" = "Maurice smetterà di leggere %@. Puoi anche revocare la password presso il tuo provider.";
+"mail.forget" = "Dimentica";
+"mail.forget.title" = "Dimenticare questa casella?";
+"mail.forget.message" = "Ciò che Maurice ha letto da %@, e da nessun'altra parte, lascia il server della tua casa, e le righe che ne derivano lasciano il tuo giardino. Ciò che hai corretto tu viene sfoltito, mai eliminato. Cancellare anche la cronologia riscrive la cronologia del giardino: una copia già scaricata altrove tiene la vecchia.";
+"mail.forget.history" = "Dimentica e cancella la cronologia";
+"mail.forget.done" = "Dimenticata: %d messaggi, %d file sfoltiti, %d eliminati.";
 "mail.add" = "Aggiungi una casella";
 "mail.address" = "Indirizzo email";
 "mail.password" = "Password per le app";

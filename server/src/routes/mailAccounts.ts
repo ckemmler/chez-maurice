@@ -12,6 +12,8 @@ import {
 } from "../services/mailAccounts";
 import { mailScanStatus, startMailScan, startMailScanInBackground } from "../services/mailScan";
 import { decideReading, mailConversationOf, sayReadingDecided, type ReadingAction } from "../services/mailApproval";
+import { forgetMailbox } from "../services/mailForget";
+import { memberLocale } from "../services/domainBriefs";
 
 // The signed-in member's own mail accounts (services/mailAccounts.ts). Every
 // route acts on the caller's accounts only; another member's account is not
@@ -136,6 +138,24 @@ accounts.post("/:id/check", async (c) => {
     return c.json(view(await checkMailAccount(c.get("userId"), c.req.param("id"))));
   } catch (err) {
     return fail(c, err);
+  }
+});
+
+/** Forget the mailbox itself (lot 6 of specs/contacts.md): what was read
+ *  from it and only it leaves the store, the lines drawn from it leave the
+ *  garden — and, with `history: true`, every past version of the garden —
+ *  then the account goes. `{ history? }`. Answers what was forgotten. */
+accounts.post("/:id/forget", async (c) => {
+  const uid = c.get("userId");
+  const account = listMailAccounts(uid).find((a) => a.id === c.req.param("id"));
+  if (!account) return c.json({ error: "not found" }, 404);
+  const body = await c.req.json().catch(() => ({}));
+  try {
+    const r = await forgetMailbox(uid, account.address, { history: body?.history === true, locale: memberLocale(uid) });
+    deleteMailAccount(uid, account.id);
+    return c.json(r);
+  } catch (err) {
+    return c.json({ error: (err as Error).message }, 422);
   }
 });
 

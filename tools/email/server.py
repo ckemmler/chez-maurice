@@ -333,6 +333,11 @@ async def list_tools() -> list[Tool]:
             inputSchema={"type": "object", "properties": {}},
         ),
         Tool(
+            name="forget_mailbox",
+            description="Server-side: forget one mailbox of the member's store — messages seen only there, their readings and triage, its locations and cursors. Returns the gone message ids.",
+            inputSchema={"type": "object", "properties": {"address": {"type": "string"}}, "required": ["address"]},
+        ),
+        Tool(
             name="documents_reset",
             description="Server-side: forget what the documents pass wrote (not its refusals), after the notes were erased.",
             inputSchema={"type": "object", "properties": {}},
@@ -452,6 +457,8 @@ def dispatch(service: EmailService, name: str, args: dict[str, Any], *, member_i
         return service.reading_material(accounts, limit=args.get("limit") or 5000)
     if name == "reading_reset":
         return service.reading_reset(accounts)
+    if name == "forget_mailbox":
+        return service.forget_mailbox(accounts, str(args["address"]))
     if name == "documents_reset":
         return service.documents_reset(accounts)
     if name == "documents_record":

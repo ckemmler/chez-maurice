@@ -632,6 +632,11 @@
 "mail.save" = "Guardar";
 "mail.remove" = "Quitar";
 "mail.remove.confirm" = "Maurice dejará de leer %@. También puedes revocar la contraseña en tu proveedor.";
+"mail.forget" = "Olvidar";
+"mail.forget.title" = "¿Olvidar este buzón?";
+"mail.forget.message" = "Lo que Maurice leyó de %@, y de ningún otro sitio, sale del servidor de tu hogar, y las líneas que vienen de ahí salen de tu jardín. Lo que corregiste tú se recorta, nunca se borra. Borrar también el historial reescribe el historial de tu jardín: una copia ya descargada en otro lugar conserva el antiguo.";
+"mail.forget.history" = "Olvidar y borrar el historial";
+"mail.forget.done" = "Olvidado: %d mensajes, %d archivos recortados, %d borrados.";
 "mail.add" = "Añadir un buzón";
 "mail.address" = "Dirección de correo";
 "mail.password" = "Contraseña de aplicación";

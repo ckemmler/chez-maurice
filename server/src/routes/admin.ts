@@ -11,6 +11,8 @@ import { listProposals, proposalCard, type ProposalState } from "../services/dom
 import { canUseMaurice } from "../services/maurices";
 import { getUser, getUserByUsername } from "../services/users";
 import { mailReadingStatus, startMailReading } from "../services/mailReading";
+import { forgetMailbox } from "../services/mailForget";
+import { memberLocale } from "../services/domainBriefs";
 import { eraseMailDocuments, indexMailFiles, mailDocumentsStatus, previewPeople, startMailDocuments } from "../services/mailDocuments";
 import db from "../db";
 
@@ -192,6 +194,21 @@ admin.post("/mail/documents/run", async (c) => {
 });
 
 admin.get("/mail/documents/:member_id", (c) => c.json(mailDocumentsStatus(c.req.param("member_id"))));
+
+// POST /api/admin/mail/forget { member_id | username, address, history? }
+// forgets one mailbox of a member — the store, the garden, the history when
+// asked (services/mailForget.ts). The account, if any, is left to them.
+admin.post("/mail/forget", async (c) => {
+  const body = await c.req.json().catch(() => ({}));
+  const member = memberOf(body);
+  if (!member) return c.json({ error: "Unknown member" }, 404);
+  if (typeof body.address !== "string" || !body.address.includes("@")) return c.json({ error: "address required" }, 400);
+  try {
+    return c.json(await forgetMailbox(member.id, body.address, { history: body.history === true, locale: memberLocale(member.id) }));
+  } catch (err) {
+    return c.json({ error: (err as Error).message }, 422);
+  }
+});
 
 // POST /api/admin/mail/documents/index { member_id | username } pushes every
 // file the mail pass wrote to the corpus — for a run made before the push.

@@ -632,6 +632,11 @@
 "mail.save" = "Sichern";
 "mail.remove" = "Entfernen";
 "mail.remove.confirm" = "Maurice liest %@ nicht mehr. Du kannst das Passwort auch bei deinem Anbieter widerrufen.";
+"mail.forget" = "Vergessen";
+"mail.forget.title" = "Dieses Postfach vergessen?";
+"mail.forget.message" = "Was Maurice aus %@ und von nirgendwo sonst gelesen hat, verlässt den Server deines Haushalts, und die Zeilen daraus verlassen deinen Garten. Was du selbst korrigiert hast, wird gekürzt, nie gelöscht. Auch den Verlauf zu löschen schreibt den Verlauf deines Gartens neu: eine anderswo schon geholte Kopie behält den alten.";
+"mail.forget.history" = "Vergessen und Verlauf löschen";
+"mail.forget.done" = "Vergessen: %d Nachrichten, %d Dateien gekürzt, %d gelöscht.";
 "mail.add" = "Postfach hinzufügen";
 "mail.address" = "E-Mail-Adresse";
 "mail.password" = "App-Passwort";

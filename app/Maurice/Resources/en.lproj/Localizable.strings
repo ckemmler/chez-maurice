@@ -632,6 +632,11 @@
 "mail.save" = "Save";
 "mail.remove" = "Remove";
 "mail.remove.confirm" = "Maurice will stop reading %@. You can also revoke the password at your provider.";
+"mail.forget" = "Forget";
+"mail.forget.title" = "Forget this mailbox?";
+"mail.forget.message" = "What Maurice read from %@, and from nowhere else, leaves your household's server, and the lines drawn from it leave your garden. What you corrected yourself is pruned, never removed. Also erasing the history rewrites your garden's history: a copy already fetched elsewhere keeps the old one.";
+"mail.forget.history" = "Forget and erase the history";
+"mail.forget.done" = "Forgotten: %d messages, %d files pruned, %d removed.";
 "mail.add" = "Add a mailbox";
 "mail.address" = "Email address";
 "mail.password" = "App password";
