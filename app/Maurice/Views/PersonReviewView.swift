@@ -383,23 +383,37 @@ struct PersonReviewView: View {
             if m.byMaurice {
                 Text(L("review.by_maurice")).font(.system(size: 13)).foregroundStyle(theme.inkMute)
             }
-            HStack(spacing: 10) {
-                if m.pending > 0 {
-                    Text(m.pending == 1 ? L("review.one_item") : L("review.items", m.pending))
-                        .font(.system(size: 13, weight: .medium)).foregroundStyle(theme.inkSoft)
-                    Spacer(minLength: 8)
-                    Button {
-                        Task { await act(target: "all", action: "confirm", id: nil) }
-                    } label: {
-                        Text(L("review.confirm_all")).font(.system(size: 13, weight: .medium))
+            if m.pending > 0 {
+                let count = Text(m.pending == 1 ? L("review.one_item") : L("review.items", m.pending))
+                    .font(.system(size: 13, weight: .medium)).foregroundStyle(theme.inkSoft)
+                let all = Button {
+                    Task { await act(target: "all", action: "confirm", id: nil) }
+                } label: {
+                    Text(L("review.confirm_all")).font(.system(size: 13, weight: .medium)).lineLimit(1)
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(accent)
+                ViewThatFits(in: .horizontal) {
+                    HStack(spacing: 10) {
+                        count
+                        Spacer(minLength: 8)
+                        all.fixedSize()
+                        if working { ProgressView().controlSize(.small) }
                     }
-                    .buttonStyle(.borderedProminent)
-                    .tint(accent)
-                } else {
+                    VStack(alignment: .leading, spacing: 8) {
+                        count
+                        HStack(spacing: 10) {
+                            all
+                            if working { ProgressView().controlSize(.small) }
+                        }
+                    }
+                }
+            } else {
+                HStack(spacing: 10) {
                     Label(L("review.all_checked"), systemImage: "checkmark.circle.fill")
                         .font(.system(size: 13)).foregroundStyle(theme.inkMute)
+                    if working { ProgressView().controlSize(.small) }
                 }
-                if working { ProgressView().controlSize(.small) }
             }
             Button {
                 withAnimation { showSources.toggle() }
@@ -454,12 +468,14 @@ struct PersonReviewView: View {
                     VStack(alignment: .leading, spacing: 3) {
                         Text(i.address).font(.system(size: 14, design: .monospaced)).foregroundStyle(theme.ink)
                             .textSelection(.enabled)
+                            .fixedSize(horizontal: false, vertical: true)
                         if !i.mailboxes.isEmpty {
                             Text(L("review.mailboxes", i.mailboxes.joined(separator: ", ")))
                                 .font(.system(size: 12)).foregroundStyle(theme.inkMute)
                         }
                         if let c = i.conflict {
-                            Text(c).font(.system(size: 12)).foregroundStyle(.orange)
+                            Text(conflictText(c)).font(.system(size: 12)).foregroundStyle(.orange)
+                                .fixedSize(horizontal: false, vertical: true)
                         }
                     }
                 } actions: {
@@ -513,6 +529,19 @@ struct PersonReviewView: View {
 
     // MARK: Pieces
 
+    /// The conflict the mail pass records on an address, in the member's
+    /// language: the server writes it in English for the model
+    /// (services/mailPeople.ts, resolvePeople).
+    private func conflictText(_ c: String) -> String {
+        if let m = c.firstMatch(of: /^in (\d+) cards of the address book$/), let n = Int(m.1) {
+            return L("review.conflict.cards", n)
+        }
+        if let m = c.firstMatch(of: /^writes as « (.+) »$/) {
+            return L("review.conflict.writes_as", String(m.1))
+        }
+        return c
+    }
+
     /// One element: its text, its status, its gestures. A pending element
     /// carries a coloured edge, so what is left to check shows at a glance.
     private func element<Content: View, Actions: View>(
@@ -520,9 +549,11 @@ struct PersonReviewView: View {
     ) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             content()
-            // The status and the gestures on one line when they fit; on a
-            // phone, three labelled buttons do not — they go under the status
-            // rather than wrap their words.
+            // The status and the gestures on one line when they fit; else the
+            // gestures under the status; else, with a large text size, the
+            // gestures as their symbols alone. Never wider than the screen:
+            // a row forced to its natural width widened the whole column past
+            // both edges (27 September 2026, on the owner's phone).
             ViewThatFits(in: .horizontal) {
                 HStack(spacing: 8) {
                     statusChip(status)
@@ -532,6 +563,10 @@ struct PersonReviewView: View {
                 VStack(alignment: .leading, spacing: 8) {
                     statusChip(status)
                     HStack(spacing: 8) { actions() }.fixedSize()
+                }
+                VStack(alignment: .leading, spacing: 8) {
+                    statusChip(status)
+                    HStack(spacing: 8) { actions() }.labelStyle(.iconOnly)
                 }
             }
             .lineLimit(1)

@@ -754,3 +754,5 @@
 "review.edit.hint" = "As tuas palavras substituem as do Maurice e contam como confirmadas. É markdown, tal como o teu jardim o guarda.";
 "review.show_sources" = "Mostrar as fontes";
 "review.hide_sources" = "Ocultar as fontes";
+"review.conflict.cards" = "Em %d fichas do teu livro de endereços";
+"review.conflict.writes_as" = "Escreve como « %@ »";

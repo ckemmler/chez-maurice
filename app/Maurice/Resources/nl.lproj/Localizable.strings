@@ -754,3 +754,5 @@
 "review.edit.hint" = "Jouw woorden vervangen die van Maurice en gelden als bevestigd. Het is markdown, zoals je tuin het bewaart.";
 "review.show_sources" = "Bronnen tonen";
 "review.hide_sources" = "Bronnen verbergen";
+"review.conflict.cards" = "In %d kaarten van je adresboek";
+"review.conflict.writes_as" = "Schrijft als « %@ »";

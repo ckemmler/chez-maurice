@@ -754,3 +754,5 @@
 "review.edit.hint" = "Tes mots remplacent ceux de Maurice et comptent comme confirmés. C’est du markdown, tel que ton jardin le garde.";
 "review.show_sources" = "Afficher les sources";
 "review.hide_sources" = "Masquer les sources";
+"review.conflict.cards" = "Dans %d fiches de ton carnet d’adresses";
+"review.conflict.writes_as" = "Écrit sous le nom « %@ »";

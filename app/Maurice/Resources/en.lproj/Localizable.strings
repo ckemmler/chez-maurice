@@ -754,3 +754,5 @@
 "review.edit.hint" = "Your words replace Maurice’s and count as confirmed. It is markdown, as your garden keeps it.";
 "review.show_sources" = "Show the sources";
 "review.hide_sources" = "Hide the sources";
+"review.conflict.cards" = "In %d cards of your address book";
+"review.conflict.writes_as" = "Writes as « %@ »";
