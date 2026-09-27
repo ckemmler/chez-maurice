@@ -1,6 +1,6 @@
 ---
 title: Domains and their briefs
-date: '2026-09-20'
+date: '2026-09-27'
 flags: []
 locale: en
 description: A domain is a part of a member's life Maurice follows, with a brief
@@ -78,7 +78,7 @@ The briefs — the data, the night, the prompt section, the routes, the page —
 - **The opening message is long for a member with many domains** — fifteen list items for the owner, one line each: it reads on a phone, but a member with thirty alive proposals would get thirty; a cap with "and N more in the drawer" is the obvious next step if it happens.
 - **Seeding is offered in the proposal conversation only.** A domain made by hand in the editor, or adopted before P2-C, has no way to ask for its notes: `seedDomain` takes any domain of the member's, but nothing calls it outside `domains__seed`. A *Write notes* button on the domain's page (a route, the same service, charged to the member) is the natural next step.
 - **The seeded notes read what the conversations say, including the personal detail in them** — a hotel address, a medicine and its dose came through on the owner's trial. It is the member's own garden, private by default, and the mark asks them to read before keeping; whether the prompt should hold such detail back is a question for the first real reviews.
-- **A seeded note is not in the corpus until the gateway's watcher sees it**: the server writes the file and commits, and asks nothing of the corpus (the garden tool pushes its own writes). The nightly reconciliation does not walk the file sources either, so a note lands in the semantic index when the watcher catches it.
+- **A seeded note reaches the corpus through the gateway's watcher, not a push**: the server writes the file and commits, and asks nothing of the corpus (the garden tool pushes its own writes). Until 27 September 2026 the watcher ignored moves and the nightly did not walk the file sources, so the notes seeded on 20 September never reached the index; both are fixed ([[maurice-server]]), and a seeded note is searchable within seconds, the next night at the latest.
 - **The drawer lives in the opened conversation only.** The proposals are reachable through the button under Maurice's message and through `GET /api/domains/proposals`; there is no entry in the domains list or the settings for what was proposed, adopted or dismissed (the route's `settled` carries it), and Carnet reads the opened conversation but has neither the tools nor the drawer (P3-C). The domain editor stays as the hand-made path and for correcting an adopted domain.
 - **A big grab-bag is left aside.** A group the model reads as several things is cut by the model only up to eighty conversations; on the owner's corpus the block of conversations lived with Maurice (dreams, contacts, books, notes…) stays out of the proposals, said in the log, until the corpus's second level cuts it finer or the conversations are bound elsewhere.
 - **The model's cut is not deterministic**: two runs on the same twenty conversations gave *Rénovation de l'appartement* once and *Natation* the next time. Acceptable for a proposal the member settles by talking; not a stable map.
