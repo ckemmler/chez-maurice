@@ -372,7 +372,6 @@
 "fact.kept" = "bewaard";
 "fact.dismissed" = "vergeten";
 "fact.failed" = "Ik kon je antwoord niet opslaan.";
-"sources.count" = "%d bronnen";
 "sources.corpus" = "%d bronnen in je geheugen";
 "sources.web" = "%d bronnen op het web";
 "sources.more" = "%1$@ van %2$d";
@@ -425,6 +424,16 @@
 "chat.activity.usedTool" = "Gereedschap %@";
 "chat.activity.secs" = "%d s";
 "chat.activity.mins" = "%d min %02d s";
+
+/* The one line under a reply: what the turn searched and called */
+"chat.tally.web.one" = "%d webzoekopdracht";
+"chat.tally.web.other" = "%d webzoekopdrachten";
+"chat.tally.memory.one" = "%d zoekopdracht in je geheugen";
+"chat.tally.memory.other" = "%d zoekopdrachten in je geheugen";
+"chat.tally.tools.one" = "%d gereedschapsaanroep";
+"chat.tally.tools.other" = "%d gereedschapsaanroepen";
+"chat.tally.title" = "Zoekopdrachten en gereedschap";
+"chat.tally.toolsHeader" = "Gereedschap";
 
 /* A reply that could not be followed to its end */
 "chat.error.busy" = "Maurice is in dit gesprek al aan het antwoorden.";

@@ -1,34 +1,83 @@
 import SwiftUI
 
-/// What a search found — a line of pills under the reply, and the sources
-/// themselves in a drawer when you tap it.
+/// What a turn went and looked at — one line under the reply, and everything
+/// behind it in a drawer when you tap it.
 ///
 /// Both searches, the corpus and the web, send the same payload
 /// (`card: "sources"`, built in `server/src/services/sourceCards.ts`): a title,
-/// where it came from, an optional cover, and the passage that matched.
+/// where it came from, an optional cover, and the passage that matched. Every
+/// other tool that returns rows sends them bare.
 ///
-/// The first version drew that as a scrolling row of cards, which took more
-/// room under every reply than the reply itself. Evidence should be *at hand*,
-/// not in the way: what stays in the transcript is now a stack of thumbnails
-/// and a count, the size of a line of text, and the cards live one tap away.
-struct SourcesCard: View {
-    @Environment(\.mauriceTheme) private var theme
-    /// Every search of one origin made on this turn, in the order it ran them.
-    /// Usually one; a turn that searched four times hands over four, and they
-    /// are drawn as a single row (see `DataCardStack.typedItems`).
-    let cards: [JSONValue]
+/// The first version drew the sources as a scrolling row of cards, which took
+/// more room under every reply than the reply itself; then as a row of pills
+/// per place searched, with the other tools' results under a disclosure of
+/// their own further down. Evidence should be *at hand*, not in the way: what
+/// stays in the transcript is one line — the thumbnails and a tally, « 2
+/// recherches web, 3 appels d'outils › » — and the rest lives one tap away.
+struct TurnTally: Equatable {
+    var web = 0
+    var memory = 0
+    var tools = 0
 
-    @State private var open = false
+    /// From the steps when the turn was watched: they know every call,
+    /// including the ones that returned nothing to draw. A thread reloaded
+    /// from scratch has only the blocks — one `sources` payload per search,
+    /// one block per call that returned rows.
+    ///
+    /// A live turn counts what is done; the call running is named beside the
+    /// tally until it ends.
+    init(steps: [ToolStep], blocks: [DataBlock], doneOnly: Bool = false) {
+        if steps.isEmpty {
+            for block in blocks {
+                switch block.data.cardKind {
+                case "sources": block.data.string("origin") == "web" ? (web += 1) : (memory += 1)
+                // A purpose-built card is drawn under the reply already.
+                case nil: tools += 1
+                default: break
+                }
+            }
+            return
+        }
+        for step in steps {
+            let n = step.count - (doneOnly && step.running ? 1 : 0)
+            switch step.tool {
+            case "web_search": web += n
+            case "corpus__search": memory += n
+            default: tools += n
+            }
+        }
+    }
 
-    private var isWeb: Bool { cards.first?.string("origin") == "web" }
-    private var results: [JSONValue] { SourcesCard.distinct(cards) }
-    /// The server caps the cards it sends but reports the true total, so the
-    /// count is honest rather than quietly eighteen short. Across several
-    /// searches: the distinct sources at hand, plus what each search said it
-    /// had found and did not carry.
-    private var total: Int {
-        let uncarried = cards.reduce(0) { $0 + max(0, $1.int("count") - ($1["results"]?.arrayValue ?? []).count) }
-        return results.count + uncarried
+    var isEmpty: Bool { web + memory + tools == 0 }
+
+    var text: String {
+        [("web", web), ("memory", memory), ("tools", tools)]
+            .filter { $0.1 > 0 }
+            .map { L("chat.tally.\($0.0).\($0.1 == 1 ? "one" : "other")", $0.1) }
+            .joined(separator: ", ")
+    }
+}
+
+/// A turn's searches, one group per place searched.
+///
+/// One search sends one `sources` payload, and a turn may run several: on
+/// 21 September 2026 a question about three school apps ran six web searches
+/// and two corpus ones, and the reply arrived under eight rows of pills. The
+/// budget in `server/src/services/searchBudget.ts` caps how many a turn may
+/// run; this is the other half — however many it ran, the same page found
+/// twice is counted once, in the order the first search of each place ran.
+enum TurnSources {
+    static func byOrigin(_ blocks: [DataBlock]) -> [(origin: String, payloads: [JSONValue])] {
+        var out: [(origin: String, payloads: [JSONValue])] = []
+        for block in blocks where block.data.cardKind == "sources" {
+            let origin = block.data.string("origin")
+            if let i = out.firstIndex(where: { $0.origin == origin }) {
+                out[i].payloads.append(block.data)
+            } else {
+                out.append((origin, [block.data]))
+            }
+        }
+        return out
     }
 
     /// The same page found by two searches is one source. A web result is its
@@ -48,8 +97,8 @@ struct SourcesCard: View {
         return item.string("title") + "|" + item.string("subtitle")
     }
 
-    /// The sources of every search, in order, each one kept the first time it
-    /// appears.
+    /// The sources of every search of one place, in order, each one kept the
+    /// first time it appears.
     static func distinct(_ cards: [JSONValue]) -> [JSONValue] {
         let isWeb = cards.first?.string("origin") == "web"
         var seen = Set<String>()
@@ -61,56 +110,126 @@ struct SourcesCard: View {
         }
         return out
     }
+}
 
-    /// How many thumbnails the stack shows before it is just a count.
+/// The thumbnails that lead the line: the first few sources the turn found,
+/// every place searched together. Nothing when it searched nothing.
+struct SourceStack: View {
+    @Environment(\.mauriceTheme) private var theme
+    let blocks: [DataBlock]
+
+    /// How many thumbnails the stack shows; the drawer has the rest.
     private static let shown = 4
 
-    var body: some View {
-        if !results.isEmpty {
-            Button { open = true } label: { pills }
-                .buttonStyle(.plain)
-                .sheet(isPresented: $open) {
-                    SourcesDrawer(cards: cards)
-                    #if os(iOS)
-                        .presentationDetents([.medium, .large])
-                        .presentationDragIndicator(.visible)
-                    #endif
-                }
+    private var items: [(item: JSONValue, isWeb: Bool)] {
+        TurnSources.byOrigin(blocks).flatMap { group in
+            TurnSources.distinct(group.payloads).map { ($0, group.origin == "web") }
         }
     }
 
-    private var pills: some View {
-        HStack(spacing: 6) {
+    var body: some View {
+        let items = items.prefix(Self.shown)
+        if !items.isEmpty {
             HStack(spacing: -7) {
-                ForEach(Array(results.prefix(Self.shown).enumerated()), id: \.offset) { _, item in
-                    SourceThumb(item: item, isWeb: isWeb, side: 20)
+                ForEach(Array(items.enumerated()), id: \.offset) { _, entry in
+                    SourceThumb(item: entry.item, isWeb: entry.isWeb, side: 20)
                         .overlay(
                             RoundedRectangle(cornerRadius: 5)
                                 .strokeBorder(theme.surface, lineWidth: 1.5)
                         )
                 }
             }
-            Text(L("sources.count", total))
-                .font(.system(size: 12, weight: .medium))
-                .foregroundStyle(theme.inkSoft)
-            Image(systemName: "chevron.right")
-                .font(.system(size: 9, weight: .semibold))
-                .foregroundStyle(theme.inkMute)
         }
-        .padding(.vertical, 4)
-        .contentShape(Rectangle())
     }
 }
 
-/// The drawer: every source the search returned, at a size where the cover and
-/// the matching passage are actually readable.
-private struct SourcesDrawer: View {
+/// The drawer: what the turn did, step by step, then every source each search
+/// returned, then the rows the other tools handed back — at a size where the
+/// cover, the matching passage and the fields are actually readable.
+struct TurnDrawer: View {
     @Environment(\.mauriceTheme) private var theme
     @Environment(\.dismiss) private var dismiss
+    let activity: TurnActivity
+    let blocks: [DataBlock]
+
+    private var sources: [(origin: String, payloads: [JSONValue])] { TurnSources.byOrigin(blocks) }
+    private var toolBlocks: [DataBlock] { blocks.filter { $0.data.cardKind == nil } }
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 18) {
+                    if !activity.steps.isEmpty { steps }
+                    ForEach(sources, id: \.origin) { group in
+                        SourcesSection(cards: group.payloads)
+                    }
+                    if !toolBlocks.isEmpty { tools }
+                }
+                .padding(14)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .background(theme.surface)
+            .navigationTitle(L("chat.tally.title"))
+            #if os(iOS)
+            .navigationBarTitleDisplayMode(.inline)
+            #endif
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button(L("common.done")) { dismiss() }.tint(theme.ink)
+                }
+            }
+        }
+    }
+
+    /// Every step on its own line, in the order the turn first took it.
+    private var steps: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            ForEach(activity.steps) { step in
+                HStack(spacing: 6) {
+                    Image(systemName: step.running ? "arrow.right" : "checkmark")
+                        .font(.system(size: 9, weight: .semibold))
+                        .frame(width: 12)
+                    Text(step.name + (step.running ? "…" : ""))
+                }
+                .foregroundStyle(step.running ? theme.inkSoft : theme.inkMute)
+            }
+        }
+        .font(.system(size: 13))
+    }
+
+    /// Each call's rows under the name of the tool that returned them.
+    private var tools: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text(L("chat.tally.toolsHeader"))
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(theme.ink)
+            ForEach(Array(toolBlocks.enumerated()), id: \.offset) { _, block in
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(blockTitle(block))
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(theme.inkMute)
+                    DataBlockBody(data: block.data)
+                }
+                .padding(10)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(RoundedRectangle(cornerRadius: 8).fill(theme.inkMute.opacity(0.06)))
+            }
+        }
+    }
+}
+
+/// The searches of one place: the questions asked, then what they found.
+private struct SourcesSection: View {
+    @Environment(\.mauriceTheme) private var theme
+    /// Every search of one origin made on this turn, in the order it ran them.
     let cards: [JSONValue]
 
     private var isWeb: Bool { cards.first?.string("origin") == "web" }
-    private var results: [JSONValue] { SourcesCard.distinct(cards) }
+    private var results: [JSONValue] { TurnSources.distinct(cards) }
+    /// The server caps the cards it sends but reports the true total, so the
+    /// count is honest rather than quietly eighteen short. Across several
+    /// searches: the distinct sources at hand, plus what each search said it
+    /// had found and did not carry.
     private var total: Int {
         let uncarried = cards.reduce(0) { $0 + max(0, $1.int("count") - ($1["results"]?.arrayValue ?? []).count) }
         return results.count + uncarried
@@ -130,35 +249,22 @@ private struct SourcesDrawer: View {
     }
 
     var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 10) {
-                    if !queries.isEmpty {
-                        VStack(alignment: .leading, spacing: 2) {
-                            ForEach(queries, id: \.self) { query in
-                                Text("« \(query) »")
-                                    .font(.system(size: 13))
-                                    .foregroundStyle(theme.inkMute)
-                            }
-                        }
-                        .padding(.bottom, 2)
-                    }
-                    ForEach(Array(results.enumerated()), id: \.offset) { _, item in
-                        SourceRow(item: item, isWeb: isWeb)
+        VStack(alignment: .leading, spacing: 10) {
+            Text(headline)
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(theme.ink)
+            if !queries.isEmpty {
+                VStack(alignment: .leading, spacing: 2) {
+                    ForEach(queries, id: \.self) { query in
+                        Text("« \(query) »")
+                            .font(.system(size: 13))
+                            .foregroundStyle(theme.inkMute)
                     }
                 }
-                .padding(14)
-                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.bottom, 2)
             }
-            .background(theme.surface)
-            .navigationTitle(headline)
-            #if os(iOS)
-            .navigationBarTitleDisplayMode(.inline)
-            #endif
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button(L("common.done")) { dismiss() }.tint(theme.ink)
-                }
+            ForEach(Array(results.enumerated()), id: \.offset) { _, item in
+                SourceRow(item: item, isWeb: isWeb)
             }
         }
     }

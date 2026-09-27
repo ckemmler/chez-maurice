@@ -26,6 +26,12 @@ struct ToolStep: Identifiable, Equatable {
         let server = tool.components(separatedBy: "__").first ?? tool
         return L(running ? "chat.activity.usingTool" : "chat.activity.usedTool", server)
     }
+
+    /// The label, with the count when it ran more than once.
+    var name: String {
+        let label = Self.label(for: tool, running: running)
+        return count > 1 ? "\(label) ×\(count)" : label
+    }
 }
 
 /// Everything a turn has done so far, folded small enough to draw on one line.

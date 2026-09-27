@@ -372,7 +372,6 @@
 "fact.kept" = "guardado";
 "fact.dismissed" = "esquecido";
 "fact.failed" = "Não consegui registar a tua resposta.";
-"sources.count" = "%d fontes";
 "sources.corpus" = "%d fontes na tua memória";
 "sources.web" = "%d fontes na web";
 "sources.more" = "%1$@ de %2$d";
@@ -425,6 +424,16 @@
 "chat.activity.usedTool" = "Ferramenta %@";
 "chat.activity.secs" = "%d s";
 "chat.activity.mins" = "%d min %02d s";
+
+/* The one line under a reply: what the turn searched and called */
+"chat.tally.web.one" = "%d pesquisa web";
+"chat.tally.web.other" = "%d pesquisas web";
+"chat.tally.memory.one" = "%d pesquisa na tua memória";
+"chat.tally.memory.other" = "%d pesquisas na tua memória";
+"chat.tally.tools.one" = "%d chamada de ferramenta";
+"chat.tally.tools.other" = "%d chamadas de ferramentas";
+"chat.tally.title" = "Pesquisas e ferramentas";
+"chat.tally.toolsHeader" = "Ferramentas";
 
 /* A reply that could not be followed to its end */
 "chat.error.busy" = "O Maurice já está a responder nesta conversa.";

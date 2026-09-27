@@ -258,11 +258,12 @@ struct ChatView: View {
                                         TurnActivityRow(activity: chat.activity, blocks: chat.streamingData,
                                                         live: true, withHat: chat.streamingText.isEmpty)
                                     }
-                                    // Structured tool results stream in (often
-                                    // before the prose) — show them live; the
-                                    // sources are on the line above.
-                                    if !chat.streamingData.isEmpty {
-                                        DataCardStack(blocks: chat.streamingData, includeSources: false)
+                                    // The answer cards stream in (often before
+                                    // the prose) — show them live; the sources
+                                    // and the other tools' rows are behind the
+                                    // line above.
+                                    if DataCardStack.hasCards(chat.streamingData) {
+                                        DataCardStack(blocks: chat.streamingData)
                                     }
                                     if !chat.streamingText.isEmpty {
                                         StreamingRow(text: chat.streamingText, serverBaseURL: session.serverURL ?? "")
@@ -1163,10 +1164,12 @@ private struct MessageRow: View {
     /// Image (if any) + markdown body — shared by both layouts.
     @ViewBuilder
     private var messageContentCore: some View {
-        // What this reply took, if we watched it happen (see
-        // `ChatService.toolTrails`): the same line as during the turn, with the
-        // sources it found on it. A reloaded thread has the sources alone.
-        if let trail = chat.toolTrails[message.id], !trail.steps.isEmpty {
+        // What this reply took: the same line as during the turn, with the
+        // sources it found on it. The steps are there if we watched it happen
+        // (see `ChatService.toolTrails`); a reloaded thread draws the line
+        // from the reply's blocks alone.
+        let trail = chat.toolTrails[message.id] ?? TurnActivity()
+        if TurnActivityRow.shows(trail, blocks: message.data ?? []) {
             TurnActivityRow(activity: trail, blocks: message.data ?? [])
         }
         if let img = imageInfo, img.path != "pending", let baseURL = session.serverURL {
@@ -1177,8 +1180,8 @@ private struct MessageRow: View {
         } else if imageInfo == nil {
             SelectableMarkdown(text: message.content)
         }
-        if let blocks = message.data, !blocks.isEmpty {
-            DataCardStack(blocks: blocks, includeSources: chat.toolTrails[message.id] == nil)
+        if let blocks = message.data, DataCardStack.hasCards(blocks) {
+            DataCardStack(blocks: blocks)
         }
     }
 
@@ -1308,125 +1311,30 @@ private struct MessageRow: View {
 
 // MARK: - Streaming Row (live text with typewriter reveal)
 
-/// Deterministic, model-untouched render of a tool's structured result. Sits
-/// beside Maurice's prose so the user sees the actual rows even if the narration
-/// drifts. Collapsed by default; the title's row count is itself the cheap tell
-/// when the prose claims more rows than the tool returned.
-/// One expandable widget for a message's tool-call results. When a turn makes
-/// several calls they're grouped under a single disclosure that expands them all
-/// at once, instead of each sitting on its own row.
+/// The payloads stamped with a card kind that has a purpose-built view, drawn
+/// open under the reply: they ARE the answer, not evidence for it. Sources and
+/// the other tools' rows are evidence, and live behind the activity line
+/// (`TurnActivityRow`, `TurnDrawer`).
 private struct DataCardStack: View {
-    @Environment(\.mauriceTheme) private var theme
     let blocks: [DataBlock]
-    /// Off when the activity line carries the pills: the sources are drawn once.
-    var includeSources = true
-    @State private var expanded = false
 
-    /// Payloads stamped with a `card` kind get a purpose-built view, shown open:
-    /// they ARE the answer, not evidence for it. Everything else keeps the
-    /// generic collapsed dump.
-    private var typedBlocks: [DataBlock] {
-        blocks.filter { $0.data.cardKind != nil && (includeSources || $0.data.cardKind != "sources") }
-    }
-    private var plainBlocks: [DataBlock] { blocks.filter { $0.data.cardKind == nil } }
+    static let answerKinds: Set<String> = ["candidates", "media", "fact"]
 
-    /// A turn's searches, folded together.
-    ///
-    /// One search sends one `sources` payload, and a turn may run several: on
-    /// 21 September 2026 a question about three school apps ran six web
-    /// searches and two corpus ones, and the reply arrived under eight rows of
-    /// pills. The budget in `server/src/services/searchBudget.ts` caps how many
-    /// a turn may run; this is the other half — however many it ran, the
-    /// member sees one row per place searched, at the point where the first of
-    /// them appeared, with the same page found twice counted once.
-    private enum TypedItem: Identifiable {
-        case card(Int, DataBlock)
-        case sources(String, [JSONValue])
-
-        var id: String {
-            switch self {
-            case .card(let i, _): return "card-\(i)"
-            case .sources(let origin, _): return "sources-\(origin)"
-            }
-        }
-    }
-
-    private var typedItems: [TypedItem] {
-        var out: [TypedItem] = []
-        var rowOfOrigin: [String: Int] = [:]
-        for (i, block) in typedBlocks.enumerated() {
-            guard block.data.cardKind == "sources" else {
-                out.append(.card(i, block))
-                continue
-            }
-            let origin = block.data.string("origin")
-            if let at = rowOfOrigin[origin], case .sources(let o, var payloads) = out[at] {
-                payloads.append(block.data)
-                out[at] = .sources(o, payloads)
-            } else {
-                rowOfOrigin[origin] = out.count
-                out.append(.sources(origin, [block.data]))
-            }
-        }
-        return out
-    }
-
-    private var label: String {
-        if plainBlocks.count == 1 { return blockTitle(plainBlocks[0]) }
-        let names = plainBlocks.map(serverName)
-        if let first = names.first, names.allSatisfy({ $0 == first }) {
-            return "\(first) · \(plainBlocks.count) calls"
-        }
-        return names.joined(separator: ", ")
+    static func hasCards(_ blocks: [DataBlock]) -> Bool {
+        blocks.contains { answerKinds.contains($0.data.cardKind ?? "") }
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            ForEach(typedItems) { item in
-                switch item {
-                case .sources(_, let payloads):
-                    SourcesCard(cards: payloads)
-                case .card(_, let block):
-                    switch block.data.cardKind {
-                    case "candidates": CandidatePickerCard(data: block.data)
-                    case "media": MediaFicheCard(data: block.data)
-                    case "fact": LifeFactCard(data: block.data)
-                    default: EmptyView()
-                    }
+            ForEach(Array(blocks.enumerated()), id: \.offset) { _, block in
+                switch block.data.cardKind {
+                case "candidates": CandidatePickerCard(data: block.data)
+                case "media": MediaFicheCard(data: block.data)
+                case "fact": LifeFactCard(data: block.data)
+                default: EmptyView()
                 }
             }
-            if !plainBlocks.isEmpty { genericStack }
         }
-    }
-
-    @ViewBuilder
-    private var genericStack: some View {
-        DisclosureGroup(isExpanded: $expanded) {
-            VStack(alignment: .leading, spacing: 12) {
-                ForEach(Array(plainBlocks.enumerated()), id: \.offset) { _, block in
-                    VStack(alignment: .leading, spacing: 4) {
-                        // Per-call header only when grouped, so the calls stay distinct.
-                        if plainBlocks.count > 1 {
-                            Text(blockTitle(block))
-                                .font(.system(size: 11, weight: .semibold))
-                                .foregroundStyle(theme.inkMute)
-                        }
-                        DataBlockBody(data: block.data)
-                    }
-                }
-            }
-            .padding(.top, 6)
-            .frame(maxWidth: .infinity, alignment: .leading)
-        } label: {
-            HStack(spacing: 6) {
-                Image(systemName: "wrench.adjustable")
-                    .font(.system(size: 11))
-                Text(label)
-                    .font(.system(size: 12, weight: .medium))
-            }
-            .foregroundStyle(theme.inkMute)
-        }
-        .padding(10)
     }
 }
 
@@ -1839,12 +1747,12 @@ private struct MediaFicheCard: View {
 }
 
 /// MCP tools are namespaced "server__tool"; show the server segment.
-private func serverName(_ block: DataBlock) -> String {
+func serverName(_ block: DataBlock) -> String {
     block.tool.components(separatedBy: "__").first ?? block.tool
 }
 
 /// "{server} · {n} rows" when the payload carries a row count, else just the name.
-private func blockTitle(_ block: DataBlock) -> String {
+func blockTitle(_ block: DataBlock) -> String {
     let server = serverName(block)
     if let n = blockRowCount(block.data) { return "\(server) · \(n) row\(n == 1 ? "" : "s")" }
     return server
@@ -1852,7 +1760,7 @@ private func blockTitle(_ block: DataBlock) -> String {
 
 /// Row count for the title tell: a top-level array's length, or the longest array
 /// nested in a wrapper object (e.g. { signals: [...], count: 50 }).
-private func blockRowCount(_ data: JSONValue) -> Int? {
+func blockRowCount(_ data: JSONValue) -> Int? {
     switch data {
     case .array(let a):
         return a.count
@@ -1867,7 +1775,7 @@ private func blockRowCount(_ data: JSONValue) -> Int? {
 }
 
 /// Renders one tool result's JSON payload (records / fields / scalar).
-private struct DataBlockBody: View {
+struct DataBlockBody: View {
     @Environment(\.mauriceTheme) private var theme
     let data: JSONValue
 
@@ -2056,25 +1964,29 @@ private struct ChatImageView: View {
 // MARK: - Turn Activity Row (what a turn is doing, on one line)
 
 /// Everything a turn has done and is doing, on one line: the sources found
-/// so far as pills, the steps done, the one running, the pulse, the clock.
+/// so far as thumbnails, a tally of the calls, the one running, the pulse,
+/// the clock.
 ///
-///     [pills] · Recherche web ×2 · Outil garden – Recherche sur le web… ◌ 12 s
+///     [pills] 2 recherches web, 3 appels d'outils – Outil garden… › ◌ 12 s
 ///
 /// Live under the stream, then kept — pulse and clock stopped — under the
-/// finished reply. It is also the wait before the first word: an empty turn
+/// finished reply; a thread reloaded from scratch draws it from the reply's
+/// blocks alone. It is also the wait before the first word: an empty turn
 /// draws the pulse and the clock alone, so there is never a second progress
 /// mark on screen (the wave of three dots that used to greet every turn is
 /// gone; the pulse is chosen in Settings, see `ThinkingPulse`).
 ///
-/// The point is that it holds still. Before, each call set a label and cleared
-/// it on the way out, so a turn with five calls flashed five lines under the
-/// answer as it was being written; here the row appears once and grows in
-/// place. A tap on the words opens every step on its own line.
+/// The point is that it holds still, and that it is the only one. Before, each
+/// call set a label and cleared it on the way out; then the searches had a row
+/// of pills each and the other tools a disclosure of their own under the
+/// reply. Here the row appears once and grows in place, and a tap opens the
+/// drawer with every step, every source and every tool's rows.
 private struct TurnActivityRow: View {
     @Environment(\.mauriceTheme) private var theme
     @AppStorage(ThinkingPulse.prefKey) private var pulseRaw = ThinkingPulse.Style.defaultChoice.rawValue
     let activity: TurnActivity
-    /// The turn's blocks so far; only the `sources` payloads are drawn here.
+    /// The turn's blocks so far: the sources for the thumbnails and the
+    /// drawer, the other tools' rows for the drawer.
     var blocks: [DataBlock] = []
     /// A live row pulses and counts; a kept one is a record and does neither.
     var live = false
@@ -2082,27 +1994,17 @@ private struct TurnActivityRow: View {
     /// no reply row yet.
     var withHat = false
 
-    @State private var expanded = false
+    @State private var open = false
+
+    /// Whether a finished reply has anything to draw here.
+    static func shows(_ activity: TurnActivity, blocks: [DataBlock]) -> Bool {
+        !activity.steps.isEmpty || !TurnTally(steps: [], blocks: blocks).isEmpty
+    }
 
     private var pulse: ThinkingPulse.Style { .init(rawValue: pulseRaw) ?? .defaultChoice }
     private var running: Bool { live && activity.isRunning }
-    private var done: [ToolStep] { activity.steps.filter { !$0.running } }
     private var current: [ToolStep] { activity.steps.filter(\.running) }
-
-    /// One row of pills per place searched, in the order the first search of
-    /// each ran — the same folding `DataCardStack` does for a reloaded thread.
-    private var sourcesByOrigin: [(origin: String, payloads: [JSONValue])] {
-        var out: [(origin: String, payloads: [JSONValue])] = []
-        for block in blocks where block.data.cardKind == "sources" {
-            let origin = block.data.string("origin")
-            if let i = out.firstIndex(where: { $0.origin == origin }) {
-                out[i].payloads.append(block.data)
-            } else {
-                out.append((origin, [block.data]))
-            }
-        }
-        return out
-    }
+    private var tally: TurnTally { TurnTally(steps: activity.steps, blocks: blocks, doneOnly: running) }
 
     var body: some View {
         #if os(macOS)
@@ -2121,44 +2023,54 @@ private struct TurnActivityRow: View {
     }
 
     private var content: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            HStack(spacing: 8) {
-                ForEach(sourcesByOrigin, id: \.origin) { row in
-                    SourcesCard(cards: row.payloads)
-                }
-                if activity.isVisible {
-                    Button { withAnimation(.easeOut(duration: 0.15)) { expanded.toggle() } } label: { words }
-                        .buttonStyle(.plain)
-                }
-                if running {
-                    ThinkingPulse(style: pulse, color: theme.inkSoft)
-                }
-                elapsed
+        HStack(spacing: 8) {
+            if !activity.steps.isEmpty || !blocks.isEmpty {
+                Button { open = true } label: { words }
+                    .buttonStyle(.plain)
+                    .sheet(isPresented: $open) {
+                        TurnDrawer(activity: activity, blocks: blocks)
+                        #if os(iOS)
+                            .presentationDetents([.medium, .large])
+                            .presentationDragIndicator(.visible)
+                        #endif
+                    }
+            } else if let now = currentText {
+                Text(now)
+                    .font(.system(size: 12.5))
+                    .foregroundStyle(theme.inkSoft)
+                    .lineLimit(1)
             }
-            .frame(minHeight: 22)
-            if expanded { detail }
+            if running {
+                ThinkingPulse(style: pulse, color: theme.inkSoft)
+            }
+            elapsed
         }
+        .frame(minHeight: 22)
         .padding(.vertical, 4)
         .animation(.easeOut(duration: 0.18), value: activity.steps)
     }
 
-    /// Done steps, muted; then the running ones, brighter.
+    /// The tally, muted; then what runs now, brighter; then the way in.
     private var words: some View {
         HStack(spacing: 6) {
-            if !done.isEmpty {
-                Text(done.map(Self.name(of:)).joined(separator: " · "))
+            SourceStack(blocks: blocks)
+            if !tally.isEmpty {
+                Text(tally.text)
                     .foregroundStyle(theme.inkMute)
                     .lineLimit(1)
-                    .truncationMode(.head)
+                    .truncationMode(.tail)
                     .layoutPriority(-1)
             }
             if let now = currentText {
-                if !done.isEmpty { Text("–").foregroundStyle(theme.inkMute) }
+                if !tally.isEmpty { Text("–").foregroundStyle(theme.inkMute) }
                 Text(now)
                     .foregroundStyle(theme.inkSoft)
                     .lineLimit(1)
                     .fixedSize(horizontal: true, vertical: false)
             }
+            Image(systemName: "chevron.right")
+                .font(.system(size: 9, weight: .semibold))
+                .foregroundStyle(theme.inkMute)
         }
         .font(.system(size: 12.5))
         .contentShape(Rectangle())
@@ -2167,7 +2079,8 @@ private struct TurnActivityRow: View {
     /// What is happening right now: the running tool(s), or the phase
     /// (thinking, reconnecting) when no tool is.
     private var currentText: String? {
-        if !current.isEmpty { return current.map(Self.name(of:)).joined(separator: " · ") + "…" }
+        guard running else { return nil }
+        if !current.isEmpty { return current.map { ToolStep.label(for: $0.tool, running: true) }.joined(separator: " · ") + "…" }
         if let phase = activity.phase { return phase + "…" }
         return nil
     }
@@ -2189,34 +2102,6 @@ private struct TurnActivityRow: View {
         Text(Self.format(activity.elapsed))
             .font(.system(size: 12, weight: .medium, design: .rounded).monospacedDigit())
             .foregroundStyle(theme.inkMute)
-    }
-
-    /// Every step on its own line: done ones ticked, the running ones last.
-    private var detail: some View {
-        VStack(alignment: .leading, spacing: 3) {
-            ForEach(done) { step in
-                HStack(spacing: 6) {
-                    Image(systemName: "checkmark").font(.system(size: 9, weight: .semibold)).frame(width: 12)
-                    Text(Self.name(of: step))
-                }
-                .foregroundStyle(theme.inkMute)
-            }
-            ForEach(current) { step in
-                HStack(spacing: 6) {
-                    Image(systemName: "arrow.right").font(.system(size: 9, weight: .semibold)).frame(width: 12)
-                    Text(Self.name(of: step) + "…")
-                }
-                .foregroundStyle(theme.inkSoft)
-            }
-        }
-        .font(.system(size: 12))
-        .padding(.leading, 2)
-        .transition(.opacity.combined(with: .move(edge: .top)))
-    }
-
-    private static func name(of step: ToolStep) -> String {
-        let label = ToolStep.label(for: step.tool, running: step.running)
-        return step.count > 1 ? "\(label) ×\(step.count)" : label
     }
 
     /// Seconds up to a minute, then minutes and seconds.
