@@ -262,11 +262,13 @@ async def main() -> int:
 
     print("\n── force ──")
     before = len(payloads(orch))
-    await orch.initial_index()
+    counts = await orch.initial_index()
     eq("an unchanged file is skipped", len(payloads(orch)), before)
+    check("the walk counts what it saw and embedded nothing", counts["files"] > 0 and counts["indexed"] == 0, str(counts))
     seen_before = len(orch.embedder.seen)  # type: ignore[attr-defined]
-    await orch.initial_index(force=True)
+    counts = await orch.initial_index(force=True)
     check("force re-embeds it", len(orch.embedder.seen) > seen_before)  # type: ignore[attr-defined]
+    check("and counts it", counts["indexed"] > 0, str(counts))
     eq("without duplicating anything", len(payloads(orch)), before)
 
     print("\n── prune ──")
@@ -342,6 +344,22 @@ async def main() -> int:
             break
     else:
         check("no blank chunk was stored", True)
+
+    print("\n── a file renamed into place is seen ──")
+    # An atomic save — temp file, then rename over the target — reaches the
+    # watcher as a move and nothing else; before on_moved, the note itself
+    # was never indexed.
+    from watchdog.events import FileMovedEvent
+    from src.watcher import DebouncedHandler, SourceContext
+
+    events: list[tuple[str, str]] = []
+    handler = DebouncedHandler(lambda kind, path: events.append((kind, path.name)),
+                               SourceContext("garden-notes", GARDENS, True, 0.0),
+                               asyncio.get_running_loop())
+    handler.on_moved(FileMovedEvent(str(GARDENS / "x/notes/en/.tmp123.md"), str(GARDENS / "x/notes/en/saved.md")))
+    await asyncio.sleep(0.05)
+    check("the temp file is dropped", ("deleted", ".tmp123.md") in events, str(events))
+    check("the target is indexed", ("created", "saved.md") in events, str(events))
 
     print("\n── a store another model wrote is refused at open ──")
     # Until September 2026 the pin was checked on the next write only, so a

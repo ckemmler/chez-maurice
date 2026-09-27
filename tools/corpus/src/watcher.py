@@ -7,7 +7,13 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Dict
 
-from watchdog.events import FileSystemEventHandler, FileCreatedEvent, FileModifiedEvent, FileDeletedEvent
+from watchdog.events import (
+    FileCreatedEvent,
+    FileDeletedEvent,
+    FileModifiedEvent,
+    FileMovedEvent,
+    FileSystemEventHandler,
+)
 from watchdog.observers import Observer
 
 
@@ -42,6 +48,15 @@ class DebouncedHandler(FileSystemEventHandler):
     def on_deleted(self, event):
         if isinstance(event, FileDeletedEvent) and not event.is_directory:
             self._invoke("deleted", Path(event.src_path))
+
+    def on_moved(self, event):
+        # An atomic write — a temp file renamed over the target, which is how
+        # most editors, git and coding agents save — arrives as a move and
+        # nothing else. Unhandled, the note itself was never seen: 31 of the
+        # owner's notes were missing from the index on 27 September 2026.
+        if isinstance(event, FileMovedEvent) and not event.is_directory:
+            self._invoke("deleted", Path(event.src_path))
+            self._schedule("created", Path(event.dest_path))
 
     def _schedule(self, event_type: str, path: Path) -> None:
         def start_task() -> None:

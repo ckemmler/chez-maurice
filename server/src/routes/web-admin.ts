@@ -967,7 +967,7 @@ function corpusCard(lang: string): string {
     : t(lang, "corpus.never_run");
   const outcome = s.last_outcome ? t(lang, "corpus.outcome_" + s.last_outcome) : "";
   const stats = s.last_stats
-    ? t(lang, "corpus.stats", String(s.last_stats.conversations), String(s.last_stats.chunks_written), String(s.last_stats.pruned))
+    ? t(lang, "corpus.stats", String(s.last_stats.conversations), String(s.last_stats.chunks_written), String(s.last_stats.files_indexed ?? 0), String(s.last_stats.pruned))
     : "";
   return `
         <div class="card pad">

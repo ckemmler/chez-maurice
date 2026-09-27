@@ -231,13 +231,15 @@ class CorpusOrchestrator:
 
     async def index_file(
         self, path: Path, source_name: str, source_config: SourceConfig, force: bool = False
-    ) -> None:
+    ) -> bool:
+        """Index one file; True when it was (re-)embedded, False when it was
+        up to date, out of scope or failed."""
         if self._should_ignore(path) or not self._matches_source(source_config, path):
-            return
+            return False
         member_id = self._member_for(source_config, path)
         if source_config.member_from_path and not member_id:
             self.logger.warning("Skipping %s: could not resolve owning member", path)
-            return
+            return False
         try:
             written = await process_file(
                 path,
@@ -253,10 +255,12 @@ class CorpusOrchestrator:
                 self.logger.info("Indexed %s (%s)", path, source_name)
             else:
                 self.logger.debug("Up-to-date %s (%s)", path, source_name)
+            return bool(written)
         except FileNotFoundError:
             self.logger.warning("File disappeared before indexing: %s", path)
         except Exception as exc:  # noqa: BLE001
             self.logger.error("Failed to index %s: %s", path, exc)
+        return False
 
     async def index_single(self, source_name: str, path: Path) -> None:
         """Index one file under a named source (push hook for create/update)."""
@@ -274,8 +278,11 @@ class CorpusOrchestrator:
             return
         remove_file(path, self.indexer, self.hash_store, member_id=member_id)
 
-    async def initial_index(self, sources: Optional[List[str]] = None, force: bool = False) -> None:
+    async def initial_index(self, sources: Optional[List[str]] = None, force: bool = False) -> dict:
+        """Walk the sources and index what changed. Returns how many files were
+        seen and how many were (re-)embedded — the server's nightly reports it."""
         names = sources or list(self.config.sources.keys())
+        seen = indexed = 0
         for name in names:
             if name not in self.config.sources:
                 self.logger.warning("Unknown source '%s' skipped", name)
@@ -283,7 +290,10 @@ class CorpusOrchestrator:
             source = self.config.sources[name]
             files = self._iter_source_files(source)
             for path in files:
-                await self.index_file(path, name, source, force=force)
+                seen += 1
+                if await self.index_file(path, name, source, force=force):
+                    indexed += 1
+        return {"files": seen, "indexed": indexed}
 
     def prune_missing(self, sources: Optional[List[str]] = None, *, shared: bool = False) -> dict:
         """Drop index entries whose file is gone from disk.

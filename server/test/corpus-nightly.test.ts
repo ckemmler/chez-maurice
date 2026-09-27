@@ -1,14 +1,15 @@
 // The corpus reconciles itself every night (services/corpusNightly.ts). What
 // these pin down is the shape of the safety net rather than the corpus's own
-// work: one reconcile call for the household, a prune per member, a night
+// work: one reconcile call for the household, one walk of the garden sources,
+// a prune per member, a night
 // that fails is recorded as such, a run in flight is shared, and "due" means
 // once per local day from the hour on — never twice, never skipped.
 
 import { expect, test } from "bun:test";
 
-const { isDue, reconcileCorpus, corpusNightlyStatus, nightlyOn } = await import("../src/services/corpusNightly");
+const { isDue, reconcileCorpus, corpusNightlyStatus, nightlyOn, GARDEN_SOURCES } = await import("../src/services/corpusNightly");
 
-function fakeDeps(opts: { fail?: string; pruneFail?: string } = {}) {
+function fakeDeps(opts: { fail?: string; pruneFail?: string; walkFail?: string } = {}) {
   const calls: { member: string; tool: string; args: any }[] = [];
   const members = [{ id: "m-anna" }, { id: "m-ben" }, { id: "m-child" }];
   const call = async (member: string, tool: string, args: any) => {
@@ -16,6 +17,10 @@ function fakeDeps(opts: { fail?: string; pruneFail?: string } = {}) {
     if (tool === "index_conversation") {
       if (opts.fail) throw new Error(opts.fail);
       return { conversations: 42, chunks_written: 7 };
+    }
+    if (tool === "reindex") {
+      if (opts.walkFail) throw new Error(opts.walkFail);
+      return { status: "done", files: 830, indexed: 31 };
     }
     if (tool === "prune") {
       if (opts.pruneFail === member) return { error: "boom" };
@@ -40,16 +45,18 @@ test("due once per local day, from the hour on", () => {
   expect(isDue(at(4), "not a date")).toBe(true); // a broken record costs one run
 });
 
-test("one reconcile for the household, one prune per member, counted", async () => {
+test("one reconcile and one garden walk for the household, one prune per member, counted", async () => {
   const { calls, deps } = fakeDeps();
   const outcome = await reconcileCorpus(deps);
   expect(outcome).toBe("reconciled");
-  expect(calls.map((c) => c.tool)).toEqual(["index_conversation", "prune", "prune", "prune"]);
+  expect(calls.map((c) => c.tool)).toEqual(["index_conversation", "reindex", "prune", "prune", "prune"]);
   expect(calls[0].args).toEqual({}); // no conversation_id: every conversation
-  expect(calls.slice(1).map((c) => c.member)).toEqual(["m-anna", "m-ben", "m-child"]);
+  expect(calls[1].args).toEqual({ sources: GARDEN_SOURCES }); // the gardens only, never the books
+  expect(GARDEN_SOURCES).toContain("garden-notes");
+  expect(calls.slice(2).map((c) => c.member)).toEqual(["m-anna", "m-ben", "m-child"]);
   const s = corpusNightlyStatus();
   expect(s.last_outcome).toBe("reconciled");
-  expect(s.last_stats).toEqual({ conversations: 42, chunks_written: 7, pruned: 2, members: 3 });
+  expect(s.last_stats).toEqual({ conversations: 42, chunks_written: 7, files_indexed: 31, pruned: 2, members: 3 });
   expect(s.last_error).toBeNull();
   expect(s.running).toBe(false);
   expect(s.last_run_at && !Number.isNaN(Date.parse(s.last_run_at))).toBe(true);
@@ -60,6 +67,15 @@ test("a reconcile that fails is recorded, and prune is not attempted", async () 
   expect(await reconcileCorpus(deps)).toBe("failed");
   expect(calls.map((c) => c.tool)).toEqual(["index_conversation"]);
   expect(corpusNightlyStatus().last_error).toBe("gateway down");
+});
+
+test("a garden walk that fails is recorded, and the prune still runs", async () => {
+  const { calls, deps } = fakeDeps({ walkFail: "gateway timeout" });
+  expect(await reconcileCorpus(deps)).toBe("failed");
+  expect(calls.filter((c) => c.tool === "prune").length).toBe(3);
+  const s = corpusNightlyStatus();
+  expect(s.last_error).toBe("reindex: gateway timeout");
+  expect(s.last_stats?.conversations).toBe(42);
 });
 
 test("one member's prune failing does not stop the others", async () => {

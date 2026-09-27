@@ -17,6 +17,14 @@ import { listUsers } from "./users";
 // whose file is gone, one member at a time since a gateway session is scoped
 // to one member's store.
 //
+// It also walks the gardens. A note, fiche, card or fragment reaches the index
+// when the garden's writer pushes it (`index_path`), and a file written any
+// other way — by a script, by a coding session editing the garden on disk —
+// never did: on 27 September 2026, 31 of the owner's notes were missing, the
+// commercialisation inventory among them, so Maurice answered a question about
+// it without it. `reindex` on the garden sources hashes every file and embeds
+// only what changed, so a night with nothing new writes nothing.
+//
 // It lives in the server rather than in a launchd timer or a cron line because
 // the gateway already holds every store open: a second process reconciling
 // the same sqlite files would be a second writer, and the container has no
@@ -34,9 +42,15 @@ export type NightlyOutcome = "off" | "reconciled" | "failed" | "no_members";
 export interface NightlyStats {
   conversations: number;
   chunks_written: number;
+  /** Garden files (re-)embedded by the walk; absent on a record from before it. */
+  files_indexed?: number;
   pruned: number;
   members: number;
 }
+
+/** The file-backed garden sources the night walks (tools/corpus/config). A
+ *  source a household's config does not define is skipped by the corpus. */
+export const GARDEN_SOURCES = ["garden-notes", "garden-fiches", "garden-cards", "garden-fragments"];
 
 export interface NightlyState {
   last_run_at: string | null;
@@ -162,36 +176,49 @@ async function doRun(deps: NightlyDeps): Promise<NightlyOutcome> {
     console.log("[corpus] nightly: no members, nothing to reconcile");
     return finish("no_members", null, null);
   }
-  const stats: NightlyStats = { conversations: 0, chunks_written: 0, pruned: 0, members: members.length };
+  const stats: NightlyStats = { conversations: 0, chunks_written: 0, files_indexed: 0, pruned: 0, members: members.length };
   try {
     // One pass reconciles every conversation for every participant; the member
     // it is scoped to only satisfies the gateway's auth.
     const r = await reconcileAll(deps, members[0]!.id);
     stats.conversations = r.conversations;
     stats.chunks_written = r.chunks_written;
+    // The gardens: one walk for the household — each file is routed to its
+    // owner's store by its path, whoever the session is scoped to. Before the
+    // prune, so a file renamed on disk is indexed under its new path before its
+    // old one is dropped. A walk that fails does not stop the prune.
+    let stepError: string | null = null;
+    try {
+      const w = await deps.call(members[0]!.id, "reindex", { sources: GARDEN_SOURCES });
+      if (w?.error || w?.raw) throw new Error(String(w.error ?? w.raw));
+      stats.files_indexed = Number(w?.indexed ?? 0);
+    } catch (err) {
+      stepError = `reindex: ${(err as Error).message}`;
+      console.warn(`[corpus] nightly: ${stepError}`);
+    }
     // Prune is scoped to the caller's store, so once per member. The first
     // member's call also sweeps the shared pool (`_default.db`, the books),
     // which no member-scoped session reaches otherwise: a book removed from
     // Calibre kept its chunks until someone ran prune from the corpus's CLI.
     // A member whose prune fails does not take the others down; the error
     // is kept.
-    let pruneError: string | null = null;
     for (const [i, m] of members.entries()) {
       try {
         const p = await deps.call(m.id, "prune", i === 0 ? { shared: true } : {});
         if (p?.error || p?.raw) throw new Error(String(p.error ?? p.raw));
         stats.pruned += Number(p?.removed ?? 0);
       } catch (err) {
-        pruneError = `prune(${m.id}): ${(err as Error).message}`;
-        console.warn(`[corpus] nightly: ${pruneError}`);
+        stepError = `prune(${m.id}): ${(err as Error).message}`;
+        console.warn(`[corpus] nightly: ${stepError}`);
       }
     }
     const ms = now().getTime() - started.getTime();
     console.log(
       `[corpus] nightly: ${stats.conversations} conversation(s) reconciled, ${stats.chunks_written} chunk(s) written, ` +
+        `${stats.files_indexed} garden file(s) indexed, ` +
         `${stats.pruned} stale file entr${stats.pruned === 1 ? "y" : "ies"} pruned across ${stats.members} member(s) in ${Math.round(ms / 1000)}s`
     );
-    return finish(pruneError ? "failed" : "reconciled", pruneError, stats);
+    return finish(stepError ? "failed" : "reconciled", stepError, stats);
   } catch (err) {
     const message = (err as Error).message;
     console.error(`[corpus] nightly: failed: ${message}`);

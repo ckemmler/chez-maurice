@@ -511,10 +511,10 @@ class CorpusMCPServer:
                     arguments.get("sources"), shared=bool(arguments.get("shared"))
                 )
             elif name == "reindex":
-                await self.orchestrator.initial_index(
+                counts = await self.orchestrator.initial_index(
                     arguments.get("sources"), force=bool(arguments.get("force"))
                 )
-                payload = {"status": "reindex started"}
+                payload = {"status": "done", **counts}
             elif name == "index_conversation":
                 payload = await self.orchestrator.index_conversations(
                     arguments.get("conversation_id"), background=True
