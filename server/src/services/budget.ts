@@ -17,6 +17,11 @@
 //   the instance's — env, the operator's fuse, counted over the whole household
 //     MAURICE_SPEND_CAP_USD        total, over the life of the instance
 //     MAURICE_SPEND_CAP_DAILY_USD  rolling 24 hours
+//     MAURICE_SPEND_CAP_MESSAGE    optional: what to say instead when the
+//                                  total is spent, `{cap}` standing for the
+//                                  amount — the operator's words, in the
+//                                  household's language, saying where to go
+//                                  next (a hosted trial's allowance, say)
 //   the household's — households.spend_cap_daily_usd, its own choice, counted
 //     over the whole household
 //   the member's — users.spend_cap_daily_usd, counted over that member alone
@@ -253,13 +258,20 @@ interface Layer {
   reason: string;
 }
 
+/** The operator's own sentence for a spent total allowance, if they wrote one. */
+function totalCapMessage(cap: string): string | null {
+  const raw = process.env.MAURICE_SPEND_CAP_MESSAGE?.trim();
+  return raw ? raw.replaceAll("{cap}", cap) : null;
+}
+
 /** The caps that apply to a member, most specific first, so that when more
  *  than one is reached the refusal names the one closest to the person reading
  *  it. Each layer is counted over what its cap covers: the member's own turns
  *  for their cap, the whole household's for the other three. */
 function layers(userId?: string | null): Layer[] {
   const c = capsFor(userId);
-  const usd = (n: number) => `$${n.toFixed(2)}`;
+  // Euros since 24 September 2026, whatever the `Usd` in the names says.
+  const usd = (n: number) => `€${n.toFixed(2)}`;
   const out: Layer[] = [];
   if (c.memberDailyUsd != null && userId) {
     out.push({
@@ -294,7 +306,7 @@ function layers(userId?: string | null): Layer[] {
     out.push({
       capUsd: c.totalUsd,
       spentUsd: spentTotalUsd(),
-      reason:
+      reason: totalCapMessage(usd(c.totalUsd)) ??
         `This instance has spent its allowance of ${usd(c.totalUsd)}. ` +
         `Nothing is lost — the conversation and everything in the garden are still here.`,
     });

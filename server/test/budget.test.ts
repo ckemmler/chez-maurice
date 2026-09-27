@@ -3,7 +3,7 @@
 
 import { test, expect, beforeEach, afterEach } from "bun:test";
 
-const ENV = ["MAURICE_SPEND_CAP_USD", "MAURICE_SPEND_CAP_DAILY_USD"] as const;
+const ENV = ["MAURICE_SPEND_CAP_USD", "MAURICE_SPEND_CAP_DAILY_USD", "MAURICE_SPEND_CAP_MESSAGE"] as const;
 const saved: Record<string, string | undefined> = {};
 
 // Two members, so a cap on one can be shown not to touch the other.
@@ -202,9 +202,20 @@ test("the refusal names the cap that was reached", async () => {
   b.recordSpend(turn(0.6), BEN);
   const v = b.verdict("anthropic", "claude-sonnet-5", 0, ANNA);
   expect(v.ok).toBe(false);
-  expect(v.reason).toContain("This instance has reached its daily limit of $0.50");
+  expect(v.reason).toContain("This instance has reached its daily limit of €0.50");
   expect(v.reason).not.toContain("household");
   expect(v.reason).not.toContain("your daily limit");
+});
+
+test("the operator may say what a spent allowance means, in their own words", async () => {
+  const b = await budget();
+  process.env.MAURICE_SPEND_CAP_USD = "1.00";
+  b.recordSpend(turn(1.2), ANNA);
+  expect(b.verdict("anthropic", "claude-sonnet-5", 0, ANNA).reason).toContain("spent its allowance of €1.00");
+  process.env.MAURICE_SPEND_CAP_MESSAGE = "Le crédit d'essai ({cap}) est épuisé. Rien n'est perdu.";
+  const v = b.verdict("anthropic", "claude-sonnet-5", 0, ANNA);
+  expect(v.ok).toBe(false);
+  expect(v.reason).toBe("Le crédit d'essai (€1.00) est épuisé. Rien n'est perdu.");
 });
 
 test("a stored cap of nonsense is ignored, like an env one", async () => {

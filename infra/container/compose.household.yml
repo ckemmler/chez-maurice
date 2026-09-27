@@ -47,6 +47,9 @@ services:
       # set it in the household's env file, or in defaults.env for all.
       MAURICE_SPEND_CAP_USD: ${MAURICE_SPEND_CAP_USD:-}
       MAURICE_SPEND_CAP_DAILY_USD: ${MAURICE_SPEND_CAP_DAILY_USD:-}
+      # What to say when the total above is spent, instead of the default
+      # sentence; `{cap}` is the amount (see budget.ts).
+      MAURICE_SPEND_CAP_MESSAGE: ${MAURICE_SPEND_CAP_MESSAGE:-}
       CORPUS_EMBEDDING_BASE_URL: ${CORPUS_EMBEDDING_BASE_URL:-}
       CORPUS_EMBEDDING_MODEL: ${CORPUS_EMBEDDING_MODEL:-}
       CORPUS_EMBEDDING_API_KEY: ${CORPUS_EMBEDDING_API_KEY:-}
