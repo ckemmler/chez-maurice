@@ -13,8 +13,16 @@ import { gardenRoot } from "./garden";
  */
 
 export interface Fragment {
+  /** The file's number, `001` — the anchor the "À vérifier" footer links to. */
+  id: string;
   summary: string;
   html: string;
+}
+
+/** A source link the mail pass writes, `maurice-mail:<id>`, pointed at the
+ *  server's page for that message (routes/people.ts). */
+export function mailLinks(html: string): string {
+  return html.replace(/href="maurice-mail:([^"]+)"/g, 'href="/api/people/mail/$1" target="_blank" rel="noopener"');
 }
 
 /** `<gardens>/<member>/<collection>/<locale>/<slug>-fiche/_fragments/`. */
@@ -38,7 +46,7 @@ export function parseFragments(dir: string): Fragment[] {
         summary = sumLine?.replace(/^summary:\s*["']?|["']?\s*$/g, "") ?? "";
         body = m[2];
       }
-      return { summary, html: marked.parse(body.trim(), { async: false }) as string };
+      return { id: f.replace(/\.frag$/, ""), summary, html: mailLinks(marked.parse(body.trim(), { async: false }) as string) };
     });
 }
 

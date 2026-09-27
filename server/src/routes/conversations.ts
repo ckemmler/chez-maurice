@@ -32,6 +32,8 @@ import { publishToRoom, publishToUser, userHasSocket } from "../services/roomBus
 import { pushToUser } from "../services/push";
 import { indexConversationInBackground } from "../services/mcpClient";
 import { searchConversations } from "../services/conversationSearch";
+import { takeFooter } from "../services/reviewFooter";
+import { memberLocale } from "../services/domainBriefs";
 import {
   beginTurn,
   recordEvent,
@@ -411,6 +413,11 @@ conversations.post("/:id/messages", async (c) => {
   // still worth writing to.
   const signal = turn.controller.signal;
   const attached = () => !c.req.raw.signal.aborted;
+  // Where the member reached us, for the footer's links: the app opens only
+  // absolute ones.
+  const host = c.req.header("x-forwarded-host") || c.req.header("host") || "";
+  const proto = c.req.header("x-forwarded-proto") || (/^(localhost|127\.)/.test(host) ? "http" : "https");
+  const origin = host ? `${proto}://${host}` : "";
 
   // Stream with throttled flushing — accumulate text and emit every ~30ms
   // so the client sees a smooth streaming effect even when Anthropic is fast
@@ -429,6 +436,20 @@ conversations.post("/:id/messages", async (c) => {
         let pendingText = "";
         let lastFlush = Date.now();
         const FLUSH_INTERVAL = 30; // ms between flushes
+
+        // The "À vérifier" footer (services/reviewFooter.ts): what in the
+        // member's person fiches entered the turn unconfirmed, rendered by
+        // the server and sent as the reply's last text, so the app, a
+        // re-attaching client and the stored message all carry it.
+        let footed = false;
+        const appendFooter = async () => {
+          if (footed || isRoom || !fullResponse) return;
+          footed = true;
+          const footer = takeFooter(convoId, userId, origin, memberLocale(userId));
+          if (!footer) return;
+          fullResponse += footer;
+          await send({ type: "text_delta", text: footer });
+        };
 
         // Persist Maurice's reply (idempotent). Called on normal completion and
         // again if the client aborts mid-stream (⏹ Stop), so whatever streamed so
@@ -649,11 +670,13 @@ conversations.post("/:id/messages", async (c) => {
             }
           }
 
+          await appendFooter();
           const msg = persistReply();
           if (msg) await send({ type: "done", message_id: msg.id });
         } catch (err: any) {
           // Stopped (POST /:id/turn/stop) or the stream broke — keep the
           // partial reply. A stop is a normal end; a break is an error.
+          await appendFooter().catch(() => {});
           const msg = persistReply();
           if (signal.aborted) {
             if (msg) await send({ type: "done", message_id: msg.id });

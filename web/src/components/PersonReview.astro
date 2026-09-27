@@ -1,0 +1,165 @@
+---
+/**
+ * The member's word on a person fiche — lot 4 of specs/contacts.md.
+ *
+ * Shown to the owner only, on a fiche of `people/`: what the mail pass wrote
+ * and is not confirmed yet — the person, the relation, each address, each
+ * fragment — with ✓ confirm, ✗ reject and ✎ correct in place (saving
+ * confirms). The state comes from the server (GET /api/people/:locale/:fiche)
+ * and every gesture goes back to it (POST …/review), with the session
+ * cookie, like the owner's toolbar. The "À vérifier" footer of a reply links
+ * here: #review, #person, #relation, #identity-N, #fragment-NNN.
+ */
+interface Props {
+  locale: string;
+  basename: string;
+}
+const { locale, basename } = Astro.props;
+const lang = locale === "fr" ? "fr" : "en";
+---
+
+<section id="review" class="person-review" data-locale={locale} data-basename={basename} data-lang={lang} hidden></section>
+
+<script is:inline>
+(() => {
+  const root = document.getElementById("review");
+  if (!root) return;
+  const locale = root.dataset.locale, basename = root.dataset.basename;
+  const fr = root.dataset.lang === "fr";
+  const T = fr ? {
+    title: "À vérifier", none: "Tout est confirmé.", pending: (n) => `${n} élément${n > 1 ? "s" : ""} en attente`,
+    all: "Tout confirmer", person: "Cette fiche a été créée par Maurice à partir de ton courrier.",
+    isPerson: "C'est bien une personne", rejectFiche: "Rejeter la fiche",
+    rejectFicheQ: "Rejeter cette fiche ? Elle sera supprimée et ne sera plus jamais écrite.",
+    relation: "La relation", addresses: "Adresses", noRelation: "Pas encore de relation.",
+    confirm: "Confirmer", reject: "Rejeter", edit: "Corriger", save: "Enregistrer", cancel: "Annuler",
+    st: { pending: "en attente", confirmed: "confirmé", rejected: "rejeté" },
+    vcard: "carnet", mail: "courrier", since: "depuis", until: "jusqu'à",
+    rejectFrag: "Rejeter ce fragment ? Il sera supprimé et ne sera plus jamais écrit.", failed: "Échec : ",
+  } : {
+    title: "To check", none: "Everything is confirmed.", pending: (n) => `${n} item${n > 1 ? "s" : ""} pending`,
+    all: "Confirm all", person: "Maurice made this fiche from your mail.",
+    isPerson: "Yes, a person", rejectFiche: "Reject the fiche",
+    rejectFicheQ: "Reject this fiche? It will be deleted and never written again.",
+    relation: "The relation", addresses: "Addresses", noRelation: "No relation yet.",
+    confirm: "Confirm", reject: "Reject", edit: "Correct", save: "Save", cancel: "Cancel",
+    st: { pending: "pending", confirmed: "confirmed", rejected: "rejected" },
+    vcard: "address book", mail: "mail", since: "since", until: "until",
+    rejectFrag: "Reject this fragment? It will be deleted and never written again.", failed: "Failed: ",
+  };
+  const api = `/api/people/${encodeURIComponent(locale)}/${encodeURIComponent(basename)}`;
+  const el = (tag, attrs = {}, ...kids) => {
+    const e = document.createElement(tag);
+    for (const [k, v] of Object.entries(attrs)) {
+      if (k === "onclick") e.addEventListener("click", v); else if (v !== undefined && v !== null) e.setAttribute(k, v);
+    }
+    for (const k of kids.flat()) if (k != null) e.append(k);
+    return e;
+  };
+  const badge = (s) => el("span", { class: `pr-badge pr-${s}` }, T.st[s] || s);
+  let view = null;
+
+  async function send(body, confirmText) {
+    if (confirmText && !window.confirm(confirmText)) return;
+    const res = await fetch(`${api}/review`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    const out = await res.json().catch(() => ({}));
+    if (!res.ok) { window.alert(T.failed + (out.error || res.status)); return; }
+    // The page's text changed (an edit, a fragment gone, the fiche gone): reload it.
+    if (body.action === "edit" || body.action === "reject" || !out.view) { location.reload(); return; }
+    view = out.view;
+    render();
+  }
+
+  const buttons = (target, id, s, editText) => el("span", { class: "pr-actions" },
+    s !== "confirmed" ? el("button", { type: "button", class: "pr-ok", title: T.confirm, onclick: () => send({ target, id, action: "confirm" }) }, "✓") : null,
+    s !== "rejected" ? el("button", { type: "button", class: "pr-no", title: T.reject, onclick: () => send({ target, id, action: "reject" }, target === "fragment" ? T.rejectFrag : null) }, "✗") : null,
+    editText !== undefined ? el("button", { type: "button", class: "pr-edit", title: T.edit, onclick: (e) => editor(e.currentTarget.closest("[data-editable]"), target, id, editText) }, "✎") : null,
+  );
+
+  function editor(host, target, id, text) {
+    if (!host || host.querySelector(".pr-editor")) return;
+    const area = el("textarea", { rows: String(Math.min(14, Math.max(3, text.split("\n").length + 1))) });
+    area.value = text;
+    const box = el("div", { class: "pr-editor" }, area, el("div", {},
+      el("button", { type: "button", class: "pr-save", onclick: () => send({ target, id, action: "edit", text: area.value }) }, T.save),
+      el("button", { type: "button", onclick: () => box.remove() }, T.cancel)));
+    host.append(box);
+    area.focus();
+  }
+
+  function render() {
+    root.replaceChildren();
+    root.hidden = false;
+    const v = view;
+    root.append(el("header", { id: "person" },
+      el("strong", {}, T.title), " ",
+      el("span", { class: "pr-count" }, v.pending ? T.pending(v.pending) : T.none),
+      v.pending ? el("button", { type: "button", class: "pr-all", onclick: () => send({ target: "all", action: "confirm" }) }, `✓ ${T.all}`) : null));
+    if (v.byMaurice && v.status === "pending") {
+      root.append(el("p", { class: "pr-row" }, T.person, " ",
+        el("button", { type: "button", class: "pr-ok", onclick: () => send({ target: "fiche", action: "confirm" }) }, `✓ ${T.isPerson}`),
+        el("button", { type: "button", class: "pr-no", onclick: () => send({ target: "fiche", action: "reject" }, T.rejectFicheQ) }, `✗ ${T.rejectFiche}`)));
+    }
+    const rel = v.relation;
+    const dates = [rel.since ? `${T.since} ${rel.since}` : "", rel.until ? `${T.until} ${rel.until}` : ""].filter(Boolean).join(", ");
+    root.append(el("div", { id: "relation", class: "pr-block", "data-editable": "" },
+      el("div", { class: "pr-row" }, el("span", { class: "pr-label" }, T.relation), rel.status ? badge(rel.status) : null,
+        dates ? el("span", { class: "pr-mute" }, dates) : null,
+        rel.status ? buttons("relation", undefined, rel.status, (rel.text || "").replace(/\s+—\s+\[.*$/s, "")) : null),
+      el("p", { class: "pr-text" }, rel.text ? rel.text.replace(/\s+—\s+\[.*$/s, "") : T.noRelation)));
+    if (v.identities.length) {
+      root.append(el("div", { class: "pr-block" }, el("span", { class: "pr-label" }, T.addresses),
+        el("ul", {}, v.identities.map((i, n) => el("li", { id: `identity-${n + 1}`, class: "pr-row" },
+          el("code", {}, i.address), badge(i.status),
+          el("span", { class: "pr-mute" }, [i.source === "vcard" ? T.vcard : T.mail, ...i.mailboxes].join(" · ")),
+          i.conflict ? el("span", { class: "pr-conflict" }, i.conflict) : null,
+          buttons("identity", i.address, i.status))))));
+    }
+    // The fragments are rendered by the page: decorate each with its state.
+    for (const f of v.fragments) {
+      const d = document.getElementById(`fragment-${f.id}`);
+      if (!d) continue;
+      d.querySelectorAll(".pr-frag").forEach((x) => x.remove());
+      const sum = d.querySelector("summary");
+      if (sum && f.origin === "mail") sum.append(el("span", { class: "pr-frag" }, " ", badge(f.status)));
+      if (f.origin === "mail") {
+        const body = d.querySelector(".fragment__body") || d;
+        body.setAttribute("data-editable", "");
+        body.prepend(el("div", { class: "pr-frag pr-row" }, buttons("fragment", f.id, f.status, f.body.trim())));
+      }
+    }
+    const target = location.hash && document.getElementById(location.hash.slice(1));
+    if (target) {
+      if (target.tagName === "DETAILS") target.open = true;
+      target.scrollIntoView({ block: "center" });
+      target.classList.add("pr-target");
+    }
+  }
+
+  fetch(api).then((r) => (r.ok ? r.json() : null)).then((v) => { if (v) { view = v; render(); } }).catch(() => {});
+})();
+</script>
+
+<style is:global>
+  .person-review { border: 1px solid var(--color-border, #ddd6c8); border-radius: 10px; padding: 0.9rem 1rem; margin: 0 0 1.5rem; font-size: 0.92rem; }
+  .person-review header { display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap; margin-bottom: 0.5rem; }
+  .person-review .pr-count { opacity: 0.75; }
+  .person-review .pr-block { margin-top: 0.7rem; }
+  .person-review .pr-row { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; margin: 0.25rem 0; }
+  .person-review ul { list-style: none; padding: 0; margin: 0.3rem 0 0; }
+  .person-review .pr-label { font-weight: 600; }
+  .person-review .pr-text { margin: 0.3rem 0 0; }
+  .pr-mute { opacity: 0.65; font-size: 0.85em; }
+  .pr-conflict { color: #b4570b; font-size: 0.85em; }
+  .pr-badge { font-size: 0.72rem; padding: 0.05rem 0.45rem; border-radius: 999px; border: 1px solid currentColor; opacity: 0.85; white-space: nowrap; }
+  .pr-pending { color: #b4570b; }
+  .pr-confirmed { color: #2f7d3a; }
+  .pr-rejected { color: #999; text-decoration: line-through; }
+  .pr-actions { display: inline-flex; gap: 0.25rem; }
+  .person-review button, .pr-frag button { font: inherit; font-size: 0.85rem; padding: 0.1rem 0.5rem; border-radius: 6px; border: 1px solid var(--color-border, #ccc); background: transparent; color: inherit; cursor: pointer; }
+  .pr-ok { color: #2f7d3a; } .pr-no { color: #a33; }
+  .pr-editor { margin-top: 0.4rem; }
+  .pr-editor textarea { width: 100%; font: 0.9rem/1.45 ui-monospace, Menlo, monospace; padding: 0.4rem; border-radius: 6px; border: 1px solid var(--color-border, #ccc); background: transparent; color: inherit; }
+  .pr-editor div { display: flex; gap: 0.4rem; margin-top: 0.3rem; }
+  .pr-target { outline: 2px solid #b4570b; outline-offset: 4px; border-radius: 6px; }
+</style>

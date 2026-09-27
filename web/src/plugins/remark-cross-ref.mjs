@@ -125,6 +125,15 @@ export default function remarkCrossRef() {
 
     // 1. Transform cross-ref links (e.g. note:foo-bar)
     visit(tree, "link", (node) => {
+      // A source the mail pass cites, `maurice-mail:<id>`: the server's page
+      // for that message, in a new tab (server/src/routes/people.ts).
+      if (typeof node.url === "string" && node.url.startsWith("maurice-mail:")) {
+        node.url = `/api/people/mail/${node.url.slice("maurice-mail:".length)}`;
+        node.data ??= {};
+        node.data.hProperties ??= {};
+        Object.assign(node.data.hProperties, { class: "mail-source", target: "_blank", rel: "noopener" });
+        return;
+      }
       const match = CROSS_REF_RE.exec(node.url);
       if (!match) return;
 

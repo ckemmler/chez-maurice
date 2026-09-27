@@ -9,6 +9,7 @@ import { narrowCorpusResults } from "./corpusResults";
 import { newSearchLedger, allowSearch, recordSearch, type SearchLedger } from "./searchBudget";
 import { McpSession, type McpTool } from "./mcpClient";
 import { resolveToText, resolveAttachments, getSpec } from "./composer/specs";
+import { noteComposer, noteTool, startReview } from "./reviewFooter";
 import { resolveBookItem } from "./composer/weights";
 import { type FileAttachment } from "./composer/files";
 import { getConversationMaurice, resolveMauriceContext, resolveMauriceAttachments } from "./maurices";
@@ -566,9 +567,13 @@ async function executeTool(
           ctx.searches && recordSearch(ctx.searches, "corpus", input?.query || "");
           const narrowed = narrowCorpusResults(data, text, { conversationId: ctx.conversationId });
           const card = narrowed.rows.length ? corpusSourceCard({ results: narrowed.rows }, input?.query) : null;
-          return { text: narrowed.text, isError: false, data: card ?? data };
+          // A hit in a person fiche the member has not confirmed: the model
+          // is told, and the footer will list it (services/reviewFooter.ts).
+          const mark = noteTool(ctx.conversationId, ctx.memberId, name, input, narrowed.rows);
+          return { text: narrowed.text + mark, isError: false, data: card ?? data };
         }
-        return { text, isError: r.isError, data };
+        const mark = r.isError ? "" : noteTool(ctx.conversationId, ctx.memberId, name, input, null);
+        return { text: text + mark, isError: r.isError, data };
       }
       return { text: `Tool ${name} is unavailable.`, isError: true };
     } catch (err: any) {
@@ -1111,6 +1116,10 @@ async function* streamTurn(
   const userLang = userLocale(memberId);
 
   let { messages, ids } = buildApiMessages(conversationId);
+  // The person fiches this turn will see, for the "À vérifier" footer — only
+  // in a conversation of the member's own: a room's other participants could
+  // not open their garden (services/reviewFooter.ts).
+  if (countParticipants(conversationId) <= 1) startReview(conversationId);
   // In a room the summoner is whoever sent the @claude message (userDisplayName).
   let systemPrompt =
     countParticipants(conversationId) > 1
@@ -1193,12 +1202,14 @@ function trackedBooks(
     try {
       const seen = new Set<string>();
       const blocks: string[] = [];
+      const loaded: { type: string; id: string | number }[] = [];
       const pushItems = (items: { type: string; id: string | number; text: string }[]) => {
         for (const i of items) {
           const key = `${i.type}:${i.id}`;
           if (seen.has(key) || !i.text?.trim()) continue;
           seen.add(key);
           blocks.push(i.text);
+          loaded.push(i);
         }
       };
       if (maurice) pushItems(resolveMauriceContext(memberId, maurice).items);
@@ -1207,6 +1218,8 @@ function trackedBooks(
       if (block.trim()) {
         systemPrompt +=
           `\n\n## Loaded context\nThe following material has been loaded into this conversation${maurice ? ` (some baked into ${maurice.name})` : ""}. Treat it as authoritative background and draw on it when relevant.\n\n${block}`;
+        // What in a loaded person fiche the member has not confirmed yet.
+        systemPrompt += noteComposer(conversationId, memberId, loaded);
       }
 
       // Every loaded book, named with its calibre id: the chapters above are

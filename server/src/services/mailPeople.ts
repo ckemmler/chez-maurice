@@ -339,7 +339,9 @@ export async function writePerson(ctx: PersonContext, p: Person): Promise<Person
   const relText = ref ? sectionOf(ref.body, w.relationship) : null;
   const relEdited = !!relText && !!relFm.written_hash && fragmentHash(relText) !== String(relFm.written_hash);
   const relSettled = relFm.status === "confirmed" || relFm.status === "rejected" || relEdited;
-  const force = relEdited && relFm.status !== "confirmed";
+  // Corrected in a text editor (the text moved, the status did not), or on
+  // the fiche's page (services/personReview.ts marks it `rewrite`).
+  const force = (relEdited && relFm.status !== "confirmed") || relFm.rewrite === true;
 
   const covered = new Set<string>([...(a?.sources ?? []), ...fragments.flatMap((f) => f.sources)]);
   const fresh = p.messages.filter((m) => !covered.has(m.id));
@@ -454,6 +456,10 @@ export async function writePerson(ctx: PersonContext, p: Person): Promise<Person
     };
   } else if (relEdited) {
     relation = { ...relFm, status: "confirmed" };
+  }
+  if ("rewrite" in relation) {
+    const { rewrite: _done, ...rest } = relation;
+    relation = rest;
   }
   if (!ref) body = `${body.trimEnd()}\n\n## ${w.provenance}\n\n${w.disclaimer}\n`;
 

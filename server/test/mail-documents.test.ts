@@ -192,7 +192,7 @@ test("a fiche in people/ per person: the relation once, the interactions per add
   expect(f).toContain("resource_id: jean-derely");
   expect(f).toMatch(/\nstatus: pending\n/); // born from mail alone
   expect(f).toMatch(/identities:\n\s+- address: jean@x\.org\n\s+mailboxes:\n\s+- anna@gmail\.com\n\s+- anna@proton\.me\n\s+status: pending\n\s+source: mail/);
-  expect(f).toMatch(/relation:\n\s+status: pending\n\s+since: 2026-09\n\s+until: null/);
+  expect(f).toMatch(/relation:\n\s+status: pending\n\s+since: "2026-09"\n\s+until: null/);
   expect(f).toMatch(/opened: false/);
   expect(f).toMatch(/author: maurice/);
   expect(f).toMatch(/person_key: jean@x\.org/);

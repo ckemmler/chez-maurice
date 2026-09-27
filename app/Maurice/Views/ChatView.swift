@@ -2434,6 +2434,7 @@ private struct SelectableMarkdown: View {
         // latter lifts the view into a blurry preview "platter" that flashes
         // awkwardly over transparent text before the menu opens.
         MarkdownText(text: text)
+            .environment(\.openURL, OpenURLAction { gardenLink($0) })
             .onLongPressGesture(minimumDuration: 0.4) {
                 UIImpactFeedbackGenerator(style: .medium).impactOccurred()
                 showingMenu = true
@@ -2447,9 +2448,55 @@ private struct SelectableMarkdown: View {
             }
         #else
         MarkdownText(text: text)
+            .environment(\.openURL, OpenURLAction { gardenLink($0) })
         #endif
     }
+
+    /// A link into the member's garden on this household's server — the
+    /// "À vérifier" footer's links to a person fiche — opens signed in, through
+    /// `/login?token=…&to=…`, as the garden buttons do; anything else opens as
+    /// the system would.
+    private func gardenLink(_ url: URL) -> OpenURLAction.Result {
+        guard let s = session.serverURL, let server = URL(string: s),
+              url.host == server.host, url.path.hasPrefix("/g/") else { return .systemAction }
+        Task { await openSignedIn(url, server: s) }
+        return .handled
+    }
+
+    private func openSignedIn(_ url: URL, server: String) async {
+        var target = url
+        if let token = await gardenToken() {
+            var path = url.path
+            if let q = url.query { path += "?\(q)" }
+            if let f = url.fragment { path += "#\(f)" }
+            var cs = CharacterSet.alphanumerics
+            cs.insert(charactersIn: "-._~")
+            if let to = path.addingPercentEncoding(withAllowedCharacters: cs),
+               let signed = URL(string: "\(server)/login?token=\(token)&to=\(to)") {
+                target = signed
+            }
+        }
+        #if os(iOS)
+        await UIApplication.shared.open(target)
+        #elseif os(macOS)
+        NSWorkspace.shared.open(target)
+        #endif
+    }
+
+    private func gardenToken() async -> String? {
+        guard let userId = session.activeUserId else { return nil }
+        if let cached = session.mcpToken(for: userId) { return cached }
+        guard let s = session.serverURL, let t = session.tokenForActiveUser else { return nil }
+        if let resp: McpTokenResponse = try? await APIClient(baseURL: s).post(
+            "/api/users/me/mcp-token", body: ChatGardenTokenRequest(rotate: false), token: t) {
+            session.saveMcpToken(resp.rawToken, for: userId)
+            return resp.rawToken
+        }
+        return nil
+    }
 }
+
+private struct ChatGardenTokenRequest: Encodable { let rotate: Bool }
 
 #if os(iOS)
 /// Full message body as plain, fully-selectable text in a dismissible sheet.

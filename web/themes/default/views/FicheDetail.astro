@@ -4,6 +4,7 @@ import type { Locale } from "@app/i18n/config";
 import { t, localizedPath, resourceItemPath, formatFullDate } from "@app/i18n/utils";
 import { renderEntry } from "@app/lib/content-fs";
 import { fragmentsFor, ficheHeadline } from "@app/lib/fiche";
+import PersonReview from "@app/components/PersonReview.astro";
 
 interface Props {
   fiche: any;
@@ -18,6 +19,9 @@ const resourceUrl = resourceItemPath(locale, fiche.data.resource_collection, fic
 // a shared helper so the two themes cannot drift back to the stale path.
 const fragments = fragmentsFor(fiche.id);
 const head = ficheHeadline(fiche.data);
+// A person fiche: the owner reviews what the mail pass wrote (lot 4 of
+// specs/contacts.md). `people/fr/x-fiche` → locale and basename.
+const personParts = String(fiche.id).match(/^people\/([a-z]{2})\/([a-z0-9-]+-fiche)$/);
 ---
 
 <Base title={fiche.data.title} locale={locale}>
@@ -52,10 +56,12 @@ const head = ficheHeadline(fiche.data);
       <p class="summary">{head.summary || head.excerpt}</p>
     )}
 
+    {personParts && Astro.locals.owner && <PersonReview locale={personParts[1]} basename={personParts[2]} />}
+
     <div class="body-text">
       <Fragment set:html={contentHtml} />
       {fragments.map(f => (
-        <details class="fragment">
+        <details class="fragment" id={`fragment-${f.id}`}>
           <summary class="fragment__summary">{f.summary}</summary>
           <div class="fragment__body" set:html={f.html} />
         </details>

@@ -206,7 +206,7 @@ const WORDS: Record<string, Words> = {
   },
 };
 
-const wordsFor = (locale: string): Words => WORDS[locale] ?? WORDS.en!;
+export const wordsFor = (locale: string): Words => WORDS[locale] ?? WORDS.en!;
 
 function longDate(d: Date, locale: string): string {
   try {

@@ -101,7 +101,7 @@ function yamlScalar(value: string): string {
     /\s$/.test(value) ||
     /^(true|false|null|yes|no|on|off|~)$/i.test(value) ||
     /^[-+]?[\d.]+(e[-+]?\d+)?$/i.test(value) ||   // would parse as a number
-    /^\d{4}-\d{2}-\d{2}/.test(value);             // would parse as a date
+    /^\d{4}-\d{2}/.test(value);                  // a date, or a month Bun's YAML reads as a year
   if (!risky) return value;
   return `"${value.replace(/\\/g, "\\\\").replace(/"/g, '\\"').replace(/\n/g, "\\n").replace(/\r/g, "")}"`;
 }
