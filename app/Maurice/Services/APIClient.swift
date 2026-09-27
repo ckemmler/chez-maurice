@@ -746,6 +746,9 @@ struct DomainProposal: Decodable, Identifiable, Equatable {
     let state: String
     let verdict: String?
     let conversations: Int
+    /// Mail threads it carries (their digests), beside its conversations —
+    /// absent from a server older than 27 September 2026.
+    let mail_threads: Int?
     let weight: Int
     let share: Int
     let recent_90_days: Int?

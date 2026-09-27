@@ -563,7 +563,11 @@ private struct ProposalRow: View {
 
     private var numbers: String {
         var bits: [String] = []
-        bits.append(String(format: session.localized(proposal.conversations == 1 ? "proposals.conversations.one" : "proposals.conversations.other"), proposal.conversations))
+        let mail = proposal.mail_threads ?? 0
+        if proposal.conversations > 0 || mail == 0 {
+            bits.append(String(format: session.localized(proposal.conversations == 1 ? "proposals.conversations.one" : "proposals.conversations.other"), proposal.conversations))
+        }
+        if mail > 0 { bits.append(String(format: session.localized(mail == 1 ? "proposals.mail.one" : "proposals.mail.other"), mail)) }
         if proposal.share > 0 { bits.append("\(proposal.share) %") }
         if let r = proposal.recent_90_days, r > 0 { bits.append(String(format: session.localized("proposals.recent"), r)) }
         if !proposal.isAlive, let to = proposal.to { bits.append(String(format: session.localized("proposals.quiet_since"), String(to.prefix(7)))) }

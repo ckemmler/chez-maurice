@@ -594,6 +594,8 @@
 "proposals.apply.count" = "Anwenden (%d)";
 "proposals.conversations.one" = "%d Gespräch";
 "proposals.conversations.other" = "%d Gespräche";
+"proposals.mail.one" = "%d Mailverlauf";
+"proposals.mail.other" = "%d Mailverläufe";
 "proposals.recent" = "%d aktuell";
 "proposals.quiet_since" = "ruhig seit %@";
 "proposals.weight" = "Gewicht %d von %d";

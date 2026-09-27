@@ -594,6 +594,8 @@
 "proposals.apply.count" = "Apply (%d)";
 "proposals.conversations.one" = "%d conversation";
 "proposals.conversations.other" = "%d conversations";
+"proposals.mail.one" = "%d mail thread";
+"proposals.mail.other" = "%d mail threads";
 "proposals.recent" = "%d recent";
 "proposals.quiet_since" = "quiet since %@";
 "proposals.weight" = "Weight %d of %d";

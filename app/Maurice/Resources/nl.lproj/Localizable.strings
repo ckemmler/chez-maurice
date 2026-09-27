@@ -594,6 +594,8 @@
 "proposals.apply.count" = "Toepassen (%d)";
 "proposals.conversations.one" = "%d gesprek";
 "proposals.conversations.other" = "%d gesprekken";
+"proposals.mail.one" = "%d mailgesprek";
+"proposals.mail.other" = "%d mailgesprekken";
 "proposals.recent" = "%d recent";
 "proposals.quiet_since" = "stil sinds %@";
 "proposals.weight" = "Gewicht %d van %d";
