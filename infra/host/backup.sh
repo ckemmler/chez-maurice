@@ -80,6 +80,12 @@ snapshot_dbs() { # <container>
 
 backup_one() { # <name>
   local name="$1" container="maurice-$1" volume="maurice-$1_home"
+  # Paused from outside (MAURICE_SUSPENDED=1, MULTI-HOUSEHOLD.md): nothing in
+  # it can change while it is stopped, so its last snapshot stands and
+  # nothing is owed. Not a failure.
+  if grep -qs '^MAURICE_SUSPENDED=1' "$DIR/households/$name.env"; then
+    say "$name: paused — its last snapshot stands"; return 0
+  fi
   if [ "$(docker inspect -f '{{.State.Status}}' "$container" 2>/dev/null)" != running ]; then
     say "$name: container not running — skipped (its volume is not touched)"; return 1
   fi

@@ -72,9 +72,14 @@ if ssh "$HOST" "test -f $REMOTE_DIR/defaults.env"; then
   # gets the record too, which is what its first `add` needs.
   ssh "$HOST" "printf 'MAURICE_IMAGE=%s\\n' '$REMOTE_IMAGE' > $REMOTE_DIR/image.env"
   echo "  up…  (multi-household host)"
+  # A household paused from outside (MAURICE_SUSPENDED=1 in its env file —
+  # whatever manages its subscription sets it) stays paused: `up` would wake
+  # it on the new image. Whoever paused it resumes it, onto whatever
+  # image.env names by then.
   ssh "$HOST" "cd $REMOTE_DIR && for f in households/*.env; do
     [ -e \"\$f\" ] || continue
     n=\$(basename \"\$f\" .env)
+    if grep -qs '^MAURICE_SUSPENDED=1' \"\$f\"; then echo \"  \$n: paused — left stopped\"; continue; fi
     docker compose -p maurice-\$n --env-file image.env --env-file \"\$f\" \
       -f compose.household.yml up -d
   done"

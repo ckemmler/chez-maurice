@@ -77,6 +77,16 @@ ops/household.sh purge   <host> <name>     stop it, delete its data
 scripts/deploy.sh        <host> [tag]      a new image for everyone on the host
 ```
 
+## Pausing a household
+
+A line `MAURICE_SUSPENDED=1` in `households/<name>.env`, with the container
+stopped, is a paused household: `scripts/deploy.sh` leaves it stopped rather
+than waking it on the new image, and `infra/host/backup.sh` skips it without
+calling it a failure — nothing in it changes while it is stopped, so its last
+snapshot stands. Its volume is untouched. Remove the line and `up` it to wake
+it. Whatever manages a household's subscription sets and clears it; nothing
+in this repository does.
+
 ## Updating everyone
 
 ```
