@@ -1,6 +1,6 @@
 ---
 title: The web garden
-date: '2026-09-19'
+date: '2026-09-27'
 flags: []
 locale: en
 description: 'The Astro renderer: per-request theme engine, content collections, wiki-links,
@@ -109,6 +109,10 @@ Every collection is read **off disk, per request** — `web/src/lib/content-fs.t
 The content layer was a *build-time store*: a glob loader scanned the garden once and served what it captured. A garden is not a build artefact — Maurice writes to it all day — and under rapid edits the store intermittently collapsed a collection to "empty" until the dev server restarted, which is why notes were moved off it long before the rest. Reading files has no store to corrupt: an entry exists iff its file exists.
 
 A call walks the collection's directory (fresh, so a write shows at once) over a parse cache keyed by mtime and size, and a render cache likewise. On Candide's garden — 266 files — the walk costs 2.4 ms and the whole search index 3–5 ms. The zod schemas went with the config: YAML already types dates, numbers and arrays; `content-fs` coerces the few fields views depend on and passes the rest through as authored, skipping a malformed file with a warning rather than taking its collection down. **Notes** keep `notes-fs` as their reader and `content-fs` delegates to it. **Fiches** are present in the garden engine and absent from a static publish — the rule the old `NODE_ENV=production` test was reaching for.
+
+## A person fiche, reviewed
+
+Since 27 September 2026 (lot 4 of `specs/contacts.md`). On a fiche of `people/`, the owner sees a panel (`web/src/components/PersonReview.astro`, mounted by `FicheDetail` in the default theme and the owner's) that reads `GET /api/people/:locale/:fiche` and says what the mail pass wrote and nobody confirmed: the person, the relation (with its dates), each address (source, mailboxes, conflict), and a badge on each mail fragment — with **✓ confirm, ✗ reject, ✎ correct in place** and **Tout confirmer**, posted to `POST /api/people/:locale/:fiche/review` with the session cookie (`services/personReview.ts`). Fragments carry `id="fragment-NNN"` so the chat's "À vérifier" links land on them. Source links `maurice-mail:<id>` — in the body (remark-cross-ref) and in fragments (`mailLinks` in `lib/fiche.ts`) — open `/api/people/mail/:id`, the message's headers and text, read through the `email` tool.
 
 ## The owner's toolbar
 

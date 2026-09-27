@@ -1,4 +1,4 @@
-# People and mailboxes — design, lots 1 to 3 built
+# People and mailboxes — design, lots 1 to 4 built
 
 Settled with Candide on 26 September 2026, after the first full mail import
 (Gmail and Proton, `specs/mail-import.md`, lots 1 to 5). Two refinements of
@@ -270,10 +270,15 @@ new documents.
    edit and an edit through it stays pending; `POST
    /api/admin/mail/documents/reset` erases what the pass wrote. Then erase
    Candide's documents and write again.
-4. **The footer and the page.** Pending marks on every path in (garden
-   tools, corpus, composer), the per-turn collection, the rendered block;
-   the fiche's page rendering fragments, statuses and mailboxes, with the
-   gestures; corrections by conversation (pending, ✓ in the footer).
+4. **The footer and the page.** *Built 27 September 2026*
+   (`services/personReview.ts`, `services/reviewFooter.ts`,
+   `routes/people.ts`, `web/src/components/PersonReview.astro`). Pending
+   marks on every path in (garden tools, corpus, composer), the per-turn
+   collection, the rendered block; the fiche's page with the gestures;
+   corrections by conversation stay pending (the garden tool moves the hash
+   along). Also: `maurice-mail:` links open the message
+   (`/api/people/mail/:id`), the app opens garden links signed in, and the
+   files the mail pass writes are pushed to the corpus.
 5. **The person beside a hit.** Dated relations; matching a hit to a fiche
    by link, full name or alias; the attached line.
 6. **Forget a mailbox.** The purge, the pruning, the history option (every

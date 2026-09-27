@@ -1,6 +1,6 @@
 ---
 title: The chat experience
-date: '2026-09-26'
+date: '2026-09-27'
 flags: []
 locale: en
 description: Streaming render, tool-result data cards, math, markdown, images, dictation,
@@ -79,6 +79,10 @@ Two failure modes fixed in September 2026: deleting a thread while Maurice was s
 ## Tool-result data cards
 
 When a turn calls a data-returning tool, the result rides the `tool_data` channel and renders as a **data card** (`DataCardStack`) beside the prose, titled `"{tool} · {n} rows"` (e.g. `signals · 12 rows`), capped at 50 rows with a "+ more" tail. This is deliberate: the rows are drawn **from the data the tool returned**, not from the model's retelling — so Maurice can't silently misreport what a tool found. It is the floor under tool-result hallucination. A fiche the garden tool opens comes back the same way, as a card you can act on.
+
+## "À vérifier" — what rests on unconfirmed fiches
+
+Since 27 September 2026 (lot 4 of `specs/contacts.md`, `services/reviewFooter.ts`). A person fiche the mail pass wrote is pending until the member confirms it (see [[maurice-knowledge]]). During a turn in a conversation of the member's own (never in a room), every person fiche that enters it — through the garden tools (`get_fiche`, `list_fragments`, `get_fragment` on `people`), a `corpus__search` hit on a fiche or a fragment, or the context composer — is noted, and what in it is pending (the person, the relation, an address, a fragment) is marked on what the model reads, with the instruction to say it is unconfirmed and not to write a footer itself. At the end of the turn the **server** appends, without a model, a block **À vérifier — pas encore confirmé par toi**: one line per pending element, linking to it on the fiche's page (`#relation`, `#identity-N`, `#fragment-NNN`), or one line per fiche past three elements (`#review`, "7 éléments à vérifier"). It is sent as the reply's last `text_delta`, so the app, a re-attaching client and the stored message all carry it; the links are absolute (the request's host and protocol). What entered the turn, not what the answer used. The app opens such a link — its own server, a `/g/` path — signed in, through `/login?token=…&to=…`, as the garden buttons do.
 
 ## Math
 
