@@ -320,8 +320,11 @@ new documents.
 - **Aliases**: where a person's names come from (the vCard's `FN` and
   `NICKNAME`, the display names seen in `From`, the member's corrections),
   and how many a fiche keeps before matching gets noisy.
-- **Universal links**: the `apple-app-site-association` file and the native
-  fiche view are a project of the app's, after lot 4.
+- **Universal links**: the `apple-app-site-association` file. The native
+  fiche view exists (27 September 2026, `app/Maurice/Views/PersonReviewView.swift`):
+  the footer travels as a `review` block too, drawn as a card that opens the
+  fiche in the app, and the footer's links inside the app open it there; a
+  link followed from outside the app (Mail, Safari) still lands on the web page.
 - **Fragments from the rest of the garden** (lot 7): what makes a note, a
   thread digest or a conversation contribute a fragment to a person, rather
   than a link.
