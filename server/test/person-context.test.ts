@@ -91,13 +91,22 @@ test("each hit carries the people it mentions; the person's own fiche does not; 
   expect(ctx.attachPeople(CONVO, ANNA, "not json", rows)).toBe("not json");
 });
 
-test("an exchanges result names the fiche its addresses belong to, and how to open it; a rejected address, or none, says nothing", () => {
-  fiche("melanie-fiche", `title: Mélanie\nresource_collection: people\nidentities:\n  - address: mela@partfin.be\n    status: pending\n  - address: old@partfin.be\n    status: rejected`, `## Les échanges\n\n3 message(s).\n`);
-  const hint = ctx.fichesForExchanges(ANNA, { addresses: ["MELA@partfin.be"], total: 3, messages: [] });
-  expect(hint).toContain(`Mélanie (garden__get_fiche: resource_collection "people", resource_id "melanie", locale "fr")`);
-  expect(hint).toContain("going on");
-  expect(ctx.fichesForExchanges(ANNA, { addresses: ["old@partfin.be"] })).toBe("");
-  expect(ctx.fichesForExchanges(ANNA, { addresses: ["nobody@x.org"] })).toBe("");
-  expect(ctx.fichesForExchanges(null, { addresses: ["mela@partfin.be"] })).toBe("");
-  expect(ctx.fichesForExchanges(ANNA, null)).toBe("");
+test("an exchanges result carries the fiche its addresses belong to — relation and fragments, not the exchanges again — and its pending marks; a rejected address, or none, brings nothing", () => {
+  fiche("melanie-fiche", `title: Mélanie\nresource_collection: people\nstatus: pending\nidentities:\n  - address: mela@partfin.be\n    status: pending\n  - address: old@partfin.be\n    status: rejected`,
+    `## La relation\n\nTon experte-comptable.\n\n## Les échanges\n\n3 message(s).\n\n## D'où ça vient\n\nUne machine.\n`);
+  fs.mkdirSync(path.join(dir, "melanie-fiche", "_fragments"), { recursive: true });
+  fs.writeFileSync(path.join(dir, "melanie-fiche", "_fragments", "001.frag"), `---\nsummary: Courrier · Proton\norigin: mail\nstatus: pending\n---\n## Resté ouvert\n\n- Les frais de domicile, sans réponse.\n`);
+  footer.startReview("c-ex");
+  const hint = ctx.fichesForExchanges("c-ex", ANNA, { addresses: ["MELA@partfin.be"], total: 3, messages: [] });
+  expect(hint).toContain(`### Mélanie — people/fr/melanie-fiche (garden__get_fiche resource_id "melanie", locale "fr")`);
+  expect(hint).toContain("Ton experte-comptable.");
+  expect(hint).toContain("(Courrier · Proton, not confirmed yet)\n## Resté ouvert\n\n- Les frais de domicile, sans réponse.");
+  expect(hint).not.toContain("3 message(s)");
+  expect(hint).not.toContain("Une machine");
+  expect(hint).toContain("say it is unconfirmed");
+  expect(footer.takeFooter("c-ex", ANNA, "https://x.example", "fr")).toContain("Mélanie");
+  expect(ctx.fichesForExchanges("c-ex", ANNA, { addresses: ["old@partfin.be"] })).toBe("");
+  expect(ctx.fichesForExchanges("c-ex", ANNA, { addresses: ["nobody@x.org"] })).toBe("");
+  expect(ctx.fichesForExchanges("c-ex", null, { addresses: ["mela@partfin.be"] })).toBe("");
+  expect(ctx.fichesForExchanges("c-ex", ANNA, null)).toBe("");
 });

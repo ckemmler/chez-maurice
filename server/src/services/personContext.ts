@@ -1,9 +1,9 @@
 import fs from "node:fs";
 import path from "node:path";
-import { gardenFor, parseFiche } from "../../data-api/services/gardenFiche";
+import { fragmentsDir, gardenFor, parseFiche } from "../../data-api/services/gardenFiche";
 import { contactCards } from "./contactAccounts";
 import { wordsFor } from "./mailDocuments";
-import { fragmentHash, sectionOf } from "./mailPeople";
+import { fragmentHash, sectionOf, withoutSection } from "./mailPeople";
 import { noteFiche } from "./reviewFooter";
 
 // The person beside a corpus hit — lot 5 of specs/contacts.md, 27 September
@@ -184,18 +184,46 @@ export function _clearFichesByAddress(): void {
   byAddressCache.clear();
 }
 
-/** What to append to an `email__exchanges` result: the fiches of the
- *  addresses it read, and how to open them ("" when none has one). */
-export function fichesForExchanges(memberId: string | null | undefined, data: any): string {
+/** How much of a fiche rides with an exchanges result. */
+const FICHE_CHARS = 6000;
+
+/** What to append to an `email__exchanges` result: the fiche its addresses
+ *  belong to, inline — who the person is and what their mail says is going
+ *  on, promised and left open. Named only, the fiche went unread (the model
+ *  answered from the headers, 27 September 2026); so it rides with the
+ *  headers, as the relation rides with a corpus hit, and whatever of it is
+ *  pending enters the footer. "" when no address has a fiche. */
+export function fichesForExchanges(conversationId: string, memberId: string | null | undefined, data: any): string {
   if (!memberId || !data || !Array.isArray(data.addresses) || !data.addresses.length) return "";
+  const garden = gardenFor(memberId);
+  if (!garden) return "";
   const map = fichesByAddress(memberId);
   const seen = new Map<string, { locale: string; basename: string; title: string }>();
   for (const a of data.addresses) {
     const f = map.get(String(a).toLowerCase());
     if (f) seen.set(`${f.locale}/${f.basename}`, f);
   }
-  if (!seen.size) return "";
-  const list = [...seen.values()].slice(0, 3).map((f) =>
-    `${f.title} (garden__get_fiche: resource_collection "people", resource_id "${f.basename.replace(/-fiche$/, "")}", locale "${f.locale}")`);
-  return `\n\n[These addresses have a fiche in the member's garden: ${list.join("; ")}. It says who they are to the member and what their mail says is going on, was promised and is left open — the meaning behind these headers. Read it before saying what is going on.]`;
+  const parts: string[] = [];
+  let pending = false;
+  for (const f of [...seen.values()].slice(0, 2)) {
+    const file = path.join(garden.root, "people", f.locale, `${f.basename}.md`);
+    const parsed = fs.existsSync(file) ? parseFiche(fs.readFileSync(file, "utf8")) : null;
+    if (!parsed) continue;
+    const w = wordsFor(f.locale);
+    // The body without what the result already says (the exchanges) or
+    // what says nothing of the person (the provenance).
+    const body = [w.exchanges, w.provenance].reduce((b, h) => withoutSection(b, h), parsed.body).trim();
+    const fdir = fragmentsDir(file);
+    const frags = (fs.existsSync(fdir) ? fs.readdirSync(fdir).filter((x) => x.endsWith(".frag")).sort() : [])
+      .map((x) => parseFiche(fs.readFileSync(path.join(fdir, x), "utf8")))
+      .filter((x): x is NonNullable<typeof x> => !!x)
+      .map((x) => `(${x.frontmatter.summary ?? ""}${x.frontmatter.status === "pending" ? ", not confirmed yet" : ""})\n${x.body.trim()}`);
+    let text = [body, ...frags].filter(Boolean).join("\n\n");
+    if (text.length > FICHE_CHARS) text = `${text.slice(0, FICHE_CHARS - 1)}…`;
+    parts.push(`### ${f.title} — people/${f.locale}/${f.basename} (garden__get_fiche resource_id "${f.basename.replace(/-fiche$/, "")}", locale "${f.locale}")\n${text}`);
+    if (parsed.frontmatter.status === "pending" || parsed.frontmatter.relation?.status === "pending" || frags.some((x) => x.includes(", not confirmed yet)"))) pending = true;
+    noteFiche(conversationId, f.locale, f.basename);
+  }
+  if (!parts.length) return "";
+  return `\n\n[The fiche these addresses belong to, from the member's garden — what the headers above mean: who the person is to them, what is going on, what was promised, what is left open. Answer from it as much as from the headers.${pending ? " What is marked not confirmed yet is Maurice's reading of the mail: use it, and say it is unconfirmed; the system adds the review footer." : ""}]\n\n${parts.join("\n\n")}`;
 }

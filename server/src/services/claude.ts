@@ -618,7 +618,7 @@ async function executeTool(
         const mark = r.isError ? "" : noteTool(ctx.conversationId, ctx.memberId, name, input, null);
         // The headers of a person's mail, and the fiche that says what they
         // mean (services/personContext.ts).
-        const fiche = !r.isError && name === "email__exchanges" ? fichesForExchanges(ctx.memberId, data) : "";
+        const fiche = !r.isError && name === "email__exchanges" ? fichesForExchanges(ctx.conversationId, ctx.memberId, data) : "";
         return { text: text + fiche + mark, isError: r.isError, data };
       }
       return { text: `Tool ${name} is unavailable.`, isError: true };
