@@ -612,6 +612,7 @@ export async function writeMailDocuments(memberId: string, d: MailDocumentsDeps 
         declined.push({ kind: "person", key: p.key, sources: o.sources });
         run.skipped.declined++;
       } else if (o.kind === "empty") {
+        if (o.files) files.push(...o.files);
         console.warn(`[mail] documents for ${memberId}: nothing usable for person ${p.key} (${o.stop})`);
       } else {
         files.push(...o.files);

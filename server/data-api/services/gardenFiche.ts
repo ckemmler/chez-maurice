@@ -295,9 +295,17 @@ export function autoCommit(garden: GardenRef, paths: string[], message: string):
     // for a /var/folders garden on macOS), and a path relative to a root the
     // caller spelt differently would start with ".." and be skipped.
     const real = (p: string) => { try { return fs.realpathSync(p); } catch { return p; } };
-    const rel = paths
+    let rel = paths
       .map((p) => path.relative(root, real(p)))
       .filter((p) => p && !p.startsWith(".."));
+    // A path that is neither on disk nor known to git — a file written and
+    // removed within the same piece of work — makes `git add` refuse the
+    // whole list: keep only what exists or what git tracks.
+    const gone = rel.filter((p) => !fs.existsSync(path.join(root, p)));
+    if (gone.length) {
+      const known = new Set(String(spawnSync("git", ["ls-files", "-z", "--", ...gone], { cwd: root }).stdout ?? "").split("\0").filter(Boolean));
+      rel = rel.filter((p) => fs.existsSync(path.join(root, p)) || known.has(p));
+    }
     if (!rel.length) return;
     spawnSync("git", ["add", "--", ...rel], { cwd: root });
     if (spawnSync("git", ["diff", "--cached", "--quiet"], { cwd: root }).status !== 0) {

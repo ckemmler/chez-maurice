@@ -558,7 +558,7 @@ export type PersonOutcome =
   | { kind: "unchanged"; files?: string[] }
   | { kind: "deleted"; found: boolean }
   | { kind: "declined"; sources: string[] }
-  | { kind: "empty"; stop: string }
+  | { kind: "empty"; stop: string; files?: string[] }
   | { kind: "written"; basename: string; locale: string; title: string; covered: string[]; files: string[]; webPath: string; fragments: number; cited: number };
 
 const SECTION_KEYS = ["going_on", "promised", "open"] as const;
@@ -599,27 +599,26 @@ export async function writePerson(ctx: PersonContext, p: Person): Promise<Person
   // the fiche's page (services/personReview.ts marks it `rewrite`).
   const force = (relEdited && relFm.status !== "confirmed") || relFm.rewrite === true;
 
+  // The addresses follow the evidence whatever the model does below.
+  const touchedIds: string[] = [];
+  if (ref) {
+    const ids = mergeIdentities(ref.fm.identities, p.identities);
+    if (JSON.stringify(ids) !== JSON.stringify(ref.fm.identities ?? [])) {
+      ref.fm = { ...ref.fm, identities: ids };
+      atomicWrite(ref.file, `---\n${dumpFrontmatter(ref.fm)}\n---\n\n${ref.body.replace(/^\n+/, "")}`);
+      touchedIds.push(ref.file);
+    }
+  }
   const covered = new Set<string>([...(a?.sources ?? []), ...fragments.flatMap((f) => f.sources)]);
   const fresh = p.messages.filter((m) => !covered.has(m.id));
-  if (!fresh.length && !force) {
-    // Nothing new to read — but the addresses may have moved (a guessed link,
-    // an address newly in the book): the frontmatter follows.
-    if (ref) {
-      const ids = mergeIdentities(ref.fm.identities, p.identities);
-      if (JSON.stringify(ids) !== JSON.stringify(ref.fm.identities ?? [])) {
-        atomicWrite(ref.file, `---\n${dumpFrontmatter({ ...ref.fm, identities: ids as any })}\n---\n\n${ref.body.replace(/^\n+/, "")}`);
-        return { kind: "unchanged", files: [ref.file] };
-      }
-    }
-    return { kind: "unchanged" };
-  }
+  if (!fresh.length && !force) return { kind: "unchanged", files: touchedIds };
 
   const redo = new Set(pending.flatMap((f) => f.sources));
   const material = p.messages.filter((m) => !covered.has(m.id) || redo.has(m.id)).slice(-MAX_PER_NOTE);
   const settledRelation = relSettled && relFm.status !== "rejected" ? relText : null;
   const r = await ctx.ask(personSystem(ctx.member, ctx.language, { known: !!p.card, relation: settledRelation }), materialBlock(material));
   const d = parseJsonObject(r.text);
-  if (!d) return { kind: "empty", stop: r.stop };
+  if (!d) return { kind: "empty", stop: r.stop, files: touchedIds };
   // Not a person — or, for someone in the address book, the member
   // themselves on another address: no fiche, and not asked again.
   if (d.is_person === false) return { kind: "declined", sources: material.map((m) => m.id) };
@@ -646,7 +645,7 @@ export async function writePerson(ctx: PersonContext, p: Person): Promise<Person
   }
   let newRelation: { text: string; ids: string[] } | null = null;
   if (!relSettled && d.relation && typeof d.relation.text === "string") newRelation = sourcedLine(d.relation.text, material, locale, ctx.labels);
-  if (!buckets.size && !newRelation && !ref) return { kind: "empty", stop: r.stop };
+  if (!buckets.size && !newRelation && !ref) return { kind: "empty", stop: r.stop, files: touchedIds };
 
   // The fiche.
   const title = ref?.fm.title ? String(ref.fm.title) : (p.card?.full_name || (typeof d.title === "string" && d.title.trim()) || p.name);
