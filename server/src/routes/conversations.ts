@@ -416,7 +416,7 @@ conversations.post("/:id/messages", async (c) => {
   // Where the member reached us, for the footer's links: the app opens only
   // absolute ones.
   const host = c.req.header("x-forwarded-host") || c.req.header("host") || "";
-  const proto = c.req.header("x-forwarded-proto") || (/^(localhost|127\.)/.test(host) ? "http" : "https");
+  const proto = c.req.header("x-forwarded-proto") || new URL(c.req.url).protocol.replace(":", "");
   const origin = host ? `${proto}://${host}` : "";
 
   // Stream with throttled flushing — accumulate text and emit every ~30ms
