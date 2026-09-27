@@ -457,6 +457,43 @@ class SqliteVecStore:
 
         return _centroids(pairs())
 
+    def note_centroids(
+        self,
+        *,
+        origin: str,
+        kind: str,
+        paths: Optional[Iterable[str]] = None,
+        member_id: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """One unit vector per garden note of a kind — the mail's thread
+        digests (`origin: mail`, `kind: thread`, lifted from the note's `meta`
+        at indexing), for the mapping's pass on the mail. Keyed by the note's
+        file path (`unit_key`). `paths` restricts to those."""
+        from .domain_map import centroids as _centroids  # numpy only
+
+        conn = self._conn(member_id)
+        wanted = set(paths) if paths is not None else None
+        sql = (
+            "SELECT c.unit_key, v.embedding "
+            "FROM chunks c JOIN vec_chunks v ON v.rowid = c.id "
+            "WHERE c.source_type = 'note' "
+            "AND json_extract(c.payload, '$.origin') = ? AND json_extract(c.payload, '$.kind') = ?"
+        )
+        with self._lock:
+            rows = conn.execute(sql, (origin, kind)).fetchall()
+        import numpy as np
+
+        def pairs():
+            for key, blob in rows:
+                if not key or (wanted is not None and key not in wanted):
+                    continue
+                vec = np.frombuffer(blob, dtype=np.float32)
+                if vec.shape[0] != self.vector_size:
+                    continue
+                yield key, vec
+
+        return _centroids(pairs())
+
     def close(self) -> None:
         with self._lock:
             for conn in self._conns.values():

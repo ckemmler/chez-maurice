@@ -313,6 +313,34 @@ class CorpusMCPServer:
                     },
                 ),
                 Tool(
+                    name="map_notes",
+                    description=(
+                        "Group the caller's garden notes of one kind by their vectors — the "
+                        "domains' mapping on the mail: the thread digests the mail import "
+                        "writes (`origin: mail`, `kind: thread`). One centroid per note, "
+                        "spherical k-means, a merge of the too-close centroids, a second level "
+                        "on any group above `split_above`. Returns groups of note file paths "
+                        "ordered by closeness to their centre; the server adds dates and names. "
+                        "Reads only, the member's file only."
+                    ),
+                    inputSchema={
+                        "type": "object",
+                        "properties": {
+                            "origin": {"type": "string", "description": "The notes' `origin` (default \"mail\")"},
+                            "kind": {"type": "string", "description": "The notes' `kind` (default \"thread\")"},
+                            "paths": {
+                                "type": "array",
+                                "items": {"type": "string"},
+                                "description": "Restrict to these note file paths (omit for all)",
+                            },
+                            "k": {"type": "integer", "description": "Groups at the first level (default one per 12 notes, in [2, 60])"},
+                            "merge": {"type": "number", "description": "Merge centroids above this cosine (default 0.90)"},
+                            "split_above": {"type": "integer", "description": "Cluster again any group larger than this (default 40; 0 = never)"},
+                            "split_per": {"type": "integer", "description": "Notes per sub-group on the second level (default 12)"},
+                        },
+                    },
+                ),
+                Tool(
                     name="reconcile_status",
                     description=(
                         "The full conversations reconciliation: { running, started_at, finished_at, "
@@ -522,6 +550,8 @@ class CorpusMCPServer:
                 )
             elif name == "map_conversations":
                 payload = self._map_conversations(arguments or {})
+            elif name == "map_notes":
+                payload = self._map_notes(arguments or {})
             elif name == "reconcile_status":
                 payload = self.orchestrator.reconcile_status()
             elif name == "import_chat_export":
@@ -589,6 +619,43 @@ class CorpusMCPServer:
             "requested": len(ids) if isinstance(ids, list) else None,
             "roles": roles,
             "groups": groups_payload(groups),
+        }
+
+    def _map_notes(self, args: dict[str, Any]) -> dict[str, Any]:
+        """The mapping's pass on the mail: the thread digests grouped among
+        themselves. Not mixed with the conversations: on the owner's store
+        (27 September 2026) a digest's nearest digest sat at a median cosine of
+        0.76 and its nearest conversation at 0.65 — Maurice's prose against the
+        member's questions — so a common k-means sorts by style before
+        subject. Mail-sized defaults: a group per twelve notes, a second level
+        above forty."""
+        store = self.orchestrator.indexer
+        if not hasattr(store, "note_centroids"):
+            return {"error": "this store cannot map notes"}
+        try:
+            from .domain_map import cluster, groups_payload
+        except ImportError:  # pragma: no cover - script fallback
+            from src.domain_map import cluster, groups_payload
+        paths = args.get("paths")
+        vectors = store.note_centroids(
+            origin=str(args.get("origin") or "mail"),
+            kind=str(args.get("kind") or "thread"),
+            paths=[str(p) for p in paths] if isinstance(paths, list) else None,
+        )
+        n = len(vectors)
+        k = int(args["k"]) if args.get("k") else max(2, min(60, n // 12)) if n else None
+        split_above = args.get("split_above", 40)
+        groups = cluster(
+            vectors,
+            k=k,
+            merge=float(args.get("merge", 0.90)),
+            split_above=int(split_above) if split_above else None,
+            split_per=int(args.get("split_per") or 12),
+        )
+        return {
+            "notes": n,
+            "requested": len(paths) if isinstance(paths, list) else None,
+            "groups": groups_payload(groups, key="note_paths"),
         }
 
     async def run(self) -> None:

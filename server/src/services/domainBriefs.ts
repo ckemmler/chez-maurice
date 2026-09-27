@@ -9,6 +9,7 @@ import { CHARS_PER_TOKEN, estimateText } from "./contextWindow";
 import { searchConversations } from "./conversationSearch";
 import { isDue } from "./corpusNightly";
 import { userLocale } from "./i18n";
+import { domainMail, mailExcerpt } from "./domainMail";
 import { isDomain, listMaurices, type Maurice } from "./maurices";
 import { corpusCall } from "./mcpClient";
 import { getModel } from "./models";
@@ -555,10 +556,18 @@ function aboutLine(domain: Maurice, name: string): string {
   return st ? ` ${name} describes it so: "${st}" Take that as the statement of what the domain is about — the brief covers this, not the rest.` : "";
 }
 
-export function firstPrompt(domain: Maurice, name: string, excerpts: string): string {
+/** How the material is named to the model: conversations, and the email
+ *  threads' digests when there are some (you wrote them from the mailbox). */
+function materialWords(name: string, mail: boolean): string {
+  return mail
+    ? `excerpts from ${name}'s conversations and summaries you wrote of their email threads that belong to it`
+    : `excerpts from ${name}'s conversations that belong to it`;
+}
+
+export function firstPrompt(domain: Maurice, name: string, excerpts: string, mail = false): string {
   const tag = domain.tagline?.trim() ? ` (${domain.tagline.trim()})` : "";
   return [
-    `The domain is called "${domain.name}"${tag}.${aboutLine(domain, name)} Here are excerpts from ${name}'s conversations that belong to it, oldest first:`,
+    `The domain is called "${domain.name}"${tag}.${aboutLine(domain, name)} Here are ${materialWords(name, mail)}, oldest first:`,
     excerpts,
     `Write the brief of this domain: what you know of this part of their life, where it stands, what remains open.`,
   ].join("\n\n");
@@ -569,7 +578,7 @@ export function incrementalPrompt(
   previous: string,
   excerpts: string,
   words: number,
-  opts: { name?: string; byMember?: boolean } = {},
+  opts: { name?: string; byMember?: boolean; mail?: boolean } = {},
 ): string {
   const name = opts.name ?? "the member";
   const kept = opts.byMember
@@ -578,7 +587,7 @@ export function incrementalPrompt(
   return [
     `The domain is called "${domain.name}".${aboutLine(domain, name)} ${kept}`,
     previous,
-    `And here are excerpts from conversations since then, oldest first:`,
+    opts.mail ? `And here are ${materialWords(name, true)}, new since then, oldest first:` : `And here are excerpts from conversations since then, oldest first:`,
     excerpts,
     `Rewrite the brief: keep what is still true, update what moved, drop what is out of date, add what is new. One brief, same rules, ${words} words at most.`,
   ].join("\n\n");
@@ -651,7 +660,16 @@ async function doRefresh(domain: Maurice, memberId: string): Promise<RefreshResu
     console.warn(`[briefs] "${domain.name}": could not gather material: ${error}`);
     return { outcome: "failed", brief: previous, sources: 0, cost_usd: null, error };
   }
-  if (!material.length) return { outcome: "unchanged", brief: previous, sources: 0, cost_usd: null };
+  // The mail's digests attached since the last brief (all of them for a
+  // first one): each read once, the most recent threads first when there
+  // are many.
+  const mail = domainMail(domain.id, memberId, previous?.updated_at ?? null)
+    .map((m) => ({ path: m.path, excerpt: mailExcerpt(memberId, m.path, MAIL_EXCERPT_CHARS) }))
+    .filter((m): m is { path: string; excerpt: string } => !!m.excerpt)
+    .sort((a, b) => spanEnd(b.excerpt).localeCompare(spanEnd(a.excerpt)))
+    .slice(0, MAX_MAIL_THREADS)
+    .reverse();
+  if (!material.length && !mail.length) return { outcome: "unchanged", brief: previous, sources: 0, cost_usd: null };
 
   // The night's cap, checked before the call rather than after the bill.
   const modelId = ancillaryModel("domain_brief");
@@ -663,10 +681,10 @@ async function doRefresh(domain: Maurice, memberId: string): Promise<RefreshResu
   }
 
   const words = previous?.text.trim() ? INCREMENTAL_WORDS : FIRST_WORDS;
-  const excerpts = material.map((m) => m.excerpt).join("\n\n");
+  const excerpts = [...material.map((m) => m.excerpt), ...mail.map((m) => m.excerpt)].join("\n\n");
   const prompt = previous?.text.trim()
-    ? incrementalPrompt(domain, previous.text.trim(), excerpts, words, { name, byMember: previous.model === MEMBER_AUTHOR })
-    : firstPrompt(domain, name, excerpts);
+    ? incrementalPrompt(domain, previous.text.trim(), excerpts, words, { name, byMember: previous.model === MEMBER_AUTHOR, mail: mail.length > 0 })
+    : firstPrompt(domain, name, excerpts, mail.length > 0);
 
   let result: AncillaryResult;
   try {
@@ -700,7 +718,7 @@ async function doRefresh(domain: Maurice, memberId: string): Promise<RefreshResu
     maurice_id: domain.id,
     member_id: memberId,
     text,
-    sources: material.map((m) => m.conversation_id),
+    sources: [...material.map((m) => m.conversation_id), ...mail.map((m) => `mail:${m.path}`)],
     read_until: readUntil || null,
     model: result.model,
     summary: null,
@@ -712,10 +730,19 @@ async function doRefresh(domain: Maurice, memberId: string): Promise<RefreshResu
   // softly — no summary means the index shows the brief's opening instead.
   await writeSummary(domain, memberId, text, language);
   console.log(
-    `[briefs] "${domain.name}" for ${name}: ${previous?.text.trim() ? "rewritten" : "written"} from ${material.length} conversation(s)` +
+    `[briefs] "${domain.name}" for ${name}: ${previous?.text.trim() ? "rewritten" : "written"} from ${material.length} conversation(s)${mail.length ? ` and ${mail.length} mail thread(s)` : ""}` +
       (cost != null ? ` for $${cost.toFixed(4)}` : ""),
   );
-  return { outcome: "written", brief: getBrief(domain.id, memberId), sources: material.length, cost_usd: cost };
+  return { outcome: "written", brief: getBrief(domain.id, memberId), sources: material.length + mail.length, cost_usd: cost };
+}
+
+/** Mail threads a rewrite reads at most, and the room each gets. */
+const MAX_MAIL_THREADS = 8;
+const MAIL_EXCERPT_CHARS = 1400;
+
+/** The last day of a digest's excerpt head ("… (2024-05-30 → 2025-03-13)"). */
+function spanEnd(excerpt: string): string {
+  return excerpt.match(/→ (\d{4}-\d{2}-\d{2})\)/)?.[1] ?? "";
 }
 
 /** The longest a one-liner may be before the index cuts it. */

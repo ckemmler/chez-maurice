@@ -1055,6 +1055,23 @@ db.run(`
   )
 `);
 db.run(`CREATE INDEX IF NOT EXISTS idx_domain_proposals_member ON domain_proposals(member_id, state)`);
+// The mail's thread digests a proposal carries beside its conversations
+// (27 September 2026): garden-relative note paths, `notes/<locale>/<slug>.md`.
+try { db.run(`ALTER TABLE domain_proposals ADD COLUMN mail_json TEXT NOT NULL DEFAULT '[]'`); } catch {}
+
+// The thread digests a domain reads (services/domainMail.ts): those of the
+// proposal it was adopted from, and those the mapping later found to be
+// about it. The brief reads each once, after `added_at`.
+db.run(`
+  CREATE TABLE IF NOT EXISTS domain_mail (
+    maurice_id TEXT NOT NULL REFERENCES maurices(id) ON DELETE CASCADE,
+    member_id  TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    path       TEXT NOT NULL,
+    added_at   TEXT NOT NULL DEFAULT (datetime('now')),
+    PRIMARY KEY (maurice_id, path)
+  )
+`);
+db.run(`CREATE INDEX IF NOT EXISTS idx_domain_mail_member ON domain_mail(member_id)`);
 
 // Migration: an earlier seed minted fabricated ids (opus/haiku at the sonnet
 // version), which 404 at Anthropic. Remap to the real ids and make sure the

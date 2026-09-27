@@ -206,11 +206,12 @@ def _cluster_level(ids, X, *, k, merge, split_above, split_per, depth, max_depth
     return out
 
 
-def groups_payload(groups: list[Group]) -> list[dict[str, Any]]:
-    """What the MCP tool returns: no vectors, just the ids and the numbers."""
+def groups_payload(groups: list[Group], key: str = "conversation_ids") -> list[dict[str, Any]]:
+    """What the MCP tool returns: no vectors, just the ids and the numbers.
+    `key` names the ids for what they are (`note_paths` for the notes)."""
     return [
         {
-            "conversation_ids": g.conversation_ids,
+            key: g.conversation_ids,
             "size": g.size,
             "cohesion": round(g.cohesion, 4),
             "depth": g.depth,

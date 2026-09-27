@@ -7,6 +7,7 @@ import type { McpTool } from "./mcpClient";
 import { OPENED_BY_MAURICE } from "./openedConversations";
 import { publishToRoom } from "./roomBus";
 import { describeSeeding, seedDomain, type SeedResult } from "./domainSeeding";
+import { attachMail, mailOfDomains, readMailThread } from "./domainMail";
 
 // The domain proposals — what the night's mapping found and offers, and the
 // three tools Maurice holds in the conversation that carries them.
@@ -35,6 +36,8 @@ export type ProposalState = "proposed" | "adopted" | "dismissed" | "expired" | "
 export interface ProposalStats {
   /** Conversations in the group, months with at least one, first and last day. */
   size?: number;
+  /** Mail threads in the group (their digests), beside the conversations. */
+  mail?: number;
   months_active?: number;
   first?: string;
   last?: string;
@@ -62,6 +65,8 @@ export interface Proposal {
   name: string;
   summary: string;
   conversation_ids: string[];
+  /** The mail's thread digests it carries: garden-relative note paths. */
+  mail: string[];
   state: ProposalState;
   presented: boolean;
   conversation_id: string | null;
@@ -71,12 +76,18 @@ export interface Proposal {
   updated_at: string;
 }
 
+/** What a proposal weighs: its conversations and its mail threads. */
+export function sizeOf(p: Pick<Proposal, "conversation_ids" | "mail">): number {
+  return p.conversation_ids.length + (p.mail?.length ?? 0);
+}
+
 interface Row {
   id: string;
   member_id: string;
   name: string;
   summary: string;
   conversation_ids_json: string;
+  mail_json: string;
   state: ProposalState;
   presented: number;
   conversation_id: string | null;
@@ -97,12 +108,14 @@ function parseJson<T>(s: string, fallback: T): T {
 
 function toProposal(r: Row): Proposal {
   const ids = parseJson<unknown>(r.conversation_ids_json, []);
+  const mail = parseJson<unknown>(r.mail_json ?? "[]", []);
   return {
     id: r.id,
     member_id: r.member_id,
     name: r.name,
     summary: r.summary,
     conversation_ids: Array.isArray(ids) ? ids.map(String) : [],
+    mail: Array.isArray(mail) ? mail.map(String) : [],
     state: r.state,
     presented: !!r.presented,
     conversation_id: r.conversation_id,
@@ -142,6 +155,7 @@ export interface NewProposal {
   name: string;
   summary: string;
   conversation_ids: string[];
+  mail?: string[];
   presented?: boolean;
   conversation_id?: string | null;
   stats?: ProposalStats;
@@ -150,17 +164,18 @@ export interface NewProposal {
 export function insertProposal(p: NewProposal): Proposal {
   const id = crypto.randomUUID();
   db.run(
-    `INSERT INTO domain_proposals (id, member_id, name, summary, conversation_ids_json, state, presented, conversation_id, stats_json)
-     VALUES (?, ?, ?, ?, ?, 'proposed', ?, ?, ?)`,
+    `INSERT INTO domain_proposals (id, member_id, name, summary, conversation_ids_json, mail_json, state, presented, conversation_id, stats_json)
+     VALUES (?, ?, ?, ?, ?, ?, 'proposed', ?, ?, ?)`,
     [
       id,
       p.member_id,
       p.name.trim(),
       p.summary.trim(),
       JSON.stringify([...new Set(p.conversation_ids)]),
+      JSON.stringify([...new Set(p.mail ?? [])]),
       p.presented ? 1 : 0,
       p.conversation_id ?? null,
-      JSON.stringify({ size: p.conversation_ids.length, ...(p.stats ?? {}) }),
+      JSON.stringify({ ...(p.stats ?? {}), size: p.conversation_ids.length, mail: new Set(p.mail ?? []).size }),
     ],
   );
   return getProposal(id)!;
@@ -168,23 +183,24 @@ export function insertProposal(p: NewProposal): Proposal {
 
 export function updateProposal(
   id: string,
-  patch: Partial<Pick<Proposal, "name" | "summary" | "conversation_ids" | "state" | "presented" | "conversation_id" | "maurice_id" | "stats">>,
+  patch: Partial<Pick<Proposal, "name" | "summary" | "conversation_ids" | "mail" | "state" | "presented" | "conversation_id" | "maurice_id" | "stats">>,
 ): Proposal | null {
   const cur = getProposal(id);
   if (!cur) return null;
   const next = { ...cur, ...patch };
   db.run(
-    `UPDATE domain_proposals SET name = ?, summary = ?, conversation_ids_json = ?, state = ?, presented = ?,
+    `UPDATE domain_proposals SET name = ?, summary = ?, conversation_ids_json = ?, mail_json = ?, state = ?, presented = ?,
        conversation_id = ?, maurice_id = ?, stats_json = ?, updated_at = datetime('now') WHERE id = ?`,
     [
       next.name.trim(),
       next.summary.trim(),
       JSON.stringify([...new Set(next.conversation_ids)]),
+      JSON.stringify([...new Set(next.mail)]),
       next.state,
       next.presented ? 1 : 0,
       next.conversation_id,
       next.maurice_id,
-      JSON.stringify({ ...next.stats, size: next.conversation_ids.length }),
+      JSON.stringify({ ...next.stats, size: next.conversation_ids.length, mail: new Set(next.mail).size }),
       id,
     ],
   );
@@ -203,6 +219,16 @@ export function conversationsSpokenFor(memberId: string): Set<string> {
   const out = new Set<string>();
   for (const p of listProposals(memberId, ["proposed", "adopted", "dismissed"])) {
     for (const id of p.conversation_ids) out.add(id);
+  }
+  return out;
+}
+
+/** Mail threads the mapping must leave alone, on the same rule as the
+ *  conversations — plus those already attached to a domain. */
+export function mailSpokenFor(memberId: string): Set<string> {
+  const out = mailOfDomains(memberId);
+  for (const p of listProposals(memberId, ["proposed", "adopted", "dismissed"])) {
+    for (const path of p.mail) out.add(path);
   }
   return out;
 }
@@ -270,6 +296,16 @@ function convoLines(memberId: string, ids: string[], limit: number): ConvoLine[]
   return take.map((id) => byId.get(id)).filter((r): r is ConvoLine => !!r);
 }
 
+/** The mail threads of a proposal as the tools show them: title and first day. */
+function mailLines(memberId: string, paths: string[], limit: number): Array<{ path: string; title: string; first: string; last: string }> {
+  const out: Array<{ path: string; title: string; first: string; last: string }> = [];
+  for (const p of paths.slice(0, limit)) {
+    const t = readMailThread(memberId, p);
+    if (t) out.push({ path: p, title: t.title, first: t.dates[0] ?? "", last: t.dates[t.dates.length - 1] ?? "" });
+  }
+  return out;
+}
+
 function day(s: string | undefined | null): string {
   return (s ?? "").slice(0, 10);
 }
@@ -284,13 +320,17 @@ export function proposalCard(p: Proposal, opts: { titles?: number; ids?: boolean
     state: p.state,
     presented: p.presented,
     conversations: p.conversation_ids.length,
+    mail_threads: p.mail.length,
     verdict: p.stats.verdict ?? null,
     from: day(p.stats.first) || null,
     to: day(p.stats.last) || null,
     months_active: p.stats.months_active ?? null,
     recent_90_days: p.stats.recent_90 ?? null,
     split_hint: p.stats.split_hint || null,
-    sample: lines.map((l) => `${day(l.first)} — ${l.title || "(untitled)"}`),
+    sample: [
+      ...lines.map((l) => `${day(l.first)} — ${l.title || "(untitled)"}`),
+      ...mailLines(p.member_id, p.mail, opts.titles ?? 6).map((t) => `${t.first} — ${t.title} (mail)`),
+    ],
     ...(opts.ids ? { conversation_ids: p.conversation_ids } : {}),
     ...(p.maurice_id ? { domain_id: p.maurice_id } : {}),
   };
@@ -310,12 +350,11 @@ export function memberConversationCount(memberId: string): number {
  *  a five-dot bar relative to the biggest of the lot, its share of the
  *  member's conversations, and one line of its summary. */
 export function proposalView(p: Proposal, maxSize: number, total: number) {
-  const n = p.conversation_ids.length;
   return {
     ...proposalCard(p, { titles: 3 }),
     one_line: oneLine(p.summary),
-    weight: weightOf(n, maxSize),
-    share: shareOf(n, total),
+    weight: weightOf(sizeOf(p), maxSize),
+    share: shareOf(p.conversation_ids.length, total),
     conversation_id: p.conversation_id,
     seed: p.stats.seed ?? null,
     created_at: p.created_at,
@@ -331,7 +370,7 @@ export function proposalsForMember(memberId: string) {
   const conversationId = open.find((p) => p.conversation_id)?.conversation_id ?? null;
   const settled = conversationId ? proposalsInConversation(conversationId).filter((p) => p.state !== "proposed") : [];
   const total = memberConversationCount(memberId);
-  const maxSize = Math.max(1, ...open.map((p) => p.conversation_ids.length), ...settled.map((p) => p.conversation_ids.length));
+  const maxSize = Math.max(1, ...open.map(sizeOf), ...settled.map(sizeOf));
   return {
     conversation_id: conversationId,
     total_conversations: total,
@@ -343,7 +382,7 @@ export function proposalsForMember(memberId: string) {
 function orderForDrawer(a: Proposal, b: Proposal): number {
   const av = a.stats.verdict === "lived" ? 1 : 0;
   const bv = b.stats.verdict === "lived" ? 1 : 0;
-  return av - bv || (b.stats.recent_90 ?? 0) - (a.stats.recent_90 ?? 0) || b.conversation_ids.length - a.conversation_ids.length;
+  return av - bv || (b.stats.recent_90 ?? 0) - (a.stats.recent_90 ?? 0) || sizeOf(b) - sizeOf(a);
 }
 
 // ── The prompt section ───────────────────────────────────────────────────────
@@ -363,14 +402,14 @@ export function proposalPromptSection(conversationId: string, memberName: string
   const open = all.filter((p) => p.state === "proposed");
   const settled = all.filter((p) => p.state !== "proposed");
   const line = (p: Proposal) =>
-    `- ${p.name} (id ${p.id}; ${p.conversation_ids.length} conversations, ${p.stats.verdict === "lived" ? "lived, quiet now" : "alive"}${p.presented ? ", presented in your opening message" : ""}${p.stats.split_hint ? `; might be several things: ${p.stats.split_hint}` : ""})`;
+    `- ${p.name} (id ${p.id}; ${p.conversation_ids.length} conversations${p.mail.length ? `, ${p.mail.length} mail threads` : ""}, ${p.stats.verdict === "lived" ? "lived, quiet now" : "alive"}${p.presented ? ", presented in your opening message" : ""}${p.stats.split_hint ? `; might be several things: ${p.stats.split_hint}` : ""})`;
   const settledLine = (p: Proposal) =>
     p.state !== "adopted"
       ? `${p.name} (${p.state})`
       : `${p.name} (id ${p.id}; adopted, ${p.stats.seed?.state === "written" ? `${p.stats.seed.notes?.length ?? 0} note(s) seeded in the garden` : p.stats.seed?.state === "declined" ? "garden notes declined" : "garden notes not offered yet"})`;
   return (
     `\n\n## Proposing domains\n` +
-    `You opened this conversation yourself, at night, to propose domains: parts of ${memberName}'s life you seem to follow across their conversations (imported ones and the ones lived with you). A domain, once adopted, is a row with a name and a statement that you keep a brief on. ` +
+    `You opened this conversation yourself, at night, to propose domains: parts of ${memberName}'s life you seem to follow across their conversations (imported ones and the ones lived with you) and, when their mail was read, across their email threads (the digests you wrote of them under "My mail" in their garden). A domain, once adopted, is a row with a name and a statement that you keep a brief on. ` +
     `Nothing becomes a domain without ${memberName}'s yes in this conversation — never adopt on a hint, an "ok" to something else, or your own judgement. Discuss: they may rename, merge two, cut one, say one is not a domain (then dismiss it, and its conversations will not come up again), or point at something you missed (then propose it). Their words on what a domain is about are right by definition.\n` +
     `Three tools, here only: \`domains__propose\` (list the proposals with their sample conversations, show one in full, or add one ${memberName} names), \`domains__adjust\` (rename, merge, split, dismiss), \`domains__adopt\` (create the domain — after an explicit yes). ` +
     `Adopting writes the first brief in the background; say it will appear on the domain's page in the app shortly. In ${memberName}'s language the app calls a brief "${word}" — use that word. Do not read ids aloud; use names. ` +
@@ -513,10 +552,12 @@ export async function runDomainTool(name: string, input: any, conversationId: st
       const p = mine(str(inp.id));
       if (!p) return fail("no such proposal in this conversation");
       const lines = convoLines(memberId, p.conversation_ids, 200);
+      const threads = mailLines(memberId, p.mail, 200);
       return ok({
         ...proposalCard(p, { titles: 0 }),
         conversations_listed: lines.length,
         conversations: lines.map((l) => ({ id: l.id, date: day(l.first), title: l.title || "(untitled)" })),
+        ...(threads.length ? { mail_threads: threads.map((t) => ({ from: t.first, to: t.last, title: t.title })) } : {}),
       });
     }
     if (action === "add") {
@@ -559,6 +600,7 @@ export async function runDomainTool(name: string, input: any, conversationId: st
         name: nm,
         summary: sm,
         conversation_ids: parts.flatMap((p) => p!.conversation_ids),
+        mail: parts.flatMap((p) => p!.mail),
         conversation_id: conversationId,
         presented: parts.some((p) => p!.presented),
         stats: { origin: "merge", verdict: parts.some((p) => p!.stats.verdict === "alive") ? "alive" : "lived", ...mergedStats(parts as Proposal[]) },
@@ -709,8 +751,10 @@ export function adoptProposal(p: Proposal, opts: { name?: string; summary?: stri
     const r = db.run(`UPDATE conversations SET maurice_id = ? WHERE id = ? AND user_id = ? AND maurice_id IS NULL`, [domain.id, id, p.member_id]);
     bound += Number(r.changes ?? 0);
   }
+  // Its mail threads become the domain's, for the brief to read.
+  const mail = attachMail(domain.id, p.member_id, p.mail);
   updateProposal(p.id, { state: "adopted", maurice_id: domain.id, name, summary });
-  console.log(`[proposals] "${name}" adopted by ${p.member_id}: domain ${domain.id}, ${bound} conversation(s) bound`);
+  console.log(`[proposals] "${name}" adopted by ${p.member_id}: domain ${domain.id}, ${bound} conversation(s) bound${mail ? `, ${mail} mail thread(s)` : ""}`);
   const brief = refreshBrief(getMaurice(domain.id) ?? domain, p.member_id).catch((err) => {
     console.warn(`[proposals] first brief of "${name}" failed: ${(err as Error).message}`);
     return { outcome: "failed", brief: null, sources: 0, cost_usd: null, error: String(err) } as RefreshResult;

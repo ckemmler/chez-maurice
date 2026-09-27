@@ -163,6 +163,49 @@ def test_store_conversation_centroids():
         store.close()
 
 
+def test_store_note_centroids():
+    import sqlite_vec  # noqa: F401
+    from src.sqlite_vec_store import SqliteVecStore
+
+    with tempfile.TemporaryDirectory() as tmp:
+        store = SqliteVecStore(vectors_dir=Path(tmp), vector_size=DIM, embedding_model="test-model")
+        def rec(path, meta, vec, n):
+            return {
+                "chunk_id": f"{path}-{n}", "unit_key": path, "unit_hash": f"h{path}{n}",
+                "source_type": "note", "vector": [float(x) for x in vec],
+                "payload": {"file_path": path, **meta},
+            }
+        local = np.random.default_rng(12)
+        a, b = unit(local.normal(size=DIM)), unit(local.normal(size=DIM))
+        thread = {"origin": "mail", "kind": "thread"}
+        recs = [
+            rec("/g/notes/fr/t1.md", thread, a, 0), rec("/g/notes/fr/t1.md", thread, a, 1),
+            rec("/g/notes/fr/t2.md", thread, b, 0),
+            rec("/g/notes/fr/p.md", {"origin": "mail", "kind": "person"}, a, 0),
+            rec("/g/notes/fr/n.md", {}, a, 0),
+        ]
+        recs.append({**rec("/g/notes/fr/t3.md", thread, a, 0), "source_type": "conversation"})
+        store.bulk_load(recs, member_id="m1")
+        got = store.note_centroids(origin="mail", kind="thread", member_id="m1")
+        assert set(got) == {"/g/notes/fr/t1.md", "/g/notes/fr/t2.md"}, got.keys()
+        assert float(got["/g/notes/fr/t1.md"] @ a) > 0.99
+        only = store.note_centroids(origin="mail", kind="thread", paths=["/g/notes/fr/t2.md"], member_id="m1")
+        assert set(only) == {"/g/notes/fr/t2.md"}
+        assert store.note_centroids(origin="mail", kind="thread", member_id="m2") == {}
+        store.close()
+
+
+def test_groups_payload_names_its_ids():
+    from src.domain_map import groups_payload
+
+    local = np.random.default_rng(11)  # its own draws: the others' planted data stays put
+    centres = [unit(local.normal(size=DIM)) for _ in range(2)]
+    vectors = {f"n{g}-{i}": unit(c + 0.1 * local.normal(size=DIM)).astype(np.float32) for g, c in enumerate(centres) for i in range(5)}
+    out = groups_payload(cluster(vectors, k=2), key="note_paths")
+    assert all("note_paths" in g and "conversation_ids" not in g for g in out)
+    assert sum(g["size"] for g in out) == 10
+
+
 if __name__ == "__main__":
     tests = [v for k, v in sorted(globals().items()) if k.startswith("test_") and callable(v)]
     failed = 0

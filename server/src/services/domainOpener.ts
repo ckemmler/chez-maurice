@@ -27,6 +27,12 @@ export interface OpenerStrings {
   conversations_other: string;
   recent: string;
   quiet_since: string;
+  /** A proposal's mail threads, beside its conversations (27 September 2026). */
+  mail_one: string;
+  mail_other: string;
+  /** The message that follows the opening when the mail brings more. */
+  followup_intro: string;
+  followup_attached: string;
   intro: string;
   invitation: string;
   title: string;
@@ -45,6 +51,10 @@ export const OPENER_STRINGS: Record<string, OpenerStrings> = {
     conversations_other: "%d conversations",
     recent: "%d recent",
     quiet_since: "quiet since %s",
+    mail_one: "%d mail thread",
+    mail_other: "%d mail threads",
+    followup_intro: "Your mail has been read, and it showed me parts of your life I had not seen in our conversations.",
+    followup_attached: "I also filed mail threads under what was already there: %s.",
     intro: "Tonight I looked over our past conversations — the ones imported from other assistants and the ones lived with you — and I saw a few parts of your life I seem to follow.",
     invitation: "Adopt, rename, cut, merge or refuse them — here, in your words, or with “Define my domains” under this message in the Maurice app.",
     title: "Your domains, as I see them",
@@ -60,6 +70,10 @@ export const OPENER_STRINGS: Record<string, OpenerStrings> = {
     conversations_other: "%d conversations",
     recent: "%d récentes",
     quiet_since: "calme depuis %s",
+    mail_one: "%d fil de courrier",
+    mail_other: "%d fils de courrier",
+    followup_intro: "Ton courrier a été lu, et il m'a montré des pans de ta vie que je n'avais pas vus dans nos conversations.",
+    followup_attached: "J'ai aussi rangé des fils de courrier sous ce qui existait déjà : %s.",
     intro: "Cette nuit, j'ai relu nos échanges passés — ceux importés d'autres assistants et ceux vécus avec toi — et j'y ai vu quelques pans de ta vie que je semble suivre.",
     invitation: "Adopte, renomme, coupe, fusionne ou refuse — ici, dans tes mots, ou avec « Définir mes domaines » sous ce message dans l'app Maurice.",
     title: "Tes domaines, tels que je les vois",
@@ -75,6 +89,10 @@ export const OPENER_STRINGS: Record<string, OpenerStrings> = {
     conversations_other: "%d conversazioni",
     recent: "%d recenti",
     quiet_since: "fermo dal %s",
+    mail_one: "%d filo di posta",
+    mail_other: "%d fili di posta",
+    followup_intro: "La tua posta è stata letta e mi ha mostrato parti della tua vita che non avevo visto nelle nostre conversazioni.",
+    followup_attached: "Ho anche messo dei fili di posta sotto ciò che c'era già: %s.",
     intro: "Stanotte ho riletto le nostre conversazioni passate — quelle importate da altri assistenti e quelle vissute con te — e ci ho visto alcune parti della tua vita che sembro seguire.",
     invitation: "Adotta, rinomina, dividi, unisci o rifiuta — qui, con le tue parole, oppure con «Definire i miei domini» sotto questo messaggio nell'app Maurice.",
     title: "I tuoi domini, come li vedo",
@@ -90,6 +108,10 @@ export const OPENER_STRINGS: Record<string, OpenerStrings> = {
     conversations_other: "%d Gespräche",
     recent: "%d aktuell",
     quiet_since: "ruhig seit %s",
+    mail_one: "%d Mailverlauf",
+    mail_other: "%d Mailverläufe",
+    followup_intro: "Deine Post wurde gelesen, und sie hat mir Teile deines Lebens gezeigt, die ich in unseren Gesprächen nicht gesehen hatte.",
+    followup_attached: "Ich habe außerdem Mailverläufe dem zugeordnet, was schon da war: %s.",
     intro: "Heute Nacht habe ich unsere vergangenen Gespräche durchgesehen — die aus anderen Assistenten importierten und die mit dir geführten — und darin einige Teile deines Lebens gesehen, die ich offenbar verfolge.",
     invitation: "Übernimm, benenne um, teile, führe zusammen oder lehne ab — hier, in deinen Worten, oder mit „Meine Bereiche festlegen“ unter dieser Nachricht in der Maurice-App.",
     title: "Deine Bereiche, wie ich sie sehe",
@@ -105,6 +127,10 @@ export const OPENER_STRINGS: Record<string, OpenerStrings> = {
     conversations_other: "%d conversaciones",
     recent: "%d recientes",
     quiet_since: "en calma desde %s",
+    mail_one: "%d hilo de correo",
+    mail_other: "%d hilos de correo",
+    followup_intro: "Tu correo ha sido leído y me ha mostrado partes de tu vida que no había visto en nuestras conversaciones.",
+    followup_attached: "También he archivado hilos de correo bajo lo que ya existía: %s.",
     intro: "Esta noche he releído nuestras conversaciones pasadas —las importadas de otros asistentes y las vividas contigo— y he visto en ellas algunas partes de tu vida que parezco seguir.",
     invitation: "Adopta, renombra, separa, fusiona o rechaza —aquí, con tus palabras, o con «Definir mis dominios» bajo este mensaje en la app Maurice.",
     title: "Tus dominios, tal como los veo",
@@ -120,6 +146,10 @@ export const OPENER_STRINGS: Record<string, OpenerStrings> = {
     conversations_other: "%d conversas",
     recent: "%d recentes",
     quiet_since: "parado desde %s",
+    mail_one: "%d fio de correio",
+    mail_other: "%d fios de correio",
+    followup_intro: "O teu correio foi lido e mostrou-me partes da tua vida que eu não tinha visto nas nossas conversas.",
+    followup_attached: "Também arrumei fios de correio sob o que já existia: %s.",
     intro: "Esta noite reli as nossas conversas passadas — as importadas de outros assistentes e as vividas contigo — e vi nelas algumas partes da tua vida que pareço acompanhar.",
     invitation: "Adota, renomeia, separa, junta ou recusa — aqui, com as tuas palavras, ou com «Definir os meus domínios» por baixo desta mensagem na app Maurice.",
     title: "Os teus domínios, tal como os vejo",
@@ -135,6 +165,10 @@ export const OPENER_STRINGS: Record<string, OpenerStrings> = {
     conversations_other: "%d gesprekken",
     recent: "%d recent",
     quiet_since: "stil sinds %s",
+    mail_one: "%d mailgesprek",
+    mail_other: "%d mailgesprekken",
+    followup_intro: "Je mail is gelezen en liet me delen van je leven zien die ik in onze gesprekken niet had gezien.",
+    followup_attached: "Ik heb ook mailgesprekken ondergebracht bij wat er al was: %s.",
     intro: "Vannacht heb ik onze eerdere gesprekken doorgelezen — die uit andere assistenten zijn geïmporteerd en die met jou zijn gevoerd — en ik zag er een paar delen van je leven in die ik blijkbaar volg.",
     invitation: "Neem over, hernoem, splits, voeg samen of weiger — hier, in je eigen woorden, of met “Mijn domeinen bepalen” onder dit bericht in de Maurice-app.",
     title: "Je domeinen, zoals ik ze zie",
@@ -150,6 +184,29 @@ export function openerStrings(locale: string): OpenerStrings {
 function fmt(s: string, ...args: Array<string | number>): string {
   let i = 0;
   return s.replace(/%[ds]/g, () => String(args[i++] ?? ""));
+}
+
+/** Conversations and mail threads together: what a proposal weighs. Kept
+ *  here rather than imported, domainProposals.ts importing this file. */
+function unitsOf(p: Proposal): number {
+  return p.conversation_ids.length + (p.mail?.length ?? 0);
+}
+
+/** "12 conversations · 30 mail threads", the part that is zero left out
+ *  (a proposal with neither says its zero conversations). */
+function counts(p: Proposal, t: OpenerStrings): string[] {
+  const n = p.conversation_ids.length;
+  const m = p.mail?.length ?? 0;
+  const out: string[] = [];
+  if (n || !m) out.push(fmt(n === 1 ? t.conversations_one : t.conversations_other, n));
+  if (m) out.push(fmt(m === 1 ? t.mail_one : t.mail_other, m));
+  return out;
+}
+
+/** The same numbers in English, for the model's prompts. */
+function countsEn(p: Proposal): string {
+  const m = p.mail?.length ?? 0;
+  return `${p.conversation_ids.length} conversations${m ? ` and ${m} mail threads` : ""}`;
 }
 
 // ── Weight ───────────────────────────────────────────────────────────────────
@@ -194,20 +251,20 @@ export interface OpenerParts {
   invitation: string;
 }
 
-export function openerSystem(name: string, language: string, buttonLabel = "Define my domains"): string {
+export function openerSystem(name: string, language: string, buttonLabel = "Define my domains", withMail = false): string {
   return [
-    `You are Maurice, ${name}'s personal assistant. Tonight you looked over their past conversations — the ones imported from other assistants and the ones lived with you — and saw a few parts of their life you seem to follow. You are opening a conversation to propose them as *domains*: a domain is a part of their life you follow closely, with a short brief you keep on it that they can read and correct in the app. Nothing exists until they say yes.`,
+    `You are Maurice, ${name}'s personal assistant. Tonight you looked over their past conversations — the ones imported from other assistants and the ones lived with you —${withMail ? " and the email threads of theirs you had read and summarised," : ""} and saw a few parts of their life you seem to follow. You are opening a conversation to propose them as *domains*: a domain is a part of their life you follow closely, with a short brief you keep on it that they can read and correct in the app. Nothing exists until they say yes.`,
     `The app lays the list of domains out itself, with each one's weight; you do not list them. You write three short things, in ${language}, addressing ${name} as "you" (the familiar form where the language has one — "tu" in French), in your own voice: warm, plain, no flattery, no filler, no emoji, no markdown, no title. Return one JSON object and nothing else: {"intro": "…", "nuances": "…", "invitation": "…"}.\n- "intro": one to three sentences — what you did tonight and what you saw, without naming the domains.\n- "nuances": the nuances you see, in one short paragraph — a group that might be two things, two that might be one, one that may not be a domain, what is dated; name the domains concerned. Empty string if you see none.\n- "invitation": one or two sentences inviting them to adopt, rename, cut, merge or refuse — here in their words, or with the button "${buttonLabel}" under this message in the app (that is its exact label; keep it). Ask nothing you could not act on here.`,
   ].join("\n\n");
 }
 
 export function openerPrompt(alive: Proposal[], lived: Proposal[], name: string, sampleTitles: (p: Proposal) => string[]): string {
   const card = (p: Proposal) =>
-    `- ${p.name} — ${p.conversation_ids.length} conversations, ${p.stats.first?.slice(0, 7)} → ${p.stats.last?.slice(0, 7)}, ${p.stats.recent_90 ?? 0} in the last 90 days.${p.stats.split_hint ? ` Might be several things: ${p.stats.split_hint}` : ""}\n  ${p.summary}${sampleTitles(p).length ? `\n  Sample: ${sampleTitles(p).join("; ")}` : ""}`;
+    `- ${p.name} — ${countsEn(p)}, ${p.stats.first?.slice(0, 7)} → ${p.stats.last?.slice(0, 7)}, ${p.stats.recent_90 ?? 0} in the last 90 days.${p.stats.split_hint ? ` Might be several things: ${p.stats.split_hint}` : ""}\n  ${p.summary}${sampleTitles(p).length ? `\n  Sample: ${sampleTitles(p).join("; ")}` : ""}`;
   return [
     `The domains alive now, that the app will present to ${name} (biggest first):\n${alive.map(card).join("\n")}`,
     lived.length
-      ? `Others that lived at some point, named apart by the app:\n${lived.map((p) => `- ${p.name} (${p.conversation_ids.length} conversations, quiet since ${p.stats.last?.slice(0, 7)})`).join("\n")}`
+      ? `Others that lived at some point, named apart by the app:\n${lived.map((p) => `- ${p.name} (${countsEn(p)}, quiet since ${p.stats.last?.slice(0, 7)})`).join("\n")}`
       : `Nothing else lived.`,
     `Write your three parts for ${name}, as JSON.`,
   ].join("\n\n");
@@ -242,14 +299,13 @@ export interface OpeningInput {
 
 /** One proposal's line: the weight, the name, the numbers, one line of summary. */
 export function proposalLine(p: Proposal, maxSize: number, total: number, t: OpenerStrings): string {
-  const n = p.conversation_ids.length;
-  const bits = [fmt(n === 1 ? t.conversations_one : t.conversations_other, n)];
-  const share = shareOf(n, total);
+  const bits = counts(p, t);
+  const share = shareOf(p.conversation_ids.length, total);
   if (share) bits.push(`${share} %`);
   const recent = p.stats.recent_90 ?? 0;
   if (recent) bits.push(fmt(t.recent, recent));
   const line = oneLine(p.summary);
-  return `- ${dots(weightOf(n, maxSize))} **${p.name}** · ${bits.join(" · ")}${line ? ` — ${line}` : ""}`;
+  return `- ${dots(weightOf(unitsOf(p), maxSize))} **${p.name}** · ${bits.join(" · ")}${line ? ` — ${line}` : ""}`;
 }
 
 /**
@@ -261,7 +317,7 @@ export function proposalLine(p: Proposal, maxSize: number, total: number, t: Ope
 export function renderOpening(input: OpeningInput): string {
   const t = openerStrings(input.locale);
   const parts = input.parts ?? {};
-  const maxSize = Math.max(1, ...input.alive.map((p) => p.conversation_ids.length), ...input.lived.map((p) => p.conversation_ids.length));
+  const maxSize = Math.max(1, ...input.alive.map(unitsOf), ...input.lived.map(unitsOf));
   const blocks: string[] = [];
   blocks.push(parts.intro || t.intro);
   blocks.push(t.what);
@@ -269,15 +325,49 @@ export function renderOpening(input: OpeningInput): string {
     blocks.push(`**${t.alive_head}**\n\n${input.alive.map((p) => proposalLine(p, maxSize, input.total, t)).join("\n")}`);
   }
   if (input.lived.length) {
-    const named = input.lived.map((p) => {
-      const n = p.conversation_ids.length;
-      const since = p.stats.last?.slice(0, 7);
-      return `${p.name} (${fmt(n === 1 ? t.conversations_one : t.conversations_other, n)}${since ? `, ${fmt(t.quiet_since, since)}` : ""})`;
-    });
-    blocks.push(`**${t.lived_head}** : ${named.join(" · ")}.`);
+    blocks.push(`**${t.lived_head}** : ${livedNames(input.lived, t).join(" · ")}.`);
   }
   if (parts.nuances) blocks.push(parts.nuances);
   blocks.push(parts.invitation || t.invitation);
+  return blocks.join("\n\n");
+}
+
+function livedNames(lived: Proposal[], t: OpenerStrings): string[] {
+  return lived.map((p) => {
+    const since = p.stats.last?.slice(0, 7);
+    return `${p.name} (${counts(p, t).join(", ")}${since ? `, ${fmt(t.quiet_since, since)}` : ""})`;
+  });
+}
+
+export interface FollowUpInput {
+  locale: string;
+  alive: Proposal[];
+  lived: Proposal[];
+  total: number;
+  /** What the mail added to domains or proposals that were already there. */
+  attached: Array<{ name: string; threads: number }>;
+}
+
+/**
+ * The message that follows the opening in the same conversation when the
+ * night finds more in the member's mail while proposals are still open
+ * (27 September 2026): what is new, laid out like the opening, and where
+ * the mail was filed under what already existed. No model call: the fixed
+ * sentences and the list say it all.
+ */
+export function renderFollowUp(input: FollowUpInput): string {
+  const t = openerStrings(input.locale);
+  const maxSize = Math.max(1, ...input.alive.map(unitsOf), ...input.lived.map(unitsOf));
+  const blocks: string[] = [t.followup_intro];
+  if (input.alive.length) {
+    blocks.push(`**${t.alive_head}**\n\n${input.alive.map((p) => proposalLine(p, maxSize, input.total, t)).join("\n")}`);
+  }
+  if (input.lived.length) blocks.push(`**${t.lived_head}** : ${livedNames(input.lived, t).join(" · ")}.`);
+  if (input.attached.length) {
+    const list = input.attached.map((a) => `**${a.name}** (${fmt(a.threads === 1 ? t.mail_one : t.mail_other, a.threads)})`).join(", ");
+    blocks.push(fmt(t.followup_attached, list));
+  }
+  blocks.push(t.invitation);
   return blocks.join("\n\n");
 }
 
