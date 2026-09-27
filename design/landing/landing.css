@@ -445,3 +445,9 @@ p{margin:0;text-wrap:pretty;}
 .gh-ribbon span svg{width:14px; height:14px; flex:0 0 auto;}
 .gh-ribbon:hover span{background:#000;}
 @media (max-width:820px){ .gh-ribbon{display:none;} }
+/* Where the ribbon shows, keep the nav's buttons out from under its corner. */
+@media (min-width:821px){ .nav-cta{margin-right:72px;} }
+/* On a phone the nav holds the brand and one button: the trial. Download is
+   one scroll away, in the hero and its own section. */
+@media (max-width:680px){ .nav-dl{display:none;} .brand{white-space:nowrap;} }
+@media (max-width:400px){ .nav-in{gap:12px;} .nav-cta .btn-sm{padding:9px 12px;font-size:13.5px;} }

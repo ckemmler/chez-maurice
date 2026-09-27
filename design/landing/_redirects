@@ -3,3 +3,8 @@
 # 200, so `curl -O` saves an HTML file called ChezMaurice.pkg. Send people to
 # the install guide instead.
 /ChezMaurice.pkg  /docs  301
+
+# Short, shareable doors to the hosted trial's sign-up: chezmaurice.eu/trial,
+# and the French word for it.
+/trial  https://account.chezmaurice.eu/         302
+/essai  https://account.chezmaurice.eu/?lang=fr 302
