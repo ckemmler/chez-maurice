@@ -293,6 +293,19 @@ async def main() -> int:
     eq("list matches any", len(payloads(orch, source_type=["fiche", "note"])),
        len(fiche_chunks) + len(payloads(orch, source_type="note")))
     eq("no match is empty, not everything", len(payloads(orch, publication="nexistepas")), 0)
+    # The two vocabularies are values, matched exactly on an index: "book"
+    # is not "books", and the case does not matter.
+    eq("collection is exact", len(payloads(orch, collection="book")), 0)
+    eq("collection ignores the case", len(payloads(orch, collection="Books")), len(payloads(orch, collection="books")))
+    eq("source_type is exact", len(payloads(orch, source_type="fich")), 0)
+    if hasattr(orch.indexer, "_conn"):
+        conn = orch.indexer._conn(None)
+        plan = " ".join(str(r) for r in conn.execute(
+            "EXPLAIN QUERY PLAN SELECT id FROM chunks WHERE json_extract(payload, '$.collection') = ?", ("people",)))
+        check("the collection filter is served by an index", "idx_chunks_collection" in plan, plan)
+        vec = [0.1] * VECTOR_SIZE
+        eq("a search over a kind the file does not hold is empty", orch.indexer.search(vector=vec, limit=5, filters={"collection": "people"}), [])
+        check("and one over a kind it holds is not", len(orch.indexer.search(vector=vec, limit=5, filters={"collection": "books"})) > 0)
     try:
         payloads(orch, **{"meta.author": "Seth"})
         check("a dotted key is rejected", False)

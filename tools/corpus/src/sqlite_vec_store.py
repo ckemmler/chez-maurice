@@ -40,6 +40,18 @@ _DEFAULT_MEMBER = "_default"
 _SAFE_KEY = re.compile(r"[^A-Za-z0-9_-]")
 _IDENTIFIER = re.compile(r"^[A-Za-z0-9_]+$")
 
+# The two vocabularies every layer of the corpus is asked by (the people, the
+# garden, the conversations, the books): matched exactly, lowercased, on an
+# expression index. As substrings they were a JSON extraction over every
+# chunk's payload — the full text included — on every search: on the owner's
+# 92 000 chunks and the 38 000 of the shared pool, one to three seconds a
+# search inside the gateway (27 September 2026), for a candidate set the index
+# finds in a tenth of a millisecond.
+_EXACT_KEYS = ("source_type", "collection")
+# Keys an expression index serves: a filter made only of these is cheap to
+# test for emptiness before the vector search.
+_INDEXED_KEYS = frozenset(_EXACT_KEYS + ("conversation_id", "message_id"))
+
 
 def _db_filename(member_id: Optional[str]) -> str:
     key = member_id or _DEFAULT_MEMBER
@@ -61,7 +73,10 @@ def _build_where(filters: Optional[Dict[str, Any]]) -> tuple[str, list]:
                 continue  # Qdrant treats an empty OR-set as no constraint
             placeholders = ",".join("?" * len(value))
             clauses.append(f"{col} IN ({placeholders})")
-            params.extend(str(v) for v in value)
+            params.extend(str(v).lower() if key in _EXACT_KEYS else str(v) for v in value)
+        elif isinstance(value, str) and key in _EXACT_KEYS:
+            clauses.append(f"{col} = ?")
+            params.append(value.lower())
         elif isinstance(value, str) and key.endswith("_id"):
             # An id is exact, and exact is what the expression indexes below
             # can serve. Reconciling a conversation looks up its chunks by
@@ -170,9 +185,10 @@ class SqliteVecStore:
         )
         conn.execute("CREATE INDEX IF NOT EXISTS idx_chunks_unit ON chunks(unit_key)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_chunks_hash ON chunks(unit_hash)")
-        # Expression indexes on the two ids the conversations path filters by.
+        # Expression indexes on the two ids the conversations path filters by,
+        # and on the two vocabularies every layer is asked by (_EXACT_KEYS).
         # The expression text must be exactly what _build_where writes.
-        for key in ("conversation_id", "message_id"):
+        for key in ("conversation_id", "message_id", *_EXACT_KEYS):
             conn.execute(
                 f"CREATE INDEX IF NOT EXISTS idx_chunks_{key} ON chunks(json_extract(payload, '$.{key}'))"
             )
@@ -350,6 +366,13 @@ class SqliteVecStore:
         params: list = [qvec]
         if filters:
             frag, fparams = _build_where(filters)
+            # A file with nothing of that kind is not searched at all: the
+            # shared pool holds books, and a search of the people or the
+            # conversations used to scan its vectors for nothing.
+            if set(filters) <= _INDEXED_KEYS:
+                with self._lock:
+                    if conn.execute(f"SELECT 1 FROM chunks WHERE {frag} LIMIT 1", fparams).fetchone() is None:
+                        return []
             sql += f" AND rowid IN (SELECT id FROM chunks WHERE {frag})"
             params.extend(fparams)
         sql += " ORDER BY distance"
