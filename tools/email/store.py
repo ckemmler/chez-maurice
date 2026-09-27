@@ -853,30 +853,29 @@ class MailStore:
         if not addresses and not domains:
             return {"total": 0, "first": None, "last": None, "rows": []}
         where, args = self._party_clause(addresses, domains)
-        base = f"FROM messages m WHERE m.gone_at IS NULL AND {where}"
+        # One pass over the table (the recipients cannot be indexed): every
+        # match's id and instant; the count, the span and the newest are
+        # taken from that, and only the newest are read in full.
         with self._connect() as conn:
-            head = conn.execute(
-                f"SELECT count(*) AS n {base}", args
-            ).fetchone()
+            hits = conn.execute(
+                f"SELECT m.id, m.date, julianday(m.date) AS jd FROM messages m WHERE m.gone_at IS NULL AND {where}", args
+            ).fetchall()
+            dated = sorted((h for h in hits if h["jd"] is not None), key=lambda h: (-h["jd"], h["id"]))
+            newest = [h["id"] for h in dated[: max(1, int(limit))]]
             rows = conn.execute(
                 f"""SELECT m.id, m.sender, m.sender_address, m.recipients, m.cc, m.date, m.subject_sealed,
                            (SELECT group_concat(l.address || char(9) || l.folder || char(9) || l.uid, char(10))
                               FROM locations l WHERE l.message = m.id) AS seen
-                    {base} ORDER BY julianday(m.date) DESC, m.id LIMIT ?""",
-                (*args, max(1, int(limit))),
-            ).fetchall()
-            span = conn.execute(
-                # A message without a readable date sorts first ascending:
-                # it would stand for the first exchange.
-                f"""SELECT (SELECT date {base} AND julianday(m.date) IS NOT NULL ORDER BY julianday(m.date) ASC LIMIT 1) AS first,
-                           (SELECT date {base} AND julianday(m.date) IS NOT NULL ORDER BY julianday(m.date) DESC LIMIT 1) AS last""",
-                (*args, *args),
-            ).fetchone() if head["n"] else None
+                    FROM messages m WHERE m.id IN ({",".join("?" * len(newest))})""",
+                newest,
+            ).fetchall() if newest else []
+        order = {mid: n for n, mid in enumerate(newest)}
         return {
-            "total": int(head["n"] or 0),
-            "first": span["first"] if span else None,
-            "last": span["last"] if span else None,
-            "rows": [dict(r) for r in rows],
+            "total": len(hits),
+            # A message without a readable date stands for neither end.
+            "first": dated[-1]["date"] if dated else None,
+            "last": dated[0]["date"] if dated else None,
+            "rows": sorted((dict(r) for r in rows), key=lambda r: order[r["id"]]),
         }
 
     def senders(self) -> list[dict[str, Any]]:
