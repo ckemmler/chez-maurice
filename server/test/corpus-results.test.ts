@@ -146,3 +146,25 @@ test("an empty result set says so rather than saying nothing", () => {
   expect(out.results).toEqual([]);
   expect(out.note).toContain("nothing in the corpus");
 });
+
+describe("the people layer, a lookup on its own scale", () => {
+  const person = (name: string, score: number) =>
+    hit({ file_path: `/gardens/anna/people/fr/${name}-fiche.md`, source: "garden-fiches", source_type: "fiche", collection: "people", title: name, score });
+
+  test("the right person under the general floor is kept, a close namesake with him; noise is not", () => {
+    // "Thomas", 27 September 2026: his fiche at 0.487 was dropped under 0.53.
+    const results = [person("thomas-carton-de-wiart", 0.487), person("coleen-thomas", 0.439), person("kassim", 0.286)];
+    expect(narrowCorpusResults({ results }, "raw").rows).toHaveLength(0);
+    expect(narrowCorpusResults({ results }, "raw", { people: true }).rows.map((r: any) => r.title)).toEqual(["thomas-carton-de-wiart", "coleen-thomas"]);
+  });
+
+  test("a role nobody holds finds nobody", () => {
+    const results = [person("monica-simonnet", 0.300), person("corine-sombrun", 0.286)];
+    expect(narrowCorpusResults({ results }, "raw", { people: true }).rows).toHaveLength(0);
+  });
+
+  test("two close candidates are both handed over, for the summaries to tell apart", () => {
+    const results = [person("melanie", 0.41), person("cyrielle-debaix", 0.41), person("barbara", 0.378), person("paola", 0.33)];
+    expect(narrowCorpusResults({ results }, "raw", { people: true }).rows.map((r: any) => r.title)).toEqual(["melanie", "cyrielle-debaix", "barbara"]);
+  });
+});

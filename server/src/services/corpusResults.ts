@@ -70,7 +70,22 @@ export interface NarrowOptions {
   /** The conversation taking the turn, whose own passages are dropped. */
   conversationId?: string;
   maxHits?: number;
+  /** A search of the people (`collection: people`) — a lookup, scored on
+   *  another scale; see PEOPLE_FLOOR. */
+  people?: boolean;
 }
+
+/** The people layer is a lookup, not a question: a first name or a role
+ *  against a fiche scores lower than a question against a passage, and the
+ *  general floor threw the answer away — Thomas's fiche at 0.487, the
+ *  accountant's at 0.410, dropped under 0.53 (27 September 2026; the model
+ *  said there was no fiche and went to the mailbox). Measured on the owner's
+ *  140 fiches: the right person scores 0.38 to 0.54 (Jonathan 0.384, the
+ *  violin teacher 0.539); a role nobody holds tops out at 0.30 (a dentist)
+ *  to 0.35 (a plumber). And close to the best only: a hit carries its fiche's
+ *  summary, from which the model tells a namesake apart. */
+const PEOPLE_FLOOR = 0.37;
+const PEOPLE_SPREAD = 0.06;
 
 export interface NarrowedCorpus {
   /** What the model reads: the JSON it is handed in the tool result. */
@@ -144,7 +159,7 @@ export function narrowCorpusResults(data: unknown, raw: string, opts: NarrowOpti
   // 3. A floor, and a distance from the best.
   let rows = [...kept.values()];
   const best = rows.reduce((m, r) => Math.max(m, Number(r?.score ?? 0)), 0);
-  const cut = Math.max(SCORE_FLOOR, best - SCORE_SPREAD);
+  const cut = opts.people ? Math.max(PEOPLE_FLOOR, best - PEOPLE_SPREAD) : Math.max(SCORE_FLOOR, best - SCORE_SPREAD);
   // And when that leaves nothing, nothing is the answer. This used to keep the
   // best hit regardless — "an empty list the model cannot read" — which is
   // exactly backwards: the model reads an empty list fine, it is the one false

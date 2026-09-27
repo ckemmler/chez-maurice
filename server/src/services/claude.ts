@@ -643,7 +643,7 @@ async function executeTool(
         // the member sees under the reply is what the model actually read.
         if (!r.isError && name === "corpus__search") {
           ctx.searches && recordSearch(ctx.searches, "corpus", input?.query || "", input?.filters);
-          const narrowed = narrowCorpusResults(data, text, { conversationId: ctx.conversationId });
+          const narrowed = narrowCorpusResults(data, text, { conversationId: ctx.conversationId, people: wantsPeople(name, input) });
           const card = narrowed.rows.length ? corpusSourceCard({ results: narrowed.rows }, input?.query) : null;
           // A hit in a person fiche the member has not confirmed: the model
           // is told, and the footer will list it (services/reviewFooter.ts).
