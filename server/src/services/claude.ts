@@ -10,7 +10,7 @@ import { newSearchLedger, allowSearch, recordSearch, type SearchLedger } from ".
 import { McpSession, type McpTool } from "./mcpClient";
 import { resolveToText, resolveAttachments, getSpec } from "./composer/specs";
 import { noteComposer, noteTool, startReview } from "./reviewFooter";
-import { attachPeople } from "./personContext";
+import { attachPeople, fichesForExchanges } from "./personContext";
 import { resolveBookItem } from "./composer/weights";
 import { type FileAttachment } from "./composer/files";
 import { getConversationMaurice, resolveMauriceContext, resolveMauriceAttachments } from "./maurices";
@@ -616,7 +616,10 @@ async function executeTool(
           return { text: withPeople + mark, isError: false, data: card ?? data };
         }
         const mark = r.isError ? "" : noteTool(ctx.conversationId, ctx.memberId, name, input, null);
-        return { text: text + mark, isError: r.isError, data };
+        // The headers of a person's mail, and the fiche that says what they
+        // mean (services/personContext.ts).
+        const fiche = !r.isError && name === "email__exchanges" ? fichesForExchanges(ctx.memberId, data) : "";
+        return { text: text + fiche + mark, isError: r.isError, data };
       }
       return { text: `Tool ${name} is unavailable.`, isError: true };
     } catch (err: any) {

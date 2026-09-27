@@ -144,3 +144,58 @@ export function attachPeople(conversationId: string, memberId: string | null | u
   });
   return attached ? JSON.stringify(payload) : narrowed;
 }
+
+// ── The person behind an address ─────────────────────────────────────────
+//
+// `email__exchanges` answers from the header store, by address: the person's
+// fiche says what those messages mean — who they are, what is going on,
+// what was promised, what is left open. A model that asked the store by name
+// never learns there is a fiche (27 September 2026: the accountant's
+// exchanges read, her fiche with every open question never opened). So the
+// server says, beside the result, which fiches hold those addresses.
+
+const byAddressCache = new Map<string, { at: number; map: Map<string, { locale: string; basename: string; title: string }> }>();
+
+function fichesByAddress(memberId: string): Map<string, { locale: string; basename: string; title: string }> {
+  const hit = byAddressCache.get(memberId);
+  if (hit && Date.now() - hit.at < TTL_MS) return hit.map;
+  const map = new Map<string, { locale: string; basename: string; title: string }>();
+  const garden = gardenFor(memberId);
+  const root = garden ? path.join(garden.root, "people") : "";
+  for (const locale of root && fs.existsSync(root) ? fs.readdirSync(root) : []) {
+    const dir = path.join(root, locale);
+    if (!/^[a-z]{2}$/.test(locale) || !fs.statSync(dir).isDirectory()) continue;
+    for (const f of fs.readdirSync(dir).filter((x) => x.endsWith("-fiche.md"))) {
+      const parsed = parseFiche(fs.readFileSync(path.join(dir, f), "utf8"));
+      const ids = Array.isArray(parsed?.frontmatter.identities) ? parsed!.frontmatter.identities : [];
+      for (const id of ids) {
+        if (!id?.address || id.status === "rejected") continue;
+        const a = String(id.address).toLowerCase();
+        if (!map.has(a)) map.set(a, { locale, basename: f.slice(0, -3), title: String(parsed!.frontmatter.title ?? f) });
+      }
+    }
+  }
+  byAddressCache.set(memberId, { at: Date.now(), map });
+  return map;
+}
+
+/** Tests only. */
+export function _clearFichesByAddress(): void {
+  byAddressCache.clear();
+}
+
+/** What to append to an `email__exchanges` result: the fiches of the
+ *  addresses it read, and how to open them ("" when none has one). */
+export function fichesForExchanges(memberId: string | null | undefined, data: any): string {
+  if (!memberId || !data || !Array.isArray(data.addresses) || !data.addresses.length) return "";
+  const map = fichesByAddress(memberId);
+  const seen = new Map<string, { locale: string; basename: string; title: string }>();
+  for (const a of data.addresses) {
+    const f = map.get(String(a).toLowerCase());
+    if (f) seen.set(`${f.locale}/${f.basename}`, f);
+  }
+  if (!seen.size) return "";
+  const list = [...seen.values()].slice(0, 3).map((f) =>
+    `${f.title} (garden__get_fiche: resource_collection "people", resource_id "${f.basename.replace(/-fiche$/, "")}", locale "${f.locale}")`);
+  return `\n\n[These addresses have a fiche in the member's garden: ${list.join("; ")}. It says who they are to the member and what their mail says is going on, was promised and is left open — the meaning behind these headers. Read it before saying what is going on.]`;
+}

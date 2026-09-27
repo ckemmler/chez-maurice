@@ -35,6 +35,7 @@ beforeEach(() => {
   fs.rmSync(path.join(GARDENS, ANNA), { recursive: true, force: true });
   fs.mkdirSync(dir, { recursive: true });
   ctx._clearPeopleIndex();
+  ctx._clearFichesByAddress();
   const jean = "Ton collègue chez Acme, parti en mars 2026. — [3 mars 2026, Jean, « Dernier jour » · Gmail](maurice-mail:m1)";
   fiche("jean-dupont-fiche", `title: Jean Dupont\nresource_collection: people\nstatus: confirmed\nrelation:\n  status: confirmed\n  since: "2021"\n  until: "2026-03"\n  written_hash: ${fragmentHash(jean)}`, `## La relation\n\n${jean}\n`);
   const paola = "La mère de tes enfants.";
@@ -88,4 +89,15 @@ test("each hit carries the people it mentions; the person's own fiche does not; 
   // Nothing to attach, or a shape it does not know: the text as it was.
   expect(ctx.attachPeople(CONVO, ANNA, narrowed.replace("Jean Dupont", "Jean").replace("Paola Magi", "Paola"), rows.map((r) => ({ ...r, text: "" })))).toBe(narrowed.replace("Jean Dupont", "Jean").replace("Paola Magi", "Paola"));
   expect(ctx.attachPeople(CONVO, ANNA, "not json", rows)).toBe("not json");
+});
+
+test("an exchanges result names the fiche its addresses belong to, and how to open it; a rejected address, or none, says nothing", () => {
+  fiche("melanie-fiche", `title: Mélanie\nresource_collection: people\nidentities:\n  - address: mela@partfin.be\n    status: pending\n  - address: old@partfin.be\n    status: rejected`, `## Les échanges\n\n3 message(s).\n`);
+  const hint = ctx.fichesForExchanges(ANNA, { addresses: ["MELA@partfin.be"], total: 3, messages: [] });
+  expect(hint).toContain(`Mélanie (garden__get_fiche: resource_collection "people", resource_id "melanie", locale "fr")`);
+  expect(hint).toContain("going on");
+  expect(ctx.fichesForExchanges(ANNA, { addresses: ["old@partfin.be"] })).toBe("");
+  expect(ctx.fichesForExchanges(ANNA, { addresses: ["nobody@x.org"] })).toBe("");
+  expect(ctx.fichesForExchanges(null, { addresses: ["mela@partfin.be"] })).toBe("");
+  expect(ctx.fichesForExchanges(ANNA, null)).toBe("");
 });
