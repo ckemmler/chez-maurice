@@ -61,3 +61,13 @@ test("the reading approved and an address book linked: the fiche comes first, wi
   // Without the garden tool, the fiche is not a step it could take.
   expect(mailNotice(TOOLS.filter((t) => t !== "garden__get_fiche"), ANNA, "Anna")).toContain("1. email__exchanges");
 });
+
+test("the corpus notice asks for the people as a layer of their own, and to open a person's fiche", async () => {
+  const { corpusNotice } = await import("../src/services/claude");
+  const n = corpusNotice(["corpus__search", "garden__get_fiche"]);
+  expect(n).toContain(`filters {"collection": "people"}`);
+  expect(n).toContain(`"my accountant"`);
+  expect(n).toContain("open it (garden__get_fiche");
+  expect(n.indexOf(`{"collection": "people"}`)).toBeLessThan(n.indexOf(`"source_type": ["note"`));
+  expect(corpusNotice(["corpus__search"])).not.toContain("garden__get_fiche");
+});

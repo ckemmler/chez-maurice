@@ -21,8 +21,8 @@
 //
 //   - **A budget**, per family. Four web searches answer any question a chat
 //     turn is going to answer; a fifth is a model circling. The corpus gets
-//     three, one per layer the prompt tells it to ask for (garden,
-//     conversations, what they have only read).
+//     four, one per layer the prompt tells it to ask for (the people, the
+//     garden, conversations, what they have only read).
 //   - **A repeat check**, on the query itself: re-running a search spends a
 //     round to receive the same pages twice. Of the fifteen pairs above, the
 //     content-word overlap is 0.56 for queries three and four — the same
@@ -41,9 +41,9 @@
 
 export type SearchFamily = "web" | "corpus";
 
-/** Per family, per turn. Four for the web; three for the corpus, one per layer
+/** Per family, per turn. Four for the web; four for the corpus, one per layer
  *  the prompt asks it to search separately. */
-const BUDGET: Record<SearchFamily, number> = { web: 4, corpus: 3 };
+const BUDGET: Record<SearchFamily, number> = { web: 4, corpus: 4 };
 
 /** Above this overlap of content words, two queries are one question asked
  *  twice and the second is answered from the first. Between the reworded pair
@@ -65,7 +65,7 @@ const EMPTY = new Set(
 export interface SearchLedger {
   spent: Record<SearchFamily, number>;
   /** One entry per search actually run this turn, newest last. */
-  past: { family: SearchFamily; words: Set<string>; query: string }[];
+  past: { family: SearchFamily; words: Set<string>; query: string; scope: string }[];
 }
 
 export function newSearchLedger(): SearchLedger {
@@ -98,10 +98,15 @@ export type SearchVerdict =
  * May this turn run this search? Consulted before the call, and only for the
  * two search families — every other tool is unbudgeted.
  */
-export function allowSearch(ledger: SearchLedger, family: SearchFamily, query: string): SearchVerdict {
+export function allowSearch(ledger: SearchLedger, family: SearchFamily, query: string, filters?: unknown): SearchVerdict {
   const asked = words(query);
+  const where = scopeOf(filters);
 
-  const twin = ledger.past.find((p) => p.family === family && overlap(p.words, asked) >= SAME_QUESTION);
+  // The same words over another layer are another search: "ma comptable"
+  // among the people and among the notes find different things — the first
+  // her fiche, the second the mail about the accounts (27 September 2026,
+  // when the people layer was refused as a repeat of the garden's).
+  const twin = ledger.past.find((p) => p.family === family && p.scope === where && overlap(p.words, asked) >= SAME_QUESTION);
   if (twin) {
     return {
       run: false,
@@ -112,11 +117,11 @@ export function allowSearch(ledger: SearchLedger, family: SearchFamily, query: s
   }
 
   if (ledger.spent[family] >= BUDGET[family]) {
-    const where = family === "web" ? "web searches" : "corpus searches";
+    const which = family === "web" ? "web searches" : "corpus searches";
     return {
       run: false,
       text:
-        `No ${where} left on this turn — ${BUDGET[family]} is the budget, and the results of all of them are above. ` +
+        `No ${which} left on this turn — ${BUDGET[family]} is the budget, and the results of all of them are above. ` +
         `This is not a failure and not worth retrying with another tool: answer now with what you found, ` +
         `and say plainly what you could not establish rather than searching around it.`,
     };
@@ -127,7 +132,15 @@ export function allowSearch(ledger: SearchLedger, family: SearchFamily, query: s
 
 /** Called once a search has actually run. Kept separate from `allowSearch` so
  *  a refused call never counts against the budget it was refused by. */
-export function recordSearch(ledger: SearchLedger, family: SearchFamily, query: string): void {
+export function recordSearch(ledger: SearchLedger, family: SearchFamily, query: string, filters?: unknown): void {
   ledger.spent[family] += 1;
-  ledger.past.push({ family, words: words(query), query });
+  ledger.past.push({ family, words: words(query), query, scope: scopeOf(filters) });
+}
+
+/** A search's filters as one comparable string: keys sorted, list values
+ *  sorted, "" for none. */
+function scopeOf(filters: unknown): string {
+  if (!filters || typeof filters !== "object") return "";
+  const norm = (v: unknown): unknown => (Array.isArray(v) ? v.map(String).sort() : v);
+  return JSON.stringify(Object.keys(filters as object).sort().map((k) => [k, norm((filters as any)[k])]));
 }

@@ -97,12 +97,22 @@ describe("what counts as the same question", () => {
 });
 
 describe("the two budgets are separate", () => {
-  test("the corpus has three, one per layer", () => {
+  test("the corpus has four, one per layer", () => {
     const { ran } = replay(
-      ["le jardin sur ce sujet", "ce qu'il m'a déjà dit là-dessus", "ce qu'il a seulement lu", "et encore autre chose"],
+      ["les gens concernés", "le jardin sur ce sujet", "ce qu'il m'a déjà dit là-dessus", "ce qu'il a seulement lu", "et encore autre chose"],
       "corpus",
     );
-    expect(ran).toHaveLength(3);
+    expect(ran).toHaveLength(4);
+  });
+
+  test("the same words over another layer are another search; over the same layer, a repeat", () => {
+    const ledger = newSearchLedger();
+    recordSearch(ledger, "corpus", "ma comptable", { source_type: ["note", "fiche", "card", "fragment"] });
+    expect(allowSearch(ledger, "corpus", "ma comptable", { collection: "people" }).run).toBe(true);
+    recordSearch(ledger, "corpus", "ma comptable", { collection: "people" });
+    // Keys and list values in another order are the same layer.
+    expect(allowSearch(ledger, "corpus", "ma comptable", { source_type: ["fragment", "card", "fiche", "note"] }).run).toBe(false);
+    expect(allowSearch(ledger, "corpus", "ma comptable").run).toBe(true);
   });
 
   test("a spent web budget leaves the corpus untouched", () => {

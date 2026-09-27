@@ -206,8 +206,14 @@ function buildRoomSystemPrompt(conversationId: string, summonerName: string, ima
  *  fired both searches in the same round, which is better on both counts: one
  *  round of latency rather than three, and every layer answered rather than a
  *  walk that stops at the first plausible hit. The instruction now says what
- *  the model did. */
-function corpusNotice(toolNames: string[]): string {
+ *  the model did.
+ *
+ *  The people came in as a layer of their own on 27 September 2026. Asked
+ *  for "my accountant", the garden layer returned the digests of her mail —
+ *  notes on the accounts — and not her fiche; the model then searched the
+ *  mailbox for who she was. Among `{"collection": "people"}` her fiche is
+ *  the first hit, for her role as for her name. */
+export function corpusNotice(toolNames: string[]): string {
   if (!toolNames.includes("corpus__search")) return "";
   return (
     `\n\n## Your memory of what they keep\n` +
@@ -215,10 +221,13 @@ function corpusNotice(toolNames: string[]): string {
     `Reach for it when a question falls into one of the domains above: the briefs say what matters to them, the corpus holds what they actually wrote. ` +
     `It ranks nothing across sources — an unfiltered search mixes them, and past conversations, being far the most numerous, take every slot. ` +
     `So ask each layer separately, in the same round, one call per layer you need:\n` +
+    `- the people in their life, whenever the question is about someone — by name, or by what they are to them ("my accountant", "Adriano's violin teacher"): filters {"collection": "people"}. ` +
+    `A person's fiche is the hub: who they are to them, dated, and — when their mail is read — what is going on with them, what was promised, what is left open, the latest exchanges. ` +
+    `A fiche among the hits is the person${toolNames.includes("garden__get_fiche") ? `: open it (garden__get_fiche, resource_collection "people") before searching anywhere else for them` : ""}.\n` +
     `- their garden, what they chose to keep on a subject: filters {"source_type": ["note", "fiche", "card", "fragment"]}\n` +
     `- what they have already said to you: filters {"source_type": "conversation"}\n` +
     `- what they have only read or gathered, and rarely needs asking: filters {"source_type": ["book", "dossier", "thought"]}\n` +
-    `The first two are the usual pair. Weigh what comes back in that same order — what they wrote down themselves outranks what they once said in passing, which outranks a page from someone else's book. ` +
+    `The garden and the conversations are the usual pair; the people join them whenever someone is involved. Weigh what comes back in that same order — what they wrote down themselves outranks what they once said in passing, which outranks a page from someone else's book. ` +
     `Say where something came from when it matters, and say when something comes from a brief rather than from a search you just ran.\n` +
     `A result may carry "people": who someone its passage mentions is to them now, from that person's fiche, dated (since → until). A passage can be years old — a colleague it places at a company may have left since — so where the two differ, the person's line is what holds today; say so. A line marked [not confirmed yet] is Maurice's reading of their mail: use it, and say it is unconfirmed.\n` +
     `Two things it is not. It is not a way to check an outside fact — what a school's app is, what an error code means, what something costs — which the web answers and their own writing does not; ` +
@@ -246,7 +255,7 @@ export function mailNotice(toolNames: string[], memberId: string | null | undefi
   const fiches = read && toolNames.includes("garden__get_fiche");
   const when = mailNightlyOn() ? "Every night Maurice walks them" : "Maurice walks them";
   const steps = [
-    ...(fiches ? [`Their fiche: garden__get_fiche with resource_collection "people" and the slug without "-fiche" (people/fr/jean-dupont-fiche.md is resource_id "jean-dupont", locale "fr"); it comes with its fragments. corpus__search finds it when you do not know the slug, and a fiche among its hits is the person: open it rather than going to the mailbox.`] : []),
+    ...(fiches ? [`Their fiche: garden__get_fiche with resource_collection "people" and the slug without "-fiche" (people/fr/jean-dupont-fiche.md is resource_id "jean-dupont", locale "fr"); it comes with its fragments. corpus__search with {"collection": "people"} finds it by their name or by what they are to ${memberName} when you do not know the slug, and a fiche among its hits is the person: open it rather than going to the mailbox.`] : []),
     `email__exchanges: everything exchanged with an address, a domain or a name, read from the store — instant, newest first, current up to the last walk (its \`as_of\`).`,
     `The live mailbox (email__search, email__get_message, email__get_by_id), for what the others cannot hold: mail that came in since the last walk, words inside a body, unread or flagged, a message read in full. Seconds per call.`,
   ];
@@ -592,7 +601,7 @@ async function executeTool(
         // Same budget on the other side: three layers is three searches, and
         // a fourth is the model going round again (services/searchBudget.ts).
         if (name === "corpus__search" && ctx.searches) {
-          const verdict = allowSearch(ctx.searches, "corpus", input?.query || "");
+          const verdict = allowSearch(ctx.searches, "corpus", input?.query || "", input?.filters);
           if (!verdict.run) return { text: verdict.text, isError: false };
         }
         const r = await mcp.callTool(name, input || {});
@@ -604,7 +613,7 @@ async function executeTool(
         // cards the app draws are built from the same surviving rows, so what
         // the member sees under the reply is what the model actually read.
         if (!r.isError && name === "corpus__search") {
-          ctx.searches && recordSearch(ctx.searches, "corpus", input?.query || "");
+          ctx.searches && recordSearch(ctx.searches, "corpus", input?.query || "", input?.filters);
           const narrowed = narrowCorpusResults(data, text, { conversationId: ctx.conversationId });
           const card = narrowed.rows.length ? corpusSourceCard({ results: narrowed.rows }, input?.query) : null;
           // A hit in a person fiche the member has not confirmed: the model
