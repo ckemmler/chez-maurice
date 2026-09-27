@@ -1,4 +1,4 @@
-# People and mailboxes — design, lots 1 to 5 built
+# People and mailboxes — design, lots 1 to 5 and 7 built
 
 Settled with Candide on 26 September 2026, after the first full mail import
 (Gmail and Proton, `specs/mail-import.md`, lots 1 to 5). Two refinements of
@@ -285,8 +285,14 @@ new documents.
    line; a pending one into the footer.
 6. **Forget a mailbox.** The purge, the pruning, the history option (every
    past version pruned).
-7. **Stitching.** Guessed links merged on two strong signals, the split on
-   rejection, fragments from the rest of the garden.
+7. **Stitching.** *Guessed links built 27 September 2026*
+   (`mergeGuessed`, `consolidate`, `splitAddress` in
+   `services/mailPeople.ts`). The second strong signal is, for want of the
+   body, an address that spells the name, a thread in common, or two cards
+   of that name — never the name alone. Fiches fold into one (the member's
+   own first), a rejected address splits back out with its fragments. **Not
+   done: fragments from the rest of the garden** (a note, a conversation
+   contributing to a person).
 
 ## Still open
 
