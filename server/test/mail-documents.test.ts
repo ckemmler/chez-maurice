@@ -549,6 +549,30 @@ test("a person named as the member's own fiche with a card of that name is writt
   expect(frags("paola-magi-fiche").length).toBe(1);
 });
 
+test("a fiche Maurice made folds into the member's own fiche on that name, with its relation and fragments", async () => {
+  addCard({ uid: "u-p1", full_name: "Magi Paola", emails: ["magipaola@hotmail.com"] });
+  addCard({ uid: "u-p2", full_name: "Paola Magi", emails: [] });
+  material.push(msg("q1", "paola magi <magipaola@hotmail.com>", ["anna@gmail.com"], "2026-09-03T10:00:00+02:00", "École", "<q1@x>", "Paola parle de l'école."));
+  material.push(msg("q2", "paola magi <magipaola@hotmail.com>", ["anna@gmail.com"], "2026-09-04T10:00:00+02:00", "Médecin", "<q2@x>", "Paola parle du médecin."));
+  answer = (req) => req.system.includes(PERSON) && req.prompt.includes("Paola")
+    ? JSON.stringify({ title: "Paola", relation: { text: "La mère de tes enfants [1]." }, going_on: req.prompt.split("\n").filter((l: string) => /^\[\d+\]/.test(l)).map((l: string) => `Un échange ${l.match(/^\[\d+\]/)![0]}`), promised: [], open: [] })
+    : defaultAnswer(req);
+  await docs.writeMailDocuments(ANNA);
+  expect(fs.existsSync(path.join(peopleDir, "magi-paola-fiche.md"))).toBe(true);
+  // Anna has her own fiche on Paola, on the other card.
+  fs.writeFileSync(path.join(peopleDir, "paola-magi-fiche.md"), `---\ntitle: Paola Magi\nresource_collection: people\nresource_id: paola-magi\nlocale: fr\ncarddav_uid: u-p2\n---\n\n## Journal\n\n- Anniversaire le 4 mai.\n`);
+  material.push(msg("q3", "paola magi <magipaola@hotmail.com>", ["anna@gmail.com"], "2026-09-05T10:00:00+02:00", "Vacances", "<q3@x>", "Paola parle des vacances."));
+  await docs.writeMailDocuments(ANNA);
+  expect(fs.existsSync(path.join(peopleDir, "magi-paola-fiche.md"))).toBe(false);
+  const f = fiche("paola-magi-fiche");
+  expect(f).toContain("- Anniversaire le 4 mai.");
+  expect(f).toContain("## La relation\n\nLa mère de tes enfants.");
+  expect(f).toContain("person_key: vcard:u-p1");
+  expect(f).toContain("- address: magipaola@hotmail.com");
+  expect(frags("paola-magi-fiche").length).toBeGreaterThan(0);
+  expect(frags("paola-magi-fiche").map((x) => frag("paola-magi-fiche", x.slice(0, 3))).join("")).toContain("Vacances");
+});
+
 test("a mailbox is called by the account's name, else its provider, else its address; two alike fall back to the addresses", () => {
   const labels = docs.mailboxLabels([
     { address: "Anna@Gmail.com" },

@@ -414,17 +414,49 @@ export function consolidate(garden: GardenRef, index: FicheIndex, artefactOf: (k
     return index.byKey.get(key) ?? (uid ? index.byUid.get(uid) ?? null : null);
   };
   let target = locate(p.key, p.card?.uid);
-  // The member's own fiche on this name, with a card of the same name: the
-  // person is theirs already.
-  if (!target) {
-    const names = personNames(p);
-    const spelt = p.identities.every((id) => [...names].some((k) => spellsName(id.address, k)));
-    target = index.all.find((r) => r.fm.meta?.author !== "maurice" && r.fm.carddav_uid && names.has(nameKey(String(r.fm.title ?? ""))) && (spelt || !!p.card)) ?? null;
-    if (target) {
-      target.fm = { ...target.fm, meta: { ...(target.fm.meta ?? {}), person_key: p.key } };
-      atomicWrite(target.file, `---\n${dumpFrontmatter(target.fm)}\n---\n\n${target.body.replace(/^\n+/, "")}`);
-      files.push(target.file);
+  const moveFragments = (from: FicheRef, to: FicheRef) => {
+    const taken = new Set<string>();
+    for (const f of readMailFragments(from.file)) {
+      const dest = nextFragmentFile(to.file, taken);
+      fs.mkdirSync(path.dirname(dest), { recursive: true });
+      fs.renameSync(f.file, dest);
+      files.push(f.file, dest);
     }
+  };
+  const removeFiche = (ref: FicheRef) => {
+    for (const [uid, r] of index.byUid) if (r.file === ref.file) index.byUid.delete(uid);
+    for (const [k, r] of index.byKey) if (r.file === ref.file) index.byKey.delete(k);
+    const dir = path.join(path.dirname(ref.file), ref.basename);
+    for (const x of fs.existsSync(path.join(dir, "_fragments")) ? fs.readdirSync(path.join(dir, "_fragments")) : []) files.push(path.join(dir, "_fragments", x));
+    fs.rmSync(dir, { recursive: true, force: true });
+    fs.rmSync(ref.file, { force: true });
+    files.push(ref.file);
+  };
+  // The member's own fiche on this name, with a card of that name: the
+  // person is theirs already. A fiche Maurice made for them folds into it —
+  // its fragments, and its relation when the member's fiche has none.
+  const names = personNames(p);
+  const spelt = p.identities.every((id) => [...names].some((k) => spellsName(id.address, k)));
+  const theirs = index.all.find((r) => r.file !== target?.file && r.fm.meta?.author !== "maurice" && r.fm.carddav_uid
+    && names.has(nameKey(String(r.fm.title ?? ""))) && (spelt || !!p.card) && fs.existsSync(r.file));
+  if (theirs && (!target || target.fm.meta?.author === "maurice")) {
+    let body = theirs.body;
+    const fm: Record<string, any> = { ...theirs.fm, meta: { ...(theirs.fm.meta ?? {}), person_key: p.key } };
+    if (target) {
+      moveFragments(target, theirs);
+      const heading = Object.keys(target.fm.relation ?? {}).length ? findHeading(target.body) : null;
+      if (heading && !theirs.fm.relation) {
+        body = withSection(body, heading, sectionOf(target.body, heading) ?? "");
+        fm.relation = target.fm.relation;
+      }
+      if (Array.isArray(target.fm.identities)) fm.identities = mergeIdentities(fm.identities, target.fm.identities);
+      removeFiche(target);
+      forget.push(p.key);
+      index.byKey.delete(p.key);
+    }
+    atomicWrite(theirs.file, `---\n${dumpFrontmatter(fm)}\n---\n\n${body.replace(/^\n+/, "")}`);
+    files.push(theirs.file);
+    target = { ...theirs, fm, body };
   }
   for (const key of p.absorbed ?? []) {
     const ref = locate(key);
@@ -438,24 +470,21 @@ export function consolidate(garden: GardenRef, index: FicheIndex, artefactOf: (k
       files.push(target.file);
       continue;
     }
-    const taken = new Set<string>();
-    for (const f of readMailFragments(ref.file)) {
-      const dest = nextFragmentFile(target.file, taken);
-      fs.mkdirSync(path.dirname(dest), { recursive: true });
-      fs.renameSync(f.file, dest);
-      files.push(f.file, dest);
-    }
+    moveFragments(ref, target);
     if (ref.fm.meta?.author === "maurice") {
-      const dir = path.join(path.dirname(ref.file), ref.basename);
-      for (const x of fs.existsSync(path.join(dir, "_fragments")) ? fs.readdirSync(path.join(dir, "_fragments")) : []) files.push(path.join(dir, "_fragments", x));
-      fs.rmSync(dir, { recursive: true, force: true });
-      fs.rmSync(ref.file, { force: true });
-      files.push(ref.file);
+      removeFiche(ref);
       index.byKey.delete(key);
     }
   }
   if (target) index.byKey.set(p.key, target);
   return { files, forget };
+}
+
+/** The heading of a relation section the pass wrote: the first `## ` of
+ *  the body (the relation always opens it). */
+function findHeading(body: string): string | null {
+  const m = body.match(/^## (.+)$/m);
+  return m ? m[1]!.trim() : null;
 }
 
 /** The member rejected an address on a fiche: that address is somebody
@@ -551,8 +580,10 @@ export async function writePerson(ctx: PersonContext, p: Person): Promise<Person
     const parsed = parseFiche(fs.readFileSync(file, "utf8"));
     if (parsed) ref = { file, basename: a.slug, locale: a.locale, fm: parsed.frontmatter, body: parsed.body };
   }
-  if (!ref && p.card?.uid) ref = ctx.index.byUid.get(p.card.uid) ?? null;
   if (!ref) ref = ctx.index.byKey.get(p.key) ?? null;
+  if (!ref && p.card?.uid) ref = ctx.index.byUid.get(p.card.uid) ?? null;
+  // A fiche folded away since the index was read is not one to write into.
+  if (ref && !fs.existsSync(ref.file)) ref = null;
 
   const byMaurice = !ref || ref.fm.meta?.author === "maurice";
   const locale = ref?.locale ?? ctx.locale;
