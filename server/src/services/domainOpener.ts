@@ -27,6 +27,8 @@ export interface OpenerStrings {
   conversations_other: string;
   recent: string;
   quiet_since: string;
+  /** "Recent" said of mail threads, where the language makes it agree (fr). */
+  recent_mail?: string;
   /** A proposal's mail threads, beside its conversations (27 September 2026). */
   mail_one: string;
   mail_other: string;
@@ -70,6 +72,7 @@ export const OPENER_STRINGS: Record<string, OpenerStrings> = {
     conversations_other: "%d conversations",
     recent: "%d récentes",
     quiet_since: "calme depuis %s",
+    recent_mail: "%d récents",
     mail_one: "%d fil de courrier",
     mail_other: "%d fils de courrier",
     followup_intro: "Ton courrier a été lu, et il m'a montré des pans de ta vie que je n'avais pas vus dans nos conversations.",
@@ -303,7 +306,7 @@ export function proposalLine(p: Proposal, maxSize: number, total: number, t: Ope
   const share = shareOf(p.conversation_ids.length, total);
   if (share) bits.push(`${share} %`);
   const recent = p.stats.recent_90 ?? 0;
-  if (recent) bits.push(fmt(t.recent, recent));
+  if (recent) bits.push(fmt(p.conversation_ids.length === 0 && t.recent_mail ? t.recent_mail : t.recent, recent));
   const line = oneLine(p.summary);
   return `- ${dots(weightOf(unitsOf(p), maxSize))} **${p.name}** · ${bits.join(" · ")}${line ? ` — ${line}` : ""}`;
 }

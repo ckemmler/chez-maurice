@@ -53,6 +53,8 @@ async function write(req: Req) {
       return reply(JSON.stringify(p.includes("Les enfants") ? { name: "Enfants", summary: "Stages.", is_domain: true, split_hint: "", same_as: "les enfants" } : { name: "Les activités des enfants", summary: "Stages et inscriptions.", is_domain: true, split_hint: "" }));
     }
     if (/INASTI/.test(p)) return reply(JSON.stringify({ name: "Cotisations sociales", summary: "INASTI.", is_domain: true, split_hint: "" }));
+    // Named exactly like the open proposal, without saying it is the same.
+    if (/Banque/.test(p)) return reply(JSON.stringify({ name: "les enfants", summary: "…", is_domain: true, split_hint: "" }));
     return reply(JSON.stringify({ name: "Divers", summary: "…", is_domain: true, split_hint: "" }));
   }
   if (p.includes("Write the brief") || p.includes("Rewrite the brief")) return reply("Le brief de la copropriété.");
@@ -177,13 +179,15 @@ test("proposals open: the mail is filed under what it belongs to, the rest propo
   threads(FOLLOW, "Copro");
   threads(FOLLOW, "Stage");
   threads(FOLLOW, "INASTI");
+  threads(FOLLOW, "Banque");
 
   const r = await mapping.mapMember(FOLLOW);
   expect(r.outcome).toBe("followed_up");
   expect(r.conversation_id).toBe(carrier);
   // Recognised: under the domain, and under the open proposal.
   expect(mail.domainMail(domain.id, FOLLOW)).toHaveLength(5);
-  expect(proposals.getProposal(waiting.id)!.mail).toHaveLength(5);
+  expect(proposals.getProposal(waiting.id)!.mail).toHaveLength(10); // the Stage threads, and the Banque ones named like it
+  expect(proposals.openProposals(FOLLOW).filter((p) => p.name.toLowerCase() === "les enfants")).toHaveLength(1);
   // New: proposed in the same conversation.
   const fresh = proposals.openProposals(FOLLOW).find((p) => p.name === "Cotisations sociales")!;
   expect(fresh.conversation_id).toBe(carrier);

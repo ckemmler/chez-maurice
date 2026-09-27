@@ -557,7 +557,10 @@ function fileRecognised(memberId: string, candidates: Candidate[], existing: Ret
   const attached = new Map<string, number>();
   const touched = new Set<string>();
   for (const c of candidates) {
-    const hit = c.kind === "mail" && c.named.same_as ? byName.get(norm(c.named.same_as)) : undefined;
+    // The model's word, or the very name of something already there: on the
+    // owner's first run it named a group "Mes finances et achats", exactly
+    // like the open proposal, without saying it was the same.
+    const hit = c.kind !== "mail" ? undefined : (c.named.same_as ? byName.get(norm(c.named.same_as)) : undefined) ?? byName.get(norm(c.named.name));
     if (!hit) {
       rest.push(c);
       continue;
