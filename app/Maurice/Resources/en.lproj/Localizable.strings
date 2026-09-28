@@ -709,6 +709,14 @@
 "mail.box.read_now" = "Read now";
 "mail.box.read_now.help" = "Reads what is left right away instead of over the coming nights. Nothing is sent, nothing is changed in your mailbox.";
 "mail.box.running" = "Reading…";
+"mail.box.senders" = "What weighs most";
+"mail.sender.count" = "%d messages";
+"mail.sender.all" = "Read all";
+"mail.sender.week" = "Only the last week";
+"mail.sender.weeks3" = "Only the last 3 weeks";
+"mail.sender.months3" = "Only the last 3 months";
+"mail.sender.days" = "Only the last %d days";
+"mail.sender.none" = "Don't read";
 "contacts.title" = "Contacts";
 "contacts.value.none" = "None";
 "contacts.intro" = "Maurice reads your address books every night and never writes to them. Someone in your contacts counts as a person: their mail is read even when it comes through a mailing tool, and later their addresses will be joined on one fiche.";

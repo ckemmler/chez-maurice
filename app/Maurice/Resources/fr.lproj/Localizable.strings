@@ -709,6 +709,14 @@
 "mail.box.read_now" = "Lire maintenant";
 "mail.box.read_now.help" = "Lit tout de suite ce qui reste, au lieu d'attendre les nuits. Rien n'est envoyé, rien n'est modifié dans votre boîte.";
 "mail.box.running" = "Lecture en cours…";
+"mail.box.senders" = "Ce qui pèse le plus";
+"mail.sender.count" = "%d messages";
+"mail.sender.all" = "Tout lire";
+"mail.sender.week" = "Seulement la dernière semaine";
+"mail.sender.weeks3" = "Seulement les 3 dernières semaines";
+"mail.sender.months3" = "Seulement les 3 derniers mois";
+"mail.sender.days" = "Seulement les %d derniers jours";
+"mail.sender.none" = "Ne pas lire";
 "contacts.title" = "Contacts";
 "contacts.value.none" = "Aucun";
 "contacts.intro" = "Maurice lit vos carnets d'adresses chaque nuit, sans jamais rien y écrire. Quelqu'un qui est dans vos contacts compte comme une personne : ses mails sont lus même quand ils passent par un outil d'envoi groupé, et plus tard ses adresses seront reliées sur une même fiche.";

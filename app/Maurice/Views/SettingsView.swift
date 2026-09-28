@@ -943,7 +943,18 @@ struct MailboxStatus: Decodable, Equatable {
     let untriaged: Int
     let reading: MailboxReading
     let estimate: MailboxEstimate?
+    /// The senders who weigh most in its reading, with the member's rule.
+    let top_senders: [MailboxSender]?
 }
+struct MailboxSender: Decodable, Equatable, Identifiable {
+    let sender: String
+    let messages: Int
+    let set_aside: Int
+    /// Days of this sender's mail still read; 0: none; nil: no rule.
+    let rule_days: Int?
+    var id: String { sender }
+}
+private struct SenderRuleBody: Encodable { let address: String; let days: Int? }
 struct MailboxReading: Decodable, Equatable {
     let window: Int
     let to_light: Int
@@ -1061,6 +1072,8 @@ private struct MailPane: View {
     @State private var readingBusy = false
     @State private var readingError: String?
     @State private var readNowBusy = false
+    /// The sender whose rule is being written (the triage runs again).
+    @State private var ruleBusy: String?
 
     private var api: APIClient? { session.serverURL.map { APIClient(baseURL: $0) } }
 
@@ -1224,6 +1237,77 @@ private struct MailPane: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .background(RoundedRectangle(cornerRadius: 8).fill(Color.orange.opacity(0.10)))
             }
+            let senders = Array((box.top_senders ?? []).prefix(3))
+            if !senders.isEmpty, box.estimate != nil || senders.contains(where: { $0.rule_days != nil }) {
+                senderRules(senders)
+            }
+        }
+    }
+
+    /// The heaviest senders of a mailbox, each with how much of it is read:
+    /// all, only its last days, or none. A support desk's tickets or a
+    /// tracker's notifications can make most of a reading; nothing is
+    /// deleted, and the mail is sorted again at once.
+    private func senderRules(_ senders: [MailboxSender]) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(session.localized("mail.box.senders")).font(.system(size: 11, weight: .semibold)).foregroundStyle(theme.inkMute)
+            ForEach(senders) { s in
+                HStack(spacing: 8) {
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(s.sender).font(.system(size: 12)).foregroundStyle(theme.ink).lineLimit(1).truncationMode(.middle)
+                        Text(session.localized("mail.sender.count", s.messages)).font(.system(size: 11)).foregroundStyle(theme.inkMute)
+                    }
+                    Spacer(minLength: 4)
+                    if ruleBusy == s.sender {
+                        ProgressView().controlSize(.small)
+                    } else {
+                        Menu {
+                            ruleOption(s, days: nil, key: "mail.sender.all")
+                            ruleOption(s, days: 7, key: "mail.sender.week")
+                            ruleOption(s, days: 21, key: "mail.sender.weeks3")
+                            ruleOption(s, days: 90, key: "mail.sender.months3")
+                            ruleOption(s, days: 0, key: "mail.sender.none")
+                        } label: {
+                            HStack(spacing: 4) {
+                                Text(ruleLabel(s.rule_days)).font(.system(size: 12, weight: .medium))
+                                Image(systemName: "chevron.up.chevron.down").font(.system(size: 9))
+                            }
+                            .foregroundStyle(s.rule_days == nil ? theme.inkSoft : (session.activeDeviceUser?.color ?? .blue).legible(onDark: theme.isDark))
+                        }
+                        .menuIndicator(.hidden)
+                        .fixedSize()
+                        .disabled(ruleBusy != nil)
+                    }
+                }
+            }
+        }
+    }
+
+    @ViewBuilder private func ruleOption(_ s: MailboxSender, days: Int?, key: String) -> some View {
+        Button {
+            Task { await setRule(s.sender, days: days) }
+        } label: {
+            if s.rule_days == days { Label(session.localized(key), systemImage: "checkmark") } else { Text(session.localized(key)) }
+        }
+    }
+
+    private func ruleLabel(_ days: Int?) -> String {
+        switch days {
+        case nil: return session.localized("mail.sender.all")
+        case 0: return session.localized("mail.sender.none")
+        case 7: return session.localized("mail.sender.week")
+        case 21: return session.localized("mail.sender.weeks3")
+        case 90: return session.localized("mail.sender.months3")
+        case let d?: return session.localized("mail.sender.days", d)
+        }
+    }
+
+    private func setRule(_ sender: String, days: Int?) async {
+        guard let api, let token = session.tokenForActiveUser else { return }
+        ruleBusy = sender
+        defer { ruleBusy = nil }
+        if let s: MailScanStatus = try? await api.put("/api/mail-accounts/senders", body: SenderRuleBody(address: sender, days: days), token: token) {
+            scan = s
         }
     }
 

@@ -709,6 +709,14 @@
 "mail.box.read_now" = "Jetzt lesen";
 "mail.box.read_now.help" = "Liest den Rest sofort, statt die Nächte abzuwarten. Nichts wird gesendet, nichts in deinem Postfach geändert.";
 "mail.box.running" = "Wird gelesen…";
+"mail.box.senders" = "Was am meisten wiegt";
+"mail.sender.count" = "%d Nachrichten";
+"mail.sender.all" = "Alles lesen";
+"mail.sender.week" = "Nur die letzte Woche";
+"mail.sender.weeks3" = "Nur die letzten 3 Wochen";
+"mail.sender.months3" = "Nur die letzten 3 Monate";
+"mail.sender.days" = "Nur die letzten %d Tage";
+"mail.sender.none" = "Nicht lesen";
 "contacts.title" = "Kontakte";
 "contacts.value.none" = "Keine";
 "contacts.intro" = "Maurice liest deine Adressbücher jede Nacht und schreibt nie hinein. Wer in deinen Kontakten ist, zählt als Person: Seine Post wird gelesen, auch wenn sie über ein Versandwerkzeug kommt, und später werden seine Adressen auf einem Blatt zusammengeführt.";

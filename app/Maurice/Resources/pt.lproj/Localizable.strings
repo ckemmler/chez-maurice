@@ -709,6 +709,14 @@
 "mail.box.read_now" = "Ler agora";
 "mail.box.read_now.help" = "Lê já o que falta em vez de esperar pelas noites. Nada é enviado, nada é alterado na tua caixa.";
 "mail.box.running" = "A ler…";
+"mail.box.senders" = "O que mais pesa";
+"mail.sender.count" = "%d mensagens";
+"mail.sender.all" = "Ler tudo";
+"mail.sender.week" = "Só a última semana";
+"mail.sender.weeks3" = "Só as últimas 3 semanas";
+"mail.sender.months3" = "Só os últimos 3 meses";
+"mail.sender.days" = "Só os últimos %d dias";
+"mail.sender.none" = "Não ler";
 "contacts.title" = "Contactos";
 "contacts.value.none" = "Nenhum";
 "contacts.intro" = "O Maurice lê os teus livros de endereços todas as noites, sem nunca escrever neles. Quem está nos teus contactos conta como uma pessoa: o seu correio é lido mesmo quando chega por uma ferramenta de envios em massa, e mais tarde os seus endereços serão juntados numa só ficha.";

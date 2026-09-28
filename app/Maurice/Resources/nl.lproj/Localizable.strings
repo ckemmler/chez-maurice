@@ -709,6 +709,14 @@
 "mail.box.read_now" = "Nu lezen";
 "mail.box.read_now.help" = "Leest wat overblijft meteen, in plaats van de komende nachten. Er wordt niets verstuurd of gewijzigd in je mailbox.";
 "mail.box.running" = "Bezig met lezen…";
+"mail.box.senders" = "Wat het zwaarst weegt";
+"mail.sender.count" = "%d berichten";
+"mail.sender.all" = "Alles lezen";
+"mail.sender.week" = "Alleen de laatste week";
+"mail.sender.weeks3" = "Alleen de laatste 3 weken";
+"mail.sender.months3" = "Alleen de laatste 3 maanden";
+"mail.sender.days" = "Alleen de laatste %d dagen";
+"mail.sender.none" = "Niet lezen";
 "contacts.title" = "Contacten";
 "contacts.value.none" = "Geen";
 "contacts.intro" = "Maurice leest je adresboeken elke nacht en schrijft er nooit in. Wie in je contacten staat, telt als persoon: diens post wordt gelezen, ook als die via een verzendtool komt, en later worden diens adressen op één kaart samengebracht.";

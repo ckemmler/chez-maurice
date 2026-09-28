@@ -709,6 +709,14 @@
 "mail.box.read_now" = "Leggi ora";
 "mail.box.read_now.help" = "Legge subito ciò che resta invece di aspettare le notti. Niente viene inviato, niente viene modificato nella tua casella.";
 "mail.box.running" = "Lettura in corso…";
+"mail.box.senders" = "Ciò che pesa di più";
+"mail.sender.count" = "%d messaggi";
+"mail.sender.all" = "Leggi tutto";
+"mail.sender.week" = "Solo l'ultima settimana";
+"mail.sender.weeks3" = "Solo le ultime 3 settimane";
+"mail.sender.months3" = "Solo gli ultimi 3 mesi";
+"mail.sender.days" = "Solo gli ultimi %d giorni";
+"mail.sender.none" = "Non leggere";
 "contacts.title" = "Contatti";
 "contacts.value.none" = "Nessuno";
 "contacts.intro" = "Maurice legge le tue rubriche ogni notte, senza mai scriverci. Chi è nei tuoi contatti conta come una persona: la sua posta viene letta anche quando passa da uno strumento di invio massivo, e più avanti i suoi indirizzi saranno riuniti in una sola scheda.";
