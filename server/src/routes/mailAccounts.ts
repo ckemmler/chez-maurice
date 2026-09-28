@@ -14,7 +14,7 @@ import { analyseMailboxInBackground, mailScanStatus, retriage, startMailScan, ty
 import { setSenderRule } from "../services/mailSenderRules";
 import { withoutMoney } from "../services/mailboxEstimate";
 import { mailReadingStatus, readingWanted, startMailReading } from "../services/mailReading";
-import { writeMailDocuments } from "../services/mailDocuments";
+import { mailDocumentsProgress, writeMailDocuments } from "../services/mailDocuments";
 import { getUser } from "../services/users";
 import { decideReading, mailConversationOf, sayReadingDecided, type ReadingAction } from "../services/mailApproval";
 import { forgetMailbox } from "../services/mailForget";
@@ -72,7 +72,8 @@ function forViewer(uid: string, v: ScanView): ScanView {
   // For the app, "running" is anything under way on the member's mail —
   // the header walk or a reading — so it shows the reading and follows it.
   // The services keep the walk's own flag (walkMailbox waits on it).
-  const shown = { ...v, running: v.running || mailReadingStatus(uid).running };
+  const documents = mailDocumentsProgress(uid);
+  const shown = { ...v, running: v.running || mailReadingStatus(uid).running || !!documents, documents };
   return getUser(uid)?.role === "admin" ? shown : { ...shown, mailboxes: withoutMoney(shown.mailboxes) };
 }
 

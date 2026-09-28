@@ -735,6 +735,10 @@
 "mail.detail.actions" = "Acciones";
 "mail.scope.all" = "Todos tus buzones juntos (%d)";
 "mail.scope.reading" = "Abarca todos tus buzones (%d); el detalle está en cada uno";
+"mail.docs.progress" = "Escribiendo las fichas y resúmenes: %1$@ de %2$@";
+"mail.docs.preparing" = "Escribiendo las fichas y resúmenes: preparando…";
+"mail.docs.finishing" = "Escribiendo las fichas y resúmenes: terminando…";
+"mail.docs.written" = "%@ notas escritas hasta ahora";
 "contacts.title" = "Contactos";
 "contacts.value.none" = "Ninguno";
 "contacts.intro" = "Maurice lee tus libretas de direcciones cada noche, sin escribir nunca en ellas. Quien está en tus contactos cuenta como una persona: su correo se lee aunque llegue por una herramienta de envíos masivos, y más adelante sus direcciones se unirán en una sola ficha.";

@@ -735,6 +735,10 @@
 "mail.detail.actions" = "Aktionen";
 "mail.scope.all" = "Alle Postfächer zusammen (%d)";
 "mail.scope.reading" = "Gilt für alle Postfächer (%d); Einzelheiten unter jedem";
+"mail.docs.progress" = "Karteikarten und Zusammenfassungen werden geschrieben: %1$@ von %2$@";
+"mail.docs.preparing" = "Karteikarten und Zusammenfassungen: Vorbereitung…";
+"mail.docs.finishing" = "Karteikarten und Zusammenfassungen: wird abgeschlossen…";
+"mail.docs.written" = "%@ Notizen bisher geschrieben";
 "contacts.title" = "Kontakte";
 "contacts.value.none" = "Keine";
 "contacts.intro" = "Maurice liest deine Adressbücher jede Nacht und schreibt nie hinein. Wer in deinen Kontakten ist, zählt als Person: Seine Post wird gelesen, auch wenn sie über ein Versandwerkzeug kommt, und später werden seine Adressen auf einem Blatt zusammengeführt.";

@@ -735,6 +735,10 @@
 "mail.detail.actions" = "Acties";
 "mail.scope.all" = "Al je mailboxen samen (%d)";
 "mail.scope.reading" = "Geldt voor al je mailboxen (%d); details onder elke mailbox";
+"mail.docs.progress" = "Kaarten en samenvattingen schrijven: %1$@ van %2$@";
+"mail.docs.preparing" = "Kaarten en samenvattingen: voorbereiden…";
+"mail.docs.finishing" = "Kaarten en samenvattingen: afronden…";
+"mail.docs.written" = "%@ notities tot nu toe geschreven";
 "contacts.title" = "Contacten";
 "contacts.value.none" = "Geen";
 "contacts.intro" = "Maurice leest je adresboeken elke nacht en schrijft er nooit in. Wie in je contacten staat, telt als persoon: diens post wordt gelezen, ook als die via een verzendtool komt, en later worden diens adressen op één kaart samengebracht.";

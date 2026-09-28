@@ -735,6 +735,10 @@
 "mail.detail.actions" = "Ações";
 "mail.scope.all" = "Todas as tuas caixas juntas (%d)";
 "mail.scope.reading" = "Abrange todas as tuas caixas (%d); o detalhe está em cada uma";
+"mail.docs.progress" = "A escrever as fichas e os resumos: %1$@ de %2$@";
+"mail.docs.preparing" = "A escrever as fichas e os resumos: a preparar…";
+"mail.docs.finishing" = "A escrever as fichas e os resumos: a terminar…";
+"mail.docs.written" = "%@ notas escritas até agora";
 "contacts.title" = "Contactos";
 "contacts.value.none" = "Nenhum";
 "contacts.intro" = "O Maurice lê os teus livros de endereços todas as noites, sem nunca escrever neles. Quem está nos teus contactos conta como uma pessoa: o seu correio é lido mesmo quando chega por uma ferramenta de envios em massa, e mais tarde os seus endereços serão juntados numa só ficha.";

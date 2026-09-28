@@ -735,6 +735,10 @@
 "mail.detail.actions" = "Azioni";
 "mail.scope.all" = "Tutte le tue caselle insieme (%d)";
 "mail.scope.reading" = "Riguarda tutte le tue caselle (%d); il dettaglio è sotto ciascuna";
+"mail.docs.progress" = "Scrittura delle schede e dei riassunti: %1$@ su %2$@";
+"mail.docs.preparing" = "Scrittura delle schede e dei riassunti: preparazione…";
+"mail.docs.finishing" = "Scrittura delle schede e dei riassunti: conclusione…";
+"mail.docs.written" = "%@ note scritte finora";
 "contacts.title" = "Contatti";
 "contacts.value.none" = "Nessuno";
 "contacts.intro" = "Maurice legge le tue rubriche ogni notte, senza mai scriverci. Chi è nei tuoi contatti conta come una persona: la sua posta viene letta anche quando passa da uno strumento di invio massivo, e più avanti i suoi indirizzi saranno riuniti in una sola scheda.";

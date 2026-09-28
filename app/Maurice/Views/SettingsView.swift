@@ -933,6 +933,14 @@ struct MailScanStatus: Decodable, Equatable {
     let reading: MailReading?
     /// Each mailbox on its own (28 September 2026): absent from an older server.
     let mailboxes: [MailboxStatus]?
+    /// The fiches and digests being written, while they are.
+    let documents: MailDocumentsProgress?
+}
+struct MailDocumentsProgress: Decodable, Equatable {
+    let stage: String
+    let done: Int
+    let total: Int
+    let written: Int
 }
 /// One mailbox: what the store holds of it, where its reading is, and —
 /// while something is left — the estimate. The euros come for the operator
@@ -1169,6 +1177,29 @@ private struct MailPane: View {
         }
     }
 
+    /// The fiches and digests being written after a reading: where the pass
+    /// is, as a bar when it knows its total.
+    @ViewBuilder private func documentsProgress(_ d: MailDocumentsProgress) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            switch d.stage {
+            case "preparing":
+                Label(session.localized("mail.docs.preparing"), systemImage: "doc.text")
+                ProgressView().progressViewStyle(.linear)
+            case "finishing":
+                Label(session.localized("mail.docs.finishing"), systemImage: "doc.text")
+                ProgressView(value: 1).progressViewStyle(.linear)
+            default:
+                Label(session.localized("mail.docs.progress", num(d.done), num(d.total)), systemImage: "doc.text")
+                ProgressView(value: Double(d.done), total: Double(max(d.total, 1))).progressViewStyle(.linear)
+                if d.written > 0 {
+                    Text(session.localized("mail.docs.written", num(d.written))).font(.system(size: 11)).foregroundStyle(theme.inkMute)
+                }
+            }
+        }
+        .font(.system(size: 12)).foregroundStyle(theme.inkSoft)
+        .tint(session.activeDeviceUser?.color ?? .blue)
+    }
+
     /// A count as the member's locale writes it: 37 335, not 37335.
     private func num(_ n: Int) -> String { n.formatted(.number) }
 
@@ -1212,6 +1243,7 @@ private struct MailPane: View {
                         }
                         detailSection(session.localized("mail.detail.reading.title")) {
                             readingDetail(box)
+                            if let d = scan?.documents { documentsProgress(d).padding(.top, 4) }
                         }
                         boxStatus(box)
                     }
@@ -1535,6 +1567,7 @@ private struct MailPane: View {
                     VStack(alignment: .leading, spacing: 2) {
                         Text(readingLine).font(.system(size: 13.5)).foregroundStyle(theme.ink)
                         Text(session.localized("mail.scope.reading", accounts?.count ?? 0)).font(.system(size: 11.5)).foregroundStyle(theme.inkMute)
+                        if let d = scan?.documents { documentsProgress(d).padding(.top, 6) }
                         if let readingError {
                             Text(readingError).font(.system(size: 11, design: .monospaced)).foregroundStyle(theme.inkMute)
                                 .lineLimit(3).textSelection(.enabled)

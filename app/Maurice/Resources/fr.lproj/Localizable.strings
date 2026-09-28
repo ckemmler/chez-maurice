@@ -735,6 +735,10 @@
 "mail.detail.actions" = "Actions";
 "mail.scope.all" = "Toutes vos boîtes confondues (%d)";
 "mail.scope.reading" = "Porte sur toutes vos boîtes (%d) ; le détail est sous chaque boîte";
+"mail.docs.progress" = "Écriture des fiches et des résumés : %1$@ sur %2$@";
+"mail.docs.preparing" = "Écriture des fiches et des résumés : préparation…";
+"mail.docs.finishing" = "Écriture des fiches et des résumés : on termine…";
+"mail.docs.written" = "%@ notes écrites jusqu'ici";
 "contacts.title" = "Contacts";
 "contacts.value.none" = "Aucun";
 "contacts.intro" = "Maurice lit vos carnets d'adresses chaque nuit, sans jamais rien y écrire. Quelqu'un qui est dans vos contacts compte comme une personne : ses mails sont lus même quand ils passent par un outil d'envoi groupé, et plus tard ses adresses seront reliées sur une même fiche.";

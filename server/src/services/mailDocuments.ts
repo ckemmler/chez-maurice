@@ -522,7 +522,34 @@ async function exchangesWith(d: MailDocumentsDeps, memberId: string, addresses: 
 class Capped extends Error {}
 
 /** Write the fiches and digests a member's readings allow. Never throws. */
+/** Where a documents pass is, for the app (28 September 2026): the fiches
+ *  and digests it has in hand, how many it went through, how many it wrote.
+ *  In memory: a pass lives in this process, and nothing is shown once it is
+ *  over. */
+export interface DocumentsProgress {
+  stage: "preparing" | "people" | "threads" | "finishing";
+  done: number;
+  total: number;
+  written: number;
+  started_at: string;
+}
+
+const progress = new Map<string, DocumentsProgress>();
+
+export function mailDocumentsProgress(memberId: string): DocumentsProgress | null {
+  return progress.get(memberId) ?? null;
+}
+
 export async function writeMailDocuments(memberId: string, d: MailDocumentsDeps = deps): Promise<DocumentsRun> {
+  progress.set(memberId, { stage: "preparing", done: 0, total: 0, written: 0, started_at: new Date().toISOString() });
+  try {
+    return await documentsPass(memberId, d);
+  } finally {
+    progress.delete(memberId);
+  }
+}
+
+async function documentsPass(memberId: string, d: MailDocumentsDeps): Promise<DocumentsRun> {
   const now = d.now?.() ?? new Date();
   const model = ancillaryModel(WRITE_INVOCATION);
   const run: DocumentsRun = { outcome: "nothing", member_id: memberId, written: [], skipped: { unchanged: 0, deleted: 0, too_few: 0, declined: 0 }, cost: 0, model, error: null, said: null };
@@ -554,6 +581,12 @@ export async function writeMailDocuments(memberId: string, d: MailDocumentsDeps 
   const { people: addressGroups, threads } = groupMaterial(messages, memberAddresses, memberNames, { everyAddress: true });
   const fiches = indexPeopleFiches(garden);
   const people = resolvePeople(addressGroups, cards.filter((_, i) => !own.has(i)), fiches.rejected, fiches);
+  const p0 = progress.get(memberId);
+  if (p0) Object.assign(p0, { stage: "people", total: people.length + threads.length });
+  const step = () => {
+    const p = progress.get(memberId);
+    if (p) { p.done++; p.written = run.written.length; }
+  };
   const files: string[] = [];
   const recorded: any[] = [];
   const deleted: any[] = [];
@@ -614,6 +647,7 @@ export async function writeMailDocuments(memberId: string, d: MailDocumentsDeps 
       }
     }
     for (const p of people) {
+      step();
       const artefact = byKey.get(`person:${p.key}`) ?? null;
       const exchanges = await exchangesWith(d, memberId, p.identities.map((i) => i.address).filter((a) => !fiches.rejected.get(a)?.has(p.key)));
       const o = await writePerson({ garden, locale, language, member: name, w, labels, now, index: fiches, artefact, exchanges, ask }, p);
@@ -637,7 +671,10 @@ export async function writeMailDocuments(memberId: string, d: MailDocumentsDeps 
         run.written.push({ kind: "person", key: p.key, slug: o.basename, title: o.title, web_path: o.webPath, sources: o.cited });
       }
     }
+    const pt = progress.get(memberId);
+    if (pt) pt.stage = "threads";
     for (const g of threads) {
+      step();
       const kind = "thread" as const;
       const what = decide(kind, g);
       if (what !== "write") {
@@ -701,6 +738,8 @@ export async function writeMailDocuments(memberId: string, d: MailDocumentsDeps 
     }
   }
 
+  const pf = progress.get(memberId);
+  if (pf) Object.assign(pf, { stage: "finishing", done: pf.total, written: run.written.length });
   // The hub: computed from what is on disk at every run and rewritten only
   // when it changed, so it never lists a note that is not there, whatever
   // was written or found gone tonight — unless it was thrown away itself.

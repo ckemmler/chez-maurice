@@ -188,7 +188,14 @@ function addCard(card: { uid: string; full_name: string; emails: string[] }) {
 }
 
 test("a fiche in people/ per person: the relation once, the interactions per address and mailbox, pending; a digest per thread; a hub", async () => {
-  const r = await docs.writeMailDocuments(ANNA);
+  // The app follows the pass: its progress exists while it runs, not after.
+  expect(docs.mailDocumentsProgress(ANNA)).toBeNull();
+  const running = docs.writeMailDocuments(ANNA);
+  const during = docs.mailDocumentsProgress(ANNA);
+  expect(during).not.toBeNull();
+  expect(during!.stage).toBe("preparing");
+  const r = await running;
+  expect(docs.mailDocumentsProgress(ANNA)).toBeNull();
   expect(r.outcome).toBe("written");
   expect(r.written.map((n) => [n.kind, n.slug])).toEqual([["hub", "mon-courrier"], ["person", "jean-derely-fiche"], ["thread", "jeudi"]]);
   expect(r.written[1]!.web_path).toBe(`/g/${ANNA}/fr/fiches/people/jean-derely-fiche`);

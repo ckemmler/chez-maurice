@@ -735,6 +735,10 @@
 "mail.detail.actions" = "Actions";
 "mail.scope.all" = "All your mailboxes together (%d)";
 "mail.scope.reading" = "Covers all your mailboxes (%d); the detail is under each one";
+"mail.docs.progress" = "Writing the fiches and digests: %1$@ of %2$@";
+"mail.docs.preparing" = "Writing the fiches and digests: getting ready…";
+"mail.docs.finishing" = "Writing the fiches and digests: finishing…";
+"mail.docs.written" = "%@ notes written so far";
 "contacts.title" = "Contacts";
 "contacts.value.none" = "None";
 "contacts.intro" = "Maurice reads your address books every night and never writes to them. Someone in your contacts counts as a person: their mail is read even when it comes through a mailing tool, and later their addresses will be joined on one fiche.";
