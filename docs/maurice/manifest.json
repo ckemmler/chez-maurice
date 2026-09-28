@@ -1,7 +1,7 @@
 {
   "format": "maurice-docs",
   "version": 1,
-  "generated_at": "2026-09-28T06:39:12Z",
+  "generated_at": "2026-09-28T07:31:34Z",
   "notes": [
     { "file": "maurice-applications.md", "slug": "maurice-applications", "date": "2026-09-25", "bytes": 12966, "sha256": "4a525cd75240315c14e797c48149fbf014f81b29b763fb0318746b8252b0321b" },
     { "file": "maurice-architecture.md", "slug": "maurice-architecture", "date": "2026-09-22", "bytes": 29761, "sha256": "7e94f7eb9a7e6d47c47493a9c114b8f644d034661c0e0529a9e44a71abd90a96" },
@@ -19,7 +19,7 @@
     { "file": "maurice-personas-hats.md", "slug": "maurice-personas-hats", "date": "2026-09-19", "bytes": 10367, "sha256": "614e09adfab99ff0457eb9f2eb9937e6a3e38838a981e1867dd5eebfebe1a9a0" },
     { "file": "maurice-server.md", "slug": "maurice-server", "date": "2026-09-28", "bytes": 81616, "sha256": "72df846f9416e37a59ed8c6c65a1efdb683f674991b173c757501695109ce2a0" },
     { "file": "maurice-shared-gardens.md", "slug": "maurice-shared-gardens", "date": "2026-09-07", "bytes": 3592, "sha256": "a4f74c962316f7733fec96bb831339377235a2d11a934a7fe914f275dc8d1596" },
-    { "file": "maurice-tools.md", "slug": "maurice-tools", "date": "2026-09-28", "bytes": 78925, "sha256": "aa27d91bb25e9f87ef4ae8516b838c021a6b45bf7c8b89b6623e90af5a68c784" },
+    { "file": "maurice-tools.md", "slug": "maurice-tools", "date": "2026-09-28", "bytes": 79648, "sha256": "ec90a99afe891f4c9c439b13a566d089d9f8ae155d10def44815909c3bf54212" },
     { "file": "maurice-web-garden.md", "slug": "maurice-web-garden", "date": "2026-09-27", "bytes": 19384, "sha256": "6026eb6006107ae8396248922f77916dc4bb4b3fcc11d2038042c35c45d9bdc9" }
   ]
 }
