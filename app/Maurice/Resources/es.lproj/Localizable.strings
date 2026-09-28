@@ -699,6 +699,16 @@
 "mail.reading.withdraw" = "Retirar la aprobación";
 "mail.reading.help" = "Maurice lee los intercambios reales de los últimos años, por la noche, y te dice quién cuenta para ti y qué está en marcha. No se envía nada ni se cambia nada en tu buzón.";
 "mail.reading.caption" = "La lectura es un sí que das tú — aquí o en la conversación que Maurice abrió. Puedes retirarlo en cualquier momento.";
+"mail.box.messages" = "%d mensajes registrados";
+"mail.box.reading" = "Lectura: %1$d clasificados · %2$d por leer · %3$d leídos";
+"mail.box.left" = "Queda: ~%1$d por clasificar, ~%2$d por leer · %3$@";
+"mail.box.hours" = "unas %d h";
+"mail.box.under_hour" = "menos de una hora";
+"mail.box.euros" = "~%@ €";
+"mail.box.pending" = "Estimación provisional: este buzón aún no está clasificado.";
+"mail.box.read_now" = "Leer ahora";
+"mail.box.read_now.help" = "Lee ahora lo que queda en lugar de esperar a las noches. No se envía nada ni se cambia nada en tu buzón.";
+"mail.box.running" = "Leyendo…";
 "contacts.title" = "Contactos";
 "contacts.value.none" = "Ninguno";
 "contacts.intro" = "Maurice lee tus libretas de direcciones cada noche, sin escribir nunca en ellas. Quien está en tus contactos cuenta como una persona: su correo se lee aunque llegue por una herramienta de envíos masivos, y más adelante sus direcciones se unirán en una sola ficha.";

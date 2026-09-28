@@ -931,6 +931,34 @@ struct MailScanStatus: Decodable, Equatable {
     /// answered; then approved or declined, and the job's own states once
     /// the night runs it.
     let reading: MailReading?
+    /// Each mailbox on its own (28 September 2026): absent from an older server.
+    let mailboxes: [MailboxStatus]?
+}
+/// One mailbox: what the store holds of it, where its reading is, and —
+/// while something is left — the estimate. The euros come for the operator
+/// only; a member gets nil.
+struct MailboxStatus: Decodable, Equatable {
+    let address: String
+    let messages: Int
+    let untriaged: Int
+    let reading: MailboxReading
+    let estimate: MailboxEstimate?
+}
+struct MailboxReading: Decodable, Equatable {
+    let window: Int
+    let to_light: Int
+    let kept: Int
+    let skipped: Int
+    let to_read: Int
+    let read: Int
+}
+struct MailboxEstimate: Decodable, Equatable {
+    let to_sort: Int
+    let to_read: Int
+    let hours: Double
+    let euros: Double?
+    let basis: String
+    let pending: Bool
 }
 struct MailReading: Decodable, Equatable {
     let state: String
@@ -1032,6 +1060,7 @@ private struct MailPane: View {
     @State private var scanBusy = false
     @State private var readingBusy = false
     @State private var readingError: String?
+    @State private var readNowBusy = false
 
     private var api: APIClient? { session.serverURL.map { APIClient(baseURL: $0) } }
 
@@ -1116,6 +1145,9 @@ private struct MailPane: View {
                     }
                     Spacer(minLength: 0)
                 }
+                if let box = scan?.mailboxes?.first(where: { $0.address.lowercased() == account.address.lowercased() }) {
+                    boxStatus(box)
+                }
                 if account.state == "error", let reason = account.last_error {
                     Text(reason).font(.system(size: 11, design: .monospaced)).foregroundStyle(theme.inkMute)
                         .textSelection(.enabled)
@@ -1146,6 +1178,70 @@ private struct MailPane: View {
                 .font(.system(size: 12))
             }
             .padding(13)
+        }
+    }
+
+    /// What this mailbox holds and where its reading is — its own numbers,
+    /// not the store's — then, while something is left, what it will take,
+    /// and the way to read it now rather than over the coming nights.
+    @ViewBuilder private func boxStatus(_ box: MailboxStatus) -> some View {
+        let r = box.reading
+        VStack(alignment: .leading, spacing: 6) {
+            Label(session.localized("mail.box.messages", box.messages), systemImage: "tray")
+                .font(.system(size: 12)).foregroundStyle(theme.inkSoft)
+            if r.window > 0 {
+                Label(session.localized("mail.box.reading", r.kept + r.skipped, r.to_read, r.read), systemImage: "book.closed")
+                    .font(.system(size: 12)).foregroundStyle(theme.inkSoft)
+            }
+            if let e = box.estimate {
+                VStack(alignment: .leading, spacing: 6) {
+                    Label(estimateLine(e), systemImage: "exclamationmark.circle")
+                        .font(.system(size: 12)).foregroundStyle(theme.ink)
+                    if e.pending {
+                        Text(session.localized("mail.box.pending")).font(.system(size: 11)).foregroundStyle(theme.inkMute)
+                    }
+                    if readingApproved {
+                        HStack(spacing: 8) {
+                            if scan?.running == true {
+                                ProgressView().controlSize(.small)
+                                Text(session.localized("mail.box.running")).font(.system(size: 12)).foregroundStyle(theme.inkMute)
+                            } else {
+                                Button { Task { await readNow() } } label: {
+                                    Label(session.localized("mail.box.read_now"), systemImage: "play.fill")
+                                        .font(.system(size: 12.5, weight: .medium))
+                                        .padding(.horizontal, 10).padding(.vertical, 5)
+                                }
+                                .glassProminentButton()
+                                .tint(session.activeDeviceUser?.color ?? .blue)
+                                .disabled(readNowBusy)
+                                .help(session.localized("mail.box.read_now.help"))
+                            }
+                            Spacer(minLength: 0)
+                        }
+                    }
+                }
+                .padding(10)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(RoundedRectangle(cornerRadius: 8).fill(Color.orange.opacity(0.10)))
+            }
+        }
+    }
+
+    /// "~16 712 to sort, ~5 400 to read · about 8 h · ~21 €" — the euros only
+    /// when the server sent them (the operator).
+    private func estimateLine(_ e: MailboxEstimate) -> String {
+        let hours = e.hours < 1 ? session.localized("mail.box.under_hour") : session.localized("mail.box.hours", Int(e.hours.rounded()))
+        var line = session.localized("mail.box.left", e.to_sort, e.to_read, hours)
+        if let euros = e.euros { line += " · " + session.localized("mail.box.euros", euros.formatted(.number.precision(.fractionLength(0...2)))) }
+        return line
+    }
+
+    private func readNow() async {
+        guard let api, let token = session.tokenForActiveUser else { return }
+        readNowBusy = true
+        defer { readNowBusy = false }
+        if let s: MailScanStatus = try? await api.post("/api/mail-accounts/reading/run", body: EmptyBody(), token: token) {
+            scan = s
         }
     }
 

@@ -699,6 +699,16 @@
 "mail.reading.withdraw" = "Goedkeuring intrekken";
 "mail.reading.help" = "Maurice leest 's nachts de echte uitwisselingen van de laatste jaren en zegt je wie voor jou telt en wat er speelt. Er wordt niets verzonden, niets in je mailbox veranderd.";
 "mail.reading.caption" = "Het lezen is een ja dat jij geeft — hier of in het gesprek dat Maurice opende. Je kunt het altijd intrekken.";
+"mail.box.messages" = "%d berichten verzameld";
+"mail.box.reading" = "Lezen: %1$d gesorteerd · %2$d te lezen · %3$d gelezen";
+"mail.box.left" = "Nog: ~%1$d te sorteren, ~%2$d te lezen · %3$@";
+"mail.box.hours" = "ongeveer %d u";
+"mail.box.under_hour" = "minder dan een uur";
+"mail.box.euros" = "~€%@";
+"mail.box.pending" = "Voorlopige schatting: deze mailbox is nog niet gesorteerd.";
+"mail.box.read_now" = "Nu lezen";
+"mail.box.read_now.help" = "Leest wat overblijft meteen, in plaats van de komende nachten. Er wordt niets verstuurd of gewijzigd in je mailbox.";
+"mail.box.running" = "Bezig met lezen…";
 "contacts.title" = "Contacten";
 "contacts.value.none" = "Geen";
 "contacts.intro" = "Maurice leest je adresboeken elke nacht en schrijft er nooit in. Wie in je contacten staat, telt als persoon: diens post wordt gelezen, ook als die via een verzendtool komt, en later worden diens adressen op één kaart samengebracht.";

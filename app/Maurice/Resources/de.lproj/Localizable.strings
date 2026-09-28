@@ -699,6 +699,16 @@
 "mail.reading.withdraw" = "Freigabe zurückziehen";
 "mail.reading.help" = "Maurice liest nachts die echten Wechsel der letzten Jahre und sagt dir, wer für dich zählt und was gerade läuft. Nichts wird gesendet, nichts in deinem Postfach verändert.";
 "mail.reading.caption" = "Das Lesen ist ein Ja, das du gibst — hier oder in dem Gespräch, das Maurice eröffnet hat. Du kannst es jederzeit zurückziehen.";
+"mail.box.messages" = "%d Nachrichten erfasst";
+"mail.box.reading" = "Lesen: %1$d sortiert · %2$d zu lesen · %3$d gelesen";
+"mail.box.left" = "Übrig: ~%1$d zu sortieren, ~%2$d zu lesen · %3$@";
+"mail.box.hours" = "etwa %d h";
+"mail.box.under_hour" = "unter einer Stunde";
+"mail.box.euros" = "~%@ €";
+"mail.box.pending" = "Vorläufige Schätzung: Dieses Postfach ist noch nicht sortiert.";
+"mail.box.read_now" = "Jetzt lesen";
+"mail.box.read_now.help" = "Liest den Rest sofort, statt die Nächte abzuwarten. Nichts wird gesendet, nichts in deinem Postfach geändert.";
+"mail.box.running" = "Wird gelesen…";
 "contacts.title" = "Kontakte";
 "contacts.value.none" = "Keine";
 "contacts.intro" = "Maurice liest deine Adressbücher jede Nacht und schreibt nie hinein. Wer in deinen Kontakten ist, zählt als Person: Seine Post wird gelesen, auch wenn sie über ein Versandwerkzeug kommt, und später werden seine Adressen auf einem Blatt zusammengeführt.";

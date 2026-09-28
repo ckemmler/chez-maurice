@@ -699,6 +699,16 @@
 "mail.reading.withdraw" = "Withdraw the approval";
 "mail.reading.help" = "Maurice reads the real exchanges of the last years, at night, and tells you who matters to you and what is going on. Nothing is sent, nothing is changed in your mailbox.";
 "mail.reading.caption" = "Reading is a yes you give — here or in the conversation Maurice opened. You can withdraw it at any time.";
+"mail.box.messages" = "%d messages collected";
+"mail.box.reading" = "Reading: %1$d sorted · %2$d to read · %3$d read";
+"mail.box.left" = "Left: ~%1$d to sort, ~%2$d to read · %3$@";
+"mail.box.hours" = "about %d h";
+"mail.box.under_hour" = "under an hour";
+"mail.box.euros" = "~€%@";
+"mail.box.pending" = "A first estimate: this mailbox is not sorted yet.";
+"mail.box.read_now" = "Read now";
+"mail.box.read_now.help" = "Reads what is left right away instead of over the coming nights. Nothing is sent, nothing is changed in your mailbox.";
+"mail.box.running" = "Reading…";
 "contacts.title" = "Contacts";
 "contacts.value.none" = "None";
 "contacts.intro" = "Maurice reads your address books every night and never writes to them. Someone in your contacts counts as a person: their mail is read even when it comes through a mailing tool, and later their addresses will be joined on one fiche.";
