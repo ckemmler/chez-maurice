@@ -2,9 +2,11 @@ import { Hono } from "hono";
 import { requireAuth } from "../middleware/auth";
 import {
   MailAccountError,
+  approveMailboxes,
   checkMailAccount,
   createMailAccount,
   deleteMailAccount,
+  getMailAccount,
   listMailAccounts,
   replacePassword,
   restoreSecret,
@@ -66,6 +68,19 @@ function fail(c: any, err: unknown) {
 
 accounts.get("/", (c) => c.json({ accounts: listMailAccounts(c.get("userId")).map(view) }));
 
+/** Start the approved reading now unless one runs; the documents after it.
+ *  Twelve hours at most. Returns whether this call started it. */
+function startReadingNow(uid: string): boolean {
+  if (mailReadingStatus(uid).running) return false;
+  startMailReading(uid, { maxMs: 12 * 60 * 60 * 1000 })
+    .then(async (r) => {
+      if (r.read > 0) await writeMailDocuments(uid);
+    })
+    .catch((err) => console.warn(`[mail] reading started from the app for ${uid}: ${(err as Error).message}`));
+  console.log(`[mail] reading started from the app for ${uid}`);
+  return true;
+}
+
 /** The operator sees what a reading costs; a member sees the volume and the
  *  time (the rule of 26 September 2026: no money shown to members). */
 function forViewer(uid: string, v: ScanView): ScanView {
@@ -97,7 +112,7 @@ accounts.post("/", async (c) => {
   }
   // The headers, then the free work of the night at once (triage,
   // calibration): the card says what reading this mailbox will take.
-  analyseMailboxInBackground(uid);
+  analyseMailboxInBackground(uid, created.id);
   return c.json(view(checked), 201);
 });
 
@@ -130,6 +145,24 @@ accounts.put("/senders", async (c) => {
   return c.json(forViewer(uid, await mailScanStatus(uid)));
 });
 
+/** A yes to one mailbox — one added after the member's yes to the reading,
+ *  which is not read without its own — and its reading started now (the
+ *  documents after it). The first yes of a member, given this way, covers
+ *  this mailbox only. */
+accounts.post("/:id/reading", async (c) => {
+  const uid = c.get("userId");
+  const account = getMailAccount(uid, c.req.param("id"));
+  if (!account) return c.json({ error: "no such mailbox" }, 404);
+  try {
+    if (!readingWanted(uid)) await decideReading(uid, "approve", { mailbox: account.id });
+    else approveMailboxes(uid, account.id);
+  } catch (err) {
+    return c.json({ error: (err as Error).message }, 422);
+  }
+  startReadingNow(uid);
+  return c.json({ ...forViewer(uid, await mailScanStatus(uid)), started: true, running: true });
+});
+
 /** Read now rather than tonight — the reading the member approved, over
  *  every mailbox, as long as it takes (twelve hours at most), then the
  *  documents it allows. A run already going (the night's, or one started
@@ -137,16 +170,8 @@ accounts.put("/senders", async (c) => {
 accounts.post("/reading/run", async (c) => {
   const uid = c.get("userId");
   if (!readingWanted(uid)) return c.json({ error: "the reading has not been approved" }, 409);
-  const already = mailReadingStatus(uid).running;
-  if (!already) {
-    startMailReading(uid, { maxMs: 12 * 60 * 60 * 1000 })
-      .then(async (r) => {
-        if (r.read > 0) await writeMailDocuments(uid);
-      })
-      .catch((err) => console.warn(`[mail] reading started from the app for ${uid}: ${(err as Error).message}`));
-    console.log(`[mail] reading started from the app for ${uid}`);
-  }
-  return c.json({ ...forViewer(uid, await mailScanStatus(uid)), started: !already, running: true });
+  const started = startReadingNow(uid);
+  return c.json({ ...forViewer(uid, await mailScanStatus(uid)), started, running: true });
 });
 
 /** The member's word on the reading, from the card: `{ action: "approve" |

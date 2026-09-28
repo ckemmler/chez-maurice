@@ -723,6 +723,9 @@
 "mail.box.summary.done" = "%1$@ berichten · %2$@ gelezen";
 "mail.box.summary.none" = "%@ berichten";
 "mail.box.summary.running" = "bezig met lezen";
+"mail.box.summary.waiting" = "wacht op je akkoord";
+"mail.box.not_approved" = "Nog niet gelezen: toegevoegd na je akkoord, wacht op een eigen akkoord.";
+"mail.box.read_this" = "Deze mailbox lezen";
 "mail.detail.scan.title" = "Verzameling van deze mailbox";
 "mail.detail.scan" = "%@ berichten verzameld uit deze mailbox";
 "mail.detail.untriaged" = "waarvan %@ nog niet gesorteerd";

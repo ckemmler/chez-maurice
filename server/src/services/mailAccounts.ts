@@ -52,6 +52,8 @@ export interface MailAccount {
   checked_at: string | null;
   created_at: string;
   updated_at: string;
+  /** When the member said yes to reading this mailbox; null: not read. */
+  reading_approved_at: string | null;
 }
 
 export class MailAccountError extends Error {
@@ -121,7 +123,7 @@ export function decryptSecret(sealed: string): string {
 // ── accounts ────────────────────────────────────────────────────────────
 
 const COLUMNS = `id, member_id, address, name, provider, host, port, security, username,
-  state, last_error, checked_at, created_at, updated_at`;
+  state, last_error, checked_at, created_at, updated_at, reading_approved_at`;
 
 const ADDRESS = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const NAME = /^[a-z0-9][a-z0-9_-]{0,31}$/;
@@ -162,6 +164,20 @@ export function listMailAccounts(memberId: string): MailAccount[] {
   return db
     .query(`SELECT ${COLUMNS} FROM mail_accounts WHERE member_id = ? ORDER BY created_at, address`)
     .all(memberId) as MailAccount[];
+}
+
+/** The mailboxes the reading may read: those the member said yes to. */
+export function approvedMailboxAddresses(memberId: string): string[] {
+  return (db.query(`SELECT address FROM mail_accounts WHERE member_id = ? AND reading_approved_at IS NOT NULL`).all(memberId) as Array<{ address: string }>).map((r) => r.address.toLowerCase());
+}
+
+/** A yes to one mailbox, or — `id` null — to every mailbox the member has
+ *  now (the yes of the numbers conversation). Returns how many changed. */
+export function approveMailboxes(memberId: string, id: string | null = null): number {
+  const r = id
+    ? db.run(`UPDATE mail_accounts SET reading_approved_at = datetime('now') WHERE member_id = ? AND id = ? AND reading_approved_at IS NULL`, [memberId, id])
+    : db.run(`UPDATE mail_accounts SET reading_approved_at = datetime('now') WHERE member_id = ? AND reading_approved_at IS NULL`, [memberId]);
+  return Number(r.changes ?? 0);
 }
 
 export function getMailAccount(memberId: string, id: string): MailAccount | null {

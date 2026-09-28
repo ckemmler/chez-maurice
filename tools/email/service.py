@@ -380,19 +380,20 @@ class EmailService:
             raise AccessDenied("the member has not approved the reading of their mail")
         return job
 
-    def reading_next(self, accounts: list[Account], stage: str = "light", limit: int = 20) -> dict[str, Any]:
+    def reading_next(self, accounts: list[Account], stage: str = "light", limit: int = 20, addresses: list[str] | None = None) -> dict[str, Any]:
         """The next batch of a pass: previews for `light`, bodies for
         `full`. Nothing stored, nothing marked read."""
         _member_id, store = self._member_store(accounts)
         job = self._reading_job(store)
         sessions = {a.address.lower(): self._session(a) for a in accounts}
-        return reading_mod.next_batch(store, sessions, job, stage, limit)
+        return reading_mod.next_batch(store, sessions, job, stage, limit, addresses=addresses)
 
     def reading_record(
-        self, accounts: list[Account], *, verdicts: list[dict[str, Any]] | None = None, readings: list[dict[str, Any]] | None = None
+        self, accounts: list[Account], *, verdicts: list[dict[str, Any]] | None = None, readings: list[dict[str, Any]] | None = None,
+        addresses: list[str] | None = None,
     ) -> dict[str, Any]:
         _member_id, store = self._member_store(accounts)
-        return reading_mod.record(store, self._reading_job(store), verdicts=verdicts, readings=readings)
+        return reading_mod.record(store, self._reading_job(store), verdicts=verdicts, readings=readings, addresses=addresses)
 
     def reading_control(
         self, accounts: list[Account], state: str, *, error: str | None = None, measured: dict[str, Any] | None = None, seconds: float | None = None
@@ -474,10 +475,10 @@ class EmailService:
             return {"id": message, **out}
         raise MailboxError(f"message {message!r} is no longer where the store last saw it; walk the mailbox again")
 
-    def reading_progress(self, accounts: list[Account]) -> dict[str, Any]:
+    def reading_progress(self, accounts: list[Account], addresses: list[str] | None = None) -> dict[str, Any]:
         _member_id, store = self._member_store(accounts)
         job = reading_mod.status(store)
-        return {"job": job, "progress": reading_mod.progress(store, job), "capacity": store.capacity()}
+        return {"job": job, "progress": reading_mod.progress(store, job, addresses=addresses), "capacity": store.capacity()}
 
     # ── tools ────────────────────────────────────────────────────────────
     def list_accounts(self, accounts: list[Account]) -> dict[str, Any]:

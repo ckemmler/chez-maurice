@@ -1,6 +1,7 @@
 import db from "../db";
 import { addMessage } from "./conversations";
 import { memberLocale } from "./domainBriefs";
+import { approveMailboxes, listMailAccounts } from "./mailAccounts";
 import { mailOpenerStrings } from "./mailOpener";
 import { mailToolCall, type MemberMailState } from "./mailScan";
 import type { McpTool } from "./mcpClient";
@@ -112,7 +113,7 @@ const isAction = (v: unknown): v is ReadingAction => v === "approve" || v === "d
  *  member, and mirror it here. Throws when the tool cannot be reached or
  *  refuses (no mail account, a reading already running): the caller says
  *  so in its own way. Nothing is read, nothing is spent. */
-export async function decideReading(memberId: string, action: ReadingAction, opts: { years?: number } = {}): Promise<Decision> {
+export async function decideReading(memberId: string, action: ReadingAction, opts: { years?: number; mailbox?: string } = {}): Promise<Decision> {
   const tool = action === "approve" ? "approve_reading" : "decline_reading";
   const args = action === "approve" && opts.years ? { years: opts.years } : {};
   const r = await mailToolCall(memberId, tool, args);
@@ -123,6 +124,9 @@ export async function decideReading(memberId: string, action: ReadingAction, opt
     throw new Error(r?.note ? String(r.note) : `the reading job is ${state ?? "unknown"}`);
   }
   mirror(memberId, state);
+  // The yes covers the mailboxes there are — or the one it was given for;
+  // a mailbox added later waits for its own.
+  if (state === "approved") approveMailboxes(memberId, opts.mailbox ?? null);
   return { reading: state, already: !!r.already, job_id: r?.job?.id ?? null, decided_at: r?.job?.updated_at ?? null };
 }
 
@@ -155,11 +159,12 @@ export function isMailTool(name: string): boolean {
 const TOOL: McpTool = {
   name: MAIL_TOOL_NAME,
   description:
-    "Record the member's answer to your question about reading their mail — only in this conversation, and only on an explicit yes or no to that question. `approve`: they agree that you read the real exchanges of their mailbox; the reading happens at night, starting the next one, and you will come back with what you understood. `decline`: they do not want it; it is kept, and you never ask again (they can change their mind later, here or in the app's Settings → Mail).",
+    "Record the member's answer to your question about reading their mail — only in this conversation, and only on an explicit yes or no to that question. `approve`: they agree that you read the real exchanges of their mailbox; the reading happens at night, starting the next one, and you will come back with what you understood. With `mailbox` (an address), the yes is for that mailbox only — one added after their first yes, which is not read without its own. `decline`: they do not want it; it is kept, and you never ask again (they can change their mind later, here or in the app's Settings → Mail).",
   inputSchema: {
     type: "object",
     properties: {
       action: { type: "string", enum: ["approve", "decline"] },
+      mailbox: { type: "string", description: "approve: the address of the one mailbox the yes is for" },
     },
     required: ["action"],
   },
@@ -189,8 +194,15 @@ export async function runMailTool(input: any, conversationId: string): Promise<T
   if (!memberId) return fail("this tool exists only in the conversation that asked about reading the member's mail");
   const action = input?.action;
   if (!isAction(action)) return fail("action must be approve or decline");
+  const address = typeof input?.mailbox === "string" ? input.mailbox.trim().toLowerCase() : "";
+  const box = address ? listMailAccounts(memberId).find((a) => a.address.toLowerCase() === address) : null;
+  if (address && !box) return fail(`no mailbox ${address} among theirs`);
   try {
-    const d = await decideReading(memberId, action);
+    if (action === "approve" && box && mailConversationOf(memberId)?.reading === "approved") {
+      approveMailboxes(memberId, box.id);
+      return ok({ reading: "approved", mailbox: box.address, say: "that mailbox is read from the next night on (or now, from the app's Settings → Mail); you will come back with what you understood." });
+    }
+    const d = await decideReading(memberId, action, box ? { mailbox: box.id } : {});
     return ok(
       action === "approve"
         ? {
@@ -223,12 +235,17 @@ export function mailPromptSection(conversationId: string, memberId: string | und
       : mc?.reading === "declined"
         ? `${memberName} has said no. Never ask again, never hint at it. Only if they themselves say, unprompted and explicitly, that they now want you to read, call the tool with \`action: "approve"\`.`
         : `The question is open. Wait for ${memberName}'s word: on an explicit yes to reading their mail, call the tool with \`action: "approve"\`; on an explicit no, with \`action: "decline"\`. Never on a hint, an "ok" to something else, a question, or your own judgement — if unsure, ask again plainly.`;
+  const waiting = mc?.reading === "approved" ? listMailAccounts(memberId).filter((a) => !a.reading_approved_at).map((a) => a.address) : [];
+  const perBox = waiting.length
+    ? `\nMailboxes added after their yes, not read without their own: ${waiting.join(", ")}. On an explicit yes to one, call the tool with \`action: "approve"\` and \`mailbox\` set to its address.`
+    : "";
   return (
     `\n\n## Reading ${memberName}'s mail\n` +
     `You opened this conversation yourself, at night, with the numbers of ${memberName}'s mailbox and one question: may you read the real exchanges of the last years, to tell them who matters to them and what is going on. ` +
     `It is a consent to read, nothing else: never speak of what it costs, of a budget, or of limits — there is nothing of the kind to say. ` +
     `Nothing happens before their yes, and the yes itself reads nothing now: the reading happens at night, starting the next one, over a few nights, and you come back here with what you understood.\n` +
     `One tool, here only: \`mail__approve_reading\` (\`action: "approve"\` or \`"decline"\`). ${standing}\n` +
-    `${memberName} can also answer without you, from the card under Settings → Mail in the app; what they did there appears in this conversation as a message of yours.`
+    `${memberName} can also answer without you, from the card under Settings → Mail in the app; what they did there appears in this conversation as a message of yours.` +
+    perBox
   );
 }

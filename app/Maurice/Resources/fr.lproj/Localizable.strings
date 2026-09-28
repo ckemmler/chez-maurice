@@ -723,6 +723,9 @@
 "mail.box.summary.done" = "%1$@ messages · %2$@ lus";
 "mail.box.summary.none" = "%@ messages";
 "mail.box.summary.running" = "lecture en cours";
+"mail.box.summary.waiting" = "en attente de votre accord";
+"mail.box.not_approved" = "Pas encore lue : ajoutée après votre accord, Maurice attend le vôtre pour cette boîte.";
+"mail.box.read_this" = "Lire cette boîte";
 "mail.detail.scan.title" = "Relevé de cette boîte";
 "mail.detail.scan" = "%@ messages relevés dans cette boîte";
 "mail.detail.untriaged" = "dont %@ pas encore triés";

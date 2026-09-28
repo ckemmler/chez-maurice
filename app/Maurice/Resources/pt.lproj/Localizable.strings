@@ -723,6 +723,9 @@
 "mail.box.summary.done" = "%1$@ mensagens · %2$@ lidas";
 "mail.box.summary.none" = "%@ mensagens";
 "mail.box.summary.running" = "a ler";
+"mail.box.summary.waiting" = "à espera do teu acordo";
+"mail.box.not_approved" = "Ainda não lida: adicionada depois do teu acordo, espera o seu.";
+"mail.box.read_this" = "Ler esta caixa";
 "mail.detail.scan.title" = "Registo desta caixa";
 "mail.detail.scan" = "%@ mensagens registadas nesta caixa";
 "mail.detail.untriaged" = "das quais %@ ainda por triar";

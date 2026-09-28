@@ -2,6 +2,7 @@ import { ancillaryComplete, ancillaryModel, type AncillaryRequest, type Ancillar
 import { recordSpend, verdict as budgetVerdict } from "./budget";
 import { memberLanguage } from "./domainBriefs";
 import { parseJsonObject } from "./domainMapping";
+import { approvedMailboxAddresses } from "./mailAccounts";
 import { mailConversationOf } from "./mailApproval";
 import { mailToolCall } from "./mailScan";
 import { getModel } from "./models";
@@ -223,10 +224,13 @@ export async function runMailReading(memberId: string, opts: ReadingRunOptions =
     return run;
   };
 
+  // Only the mailboxes the member said yes to (28 September 2026): a
+  // mailbox added after the yes waits for its own.
+  const addresses = approvedMailboxAddresses(memberId);
   // Where things stand, and whether there is anything to do.
   let p: any;
   try {
-    p = await d.call(memberId, "reading_progress", {});
+    p = await d.call(memberId, "reading_progress", { addresses });
   } catch (err) {
     return finish("failed", `the mail tool could not be reached: ${(err as Error).message}`);
   }
@@ -274,7 +278,7 @@ export async function runMailReading(memberId: string, opts: ReadingRunOptions =
     // 1. The light pass.
     let stalled = 0;
     while (run.judged < limit && !outOfTime()) {
-      const batch = await d.call(memberId, "reading_next", { stage: "light", limit: Math.min(LIGHT_BATCH, limit - run.judged) });
+      const batch = await d.call(memberId, "reading_next", { stage: "light", limit: Math.min(LIGHT_BATCH, limit - run.judged), addresses });
       if (batch?.error || batch?.raw) throw new Error(String(batch.error ?? batch.raw));
       const messages: any[] = batch.messages ?? [];
       run.progress = batch.progress ?? run.progress;
@@ -290,6 +294,7 @@ export async function runMailReading(memberId: string, opts: ReadingRunOptions =
       const verdicts = parseVerdicts(r.text, ids);
       const per = tokensOf(r.usage);
       const rec = await d.call(memberId, "reading_record", {
+        addresses,
         verdicts: verdicts.map((v) => ({ ...v, ...(per === null ? {} : { tokens: Math.round(per / ids.length) }) })),
       });
       if (rec?.error || rec?.raw) throw new Error(String(rec.error ?? rec.raw));
@@ -302,7 +307,7 @@ export async function runMailReading(memberId: string, opts: ReadingRunOptions =
     // 2. The full pass.
     stalled = 0;
     while (run.read < limit && !outOfTime()) {
-      const batch = await d.call(memberId, "reading_next", { stage: "full", limit: Math.min(FULL_BATCH, limit - run.read) });
+      const batch = await d.call(memberId, "reading_next", { stage: "full", limit: Math.min(FULL_BATCH, limit - run.read), addresses });
       if (batch?.error || batch?.raw) throw new Error(String(batch.error ?? batch.raw));
       const messages: any[] = batch.messages ?? [];
       run.progress = batch.progress ?? run.progress;
@@ -325,7 +330,7 @@ export async function runMailReading(memberId: string, opts: ReadingRunOptions =
         readings.push({ id: m.id, reading: { ...reading, model: r.model, truncated: !!m.truncated }, ...(tokens === null ? {} : { tokens }) });
       }
       if (readings.length) {
-        const rec = await d.call(memberId, "reading_record", { readings });
+        const rec = await d.call(memberId, "reading_record", { readings, addresses });
         if (rec?.error || rec?.raw) throw new Error(String(rec.error ?? rec.raw));
         run.read += readings.length;
         run.progress = rec.progress ?? run.progress;

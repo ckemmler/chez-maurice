@@ -945,6 +945,16 @@ db.run(`
 `);
 db.run(`CREATE INDEX IF NOT EXISTS idx_mail_conversations_conversation ON mail_conversations(conversation_id)`);
 
+// A yes per mailbox (28 September 2026): the reading reads the mailboxes
+// the member approved, not every mailbox they will ever add. The yes given
+// before this column existed covered the mailboxes there were: they are
+// marked once, the day the column is added, and never again.
+try {
+  db.run(`ALTER TABLE mail_accounts ADD COLUMN reading_approved_at TEXT`);
+  db.run(`UPDATE mail_accounts SET reading_approved_at = datetime('now')
+          WHERE member_id IN (SELECT member_id FROM mail_conversations WHERE reading = 'approved')`);
+} catch {}
+
 // A member's address books (27 September 2026, lot 2 of specs/contacts.md;
 // services/contactAccounts.ts): a CardDAV login, entered from the app, only
 // ever seen or changed by the member. `secret` is the password sealed with

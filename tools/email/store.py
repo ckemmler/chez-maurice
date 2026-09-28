@@ -214,6 +214,16 @@ def store_path(member_id: str) -> Path:
     return mail_dir() / f"{_SAFE.sub('_', member_id)}.db"
 
 
+def _address_filter(column: str, addresses: list[str] | None) -> tuple[str, list[str]]:
+    """`` AND <column> IN (...)`` for the approved mailboxes; nothing for
+    None. An empty list matches nothing — no mailbox approved, nothing read."""
+    if addresses is None:
+        return "", []
+    if not addresses:
+        return " AND 0", []
+    return f" AND lower({column}) IN ({','.join('?' * len(addresses))})", [a.lower() for a in addresses]
+
+
 # The senders a mailbox's card names, heaviest first.
 TOP_SENDERS = 5
 
@@ -595,10 +605,15 @@ class MailStore:
         return out
 
     # ── the reading (lot 4) ──────────────────────────────────────────────
-    def reading_candidates(self, kinds: tuple[str, ...], since: str, stage: str, limit: int) -> list[dict[str, Any]]:
+    def reading_candidates(
+        self, kinds: tuple[str, ...], since: str, stage: str, limit: int, addresses: list[str] | None = None
+    ) -> list[dict[str, Any]]:
         """What the next batch of a pass is made of, newest first, one
         location each: for ``light``, the messages of the window not yet
-        judged; for ``full``, those the light pass kept and not yet read."""
+        judged; for ``full``, those the light pass kept and not yet read.
+        ``addresses``: only the mailboxes the member approved for reading
+        (the location fetched from is one of them); None for all."""
+        only, only_args = _address_filter("l.address", addresses)
         where = (
             "r.message IS NULL OR r.light IS NULL" if stage == "light"
             else "r.light = 'keep' AND r.reading_sealed IS NULL"
@@ -610,15 +625,18 @@ class MailStore:
                     FROM messages m JOIN triage t ON t.message = m.id JOIN locations l ON l.message = m.id
                     LEFT JOIN readings r ON r.message = m.id
                     WHERE t.kind IN ({','.join('?' * len(kinds))}) AND m.date >= ? AND m.date < '3000'
-                      AND m.gone_at IS NULL AND ({where})
+                      AND m.gone_at IS NULL AND ({where}){only}
                     GROUP BY m.id ORDER BY m.date DESC LIMIT ?""",
-                (*kinds, since, max(1, int(limit))),
+                (*kinds, since, *only_args, max(1, int(limit))),
             ).fetchall()
         return [dict(r) for r in rows]
 
-    def reading_progress(self, kinds: tuple[str, ...], since: str) -> dict[str, int]:
+    def reading_progress(self, kinds: tuple[str, ...], since: str, addresses: list[str] | None = None) -> dict[str, int]:
         """Where the passes are over the window: still to judge, kept,
-        skipped, still to read, read."""
+        skipped, still to read, read — over the approved mailboxes when
+        ``addresses`` is given."""
+        only, only_args = _address_filter("la.address", addresses)
+        exists = f" AND EXISTS (SELECT 1 FROM locations la WHERE la.message = m.id{only})" if addresses is not None else ""
         with self._connect() as conn:
             row = conn.execute(
                 f"""SELECT
@@ -629,8 +647,8 @@ class MailStore:
                       SUM(CASE WHEN r.reading_sealed IS NOT NULL THEN 1 ELSE 0 END) AS read,
                       COUNT(*) AS messages
                     FROM messages m JOIN triage t ON t.message = m.id LEFT JOIN readings r ON r.message = m.id
-                    WHERE t.kind IN ({','.join('?' * len(kinds))}) AND m.date >= ? AND m.date < '3000' AND m.gone_at IS NULL""",
-                (*kinds, since),
+                    WHERE t.kind IN ({','.join('?' * len(kinds))}) AND m.date >= ? AND m.date < '3000' AND m.gone_at IS NULL{exists}""",
+                (*kinds, since, *(only_args if addresses is not None else [])),
             ).fetchone()
         return {k: int(row[k] or 0) for k in ("messages", "to_light", "kept", "skipped", "to_read", "read")}
 

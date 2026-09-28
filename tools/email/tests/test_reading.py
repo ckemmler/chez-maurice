@@ -242,6 +242,21 @@ def test_a_sender_set_aside_is_not_read_and_a_window_keeps_only_its_last_days(tm
     assert kinds[by_sender["ami1@example.org"]] != "bulk"
 
 
+def test_only_the_approved_mailboxes_are_read_and_counted(tmp_path):
+    svc, _client = ready(tmp_path)
+    everything = svc.reading_next(alex(svc), stage="light", limit=50)
+    assert len(everything["messages"]) == 9
+    # A mailbox the member did not approve: nothing of it, and nothing left.
+    other = svc.reading_next(alex(svc), stage="light", limit=50, addresses=["someone@else.example"])
+    assert other["messages"] == [] and other["progress"]["messages"] == 0 and other["progress"]["to_light"] == 0
+    assert svc.reading_progress(alex(svc), addresses=[])["progress"]["messages"] == 0
+    # The approved one: the same as all of it (the case is not the member's).
+    mine = svc.reading_next(alex(svc), stage="light", limit=50, addresses=["Alex@iCloud.com"])
+    assert [m["id"] for m in mine["messages"]] == [m["id"] for m in everything["messages"]]
+    rec = svc.reading_record(alex(svc), verdicts=[{"id": m["id"], "keep": False, "reason": "r"} for m in mine["messages"]], addresses=["alex@icloud.com"])
+    assert rec["progress"]["to_light"] == 0 and rec["progress"]["messages"] == 9
+
+
 def test_control_moves_the_job_and_measures_the_capacity_that_the_estimate_then_uses(tmp_path):
     svc, _client = ready(tmp_path)
     acc = alex(svc)

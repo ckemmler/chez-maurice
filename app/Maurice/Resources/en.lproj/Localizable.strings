@@ -723,6 +723,9 @@
 "mail.box.summary.done" = "%1$@ messages · %2$@ read";
 "mail.box.summary.none" = "%@ messages";
 "mail.box.summary.running" = "reading";
+"mail.box.summary.waiting" = "waiting for your yes";
+"mail.box.not_approved" = "Not read yet: added after your yes, it waits for its own.";
+"mail.box.read_this" = "Read this mailbox";
 "mail.detail.scan.title" = "This mailbox's headers";
 "mail.detail.scan" = "%@ messages collected from this mailbox";
 "mail.detail.untriaged" = "of which %@ not sorted yet";

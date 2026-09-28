@@ -38,6 +38,12 @@ app = Server("email")
 _service: EmailService | None = None
 
 
+
+def _addresses(args: dict[str, Any]) -> list[str] | None:
+    """The mailboxes a reading call is limited to; None when not given."""
+    v = args.get("addresses")
+    return [str(a) for a in v] if isinstance(v, list) else None
+
 def get_service() -> EmailService:
     global _service
     if _service is None:
@@ -293,6 +299,7 @@ async def list_tools() -> list[Tool]:
                 "properties": {
                     "stage": {"type": "string", "enum": ["light", "full"]},
                     "limit": {"type": "integer", "description": "How many (default 20, at most 100)."},
+                    "addresses": {"type": "array", "items": {"type": "string"}, "description": "Only these mailboxes (the ones the member approved for reading); omit for all."},
                 },
             },
         ),
@@ -307,6 +314,7 @@ async def list_tools() -> list[Tool]:
                 "properties": {
                     "verdicts": {"type": "array", "items": {"type": "object"}},
                     "readings": {"type": "array", "items": {"type": "object"}},
+                    "addresses": {"type": "array", "items": {"type": "string"}, "description": "Only these mailboxes (the ones the member approved for reading); omit for all."},
                 },
             },
         ),
@@ -330,7 +338,7 @@ async def list_tools() -> list[Tool]:
         Tool(
             name="reading_progress",
             description="The reading job, where the passes are over the window (to judge, kept, skipped, to read, read), and the measured capacity.",
-            inputSchema={"type": "object", "properties": {}},
+            inputSchema={"type": "object", "properties": {"addresses": {"type": "array", "items": {"type": "string"}, "description": "Only these mailboxes (the ones the member approved for reading); omit for all."},}},
         ),
         Tool(
             name="get_by_id",
@@ -475,15 +483,15 @@ def dispatch(service: EmailService, name: str, args: dict[str, Any], *, member_i
     if name == "decline_reading":
         return service.decline_reading(accounts)
     if name == "reading_next":
-        return service.reading_next(accounts, stage=args.get("stage") or "light", limit=args.get("limit") or 20)
+        return service.reading_next(accounts, stage=args.get("stage") or "light", limit=args.get("limit") or 20, addresses=_addresses(args))
     if name == "reading_record":
-        return service.reading_record(accounts, verdicts=args.get("verdicts"), readings=args.get("readings"))
+        return service.reading_record(accounts, verdicts=args.get("verdicts"), readings=args.get("readings"), addresses=_addresses(args))
     if name == "reading_control":
         return service.reading_control(
             accounts, str(args["state"]), error=args.get("error"), measured=args.get("measured"), seconds=args.get("seconds")
         )
     if name == "reading_progress":
-        return service.reading_progress(accounts)
+        return service.reading_progress(accounts, addresses=_addresses(args))
     if name == "get_by_id":
         return service.get_by_id(accounts, str(args["id"]), max_bytes=args.get("max_bytes") or 8000)
     if name == "reading_material":

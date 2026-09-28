@@ -723,6 +723,9 @@
 "mail.box.summary.done" = "%1$@ Nachrichten · %2$@ gelesen";
 "mail.box.summary.none" = "%@ Nachrichten";
 "mail.box.summary.running" = "wird gelesen";
+"mail.box.summary.waiting" = "wartet auf dein Einverständnis";
+"mail.box.not_approved" = "Noch nicht gelesen: nach deinem Einverständnis hinzugefügt, wartet es auf ein eigenes.";
+"mail.box.read_this" = "Dieses Postfach lesen";
 "mail.detail.scan.title" = "Erfassung dieses Postfachs";
 "mail.detail.scan" = "%@ Nachrichten aus diesem Postfach erfasst";
 "mail.detail.untriaged" = "davon %@ noch nicht sortiert";

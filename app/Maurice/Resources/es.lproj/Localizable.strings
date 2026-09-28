@@ -723,6 +723,9 @@
 "mail.box.summary.done" = "%1$@ mensajes · %2$@ leídos";
 "mail.box.summary.none" = "%@ mensajes";
 "mail.box.summary.running" = "leyendo";
+"mail.box.summary.waiting" = "esperando tu permiso";
+"mail.box.not_approved" = "Aún sin leer: añadido después de tu permiso, espera el suyo.";
+"mail.box.read_this" = "Leer este buzón";
 "mail.detail.scan.title" = "Registro de este buzón";
 "mail.detail.scan" = "%@ mensajes registrados en este buzón";
 "mail.detail.untriaged" = "de ellos %@ aún sin clasificar";

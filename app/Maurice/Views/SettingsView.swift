@@ -953,6 +953,9 @@ struct MailboxStatus: Decodable, Equatable {
     let estimate: MailboxEstimate?
     /// The senders who weigh most in its reading, with the member's rule.
     let top_senders: [MailboxSender]?
+    /// The member said yes to reading this mailbox; false for one added after
+    /// the yes, which waits for its own. Absent from an older server.
+    let approved: Bool?
 }
 struct MailboxSender: Decodable, Equatable, Identifiable {
     let sender: String
@@ -1218,7 +1221,11 @@ private struct MailPane: View {
         } else {
             line = session.localized("mail.box.summary.none", num(box.messages))
         }
-        if scan?.running == true, r.to_read + r.to_light > 0 { line += " · " + session.localized("mail.box.summary.running") }
+        if box.approved == false, box.estimate != nil {
+            line += " · " + session.localized("mail.box.summary.waiting")
+        } else if scan?.running == true, r.to_read + r.to_light > 0 {
+            line += " · " + session.localized("mail.box.summary.running")
+        }
         return line
     }
 
@@ -1245,7 +1252,7 @@ private struct MailPane: View {
                             readingDetail(box)
                             if let d = scan?.documents { documentsProgress(d).padding(.top, 4) }
                         }
-                        boxStatus(box)
+                        boxStatus(box, account: account)
                     }
                     detailSection(session.localized("mail.detail.actions")) {
                         actions(account)
@@ -1362,7 +1369,7 @@ private struct MailPane: View {
     /// What this mailbox holds and where its reading is — its own numbers,
     /// not the store's — then, while something is left, what it will take,
     /// and the way to read it now rather than over the coming nights.
-    @ViewBuilder private func boxStatus(_ box: MailboxStatus) -> some View {
+    @ViewBuilder private func boxStatus(_ box: MailboxStatus, account: MailAccountRow) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             if let e = box.estimate {
                 VStack(alignment: .leading, spacing: 6) {
@@ -1371,7 +1378,21 @@ private struct MailPane: View {
                     if e.pending {
                         Text(session.localized("mail.box.pending")).font(.system(size: 11)).foregroundStyle(theme.inkMute)
                     }
-                    if readingApproved, scan?.running != true {
+                    if box.approved == false {
+                        // Added after the yes: not read without its own.
+                        Text(session.localized("mail.box.not_approved")).font(.system(size: 11.5)).foregroundStyle(theme.inkSoft)
+                        HStack(spacing: 8) {
+                            Button { Task { await readThisBox(account) } } label: {
+                                Label(session.localized("mail.box.read_this"), systemImage: "checkmark")
+                                    .font(.system(size: 12.5, weight: .medium))
+                                    .padding(.horizontal, 10).padding(.vertical, 5)
+                            }
+                            .glassProminentButton()
+                            .tint(session.activeDeviceUser?.color ?? .blue)
+                            .disabled(readNowBusy)
+                            Spacer(minLength: 0)
+                        }
+                    } else if readingApproved, scan?.running != true {
                         HStack(spacing: 8) {
                             Button { Task { await readNow() } } label: {
                                 Label(session.localized("mail.box.read_now"), systemImage: "play.fill")
@@ -1473,6 +1494,16 @@ private struct MailPane: View {
             : session.localized("mail.box.left.read", num(e.to_read), hours)
         if let euros = e.euros { line += " · " + session.localized("mail.box.euros", euros.formatted(.number.precision(.fractionLength(0...2)))) }
         return line
+    }
+
+    /// The yes to this one mailbox, and its reading started now.
+    private func readThisBox(_ account: MailAccountRow) async {
+        guard let api, let token = session.tokenForActiveUser else { return }
+        readNowBusy = true
+        defer { readNowBusy = false }
+        if let s: MailScanStatus = try? await api.post("/api/mail-accounts/\(account.id)/reading", body: EmptyBody(), token: token) {
+            scan = s
+        }
     }
 
     private func readNow() async {

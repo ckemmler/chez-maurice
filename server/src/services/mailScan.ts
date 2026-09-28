@@ -7,13 +7,15 @@ import { describeCost, mailOpeningTitle, readingCost, renderMailOpening, type Re
 import { corpusCall } from "./mcpClient";
 import { openConversation, type OpenRequest, type OpenResult } from "./openedConversations";
 import { listUsers } from "./users";
-import { backfillMailConversations, linkMailConversation } from "./mailApproval";
+import { backfillMailConversations, linkMailConversation, mailConversationOf } from "./mailApproval";
 import { readingWanted, startMailReading } from "./mailReading";
-import { mailboxViews, type MailboxView } from "./mailboxEstimate";
+import { mailboxViews, newMailboxNotice, type MailboxView } from "./mailboxEstimate";
+import { addMessage } from "./conversations";
+import { publishToRoom } from "./roomBus";
 import { listSenderRules, senderRulesForTriage } from "./mailSenderRules";
 import { writeMailDocuments } from "./mailDocuments";
 import { contactAddresses, listContactAccounts, syncContacts } from "./contactAccounts";
-import { listMailAccounts } from "./mailAccounts";
+import { approvedMailboxAddresses, getMailAccount, listMailAccounts } from "./mailAccounts";
 
 // The header walk, driven from the server (specs/mail-import.md, the wiring
 // of lot 1, settled 26 September 2026).
@@ -206,9 +208,14 @@ export async function startMailScan(memberId: string): Promise<ScanView> {
 /** Each named sender with the member's rule on it, if any. */
 function withRules(memberId: string, v: ScanView): ScanView {
   const rules = new Map(listSenderRules(memberId).map((r) => [r.address, r.days]));
+  const approved = new Set(approvedMailboxAddresses(memberId));
   return {
     ...v,
-    mailboxes: v.mailboxes.map((b) => ({ ...b, top_senders: b.top_senders.map((t) => ({ ...t, rule_days: rules.get(t.sender) ?? null })) })),
+    mailboxes: v.mailboxes.map((b) => ({
+      ...b,
+      approved: approved.has(b.address.toLowerCase()),
+      top_senders: b.top_senders.map((t) => ({ ...t, rule_days: rules.get(t.sender) ?? null })),
+    })),
   };
 }
 
@@ -229,17 +236,43 @@ export function startMailScanInBackground(memberId: string): void {
  * still looking at it (28 September 2026). Nothing is read: the reading is
  * the member's word, given for the store, and launched from the card.
  */
-export function analyseMailboxInBackground(memberId: string): void {
+export function analyseMailboxInBackground(memberId: string, accountId: string | null = null): void {
   (async () => {
-    const { view, skipped } = await walkMailbox(memberId);
-    if (skipped || view.state !== "done") return;
+    // One walk per member at a time, its mailboxes fixed when it starts: a
+    // mailbox added while another is walked joins that walk without being
+    // in it. Walk again until every mailbox has been (three times at most:
+    // an empty mailbox never shows up in the counts).
+    for (let round = 0; round < 3; round++) {
+      const { view, skipped } = await walkMailbox(memberId);
+      if (skipped || view.state !== "done") return;
+      const walked = new Set(view.mailboxes.map((b) => b.address.toLowerCase()));
+      const missing = listMailAccounts(memberId).filter((a) => a.state === "ok" && !walked.has(a.address.toLowerCase()));
+      if (!missing.length) break;
+      console.log(`[mail] ${missing.map((a) => a.address).join(", ")} added during the walk for ${memberId}: walking again`);
+    }
     await measure(memberId, deps);
     const boxes = (await mailScanStatus(memberId)).mailboxes;
     console.log(
       `[mail] analysed after adding a mailbox for ${memberId}: ` +
         boxes.map((b) => `${b.address} ${b.messages} messages${b.estimate ? `, ${b.estimate.to_read} to read, ~${b.estimate.hours} h, ${b.estimate.euros ?? "?"} €` : ", nothing left"}`).join("; "),
     );
+    // Added after the member's yes: it is not read without its own. Maurice
+    // says so in the mail conversation, with what reading it would take.
+    const added = accountId ? getMailAccount(memberId, accountId) : null;
+    const box = added ? boxes.find((b) => b.address.toLowerCase() === added.address.toLowerCase()) : null;
+    if (added && box && !added.reading_approved_at && readingWanted(memberId) && box.estimate) {
+      sayNewMailbox(memberId, added.address, box);
+    }
   })().catch((err) => console.warn(`[mail] analysis after adding a mailbox for ${memberId}: ${(err as Error).message}`));
+}
+
+/** Maurice, in the mail conversation, about a mailbox added after the yes. */
+function sayNewMailbox(memberId: string, address: string, box: MailboxView): void {
+  const mc = mailConversationOf(memberId);
+  if (!mc) return;
+  const msg = addMessage(mc.conversation_id, "assistant", newMailboxNotice(memberLocale(memberId), address, box), { mauriceId: null });
+  publishToRoom(mc.conversation_id, { type: "message", message: msg });
+  console.log(`[mail] ${address} added after the yes for ${memberId}: said in the mail conversation, waiting for its own yes`);
 }
 
 /** Sort the member's mail again with their contacts as they stand — after

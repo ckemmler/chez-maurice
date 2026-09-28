@@ -184,8 +184,8 @@ def _subject(sealed: str | None) -> str | None:
         return None
 
 
-def progress(store: MailStore, job: dict[str, Any] | None, now: datetime | None = None) -> dict[str, int]:
-    return store.reading_progress(READ_KINDS, _since(job, now))
+def progress(store: MailStore, job: dict[str, Any] | None, now: datetime | None = None, addresses: list[str] | None = None) -> dict[str, int]:
+    return store.reading_progress(READ_KINDS, _since(job, now), addresses)
 
 
 def per_mailbox(store: MailStore, job: dict[str, Any] | None, now: datetime | None = None) -> list[dict[str, Any]]:
@@ -196,7 +196,8 @@ def per_mailbox(store: MailStore, job: dict[str, Any] | None, now: datetime | No
 
 
 def next_batch(
-    store: MailStore, sessions: dict[str, Session], job: dict[str, Any], stage: str, limit: int = 20, *, now: datetime | None = None
+    store: MailStore, sessions: dict[str, Session], job: dict[str, Any], stage: str, limit: int = 20, *,
+    now: datetime | None = None, addresses: list[str] | None = None,
 ) -> dict[str, Any]:
     """The next ``limit`` messages of a pass, with what that pass reads.
     A folder that refuses is reported and its messages wait for the next
@@ -205,7 +206,7 @@ def next_batch(
     if stage not in STAGES:
         raise ValueError(f"not a stage: {stage!r}")
     since = _since(job, now)
-    rows = store.reading_candidates(READ_KINDS, since, stage, max(1, min(int(limit), 100)))
+    rows = store.reading_candidates(READ_KINDS, since, stage, max(1, min(int(limit), 100)), addresses)
     by_place: dict[tuple[str, str], list[dict[str, Any]]] = defaultdict(list)
     for r in rows:
         by_place[(r["address"], r["folder"])].append(r)
@@ -249,7 +250,7 @@ def next_batch(
     # than ask for the same batch forever.
     answered = {e["id"] for e in out}
     missing = [r["id"] for r in rows if r["id"] not in answered]
-    result = {"stage": stage, "since": since, "messages": out, "missing": missing, "progress": progress(store, job, now)}
+    result = {"stage": stage, "since": since, "messages": out, "missing": missing, "progress": progress(store, job, now, addresses)}
     if errors:
         result["errors"] = errors
     return result
@@ -262,6 +263,7 @@ def record(
     verdicts: list[dict[str, Any]] | None = None,
     readings: list[dict[str, Any]] | None = None,
     now: datetime | None = None,
+    addresses: list[str] | None = None,
 ) -> dict[str, Any]:
     """Keep what a pass decided. ``verdicts``: ``{id, keep: bool, reason,
     tokens?}``. ``readings``: ``{id, reading: object, tokens?}`` — sealed
@@ -291,7 +293,7 @@ def record(
     counts["skipped"] = int(counts.get("skipped", 0)) + sum(1 for r in light_rows if r[1] == "skip")
     counts["read"] = int(counts.get("read", 0)) + len(read_rows)
     store.update_job(job["id"], counts=counts)
-    return {"recorded": {"verdicts": len(light_rows), "readings": len(read_rows)}, "job": store.job(job["id"]), "progress": progress(store, job, now)}
+    return {"recorded": {"verdicts": len(light_rows), "readings": len(read_rows)}, "job": store.job(job["id"]), "progress": progress(store, job, now, addresses)}
 
 
 def _unseal_json(sealed: str | None) -> dict[str, Any] | None:
