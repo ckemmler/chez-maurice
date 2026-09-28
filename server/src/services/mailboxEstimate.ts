@@ -76,10 +76,21 @@ interface Calibration {
 /** Euros per message sorted and per message read, from the member's
  *  reading job; null without enough of it, or when the light pass's model
  *  is also the reader's (the ledger could not tell them apart). */
-export function unitCostsFromHistory(jobId: string | null, counts: { judged?: number; read?: number } | null): { light: number; read: number } | null {
+/** The models of the passes: the light one, the reader, the writer. */
+export interface PassModels {
+  light: string;
+  full: string;
+  write: string;
+}
+
+export function passModels(): PassModels {
+  return { light: ancillaryModel("mail_read_light"), full: ancillaryModel("mail_read_full"), write: ancillaryModel(WRITE_INVOCATION) };
+}
+
+export function unitCostsFromHistory(jobId: string | null, counts: { judged?: number; read?: number } | null, models: PassModels = passModels()): { light: number; read: number } | null {
   if (!jobId || !counts || (counts.judged ?? 0) < MIN_JUDGED || (counts.read ?? 0) < MIN_READ) return null;
-  const light = ancillaryModel("mail_read_light");
-  if (light === ancillaryModel("mail_read_full") || light === ancillaryModel(WRITE_INVOCATION)) return null;
+  const light = models.light;
+  if (light === models.full || light === models.write) return null;
   const rows = db.query(`SELECT model, SUM(cost_usd) AS cost FROM spend_ledger WHERE job_id = ? GROUP BY model`).all(jobId) as Array<{ model: string; cost: number }>;
   const total = rows.reduce((s, r) => s + Number(r.cost ?? 0), 0);
   const lightCost = rows.filter((r) => r.model === light).reduce((s, r) => s + Number(r.cost ?? 0), 0);
@@ -88,28 +99,28 @@ export function unitCostsFromHistory(jobId: string | null, counts: { judged?: nu
 }
 
 /** The same without a history: the price sheet on the calibration. */
-export function unitCostsFromFormula(cal: Calibration | null): { light: number; read: number } | null {
+export function unitCostsFromFormula(cal: Calibration | null, models: PassModels = passModels()): { light: number; read: number } | null {
   if (!cal || cal.sampled <= 0) return null;
   const o = passOverhead();
   const preview = cal.preview_tokens > 0 ? cal.preview_tokens : 140;
   const body = cal.tokens / cal.sampled;
-  const light = eurosFor(ancillaryModel("mail_read_light"), preview + o.light_in, o.light_out);
-  const full = eurosFor(ancillaryModel("mail_read_full"), body + o.full_in, o.full_out);
-  const doc = eurosFor(ancillaryModel(WRITE_INVOCATION), DOC_IN, DOC_OUT);
+  const light = eurosFor(models.light, preview + o.light_in, o.light_out);
+  const full = eurosFor(models.full, body + o.full_in, o.full_out);
+  const doc = eurosFor(models.write, DOC_IN, DOC_OUT);
   if (light === null || full === null || doc === null) return null;
   return { light, read: full + doc };
 }
 
 /** Every mailbox with its estimate. `payload` is what `scan_status` answered. */
-export function mailboxViews(payload: any): MailboxView[] {
+export function mailboxViews(payload: any, models: PassModels = passModels()): MailboxView[] {
   const boxes = (Array.isArray(payload?.mailboxes) ? payload.mailboxes : []) as Array<{ address: string; messages: number; untriaged: number; reading: BoxReading }>;
   const job = payload?.reading ?? null;
   const counts = job?.counts ?? null;
   const judged = boxes.reduce((s, b) => s + b.reading.kept + b.reading.skipped, 0);
   const keptAll = boxes.reduce((s, b) => s + b.reading.kept, 0);
   const keep = judged >= 200 ? keptAll / judged : DEFAULT_KEEP;
-  const history = unitCostsFromHistory(job?.id ?? null, counts);
-  const units = history ?? unitCostsFromFormula(payload?.calibration ?? null);
+  const history = unitCostsFromHistory(job?.id ?? null, counts, models);
+  const units = history ?? unitCostsFromFormula(payload?.calibration ?? null, models);
   return boxes.map((b) => {
     const r = b.reading;
     // Not sorted yet: its window is unknown, the whole box stands for it.

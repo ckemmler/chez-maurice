@@ -60,18 +60,21 @@ test("the member's own reading prices it when there is enough of it", () => {
     db.run(`INSERT INTO spend_ledger (provider, model, cost_usd, user_id, job_id) VALUES ('x', ?, ?, 'est-m', ?)`, [model, cost, job]);
   spend(LIGHT, 2); // 2 € for 20 000 sorted
   spend(FULL, 1.5); spend(WRITE, 2.5); // 4 € for 2 000 read
-  const u = est.unitCostsFromHistory(job, { judged: 20000, read: 2000 })!;
+  const models = { light: LIGHT, full: FULL, write: WRITE };
+  const u = est.unitCostsFromHistory(job, { judged: 20000, read: 2000 }, models)!;
   expect(u.light).toBeCloseTo(0.0001, 6);
   expect(u.read).toBeCloseTo(0.002, 6);
   const [v] = est.mailboxViews({
     reading: { id: job, counts: { judged: 20000, read: 2000 } },
     mailboxes: [box("new@x", 5000, 0, { window: 5000, to_light: 1000, kept: 250, skipped: 750, to_read: 0 })],
-  });
+  }, models);
   expect(v!.estimate!.basis).toBe("history");
   // 1 000 to sort at 0.0001, 250 to read at 0.002.
   expect(v!.estimate!.euros).toBe(0.6);
   // Too little history: not used.
-  expect(est.unitCostsFromHistory(job, { judged: 100, read: 10 })).toBeNull();
+  expect(est.unitCostsFromHistory(job, { judged: 100, read: 10 }, models)).toBeNull();
+  // One model for sorting and reading: the ledger cannot tell them apart.
+  expect(est.unitCostsFromHistory(job, { judged: 20000, read: 2000 }, { light: FULL, full: FULL, write: WRITE })).toBeNull();
 });
 
 test("a mailbox not sorted yet is estimated, and says the numbers will move", () => {
