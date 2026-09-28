@@ -53,6 +53,7 @@ import { localiseRemoteImages } from "./src/services/gardenImages";
 import { scheduleDocsRefresh } from "./src/services/mauriceDocsRefresh";
 import { scheduleCorpusNightly } from "./src/services/corpusNightly";
 import { scheduleMailNightly } from "./src/services/mailScan";
+import { ensureMailConversationTitles } from "./src/services/mailApproval";
 import { scheduleDomainBriefsNightly } from "./src/services/domainBriefs";
 import { scheduleDomainMappingNightly } from "./src/services/domainMapping";
 import domains from "./src/routes/domains";
@@ -221,6 +222,12 @@ scheduleCorpusNightly();
 // pick up the new mail of every member with a mailbox (see
 // services/mailScan.ts).
 scheduleMailNightly();
+// A mail conversation opened for one mailbox speaks of all of them once
+// there are several: its title says so (services/mailApproval.ts).
+{
+  const renamed = ensureMailConversationTitles();
+  if (renamed) console.log(`[mail] ${renamed} mail conversation(s) retitled for all the member's mailboxes`);
+}
 // The domain briefs: an hour after the corpus, rewrite each member's briefs
 // from what touched their domains since (see services/domainBriefs.ts).
 scheduleDomainBriefsNightly();

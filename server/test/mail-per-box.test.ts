@@ -67,3 +67,18 @@ test("in the conversation, a yes to one mailbox marks that one alone", async () 
   expect(accounts.approvedMailboxAddresses(M).sort()).toEqual(["first@example.org", "later@example.org"]);
   expect((await approval.runMailTool({ action: "approve", mailbox: "nobody@example.org" }, mc.conversation_id)).isError).toBe(true);
 });
+
+test("with more than one mailbox, the mail conversation speaks of all the mail, and says which mailboxes a message is about", async () => {
+  const docs = await import("../src/services/mailDocuments");
+  const mc = approval.mailConversationOf(M)!;
+  db.run(`UPDATE conversations SET title = 'Ta boîte Proton, en chiffres' WHERE id = ?`, [mc.conversation_id]);
+  expect(approval.ensureMailConversationTitle(M)).toBe(true); // two mailboxes by now
+  const title = (db.query(`SELECT title FROM conversations WHERE id = ?`).get(mc.conversation_id) as { title: string }).title;
+  expect(title).not.toContain("Proton");
+  expect(approval.ensureMailConversationTitle(M)).toBe(false); // once
+  const run = { outcome: "written", member_id: M, written: [{ kind: "person", key: "k", slug: "s", title: "Salman", web_path: "/x", sources: 1 }],
+    skipped: { unchanged: 0, deleted: 0, too_few: 0, declined: 0 }, cost: 0, model: "m", error: null, said: null, mailboxes: ["later@example.org"] } as any;
+  const id = docs.sayDocumentsWritten(M, run, { root: "/tmp/none", username: M })!;
+  const said = (db.query(`SELECT content FROM messages WHERE id = ?`).get(id) as { content: string }).content;
+  expect(said).toContain("later@example.org");
+});

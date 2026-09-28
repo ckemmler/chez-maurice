@@ -11,7 +11,7 @@ import { LANGUAGE, memberLocale } from "./domainBriefs";
 import { parseJsonObject } from "./domainMapping";
 import { freeSlug } from "./domainSeeding";
 import { listMailAccounts } from "./mailAccounts";
-import { mailConversationOf } from "./mailApproval";
+import { ensureMailConversationTitle, mailConversationOf } from "./mailApproval";
 import { mailOpenerStrings } from "./mailOpener";
 import { mailToolCall } from "./mailScan";
 import { contactCards, type ContactCard } from "./contactAccounts";
@@ -110,6 +110,8 @@ export interface DocumentsRun {
   model: string;
   error: string | null;
   said: string | null;
+  /** The mailboxes the notes written come from — their new messages. */
+  mailboxes?: string[];
 }
 
 export interface MailDocumentsDeps {
@@ -581,6 +583,12 @@ async function documentsPass(memberId: string, d: MailDocumentsDeps): Promise<Do
   const now = d.now?.() ?? new Date();
   const model = ancillaryModel(WRITE_INVOCATION);
   const run: DocumentsRun = { outcome: "nothing", member_id: memberId, written: [], skipped: { unchanged: 0, deleted: 0, too_few: 0, declined: 0 }, cost: 0, model, error: null, said: null };
+  /** Where the new messages behind the written notes were read. */
+  const fromBoxes = new Set<string>();
+  const noteBoxes = (msgs: MaterialMessage[], known: Iterable<string>) => {
+    const k = new Set(known);
+    for (const m of msgs) if (!k.has(m.id)) for (const b of m.mailboxes ?? []) fromBoxes.add(String(b).toLowerCase());
+  };
   const fail = (outcome: DocumentsRun["outcome"], error: string): DocumentsRun => { run.outcome = outcome; run.error = error; return run; };
 
   const garden = gardenFor(memberId);
@@ -696,6 +704,7 @@ async function documentsPass(memberId: string, d: MailDocumentsDeps): Promise<Do
       } else {
         files.push(...o.files);
         recorded.push({ kind: "person", key: p.key, slug: o.basename, locale: o.locale, title: o.title, sources: o.covered });
+        noteBoxes(p.messages, artefact?.sources ?? []);
         run.written.push({ kind: "person", key: p.key, slug: o.basename, title: o.title, web_path: o.webPath, sources: o.cited });
       }
     });
@@ -752,6 +761,7 @@ async function documentsPass(memberId: string, d: MailDocumentsDeps): Promise<Do
       // forty the model read: otherwise a longer thread is rewritten every
       // night.
       recorded.push({ kind, key: g.key, slug, locale, title: rendered.title, sources: g.messages.map((m) => m.id) });
+      noteBoxes(g.messages, existing?.sources ?? []);
       run.written.push({ kind, key: g.key, slug, title: rendered.title, web_path: noteWebPath(garden.username, locale, slug), sources: rendered.ids.length });
     });
   } catch (err) {
@@ -807,6 +817,7 @@ async function documentsPass(memberId: string, d: MailDocumentsDeps): Promise<Do
       console.warn(`[mail] documents for ${memberId}: documents_record failed: ${(err as Error).message}`);
     }
   }
+  run.mailboxes = [...fromBoxes].sort();
   if (run.written.length) {
     if (run.outcome === "nothing") run.outcome = "written";
     // Maurice speaks of fiches and digests, not of the index alone.
@@ -830,7 +841,12 @@ export function sayDocumentsWritten(memberId: string, run: DocumentsRun, garden:
   const digests = run.written.filter((n) => n.kind === "thread").length;
   const hub = run.written.find((n) => n.kind === "hub");
   const lines = run.written.filter((n) => n.kind !== "hub").slice(0, 12).map((n) => `- ${n.title}`);
-  const text = [t.written.replace("%1", String(fiches)).replace("%2", String(digests)), hub ? hub.web_path : "", lines.join("\n")].filter(Boolean).join("\n\n");
+  // Which mailboxes: the conversation speaks of all of them.
+  const labels = mailboxLabels(listMailAccounts(memberId));
+  const boxes = (run.mailboxes ?? []).map((b) => labels.get(b) ?? b);
+  const from = boxes.length ? " " + t.from_boxes.replace("%s", joinList(boxes, memberLocale(memberId))) : "";
+  const text = [t.written.replace("%1", String(fiches)).replace("%2", String(digests)) + from, hub ? hub.web_path : "", lines.join("\n")].filter(Boolean).join("\n\n");
+  ensureMailConversationTitle(memberId);
   const msg = addMessage(mc.conversation_id, "assistant", text, { mauriceId: null });
   publishToRoom(mc.conversation_id, { type: "message", message: msg });
   return msg.id;
@@ -983,4 +999,13 @@ export function startMailDocuments(memberId: string): Promise<DocumentsRun> {
 
 export function mailDocumentsStatus(memberId: string): { running: boolean; last: DocumentsRun | null } {
   return { running: inflight.has(memberId), last: lastRuns.get(memberId) ?? null };
+}
+
+/** "Proton, Gmail et candide@contactoffice.com", in the member's language. */
+function joinList(items: string[], locale: string): string {
+  try {
+    return new Intl.ListFormat(locale, { style: "long", type: "conjunction" }).format(items);
+  } catch {
+    return items.join(", ");
+  }
 }

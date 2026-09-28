@@ -93,6 +93,11 @@ export interface MailOpenerStrings {
   declined: string;
   /** Lot 5: what he wrote — %1 fiches, %2 digests. */
   written: string;
+  /** The conversation's title once the member has more than one mailbox:
+   *  it speaks of all their mail, not of the one it was opened for. */
+  title_all: string;
+  /** Which mailboxes a message is about (28 September 2026). */
+  from_boxes: string;
   numbers: string[];
 }
 
@@ -109,6 +114,8 @@ const NUMBERS: Record<string, string[]> = {
 export const MAIL_OPENER_STRINGS: Record<string, MailOpenerStrings> = {
   en: {
     title: "Your mailbox, in numbers",
+    title_all: "Your mail",
+    from_boxes: "What I read came from %s.",
     all: "I have walked the headers of your mailbox: %1 messages in all, %2 of them newsletters and notifications.",
     window: "Over the last %1 years I count %2 real exchanges.",
     offer: "I can read them, over %1, and tell you who matters to you and what is going on.",
@@ -122,6 +129,8 @@ export const MAIL_OPENER_STRINGS: Record<string, MailOpenerStrings> = {
   },
   fr: {
     title: "Ta boîte mail, en chiffres",
+    title_all: "Ton courrier",
+    from_boxes: "Ce que j'ai lu venait de %s.",
     all: "J'ai relevé les en-têtes de ta boîte : %1 messages en tout, dont %2 lettres d'information et notifications.",
     window: "Sur les %1 dernières années, j'y compte %2 vrais échanges.",
     offer: "Je peux les lire, sur %1, et te dire qui compte pour toi et ce qui est en cours.",
@@ -135,6 +144,8 @@ export const MAIL_OPENER_STRINGS: Record<string, MailOpenerStrings> = {
   },
   it: {
     title: "La tua casella, in cifre",
+    title_all: "La tua posta",
+    from_boxes: "Ciò che ho letto veniva da %s.",
     all: "Ho raccolto le intestazioni della tua casella: %1 messaggi in tutto, di cui %2 newsletter e notifiche.",
     window: "Negli ultimi %1 anni ci conto %2 scambi veri.",
     offer: "Posso leggerli, in %1, e dirti chi conta per te e cosa è in corso.",
@@ -148,6 +159,8 @@ export const MAIL_OPENER_STRINGS: Record<string, MailOpenerStrings> = {
   },
   de: {
     title: "Dein Postfach, in Zahlen",
+    title_all: "Deine Post",
+    from_boxes: "Was ich gelesen habe, kam aus %s.",
     all: "Ich habe die Kopfzeilen deines Postfachs erfasst: %1 Nachrichten insgesamt, davon %2 Newsletter und Benachrichtigungen.",
     window: "In den letzten %1 Jahren zähle ich %2 echte Wechsel.",
     offer: "Ich kann sie lesen, über %1, und dir sagen, wer für dich zählt und was gerade läuft.",
@@ -161,6 +174,8 @@ export const MAIL_OPENER_STRINGS: Record<string, MailOpenerStrings> = {
   },
   es: {
     title: "Tu buzón, en cifras",
+    title_all: "Tu correo",
+    from_boxes: "Lo que leí venía de %s.",
     all: "He recorrido las cabeceras de tu buzón: %1 mensajes en total, %2 de ellos boletines y notificaciones.",
     window: "En los últimos %1 años cuento %2 intercambios reales.",
     offer: "Puedo leerlos, en %1, y decirte quién cuenta para ti y qué está en marcha.",
@@ -174,6 +189,8 @@ export const MAIL_OPENER_STRINGS: Record<string, MailOpenerStrings> = {
   },
   pt: {
     title: "A tua caixa, em números",
+    title_all: "O teu correio",
+    from_boxes: "O que li vinha de %s.",
     all: "Levantei os cabeçalhos da tua caixa: %1 mensagens ao todo, %2 delas newsletters e notificações.",
     window: "Nos últimos %1 anos conto %2 trocas reais.",
     offer: "Posso lê-las, em %1, e dizer-te quem conta para ti e o que está em curso.",
@@ -187,6 +204,8 @@ export const MAIL_OPENER_STRINGS: Record<string, MailOpenerStrings> = {
   },
   nl: {
     title: "Je mailbox, in cijfers",
+    title_all: "Je mail",
+    from_boxes: "Wat ik las kwam uit %s.",
     all: "Ik heb de koppen van je mailbox doorlopen: %1 berichten in totaal, waarvan %2 nieuwsbrieven en meldingen.",
     window: "Over de laatste %1 jaar tel ik %2 echte uitwisselingen.",
     offer: "Ik kan ze lezen, in %1, en je zeggen wie voor jou telt en wat er speelt.",

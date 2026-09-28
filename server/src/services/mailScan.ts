@@ -3,11 +3,11 @@ import { dirname, join } from "node:path";
 import { getAppDir } from "../../lib/appDir";
 import { isDue } from "./corpusNightly";
 import { memberLocale } from "./domainBriefs";
-import { describeCost, mailOpeningTitle, readingCost, renderMailOpening, type ReadingEstimate } from "./mailOpener";
+import { describeCost, mailOpenerStrings, mailOpeningTitle, readingCost, renderMailOpening, type ReadingEstimate } from "./mailOpener";
 import { corpusCall } from "./mcpClient";
 import { openConversation, type OpenRequest, type OpenResult } from "./openedConversations";
 import { listUsers } from "./users";
-import { backfillMailConversations, linkMailConversation, mailConversationOf } from "./mailApproval";
+import { backfillMailConversations, ensureMailConversationTitle, linkMailConversation, mailConversationOf } from "./mailApproval";
 import { readingWanted, startMailReading } from "./mailReading";
 import { mailboxViews, newMailboxNotice, type MailboxView } from "./mailboxEstimate";
 import { addMessage } from "./conversations";
@@ -270,6 +270,7 @@ export function analyseMailboxInBackground(memberId: string, accountId: string |
 function sayNewMailbox(memberId: string, address: string, box: MailboxView): void {
   const mc = mailConversationOf(memberId);
   if (!mc) return;
+  ensureMailConversationTitle(memberId);
   const msg = addMessage(mc.conversation_id, "assistant", newMailboxNotice(memberLocale(memberId), address, box), { mauriceId: null });
   publishToRoom(mc.conversation_id, { type: "message", message: msg });
   console.log(`[mail] ${address} added after the yes for ${memberId}: said in the mail conversation, waiting for its own yes`);
@@ -472,7 +473,7 @@ async function announce(memberId: string, est: ReadingEstimate, d: MailScanDeps,
   if (ms.announced_at) return false;
   const locale = d.locale(memberId);
   const text = renderMailOpening({ locale, estimate: est });
-  const opened = await d.open({ memberId, text, title: mailOpeningTitle(locale), force: true });
+  const opened = await d.open({ memberId, text, title: listMailAccounts(memberId).length > 1 ? mailOpenerStrings(locale).title_all : mailOpeningTitle(locale), force: true });
   if (!opened.ok) throw new Error(`the conversation could not be opened: ${opened.reason}`);
   ms.announced_at = now.toISOString();
   ms.conversation_id = opened.conversation.id;

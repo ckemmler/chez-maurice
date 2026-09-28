@@ -94,6 +94,28 @@ function mirror(memberId: string, reading: ReadingState): void {
   db.run(`UPDATE mail_conversations SET reading = ?, decided_at = datetime('now') WHERE member_id = ?`, [reading, memberId]);
 }
 
+// ── The conversation's title ─────────────────────────────────────────────
+
+/** The mail conversation speaks of all the member's mail: opened for one
+ *  mailbox ("Ta boîte Proton, en chiffres"), it read as that mailbox's
+ *  once a second was added, and what Maurice wrote there about the other
+ *  looked like news from the first (28 September 2026). With more than one
+ *  mailbox its title is the member's mail as a whole. Returns whether it
+ *  changed. */
+export function ensureMailConversationTitle(memberId: string): boolean {
+  const mc = mailConversationOf(memberId);
+  if (!mc || listMailAccounts(memberId).length < 2) return false;
+  const title = mailOpenerStrings(memberLocale(memberId)).title_all;
+  const r = db.run(`UPDATE conversations SET title = ? WHERE id = ? AND COALESCE(title, '') != ?`, [title, mc.conversation_id, title]);
+  return Number(r.changes ?? 0) > 0;
+}
+
+/** Every member's, once at start: conversations opened before the rule. */
+export function ensureMailConversationTitles(): number {
+  const rows = db.query(`SELECT member_id FROM mail_conversations`).all() as Array<{ member_id: string }>;
+  return rows.filter((r) => ensureMailConversationTitle(r.member_id)).length;
+}
+
 // ── The act ──────────────────────────────────────────────────────────────
 
 export type ReadingAction = "approve" | "decline";
@@ -143,6 +165,7 @@ export function readingReply(action: ReadingAction, locale: string): string {
 export function sayReadingDecided(memberId: string, action: ReadingAction): string | null {
   const mc = mailConversationOf(memberId);
   if (!mc) return null;
+  ensureMailConversationTitle(memberId);
   const msg = addMessage(mc.conversation_id, "assistant", readingReply(action, memberLocale(memberId)), { mauriceId: null });
   publishToRoom(mc.conversation_id, { type: "message", message: msg });
   return msg.id;
