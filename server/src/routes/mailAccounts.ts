@@ -69,7 +69,11 @@ accounts.get("/", (c) => c.json({ accounts: listMailAccounts(c.get("userId")).ma
 /** The operator sees what a reading costs; a member sees the volume and the
  *  time (the rule of 26 September 2026: no money shown to members). */
 function forViewer(uid: string, v: ScanView): ScanView {
-  return getUser(uid)?.role === "admin" ? v : { ...v, mailboxes: withoutMoney(v.mailboxes) };
+  // For the app, "running" is anything under way on the member's mail —
+  // the header walk or a reading — so it shows the reading and follows it.
+  // The services keep the walk's own flag (walkMailbox waits on it).
+  const shown = { ...v, running: v.running || mailReadingStatus(uid).running };
+  return getUser(uid)?.role === "admin" ? shown : { ...shown, mailboxes: withoutMoney(shown.mailboxes) };
 }
 
 /** Add a mailbox: `{ address, password }`, plus `provider` for a Google
