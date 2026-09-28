@@ -777,6 +777,9 @@
 "review.confirm_all" = "Confirm all";
 "review.relation" = "The relationship";
 "review.no_relation" = "No relationship written yet.";
+"review.proposed" = "Maurice proposes an updated relation, from the mail read since";
+"review.proposed.accept" = "Replace the relation";
+"review.proposed.refuse" = "Keep the current one";
 "review.addresses" = "Addresses";
 "review.fragments" = "What the mail says";
 "review.exchanges" = "The exchanges";

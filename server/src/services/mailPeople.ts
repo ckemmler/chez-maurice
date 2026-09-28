@@ -320,6 +320,18 @@ export function sectionOf(body: string, heading: string): string | null {
   return lines.slice(start + 1, end).join("\n").trim();
 }
 
+/** The section put right after another one (or replaced where it is). */
+export function placeAfter(body: string, heading: string, text: string, after: string): string {
+  if (sectionOf(body, heading) !== null) return withSection(body, heading, text);
+  const lines = body.replace(/\s+$/, "").split("\n");
+  const start = lines.findIndex((l) => l.trim() === `## ${after}`);
+  if (start < 0) return withSection(body, heading, text);
+  let end = lines.length;
+  for (let i = start + 1; i < lines.length; i++) if (/^##\s/.test(lines[i]!)) { end = i; break; }
+  const out = [...lines.slice(0, end), "", `## ${heading}`, "", text, "", ...lines.slice(end)];
+  return out.join("\n").replace(/\n{3,}/g, "\n\n").trimEnd() + "\n";
+}
+
 /** The body with that section's text replaced, or the section put first. */
 export function withSection(body: string, heading: string, text: string): string {
   const lines = body.split("\n");
@@ -588,6 +600,61 @@ export function personSystem(member: string, language: string, opts: { known: bo
   );
 }
 
+// ── A confirmed relation, revisited ──────────────────────────────────────
+//
+// A relation the member confirmed is never rewritten: their word prevails.
+// But it was confirmed on what had been read then — on the owner's first
+// mailbox, a colleague was "someone who sends New Year wishes" — and a
+// mailbox read later can change who the person is. So the relation keeps
+// what it rests on (`basis`: how many of the person's messages it saw, and
+// from which mailboxes); when the person has grown — REVISIT_MIN more
+// messages, or messages from a mailbox the basis did not have — Maurice
+// writes a revised relation beside the confirmed one, under its own heading,
+// for the member to accept or refuse (services/personReview.ts). Nothing is
+// replaced without them; asked once per growth, not every night.
+
+/** More messages than the basis before a confirmed relation is revisited. */
+export const REVISIT_MIN = 5;
+
+export interface RelationBasis {
+  messages: number;
+  mailboxes: string[];
+}
+
+/** What a relation rests on: recorded since 28 September 2026; for an older
+ *  one, the person's messages up to the newest one it cites — what there
+ *  was when it was written. A relation citing nothing that is still in the
+ *  material rests on everything there is (nothing to revisit). */
+export function relationBasis(rel: Record<string, any>, messages: MaterialMessage[]): RelationBasis {
+  if (rel.basis && typeof rel.basis.messages === "number") {
+    return { messages: rel.basis.messages, mailboxes: Array.isArray(rel.basis.mailboxes) ? rel.basis.mailboxes.map(String) : [] };
+  }
+  const cited = new Set((Array.isArray(rel.sources) ? rel.sources : []).map(String));
+  const upTo = messages.filter((m) => cited.has(m.id)).map((m) => m.date ?? "").sort().at(-1);
+  const seen = upTo ? messages.filter((m) => (m.date ?? "") <= upTo) : messages;
+  return { messages: seen.length, mailboxes: [...new Set(seen.flatMap((m) => m.mailboxes ?? []))] };
+}
+
+export function basisNow(messages: MaterialMessage[]): RelationBasis {
+  return { messages: messages.length, mailboxes: [...new Set(messages.flatMap((m) => m.mailboxes ?? []))].sort() };
+}
+
+/** Whether the person has grown enough past the relation's basis. */
+export function relationGrown(rel: Record<string, any>, messages: MaterialMessage[]): boolean {
+  const b = relationBasis(rel, messages);
+  const now = basisNow(messages);
+  return now.messages - b.messages >= REVISIT_MIN || now.mailboxes.some((x) => !b.mailboxes.includes(x));
+}
+
+export function revisitSystem(member: string, language: string, confirmed: string): string {
+  return (
+    `You keep, for ${member}, who a person is to them. ${member} confirmed this relation: « ${confirmed} ». ` +
+    `More of their mail with this person has been read since. If the messages below show that the relation is now materially different or broader — another role, another context: a colleague, not only someone who sends greetings — write the revised relation in one or two sentences, dated (since when, until when if it ended), keeping what still holds of the confirmed one. If the confirmed relation still says it well, answer null. ` +
+    `Write in ${language}, addressing ${member} in the second person and in the familiar register (in French, tu); do not assume ${member}'s gender. EVERY sentence ends with the numbers of the messages it comes from, in brackets, like [3] or [1][4]. ${UNTRUSTED} ` +
+    `Answer with JSON only: {"relation": {"text": "one or two sentences [n]", "since": "YYYY-MM or null", "until": "YYYY-MM or null"}} or {"relation": null}.`
+  );
+}
+
 // ── One person ───────────────────────────────────────────────────────────
 
 export interface PersonContext {
@@ -662,6 +729,30 @@ export async function writePerson(ctx: PersonContext, p: Person): Promise<Person
     }
   }
   const exchanges = ctx.exchanges ? exchangesSection(ctx.exchanges, w, locale, ctx.labels) : null;
+
+  // A confirmed relation the person has outgrown: a revision proposed
+  // beside it, never in its place. Asked once per growth — the basis moves
+  // on whatever the model answers.
+  if (ref && relFm.status === "confirmed" && !relFm.proposed && relText && relationGrown(relFm, p.messages)) {
+    const material = p.messages.slice(-MAX_PER_NOTE);
+    const confirmed = relText.replace(/\s*[—;]?\s*\[[^\]]*\]\(maurice-mail:[^)]*\)/g, "").replace(/\s+/g, " ").trim();
+    const rr = await ctx.ask(revisitSystem(ctx.member, ctx.language, confirmed), materialBlock(material));
+    const dd = parseJsonObject(rr.text);
+    const proposal = dd?.relation && typeof dd.relation.text === "string" ? sourcedLine(dd.relation.text, material, locale, ctx.labels) : null;
+    const ymd = (v: unknown) => (typeof v === "string" && /^\d{4}(-\d{2})?$/.test(v) ? v : null);
+    relFm.basis = basisNow(p.messages);
+    if (proposal) {
+      ref.body = placeAfter(ref.body, w.relationProposed, proposal.text, w.relationship);
+      relFm.proposed = {
+        sources: proposal.ids, since: ymd(dd.relation.since), until: ymd(dd.relation.until),
+        written_hash: fragmentHash(proposal.text), model: rr.model, written_at: now.toISOString().replace(/\.\d{3}Z$/, "Z"),
+      };
+    }
+    ref.fm = { ...ref.fm, relation: relFm };
+    atomicWrite(ref.file, `---\n${dumpFrontmatter(ref.fm)}\n---\n\n${ref.body.replace(/^\n+/, "")}`);
+    if (!touchedIds.includes(ref.file)) touchedIds.push(ref.file);
+  }
+
   const covered = new Set<string>([...(a?.sources ?? []), ...fragments.flatMap((f) => f.sources)]);
   const fresh = p.messages.filter((m) => !covered.has(m.id));
   if (!fresh.length && !force) {
@@ -782,6 +873,7 @@ export async function writePerson(ctx: PersonContext, p: Person): Promise<Person
       until: typeof d.relation.until === "string" && /^\d{4}(-\d{2})?$/.test(d.relation.until) ? d.relation.until : null,
       sources: newRelation.ids,
       written_hash: fragmentHash(newRelation.text),
+      basis: basisNow(p.messages),
     };
   } else if (relEdited) {
     relation = { ...relFm, status: "confirmed" };

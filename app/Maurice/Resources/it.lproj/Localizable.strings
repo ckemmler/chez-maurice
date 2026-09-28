@@ -777,6 +777,9 @@
 "review.confirm_all" = "Conferma tutto";
 "review.relation" = "La relazione";
 "review.no_relation" = "Nessuna relazione scritta per ora.";
+"review.proposed" = "Maurice propone una relazione aggiornata, dalla posta letta da allora";
+"review.proposed.accept" = "Sostituisci la relazione";
+"review.proposed.refuse" = "Tieni quella attuale";
 "review.addresses" = "Indirizzi";
 "review.fragments" = "Cosa dice la posta";
 "review.exchanges" = "Gli scambi";

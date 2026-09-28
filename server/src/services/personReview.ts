@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { atomicWrite, autoCommit, dumpFrontmatter, fichePath, fragmentsDir, parseFiche, type GardenRef } from "../../data-api/services/gardenFiche";
 import { invalidateNotes } from "./composer/notes";
-import { fragmentHash, sectionOf, splitAddress, withSection, type Status } from "./mailPeople";
+import { fragmentHash, sectionOf, splitAddress, withSection, withoutSection, type Status } from "./mailPeople";
 import { syncCorpus, wordsFor } from "./mailDocuments";
 
 // The member's word on a person fiche — lot 4 of specs/contacts.md,
@@ -26,7 +26,7 @@ import { syncCorpus, wordsFor } from "./mailDocuments";
 // marked `rewrite`, so the next pass writes the pending fragments again
 // knowing who the person is.
 
-export type Target = "fiche" | "relation" | "identity" | "fragment" | "all";
+export type Target = "fiche" | "relation" | "proposal" | "identity" | "fragment" | "all";
 export type Action = "confirm" | "reject" | "edit";
 
 export class ReviewError extends Error {
@@ -53,7 +53,11 @@ export interface PersonView {
   basename: string;
   status: Status;
   byMaurice: boolean;
-  relation: { text: string | null; status: Status | null; since: string | null; until: string | null; edited: boolean };
+  relation: {
+    text: string | null; status: Status | null; since: string | null; until: string | null; edited: boolean;
+    /** Maurice's revision of a confirmed relation, waiting for the member's word. */
+    proposed: { text: string; since: string | null; until: string | null } | null;
+  };
   identities: Array<{ address: string; mailboxes: string[]; status: Status; source: string; conflict: string | null }>;
   fragments: FragmentView[];
   /** The exchanges section, as written (read-only: the pass rewrites it). */
@@ -112,6 +116,9 @@ export function personView(garden: GardenRef, locale: string, basename: string):
     since: rel?.since ? String(rel.since) : null,
     until: rel?.until ? String(rel.until) : null,
     edited: relEdited,
+    proposed: rel?.proposed && sectionOf(body, w.relationProposed)
+      ? { text: sectionOf(body, w.relationProposed)!, since: rel.proposed.since ? String(rel.proposed.since) : null, until: rel.proposed.until ? String(rel.proposed.until) : null }
+      : null,
   };
   const identities = (Array.isArray(fm.identities) ? fm.identities : []).map((i: any) => ({
     address: String(i.address ?? ""), mailboxes: Array.isArray(i.mailboxes) ? i.mailboxes.map(String) : [],
@@ -120,7 +127,7 @@ export function personView(garden: GardenRef, locale: string, basename: string):
   const fragments = fragmentFiles(file).map((f) => { const { fm: _fm, ...v } = readFragment(f); return v; });
   // A fiche the member wrote, with no status of its own, is theirs: confirmed.
   const status: Status = fm.status ? statusOf(fm.status) : fm.meta?.author === "maurice" ? "pending" : "confirmed";
-  const pending = (status === "pending" ? 1 : 0) + (relation.status === "pending" ? 1 : 0)
+  const pending = (status === "pending" ? 1 : 0) + (relation.status === "pending" ? 1 : 0) + (relation.proposed ? 1 : 0)
     + identities.filter((i) => i.status === "pending").length + fragments.filter((f) => f.status === "pending").length;
   return {
     title: String(fm.title ?? basename), locale, basename, status, byMaurice: fm.meta?.author === "maurice",
@@ -182,6 +189,28 @@ export function review(
     writeFiche(file, fm, nextBody);
     finish(memberId, garden, touched, `People: ${basename}, relation ${action}ed`);
     return personView(garden, locale, basename);
+  } else if (target === "proposal") {
+    // Maurice's revision of a confirmed relation: accepted, it becomes the
+    // relation (confirmed, its sources and dates); refused, it goes, and the
+    // relation stays — the basis already moved, so it is not asked again
+    // before the person grows again.
+    const rel: Record<string, any> = fm.relation && typeof fm.relation === "object" ? { ...fm.relation } : {};
+    const text = sectionOf(body, w.relationProposed);
+    if (!rel.proposed || !text) throw new ReviewError("no relation proposed on this fiche", 404);
+    if (action === "edit") throw new ReviewError("a proposal is accepted or refused; edit the relation itself");
+    let nextBody = withoutSection(body, w.relationProposed);
+    if (action === "confirm") {
+      nextBody = withSection(nextBody, w.relationship, text);
+      Object.assign(rel, {
+        status: "confirmed", sources: rel.proposed.sources ?? [], since: rel.proposed.since ?? rel.since ?? null,
+        until: rel.proposed.until ?? null, written_hash: fragmentHash(text),
+      });
+    }
+    delete rel.proposed;
+    fm.relation = rel;
+    writeFiche(file, fm, nextBody);
+    finish(memberId, garden, touched, `People: ${basename}, proposed relation ${action === "confirm" ? "accepted" : "refused"}`);
+    return personView(garden, locale, basename);
   } else if (target === "identity") {
     const ids: any[] = Array.isArray(fm.identities) ? fm.identities : [];
     const i = ids.find((x) => String(x.address).toLowerCase() === String(req.id ?? "").toLowerCase());
@@ -228,7 +257,7 @@ export function review(
     }
     what = "all confirmed";
   } else {
-    throw new ReviewError("target is fiche, relation, identity, fragment or all");
+    throw new ReviewError("target is fiche, relation, proposal, identity, fragment or all");
   }
   writeFiche(file, fm, body);
   finish(memberId, garden, touched, `People: ${basename}, ${what}`);

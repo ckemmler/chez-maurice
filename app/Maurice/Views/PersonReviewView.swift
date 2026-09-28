@@ -51,6 +51,14 @@ struct PersonReviewModel: Decodable, Equatable {
         let since: String?
         let until: String?
         let edited: Bool?
+        /// Maurice's revision of a confirmed relation, once more mail about
+        /// the person was read; nil when there is none (or an older server).
+        let proposed: Proposed?
+    }
+    struct Proposed: Decodable, Equatable {
+        let text: String
+        let since: String?
+        let until: String?
     }
     struct Identity: Decodable, Equatable {
         let address: String
@@ -456,6 +464,35 @@ struct PersonReviewView: View {
                 }
             } else {
                 Text(L("review.no_relation")).font(.system(size: 13)).foregroundStyle(theme.inkMute)
+            }
+            // A revision of the confirmed relation: beside it, never in its
+            // place, until the member takes it or leaves it.
+            if let p = m.relation.proposed {
+                element(status: "pending") {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Label(L("review.proposed"), systemImage: "arrow.triangle.2.circlepath")
+                            .font(.system(size: 12, weight: .semibold)).foregroundStyle(accent)
+                        markdown(p.text)
+                        if p.since != nil || p.until != nil {
+                            Text("\(p.since ?? "?") → \(p.until ?? "…")")
+                                .font(.system(size: 12)).foregroundStyle(theme.inkMute)
+                        }
+                    }
+                } actions: {
+                    Button {
+                        Task { await act(target: "proposal", action: "confirm", id: nil) }
+                    } label: {
+                        Label(L("review.proposed.accept"), systemImage: "checkmark")
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(accent)
+                    Button {
+                        Task { await act(target: "proposal", action: "reject", id: nil) }
+                    } label: {
+                        Label(L("review.proposed.refuse"), systemImage: "xmark")
+                    }
+                    .buttonStyle(.bordered)
+                }
             }
         }
     }

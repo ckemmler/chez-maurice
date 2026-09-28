@@ -777,6 +777,9 @@
 "review.confirm_all" = "Alles bevestigen";
 "review.relation" = "De relatie";
 "review.no_relation" = "Nog geen relatie geschreven.";
+"review.proposed" = "Maurice stelt een bijgewerkte relatie voor, op basis van de sindsdien gelezen mail";
+"review.proposed.accept" = "De relatie vervangen";
+"review.proposed.refuse" = "De huidige houden";
 "review.addresses" = "Adressen";
 "review.fragments" = "Wat de post zegt";
 "review.exchanges" = "De uitwisseling";
