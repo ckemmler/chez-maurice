@@ -44,7 +44,8 @@ function usage(c: number) {
 /** The night model, from the prompt's shape: naming, a split, or the opener. */
 async function write(req: { system?: string; prompt: string }) {
   requests.push(req);
-  const p = req.prompt;
+  // The group itself, not the list of what already exists that follows it.
+  const p = req.prompt.split(/\n\nDomains \S+ already has/)[0]!;
   const reply = (text: string) => ({ text, model: NIGHT, provider: "scaleway", stop: "end" as const, usage: usage(cost) });
   if (p.includes("Cut it into 2 to 4 domains")) {
     // Every numbered line whose title says "cats" goes to one part, "taxes" to the other.
@@ -56,12 +57,14 @@ async function write(req: { system?: string; prompt: string }) {
     }
     return reply(JSON.stringify({ domains: [{ name: "The cats", summary: "Your two cats.", conversations: cats }, { name: "Taxes", summary: "Your yearly return.", conversations: taxes }] }));
   }
-  if (p.includes("Return a JSON object with these keys")) {
+  if (req.prompt.includes("Return a JSON object with these keys")) {
     if (failNaming) throw new Error("model down");
     if (/violin/i.test(p)) return reply('Sure: {"name": "The violin", "summary": "You practise and ask about technique.", "is_domain": true, "split_hint": ""}');
     if (/bread/i.test(p)) return reply('{"name": "Baking bread", "summary": "Sourdough and machines.", "is_domain": true, "split_hint": ""}');
     if (/cat|tax/i.test(p)) return reply('{"name": "Home odds and ends", "summary": "Several things.", "is_domain": false, "split_hint": "the cats on one side, the taxes on the other"}');
     if (/sail/i.test(p)) return reply('{"name": "Sailing", "summary": "A summer that passed.", "is_domain": true, "split_hint": ""}');
+    if (/garden/i.test(p)) return reply('{"name": "The garden", "summary": "Tomatoes and a hedge.", "is_domain": true, "split_hint": ""}');
+    if (/violin practice/i.test(p)) return reply('{"name": "Violon", "summary": "…", "is_domain": true, "split_hint": "", "same_as": "The violin"}');
     return reply('{"name": "Misc", "summary": "…", "is_domain": true, "split_hint": ""}');
   }
   return reply("Bonjour Anna. Cette nuit j'ai relu nos conversations…\n\n- **The violin**\n- **Baking bread**\n\nDis-moi ce que tu en penses.");
@@ -129,6 +132,7 @@ beforeEach(() => {
   budget.setSystemDailyCap(null);
   db.run(`DELETE FROM spend_ledger WHERE user_id = 'system'`);
   db.run(`DELETE FROM domain_proposals`);
+  db.run(`DELETE FROM domain_seen`);
   db.run(`DELETE FROM domain_briefs`);
   db.run(`DELETE FROM conversations WHERE user_id IN (?, ?, ?, ?)`, [ANNA, KID, GUEST, BEN]);
   db.run(`DELETE FROM maurices WHERE created_by IN (?, ?, ?, ?)`, [ANNA, KID, GUEST, BEN]);
@@ -326,6 +330,54 @@ test("a proposal left unanswered expires, and the night maps again", async () =>
   expect(later.outcome).toBe("opened");
   expect(proposals.listProposals(ANNA, ["expired"])).toHaveLength(5);
   expect(proposals.openProposals(ANNA)).toHaveLength(5);
+});
+
+test("proposals open: the night no longer waits — what is new is proposed in the same conversation, what was seen is not named again", async () => {
+  annaCorpus();
+  const first = await mapping.mapMember(ANNA);
+  expect(first.outcome).toBe("opened");
+  const carrier = first.conversation_id!;
+  const violin = proposals.openProposals(ANNA).find((p) => p.name === "The violin")!;
+
+  // Nothing new: nothing named, nothing said.
+  requests = [];
+  const quiet = await mapping.mapMember(ANNA);
+  expect(quiet.outcome).toBe("waiting");
+  expect(requests).toHaveLength(0);
+
+  // New conversations: a garden that recurs, and more violin practice.
+  ["2026-06-02", "2026-07-02", "2026-08-02", "2026-09-02"].forEach((d, i) => convo(ANNA, `Garden hedge ${i}`, d));
+  ["2026-07-05", "2026-08-05", "2026-09-05"].forEach((d, i) => convo(ANNA, `Violin practice ${i}`, d));
+  requests = [];
+  const next = await mapping.mapMember(ANNA);
+  expect(next.outcome).toBe("followed_up");
+  expect(next.conversation_id).toBe(carrier);
+  // Only the groups with something new were named: the garden, the new violin.
+  const named = requests.filter((q) => q.prompt.includes("Return a JSON object with these keys"));
+  expect(named).toHaveLength(2);
+  expect(named.some((q) => /bread|sail|cat/i.test(q.prompt.split(/\n\nDomains \S+ already has/)[0]!))).toBe(false);
+  // The garden is proposed in the same conversation; the violin grew.
+  const garden = proposals.openProposals(ANNA).find((p) => p.name === "The garden")!;
+  expect(garden.conversation_id).toBe(carrier);
+  expect(proposals.getProposal(violin.id)!.conversation_ids).toHaveLength(8);
+  const said = db.query(`SELECT content FROM messages WHERE conversation_id = ? AND role = 'assistant' ORDER BY created_at DESC, rowid DESC`).get(carrier) as { content: string };
+  expect(said.content).toContain("**The garden**");
+  expect(said.content).toContain("**The violin** (+3 conversations)");
+  expect(proposals.openProposals(ANNA).filter((p) => p.name === "The violin")).toHaveLength(1);
+});
+
+test("a member mapped before anything was marked seen: the conversations of the first night count as seen, once", async () => {
+  const old = ["2026-05-02", "2026-06-10", "2026-07-15", "2026-08-20"].map((d, i) => convo(ANNA, `Violin lesson ${i}`, d));
+  const kept = convo(ANNA, "Violin lesson x", "2026-04-01");
+  proposals.insertProposal({ member_id: ANNA, name: "Old", summary: "", conversation_ids: [kept], stats: { origin: "mapping" } });
+  db.run(`UPDATE domain_proposals SET created_at = '2026-09-01 04:00:00', state = 'dismissed' WHERE member_id = ?`, [ANNA]);
+  mapping.backfillSeen(ANNA);
+  const seen = mapping.seenItems(ANNA, "conversation");
+  expect(old.every((id) => seen.has(id))).toBe(true);
+  // Once: emptied later, it is not filled again.
+  mapping.unsee(ANNA, "conversation", old);
+  mapping.backfillSeen(ANNA);
+  expect(old.some((id) => mapping.seenItems(ANNA, "conversation").has(id))).toBe(false);
 });
 
 test("a naming the model fails is skipped, not fatal", async () => {

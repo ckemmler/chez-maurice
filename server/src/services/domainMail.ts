@@ -32,6 +32,8 @@ export interface MailThread {
   about: string;
   /** The days of the timeline, sorted. */
   dates: string[];
+  /** When the digest was written (its `meta.written_at`), ISO. */
+  written_at?: string;
 }
 
 const ORIGIN_MAIL = /^\s+origin:\s*mail\s*$/m;
@@ -77,7 +79,8 @@ export function parseThread(text: string, rel: string, file: string): MailThread
   const secs = sections(body!);
   const about = stripCitations(secs[0] ?? "").replace(/\s+/g, " ");
   const dates = [...new Set([...body!.matchAll(DATE_LINE)].map((d) => d[1]!))].sort();
-  return { path: rel, file, title, about, dates };
+  const written = fm!.match(/^\s+written_at:\s*(.*)$/m);
+  return { path: rel, file, title, about, dates, ...(written ? { written_at: unquote(written[1]!) } : {}) };
 }
 
 /** Every thread digest in the member's garden that has dated lines. */

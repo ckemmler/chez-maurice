@@ -545,38 +545,115 @@ function existingFor(memberId: string): Array<Existing & { domainId?: string; pr
 
 const norm = (s: string) => s.normalize("NFKC").toLowerCase().replace(/[«»"'’.]/g, "").replace(/\s+/g, " ").trim();
 
+// ── What was already examined ───────────────────────────────────────────────
+
+type SeenKind = "conversation" | "mail";
+
+export function seenItems(memberId: string, kind: SeenKind): Set<string> {
+  const rows = db.query(`SELECT item FROM domain_seen WHERE member_id = ? AND kind = ?`).all(memberId, kind) as Array<{ item: string }>;
+  return new Set(rows.map((r) => r.item));
+}
+
+export function markSeen(memberId: string, kind: SeenKind, items: string[]): void {
+  const ins = db.prepare(`INSERT OR IGNORE INTO domain_seen (member_id, kind, item) VALUES (?, ?, ?)`);
+  db.transaction(() => { for (const it of items) ins.run(memberId, kind, it); })();
+}
+
+export function unsee(memberId: string, kind: SeenKind, items: string[]): void {
+  const del = db.prepare(`DELETE FROM domain_seen WHERE member_id = ? AND kind = ? AND item = ?`);
+  db.transaction(() => { for (const it of items) del.run(memberId, kind, it); })();
+}
+
 /**
- * File the mail groups the model recognised under what was already there:
- * a domain reads them from its next brief (rewritten now, in the
- * background), an open proposal carries them. Returns what went where, and
- * the candidates left to propose.
+ * A member mapped before `domain_seen` existed (28 September 2026) has
+ * nothing in it, and every leftover would look new: the conversations whose
+ * first turn predates the member's first mapped proposal were examined that
+ * night, and the digests written before the last mail proposal were
+ * examined by the pass that made it. Done once per member, remembered by a
+ * marker row — not by the table being empty, which it becomes again when
+ * every proposal expires.
  */
-function fileRecognised(memberId: string, candidates: Candidate[], existing: ReturnType<typeof existingFor>): { rest: Candidate[]; attached: Array<{ name: string; threads: number }> } {
+const BACKFILLED = "__backfilled__";
+
+export function backfillSeen(memberId: string): void {
+  if (db.query(`SELECT 1 FROM domain_seen WHERE member_id = ? AND kind = 'conversation' AND item = ?`).get(memberId, BACKFILLED)) return;
+  markSeen(memberId, "conversation", [BACKFILLED]);
+  const all = listProposals(memberId);
+  const mapped = all.filter((p) => p.stats.origin === "mapping" || p.stats.origin === "split" || p.stats.origin === "model_split");
+  const firstConv = mapped.filter((p) => p.conversation_ids.length).map((p) => p.created_at).sort()[0];
+  if (firstConv) {
+    const ids = unattachedConversations(memberId).filter((c) => c.first < firstConv).map((c) => c.id);
+    markSeen(memberId, "conversation", ids);
+  }
+  const lastMail = mapped.filter((p) => p.mail.length).map((p) => p.created_at).sort().at(-1);
+  if (lastMail) {
+    const cutoff = lastMail.replace(" ", "T");
+    const paths = deps.threads(memberId).filter((t) => (t.written_at ?? "") <= cutoff + "Z").map((t) => t.path);
+    markSeen(memberId, "mail", paths);
+  }
+}
+
+/** A group is worth naming when enough of it is new: its unseen members
+ *  would make a group on their own, or they are at least half of it. */
+export function worthNaming(g: GroupRead, seen: Set<string>, th: Thresholds): boolean {
+  const unseen = g.ids.filter((id) => !seen.has(id)).length;
+  return unseen >= th.minSize || unseen * 2 >= g.ids.length;
+}
+
+// ── Filing under what exists ─────────────────────────────────────────────────
+
+export interface Attached {
+  name: string;
+  threads: number;
+  conversations: number;
+}
+
+/**
+ * File the groups the model recognised under what was already there. Mail:
+ * a domain reads it from its next brief (rewritten now, in the background),
+ * an open proposal carries it. Conversations: an open proposal takes them;
+ * one recognised as an adopted domain is left alone — binding a conversation
+ * to a domain changes how it is answered, and that is the member's to
+ * decide. Returns what went where, and the candidates left to propose.
+ */
+function fileRecognised(memberId: string, candidates: Candidate[], existing: ReturnType<typeof existingFor>): { rest: Candidate[]; attached: Attached[] } {
   const byName = new Map(existing.map((e) => [norm(e.name), e]));
   const rest: Candidate[] = [];
-  const attached = new Map<string, number>();
+  const attached = new Map<string, Attached>();
   const touched = new Set<string>();
+  const add = (name: string, threads: number, conversations: number) => {
+    const cur = attached.get(name) ?? { name, threads: 0, conversations: 0 };
+    cur.threads += threads;
+    cur.conversations += conversations;
+    attached.set(name, cur);
+  };
   for (const c of candidates) {
     // The model's word, or the very name of something already there: on the
     // owner's first run it named a group "Mes finances et achats", exactly
     // like the open proposal, without saying it was the same.
-    const hit = c.kind !== "mail" ? undefined : (c.named.same_as ? byName.get(norm(c.named.same_as)) : undefined) ?? byName.get(norm(c.named.name));
+    const hit = (c.named.same_as ? byName.get(norm(c.named.same_as)) : undefined) ?? byName.get(norm(c.named.name));
     if (!hit) {
       rest.push(c);
       continue;
     }
     if (hit.domainId) {
-      const n = attachMail(hit.domainId, memberId, c.ids);
-      if (n) touched.add(hit.domainId);
-      attached.set(hit.name, (attached.get(hit.name) ?? 0) + n);
+      if (c.kind === "mail") {
+        const n = attachMail(hit.domainId, memberId, c.ids);
+        if (n) touched.add(hit.domainId);
+        add(hit.name, n, 0);
+      }
     } else if (hit.proposal) {
       const cur = listProposals(memberId, ["proposed"]).find((p) => p.id === hit.proposal!.id);
       if (!cur) { rest.push(c); continue; }
-      const before = cur.mail.length;
-      const next = updateProposal(cur.id, { mail: [...cur.mail, ...c.ids] });
-      attached.set(hit.name, (attached.get(hit.name) ?? 0) + ((next?.mail.length ?? before) - before));
+      if (c.kind === "mail") {
+        const next = updateProposal(cur.id, { mail: [...cur.mail, ...c.ids] });
+        add(hit.name, (next?.mail.length ?? cur.mail.length) - cur.mail.length, 0);
+      } else {
+        const next = updateProposal(cur.id, { conversation_ids: [...cur.conversation_ids, ...c.ids] });
+        add(hit.name, 0, (next?.conversation_ids.length ?? cur.conversation_ids.length) - cur.conversation_ids.length);
+      }
     }
-    console.log(`[mapping] mail group "${c.named.name}" (${c.ids.length}) filed under "${hit.name}"`);
+    console.log(`[mapping] ${c.kind} group "${c.named.name}" (${c.ids.length}) recognised as "${hit.name}"${hit.domainId && c.kind === "conversation" ? " — a domain: left alone" : ""}`);
   }
   // The domains that received mail rewrite their brief now rather than
   // tomorrow night: the member will look at them this morning.
@@ -584,7 +661,7 @@ function fileRecognised(memberId: string, candidates: Candidate[], existing: Ret
     const d = getMaurice(id);
     if (d) refreshBrief(d, memberId).catch((err) => console.warn(`[mapping] brief of "${d.name}" after mail: ${(err as Error).message}`));
   }
-  return { rest, attached: [...attached].filter(([, n]) => n > 0).map(([name, threads]) => ({ name, threads })) };
+  return { rest, attached: [...attached.values()].filter((a) => a.threads + a.conversations > 0) };
 }
 
 function writeCandidates(memberId: string, candidates: Candidate[], conversationId: string | null = null): Proposal[] {
@@ -608,17 +685,18 @@ function writeCandidates(memberId: string, candidates: Candidate[], conversation
 }
 
 /**
- * Map one member's conversations and mail and, when the criterion is met,
- * open the conversation that proposes what was found. `dryRun` maps and
- * names but writes no proposal and opens nothing (the model calls are still
- * made and charged). Never throws.
+ * Map one member's conversations and mail and propose what is found. `dryRun`
+ * maps and names but writes nothing and opens nothing (the model calls are
+ * still made and charged). Never throws.
  *
- * When a conversation of proposals is already open, the night used to wait.
- * It still does for the conversations — they come back once the member has
- * settled what is there — but not for the mail: new thread digests (a
- * mailbox read the evening before) are mapped, filed under what they belong
- * to, and what is new is proposed in that same conversation, as a message
- * that follows the opening (27 September 2026).
+ * What was examined before is not examined again (`domain_seen`): the
+ * groups are still made from everything unattached, so something new finds
+ * its kin, but a group is named only when enough of it is new. Proposals
+ * still open no longer stop the night (28 September 2026): what is new is
+ * proposed in the conversation that carries them, as a message that follows
+ * the opening; what the model recognises as an open proposal is added to it,
+ * the mail it recognises as a domain is filed under it. Without a carrier,
+ * the first proposals open a conversation, through the guard.
  */
 export async function mapMember(memberId: string, opts: { dryRun?: boolean; force?: boolean } = {}): Promise<MemberResult & { dry?: Array<Named & { stats: ProposalStats }> }> {
   const now = deps.now ?? (() => new Date());
@@ -637,34 +715,42 @@ export async function mapMember(memberId: string, opts: { dryRun?: boolean; forc
   const name = member?.display_name || "the member";
   const language = memberLanguage(memberId);
 
-  // A proposal still open in a conversation: the mail may add to it; the
-  // rest waits, unless it has waited too long. Proposals without a
-  // conversation (the opening failed last time) are opened again without
-  // mapping anew — through the guard, which the opener applies.
+  // Proposals without a conversation (the opening failed last time) are
+  // opened again without mapping anew — through the guard, which the opener
+  // applies. A carrier makes the night a follow-up: no guard, nothing opened.
+  const before = openProposals(memberId);
   expireStale(memberId, PROPOSAL_STALE_DAYS, today);
   const open = openProposals(memberId);
-  if (open.length && !opts.dryRun) {
-    const carrier = open.find((p) => p.conversation_id)?.conversation_id;
-    if (carrier) return followWithMail(res, memberId, name, language, carrier, today);
-    return finishOpening(res, memberId, name, language, open, new Map(), opts);
+  // A proposal put away unanswered comes back to the map: what it held is
+  // looked at again, as the night always did after six weeks.
+  for (const p of before.filter((b) => !open.some((o) => o.id === b.id))) {
+    unsee(memberId, "conversation", p.conversation_ids);
+    unsee(memberId, "mail", p.mail);
   }
+  const carrier = open.find((p) => p.conversation_id)?.conversation_id ?? null;
+  if (open.length && !carrier && !opts.dryRun) return finishOpening(res, memberId, name, language, open, new Map(), opts);
+  const waiting = (reason: string) => ({ ...res, outcome: "waiting" as const, proposals: open.length, reason });
 
   // The guard, before anything is spent: a child or a guest gets nothing,
   // and a member who received a conversation recently waits.
-  const guard = openingGuard(memberId, today);
-  if (!guard.ok && !opts.force) return { ...res, outcome: "guarded", reason: guard.reason };
+  if (!carrier) {
+    const guard = openingGuard(memberId, today);
+    if (!guard.ok && !opts.force) return { ...res, outcome: "guarded", reason: guard.reason };
+  }
 
+  backfillSeen(memberId);
   const convos = unattachedConversations(memberId);
   const threads = unattachedThreads(memberId);
   res.conversations = convos.length;
   if (convos.length < MIN_CONVERSATIONS && threads.length < MIN_MAIL_THREADS) {
-    return { ...res, outcome: "too_few", reason: `${convos.length} conversations, ${threads.length} mail threads` };
+    const why = `${convos.length} conversations, ${threads.length} mail threads`;
+    return carrier ? waiting(`proposals open; ${why}`) : { ...res, outcome: "too_few", reason: why };
   }
   const byId = new Map(convos.map((c) => [c.id, c]));
-  const candidates: Candidate[] = [];
 
   // Both passes grouped and read before anything is spent: the conversations,
-  // and the mail beside them — its groups its own (see domainMail.ts).
+  // and the mail beside them — its groups its own (see domainMail.ts). Only
+  // the groups with enough new in them go on.
   let convRead: GroupRead[] = [];
   const th = thresholdsFor(convos.length);
   if (convos.length >= MIN_CONVERSATIONS) {
@@ -675,30 +761,40 @@ export async function mapMember(memberId: string, opts: { dryRun?: boolean; forc
       return { ...res, outcome: "failed", reason: `corpus: ${(err as Error).message}` };
     }
     res.groups += groups.length;
-    convRead = groups.map((g) => readGroup(g, byId, today, th));
+    const seen = seenItems(memberId, "conversation");
+    convRead = groups.map((g) => readGroup(g, byId, today, th)).filter((g) => worthNaming(g, seen, th));
   }
   const mail = await mailReads(memberId, threads, today);
   if ("failed" in mail) console.warn(`[mapping] ${name}: ${mail.failed}`);
-  const mailRead = "failed" in mail ? [] : mail.read;
+  const seenMail = seenItems(memberId, "mail");
+  const mailRead = "failed" in mail ? [] : mail.read.filter((g) => worthNaming(g, seenMail, MAIL_THRESHOLDS));
   res.groups += "failed" in mail ? 0 : mail.groups;
-  // Maturity, before spending: at least two groups that recur and live.
-  if (aliveIn(convRead) + aliveIn(mailRead) < MIN_ALIVE_PROPOSALS) {
+  const examined = () => {
+    if (opts.dryRun) return;
+    markSeen(memberId, "conversation", convos.map((c) => c.id));
+    if (!("failed" in mail)) markSeen(memberId, "mail", threads.map((t) => t.id));
+  };
+
+  // Before spending: two groups that recur and live for a first opening;
+  // anything that recurs, for a follow-up.
+  const recurring = [...convRead, ...mailRead].filter((g) => g.stats.verdict !== "noise").length;
+  if (carrier ? recurring === 0 : aliveIn(convRead) + aliveIn(mailRead) < MIN_ALIVE_PROPOSALS) {
+    examined();
     const lived = [...convRead, ...mailRead].filter((g) => g.stats.verdict === "lived").length;
-    return { ...res, outcome: "not_mature", reason: `${aliveIn(convRead) + aliveIn(mailRead)} alive group(s) of ${convRead.length + mailRead.length}, ${lived} lived` };
+    const why = `${aliveIn(convRead) + aliveIn(mailRead)} alive group(s) with something new, ${lived} lived`;
+    return carrier ? waiting(`proposals open; ${why}`) : { ...res, outcome: "not_mature", reason: why };
   }
 
-  if (convRead.length) {
-    const run = await nameGroups(convRead, byId, th, { name, language, today, kind: "conversation", max: MAX_NAMED });
-    res.cost_usd += run.cost;
-    res.named += run.named;
-    if (run.capped) return { ...res, outcome: "capped", reason: run.capped };
-    candidates.push(...run.candidates);
-  }
-  // What the model recognises in the mail as a domain already there is
-  // filed under it rather than proposed.
+  // What the model recognises as a domain or an open proposal is filed
+  // under it rather than proposed again.
   const existing = existingFor(memberId);
-  if (mailRead.length && !("failed" in mail)) {
-    const run = await nameGroups(mailRead, mail.byId, MAIL_THRESHOLDS, { name, language, today, kind: "mail", max: MAX_NAMED_MAIL, existing });
+  const candidates: Candidate[] = [];
+  for (const [read, ids, thr, kind, max] of [
+    [convRead, byId, th, "conversation", MAX_NAMED],
+    [mailRead, "failed" in mail ? new Map() : mail.byId, MAIL_THRESHOLDS, "mail", MAX_NAMED_MAIL],
+  ] as const) {
+    if (!read.length) continue;
+    const run = await nameGroups([...read], ids as Map<string, Convo>, thr, { name, language, today, kind, max, existing });
     res.cost_usd += run.cost;
     res.named += run.named;
     if (run.capped) return { ...res, outcome: "capped", reason: run.capped };
@@ -709,13 +805,28 @@ export async function mapMember(memberId: string, opts: { dryRun?: boolean; forc
     const aliveDry = candidates.filter((c) => c.stats.verdict === "alive");
     return { ...res, outcome: aliveDry.length >= MIN_ALIVE_PROPOSALS ? "proposed" : "not_mature", proposals: candidates.length, dry: candidates.map((c) => ({ ...c.named, stats: c.stats })) };
   }
+  examined();
   const { rest, attached } = fileRecognised(memberId, candidates, existing);
-  if (attached.length) console.log(`[mapping] ${name}: mail filed under ${attached.map((a) => `"${a.name}" (${a.threads})`).join(", ")}`);
+
+  if (carrier) {
+    if (!rest.length && !attached.length) return { ...waiting("proposals open; nothing new"), cost_usd: res.cost_usd, groups: res.groups, named: res.named };
+    const proposals = writeCandidates(memberId, rest, carrier);
+    const alive = proposals.filter((p) => p.stats.verdict !== "lived");
+    const lived = proposals.filter((p) => p.stats.verdict === "lived");
+    const fromConversations = rest.some((c) => c.kind === "conversation") || attached.some((a) => a.conversations > 0);
+    const text = renderFollowUp({ locale: memberLocale(memberId), alive, lived, total: memberConversationCount(memberId), attached, fromConversations });
+    sayInConversation(carrier, text);
+    console.log(
+      `[mapping] ${name}: followed up in ${carrier} — ${proposals.length} proposal(s), ` +
+        `${attached.map((a) => `"${a.name}" +${a.conversations} conversation(s) +${a.threads} thread(s)`).join(", ") || "nothing added to what exists"} ($${res.cost_usd.toFixed(4)})`,
+    );
+    return { ...res, outcome: "followed_up", proposals: proposals.length, presented: alive.map((p) => p.name), conversation_id: carrier };
+  }
+
   const aliveCands = rest.filter((c) => c.stats.verdict === "alive");
   if (aliveCands.length < MIN_ALIVE_PROPOSALS) {
     return { ...res, outcome: "not_mature", reason: `${aliveCands.length} alive domain(s) after naming, ${rest.length - aliveCands.length} lived` };
   }
-
   // Write the proposals: every alive one is presented in the opening
   // message (alive first, the most recent first); the lived ones are named
   // apart.
@@ -723,44 +834,6 @@ export async function mapMember(memberId: string, opts: { dryRun?: boolean; forc
   res.proposals = proposals.length;
   console.log(`[mapping] ${name}: ${proposals.length} proposal(s) from ${res.groups} group(s) of ${convos.length} conversations and ${threads.length} mail threads (${res.named} named, $${res.cost_usd.toFixed(4)})`);
   return finishOpening(res, memberId, name, language, proposals, new Map([...byId, ...threads.map((t) => [t.id, t] as const)]), opts);
-}
-
-/**
- * Proposals are open in `conversationId`: map the mail that is new since,
- * file what belongs to a domain or an open proposal under it, propose the
- * rest in the same conversation with a message of Maurice's. The guard does
- * not apply — nothing is opened. Too little new mail, or nothing found:
- * the member waits, as before.
- */
-async function followWithMail(res: MemberResult, memberId: string, name: string, language: string, conversationId: string, today: Date): Promise<MemberResult> {
-  const waiting = { ...res, outcome: "waiting" as const, proposals: openProposals(memberId).length, reason: "a proposal is still open" };
-  const threads = unattachedThreads(memberId);
-  if (threads.length < MIN_MAIL_THREADS) return waiting;
-  const mail = await mailReads(memberId, threads, today);
-  if ("failed" in mail) {
-    console.warn(`[mapping] ${name}: ${mail.failed}`);
-    return waiting;
-  }
-  res.groups = mail.groups;
-  // Before spending: something in the new mail recurs, alive or lived.
-  if (!mail.read.some((g) => g.stats.verdict !== "noise")) return { ...waiting, groups: res.groups, reason: `a proposal is still open; ${threads.length} mail threads, no group recurs` };
-  const existing = existingFor(memberId);
-  const named = await nameGroups(mail.read, mail.byId, MAIL_THRESHOLDS, { name, language, today, kind: "mail", max: MAX_NAMED_MAIL, existing });
-  res.named = named.named;
-  res.cost_usd += named.cost;
-  if (named.capped) return { ...res, outcome: "capped", reason: named.capped };
-  const { rest, attached } = fileRecognised(memberId, named.candidates, existing);
-  if (!rest.length && !attached.length) return { ...waiting, cost_usd: res.cost_usd, groups: res.groups, named: res.named, reason: `a proposal is still open; ${threads.length} mail threads, nothing new in them` };
-  const proposals = writeCandidates(memberId, rest, conversationId);
-  const alive = proposals.filter((p) => p.stats.verdict !== "lived");
-  const lived = proposals.filter((p) => p.stats.verdict === "lived");
-  const text = renderFollowUp({ locale: memberLocale(memberId), alive, lived, total: memberConversationCount(memberId), attached });
-  sayInConversation(conversationId, text);
-  console.log(
-    `[mapping] ${name}: mail followed up in ${conversationId} — ${proposals.length} proposal(s), ` +
-      `${attached.map((a) => `${a.threads} thread(s) under "${a.name}"`).join(", ") || "nothing filed"} ($${res.cost_usd.toFixed(4)})`,
-  );
-  return { ...res, outcome: "followed_up", proposals: proposals.length, presented: alive.map((p) => p.name), conversation_id: conversationId };
 }
 
 /** The order the opening message shows proposals in: alive first, then the

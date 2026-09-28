@@ -121,6 +121,7 @@ beforeEach(() => {
   for (const m of [MAILY, FOLLOW]) {
     db.run(`DELETE FROM domain_proposals WHERE member_id = ?`, [m]);
     db.run(`DELETE FROM domain_mail WHERE member_id = ?`, [m]);
+    db.run(`DELETE FROM domain_seen WHERE member_id = ?`, [m]);
     db.run(`DELETE FROM domain_briefs WHERE member_id = ?`, [m]);
     db.run(`DELETE FROM conversations WHERE user_id = ?`, [m]);
     db.run(`DELETE FROM maurices WHERE created_by = ?`, [m]);

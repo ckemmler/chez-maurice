@@ -34,6 +34,8 @@ export interface OpenerStrings {
   mail_other: string;
   /** The message that follows the opening when the mail brings more. */
   followup_intro: string;
+  /** The same, when the conversations brought something too. */
+  followup_intro_new: string;
   followup_attached: string;
   intro: string;
   invitation: string;
@@ -56,7 +58,8 @@ export const OPENER_STRINGS: Record<string, OpenerStrings> = {
     mail_one: "%d mail thread",
     mail_other: "%d mail threads",
     followup_intro: "Your mail has been read, and it showed me parts of your life I had not seen in our conversations.",
-    followup_attached: "I also filed mail threads under what was already there: %s.",
+    followup_intro_new: "Since my last message I have seen more parts of your life, in our recent conversations and in your mail.",
+    followup_attached: "I also added to what was already there: %s.",
     intro: "Tonight I looked over our past conversations — the ones imported from other assistants and the ones lived with you — and I saw a few parts of your life I seem to follow.",
     invitation: "Adopt, rename, cut, merge or refuse them — here, in your words, or with “Define my domains” under this message in the Maurice app.",
     title: "Your domains, as I see them",
@@ -76,7 +79,8 @@ export const OPENER_STRINGS: Record<string, OpenerStrings> = {
     mail_one: "%d fil de courrier",
     mail_other: "%d fils de courrier",
     followup_intro: "Ton courrier a été lu, et il m'a montré des pans de ta vie que je n'avais pas vus dans nos conversations.",
-    followup_attached: "J'ai aussi rangé des fils de courrier sous ce qui existait déjà : %s.",
+    followup_intro_new: "Depuis mon dernier message, j'ai vu d'autres pans de ta vie, dans nos conversations récentes et dans ton courrier.",
+    followup_attached: "J'ai aussi ajouté à ce qui existait déjà : %s.",
     intro: "Cette nuit, j'ai relu nos échanges passés — ceux importés d'autres assistants et ceux vécus avec toi — et j'y ai vu quelques pans de ta vie que je semble suivre.",
     invitation: "Adopte, renomme, coupe, fusionne ou refuse — ici, dans tes mots, ou avec « Définir mes domaines » sous ce message dans l'app Maurice.",
     title: "Tes domaines, tels que je les vois",
@@ -95,7 +99,8 @@ export const OPENER_STRINGS: Record<string, OpenerStrings> = {
     mail_one: "%d filo di posta",
     mail_other: "%d fili di posta",
     followup_intro: "La tua posta è stata letta e mi ha mostrato parti della tua vita che non avevo visto nelle nostre conversazioni.",
-    followup_attached: "Ho anche messo dei fili di posta sotto ciò che c'era già: %s.",
+    followup_intro_new: "Dal mio ultimo messaggio ho visto altre parti della tua vita, nelle nostre conversazioni recenti e nella tua posta.",
+    followup_attached: "Ho anche aggiunto a ciò che c'era già: %s.",
     intro: "Stanotte ho riletto le nostre conversazioni passate — quelle importate da altri assistenti e quelle vissute con te — e ci ho visto alcune parti della tua vita che sembro seguire.",
     invitation: "Adotta, rinomina, dividi, unisci o rifiuta — qui, con le tue parole, oppure con «Definire i miei domini» sotto questo messaggio nell'app Maurice.",
     title: "I tuoi domini, come li vedo",
@@ -114,7 +119,8 @@ export const OPENER_STRINGS: Record<string, OpenerStrings> = {
     mail_one: "%d Mailverlauf",
     mail_other: "%d Mailverläufe",
     followup_intro: "Deine Post wurde gelesen, und sie hat mir Teile deines Lebens gezeigt, die ich in unseren Gesprächen nicht gesehen hatte.",
-    followup_attached: "Ich habe außerdem Mailverläufe dem zugeordnet, was schon da war: %s.",
+    followup_intro_new: "Seit meiner letzten Nachricht habe ich weitere Teile deines Lebens gesehen, in unseren letzten Gesprächen und in deiner Post.",
+    followup_attached: "Ich habe außerdem Bestehendes ergänzt: %s.",
     intro: "Heute Nacht habe ich unsere vergangenen Gespräche durchgesehen — die aus anderen Assistenten importierten und die mit dir geführten — und darin einige Teile deines Lebens gesehen, die ich offenbar verfolge.",
     invitation: "Übernimm, benenne um, teile, führe zusammen oder lehne ab — hier, in deinen Worten, oder mit „Meine Bereiche festlegen“ unter dieser Nachricht in der Maurice-App.",
     title: "Deine Bereiche, wie ich sie sehe",
@@ -133,7 +139,8 @@ export const OPENER_STRINGS: Record<string, OpenerStrings> = {
     mail_one: "%d hilo de correo",
     mail_other: "%d hilos de correo",
     followup_intro: "Tu correo ha sido leído y me ha mostrado partes de tu vida que no había visto en nuestras conversaciones.",
-    followup_attached: "También he archivado hilos de correo bajo lo que ya existía: %s.",
+    followup_intro_new: "Desde mi último mensaje he visto otras partes de tu vida, en nuestras conversaciones recientes y en tu correo.",
+    followup_attached: "También he añadido a lo que ya existía: %s.",
     intro: "Esta noche he releído nuestras conversaciones pasadas —las importadas de otros asistentes y las vividas contigo— y he visto en ellas algunas partes de tu vida que parezco seguir.",
     invitation: "Adopta, renombra, separa, fusiona o rechaza —aquí, con tus palabras, o con «Definir mis dominios» bajo este mensaje en la app Maurice.",
     title: "Tus dominios, tal como los veo",
@@ -152,7 +159,8 @@ export const OPENER_STRINGS: Record<string, OpenerStrings> = {
     mail_one: "%d fio de correio",
     mail_other: "%d fios de correio",
     followup_intro: "O teu correio foi lido e mostrou-me partes da tua vida que eu não tinha visto nas nossas conversas.",
-    followup_attached: "Também arrumei fios de correio sob o que já existia: %s.",
+    followup_intro_new: "Desde a minha última mensagem vi outras partes da tua vida, nas nossas conversas recentes e no teu correio.",
+    followup_attached: "Também acrescentei ao que já existia: %s.",
     intro: "Esta noite reli as nossas conversas passadas — as importadas de outros assistentes e as vividas contigo — e vi nelas algumas partes da tua vida que pareço acompanhar.",
     invitation: "Adota, renomeia, separa, junta ou recusa — aqui, com as tuas palavras, ou com «Definir os meus domínios» por baixo desta mensagem na app Maurice.",
     title: "Os teus domínios, tal como os vejo",
@@ -171,7 +179,8 @@ export const OPENER_STRINGS: Record<string, OpenerStrings> = {
     mail_one: "%d mailgesprek",
     mail_other: "%d mailgesprekken",
     followup_intro: "Je mail is gelezen en liet me delen van je leven zien die ik in onze gesprekken niet had gezien.",
-    followup_attached: "Ik heb ook mailgesprekken ondergebracht bij wat er al was: %s.",
+    followup_intro_new: "Sinds mijn vorige bericht heb ik meer delen van je leven gezien, in onze recente gesprekken en in je mail.",
+    followup_attached: "Ik heb ook aangevuld wat er al was: %s.",
     intro: "Vannacht heb ik onze eerdere gesprekken doorgelezen — die uit andere assistenten zijn geïmporteerd en die met jou zijn gevoerd — en ik zag er een paar delen van je leven in die ik blijkbaar volg.",
     invitation: "Neem over, hernoem, splits, voeg samen of weiger — hier, in je eigen woorden, of met “Mijn domeinen bepalen” onder dit bericht in de Maurice-app.",
     title: "Je domeinen, zoals ik ze zie",
@@ -347,8 +356,10 @@ export interface FollowUpInput {
   alive: Proposal[];
   lived: Proposal[];
   total: number;
-  /** What the mail added to domains or proposals that were already there. */
-  attached: Array<{ name: string; threads: number }>;
+  /** What was added to domains or proposals that were already there. */
+  attached: Array<{ name: string; threads: number; conversations?: number }>;
+  /** The conversations brought something too (else it was the mail alone). */
+  fromConversations?: boolean;
 }
 
 /**
@@ -361,13 +372,21 @@ export interface FollowUpInput {
 export function renderFollowUp(input: FollowUpInput): string {
   const t = openerStrings(input.locale);
   const maxSize = Math.max(1, ...input.alive.map(unitsOf), ...input.lived.map(unitsOf));
-  const blocks: string[] = [t.followup_intro];
+  const blocks: string[] = [input.fromConversations ? t.followup_intro_new : t.followup_intro];
   if (input.alive.length) {
     blocks.push(`**${t.alive_head}**\n\n${input.alive.map((p) => proposalLine(p, maxSize, input.total, t)).join("\n")}`);
   }
   if (input.lived.length) blocks.push(`**${t.lived_head}** : ${livedNames(input.lived, t).join(" · ")}.`);
   if (input.attached.length) {
-    const list = input.attached.map((a) => `**${a.name}** (${fmt(a.threads === 1 ? t.mail_one : t.mail_other, a.threads)})`).join(", ");
+    const list = input.attached
+      .map((a) => {
+        const bits = [
+          ...(a.conversations ? [fmt(a.conversations === 1 ? t.conversations_one : t.conversations_other, a.conversations)] : []),
+          ...(a.threads ? [fmt(a.threads === 1 ? t.mail_one : t.mail_other, a.threads)] : []),
+        ];
+        return `**${a.name}** (+${bits.join(", +")})`;
+      })
+      .join(", ");
     blocks.push(fmt(t.followup_attached, list));
   }
   blocks.push(t.invitation);

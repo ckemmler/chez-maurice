@@ -1073,6 +1073,20 @@ db.run(`
 `);
 db.run(`CREATE INDEX IF NOT EXISTS idx_domain_mail_member ON domain_mail(member_id)`);
 
+// What the mapping has already examined (28 September 2026): a conversation
+// id or a thread digest's garden path, per member. A group made of what was
+// already seen is not named again — the night that renamed yesterday's
+// leftovers into five near-duplicates is why.
+db.run(`
+  CREATE TABLE IF NOT EXISTS domain_seen (
+    member_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    kind      TEXT NOT NULL CHECK (kind IN ('conversation', 'mail')),
+    item      TEXT NOT NULL,
+    seen_at   TEXT NOT NULL DEFAULT (datetime('now')),
+    PRIMARY KEY (member_id, kind, item)
+  )
+`);
+
 // Migration: an earlier seed minted fabricated ids (opus/haiku at the sonnet
 // version), which 404 at Anthropic. Remap to the real ids and make sure the
 // household default points at a model that actually exists.
