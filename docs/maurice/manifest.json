@@ -1,7 +1,7 @@
 {
   "format": "maurice-docs",
   "version": 1,
-  "generated_at": "2026-09-28T14:40:19Z",
+  "generated_at": "2026-09-28T14:40:02Z",
   "notes": [
     { "file": "maurice-applications.md", "slug": "maurice-applications", "date": "2026-09-25", "bytes": 12966, "sha256": "4a525cd75240315c14e797c48149fbf014f81b29b763fb0318746b8252b0321b" },
     { "file": "maurice-architecture.md", "slug": "maurice-architecture", "date": "2026-09-22", "bytes": 29761, "sha256": "7e94f7eb9a7e6d47c47493a9c114b8f644d034661c0e0529a9e44a71abd90a96" },
