@@ -1,6 +1,6 @@
 ---
 title: The MCP tool ecosystem
-date: '2026-09-27'
+date: '2026-09-28'
 flags: []
 locale: en
 description: 'The gateway that gives Maurice his capabilities: discovery, per-member
@@ -387,6 +387,8 @@ job <id>, done|paused, in Ss`. **The capacity is measured**: a run of a
 hundred messages or more leaves `messages` and `seconds` in `capacity`, and
 the estimate's nights use the last five runs' messages per hour over a
 four-hour night (`nights.measured: true`) instead of the 1 500 assumption.
+
+**Each mailbox on its own, and reading when it is added** (28 September 2026). The settings' mail pane said one thing for the whole store — the headers walked, the reading's word — under the last mailbox of the list, so a box added last read as the only one. `scan_status` now carries `mailboxes`: per address, the messages the store holds, those not triaged yet, and the reading over the window (to judge, kept, skipped, to read, read; a message in two boxes counts in both), plus the store's `calibration`. The server (`services/mailboxEstimate.ts`) adds to each box with twenty messages or more left an **estimate** — to sort, to read (what is kept so far applied to what is left to sort, a third before any), hours at the pipeline's measured pace (6 000 sorted and 1 600 read an hour), and euros **for the operator only** (`withoutMoney` for a member: the rule of 26 September). The euros are the member's own when they have a reading behind them — the ledger's euros for their reading job split by the light pass's model, per message sorted, and the rest, reading and documents together, per message read — and otherwise the price sheet on the calibration plus the passes' own instructions (`passOverhead`): the calibration alone had priced the owner's reading at a fifth of its bill. The app shows it under each mailbox, in a tinted box, with **Read now** when the word is yes: `POST /api/mail-accounts/reading/run` starts the approved reading at once (twelve hours at most) and the documents after it; the night goes through the same launcher (`startMailReading`), so a reading started in the day is joined, never doubled. **Adding a mailbox** now walks its headers and then does at once the night's free work — contacts, triage, calibration (`analyseMailboxInBackground`) — so the card has its numbers while the member is still looking at it. On the owner's contactoffice box that morning: 37 335 messages, 11 349 still to sort, about 8 200 to read, about seven hours, 18 € from his own bills.
 
 **Why a mail answer takes as long as it does** (25 September 2026). *Relis-moi
 le mail à Jean* took 58 s: 23 s in `search`, 10 s in `get_message`, 25 s across
