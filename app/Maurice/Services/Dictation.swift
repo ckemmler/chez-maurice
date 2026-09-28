@@ -180,6 +180,10 @@ final class Dictation {
     /// ends an utterance, not the session, so these accumulate and the live
     /// partial is appended to them rather than replacing them.
     private var committed = ""
+    /// The live utterance's latest text and where its first word sits in the
+    /// request's audio — what tells a revision apart from a fresh start.
+    private var segment = ""
+    private var segmentStart: TimeInterval = 0
     /// What has been heard so far this session, including the unstable tail the
     /// recognizer may still revise.
     private(set) var transcript = ""
@@ -235,6 +239,7 @@ final class Dictation {
         let attempt = generation
         transcript = ""
         committed = ""
+        segment = ""
         // Back to idle before trying again. The composer reacts to `state`
         // changing, so leaving the previous failure in place meant a second
         // attempt that failed the same way assigned the same value, fired no
@@ -578,6 +583,7 @@ final class Dictation {
         // whole session.
         if let previous, let now = tapFormat, previous != now, let rec = recognizer {
             committed = transcript
+            segment = ""
             requestBox.detach()
             let old = task
             listen(with: rec)
@@ -606,7 +612,12 @@ final class Dictation {
         let req = SFSpeechAudioBufferRecognitionRequest()
         req.shouldReportPartialResults = true
         req.requiresOnDeviceRecognition = !usingServer
+        // Full stops and question marks from the recogniser, which hears the
+        // intonation; without it a dictated paragraph arrives as one run-on.
+        req.addsPunctuation = true
         request = req
+        segment = ""
+        segmentStart = 0
         requestBox.install(req)
 
         let generation = self.generation
@@ -634,10 +645,24 @@ final class Dictation {
                     return
                 }
                 if let result {
-                    let segment = result.bestTranscription.formattedString
-                    self.transcript = Self.join(self.committed, segment)
+                    let best = result.bestTranscription
+                    let text = best.formattedString
+                    let start = best.segments.first?.timestamp ?? 0
+                    // After a pause the recogniser often starts over inside
+                    // the same task, without ever reporting final: the next
+                    // partial holds only the new words. Taking it at face value
+                    // wiped the sentence just spoken from the composer and put
+                    // the next one in its place. Bank the old one first.
+                    if !result.isFinal,
+                       Self.startedOver(from: self.segment, at: self.segmentStart, to: text, at: start) {
+                        self.committed = Self.join(self.committed, self.segment)
+                    }
+                    self.segment = text
+                    self.segmentStart = start
+                    self.transcript = Self.join(self.committed, text)
                     if result.isFinal {
                         self.committed = self.transcript
+                        self.segment = ""
                         // Close the finished request and let the box hold what
                         // arrives until the replacement is installed a line
                         // later — the recogniser has stopped consuming, and
@@ -651,12 +676,40 @@ final class Dictation {
         }
     }
 
+    /// Whether a partial result begins a new utterance rather than revising
+    /// the current one.
+    ///
+    /// Revisions keep the utterance's opening: the first word stays put in the
+    /// audio and, give or take its capital, in the text. A fresh start moves
+    /// the first word later in the audio — when the recogniser reports timings,
+    /// which partial results don't always — or, failing that, opens on another
+    /// word with less text than there was.
+    nonisolated static func startedOver(from old: String, at oldStart: TimeInterval,
+                                        to new: String, at newStart: TimeInterval) -> Bool {
+        guard !old.isEmpty, !new.isEmpty else { return false }
+        if oldStart > 0, newStart > oldStart + 1 { return true }
+        func firstWord(_ s: String) -> Substring {
+            s.split(whereSeparator: { $0.isWhitespace || $0.isPunctuation }).first ?? ""
+        }
+        let sameOpening = firstWord(old).lowercased() == firstWord(new).lowercased()
+        return !sameOpening && new.count < old.count
+    }
+
     /// Two spoken fragments, with a single space between them.
-    private static func join(_ a: String, _ b: String) -> String {
-        let left = a.trimmingCharacters(in: .whitespacesAndNewlines)
+    ///
+    /// A fragment ends where the speaker paused. When the next one opens on a
+    /// capital the recogniser took it for a new sentence, so the previous one
+    /// gets the full stop it is missing — the recogniser only punctuates within
+    /// what it heard, never across the pause.
+    nonisolated static func join(_ a: String, _ b: String) -> String {
+        var left = a.trimmingCharacters(in: .whitespacesAndNewlines)
         let right = b.trimmingCharacters(in: .whitespacesAndNewlines)
         if left.isEmpty { return right }
         if right.isEmpty { return left }
+        if let last = left.last, !".?!…:;".contains(last),
+           right.first?.isUppercase == true {
+            left += "."
+        }
         return left + " " + right
     }
 
@@ -692,6 +745,7 @@ final class Dictation {
         levels = []
         usingServer = false
         committed = ""
+        segment = ""
         if engine.isRunning { engine.stop() }
         engine.inputNode.removeTap(onBus: 0)
         request?.endAudio()
