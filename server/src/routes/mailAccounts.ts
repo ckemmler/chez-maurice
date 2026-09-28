@@ -10,7 +10,8 @@ import {
   restoreSecret,
   type MailAccount,
 } from "../services/mailAccounts";
-import { analyseMailboxInBackground, mailScanStatus, startMailScan, type ScanView } from "../services/mailScan";
+import { analyseMailboxInBackground, mailScanStatus, retriage, startMailScan, type ScanView } from "../services/mailScan";
+import { setSenderRule } from "../services/mailSenderRules";
 import { withoutMoney } from "../services/mailboxEstimate";
 import { mailReadingStatus, readingWanted, startMailReading } from "../services/mailReading";
 import { writeMailDocuments } from "../services/mailDocuments";
@@ -102,6 +103,27 @@ accounts.get("/scan", async (c) => c.json(forViewer(c.get("userId"), await mailS
 /** Start the walk again — after a pause, or to pick up new mail now rather
  *  than tonight. A walk already going is joined, not doubled. */
 accounts.post("/scan", async (c) => c.json(forViewer(c.get("userId"), await startMailScan(c.get("userId")))));
+
+/** A sender set aside from the reading, or brought back: `{ address, days }`
+ *  — the days of their mail still read, 0 for none, null to take the rule
+ *  back. The mail is sorted again at once (free, headers only), and the
+ *  answer is the view with the new numbers. 400 on a bad address or days. */
+accounts.put("/senders", async (c) => {
+  const uid = c.get("userId");
+  const body = await c.req.json().catch(() => ({}));
+  const days = body?.days === null || body?.days === undefined ? null : Number(body.days);
+  try {
+    setSenderRule(uid, String(body?.address ?? ""), days);
+  } catch (err) {
+    return c.json({ error: (err as Error).message }, 400);
+  }
+  try {
+    await retriage(uid);
+  } catch (err) {
+    console.warn(`[mail] triage after a sender rule for ${uid}: ${(err as Error).message}`);
+  }
+  return c.json(forViewer(uid, await mailScanStatus(uid)));
+});
 
 /** Read now rather than tonight — the reading the member approved, over
  *  every mailbox, as long as it takes (twelve hours at most), then the

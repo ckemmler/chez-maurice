@@ -49,11 +49,23 @@ export interface BoxReading {
   read: number;
 }
 
+/** A sender who weighs in what reading this mailbox takes. */
+export interface TopSender {
+  sender: string;
+  /** Its messages in the reading's window. */
+  messages: number;
+  /** Of which a rule of the member's set aside. */
+  set_aside: number;
+  /** The member's rule on it: days still read (0: none), null without one. */
+  rule_days: number | null;
+}
+
 export interface MailboxView {
   address: string;
   messages: number;
   untriaged: number;
   reading: BoxReading;
+  top_senders: TopSender[];
   /** Null when nothing is left to do on this mailbox. */
   estimate: {
     to_sort: number;
@@ -113,7 +125,7 @@ export function unitCostsFromFormula(cal: Calibration | null, models: PassModels
 
 /** Every mailbox with its estimate. `payload` is what `scan_status` answered. */
 export function mailboxViews(payload: any, models: PassModels = passModels()): MailboxView[] {
-  const boxes = (Array.isArray(payload?.mailboxes) ? payload.mailboxes : []) as Array<{ address: string; messages: number; untriaged: number; reading: BoxReading }>;
+  const boxes = (Array.isArray(payload?.mailboxes) ? payload.mailboxes : []) as Array<{ address: string; messages: number; untriaged: number; reading: BoxReading; top_senders?: Array<{ sender: string; messages: number; set_aside: number }> }>;
   const job = payload?.reading ?? null;
   const counts = job?.counts ?? null;
   const judged = boxes.reduce((s, b) => s + b.reading.kept + b.reading.skipped, 0);
@@ -133,6 +145,7 @@ export function mailboxViews(payload: any, models: PassModels = passModels()): M
       messages: b.messages,
       untriaged: b.untriaged,
       reading: r,
+      top_senders: (b.top_senders ?? []).map((t) => ({ sender: t.sender, messages: t.messages, set_aside: t.set_aside ?? 0, rule_days: null })),
       estimate: left
         ? {
             to_sort: toSort,

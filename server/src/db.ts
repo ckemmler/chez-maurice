@@ -1073,6 +1073,20 @@ db.run(`
 `);
 db.run(`CREATE INDEX IF NOT EXISTS idx_domain_mail_member ON domain_mail(member_id)`);
 
+// A member's senders set aside from the reading of their mail (28 September
+// 2026): `days` of that sender's mail still read, 0 for none. Passed to every
+// triage (services/mailSenderRules.ts).
+db.run(`
+  CREATE TABLE IF NOT EXISTS mail_sender_rules (
+    member_id  TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    address    TEXT NOT NULL,
+    days       INTEGER NOT NULL DEFAULT 0 CHECK (days >= 0),
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+    PRIMARY KEY (member_id, address)
+  )
+`);
+
 // What the mapping has already examined (28 September 2026): a conversation
 // id or a thread digest's garden path, per member. A group made of what was
 // already seen is not named again — the night that renamed yesterday's

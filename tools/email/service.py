@@ -327,12 +327,13 @@ class EmailService:
         return {"totals": store.totals(), "cursors": store.cursors()}
 
     # ── lot 2: the triage, the report, the calibration, the estimate ─────
-    def triage(self, accounts: list[Account], contacts: list[str] | None = None) -> dict[str, Any]:
+    def triage(self, accounts: list[Account], contacts: list[str] | None = None, rules: dict[str, int | None] | None = None) -> dict[str, Any]:
         """Bulk or correspondence, for every message in the store, from the
-        headers alone. The member is every address of their accounts."""
+        headers alone. The member is every address of their accounts;
+        ``rules`` are their senders set aside (address → days kept, 0 none)."""
         _member_id, store = self._member_store(accounts)
         member = {a.address.lower() for a in accounts}
-        return triage_mod.triage_store(store, member, set(contacts or []))
+        return triage_mod.triage_store(store, member, set(contacts or []), rules)
 
     def report(self, accounts: list[Account], years: int = 3) -> dict[str, Any]:
         _member_id, store = self._member_store(accounts)

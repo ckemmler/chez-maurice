@@ -10,6 +10,7 @@ import { listUsers } from "./users";
 import { backfillMailConversations, linkMailConversation } from "./mailApproval";
 import { readingWanted, startMailReading } from "./mailReading";
 import { mailboxViews, type MailboxView } from "./mailboxEstimate";
+import { listSenderRules, senderRulesForTriage } from "./mailSenderRules";
 import { writeMailDocuments } from "./mailDocuments";
 import { contactAddresses, listContactAccounts, syncContacts } from "./contactAccounts";
 import { listMailAccounts } from "./mailAccounts";
@@ -184,7 +185,7 @@ function readingView(job: any): ScanView["reading"] {
  *  reached is a `failed` view with the reason. */
 export async function mailScanStatus(memberId: string): Promise<ScanView> {
   try {
-    return scanView(await deps.call(memberId, "scan_status", {}));
+    return withRules(memberId, scanView(await deps.call(memberId, "scan_status", {})));
   } catch (err) {
     return scanView({ error: `the mail tool could not be reached: ${(err as Error).message}` });
   }
@@ -196,10 +197,19 @@ export async function startMailScan(memberId: string): Promise<ScanView> {
     const started = await deps.call(memberId, "scan_mailbox", {});
     if (started?.error || started?.raw) return scanView(started);
     // The start answers with the job alone; the totals come from the status.
-    return scanView(await deps.call(memberId, "scan_status", {}));
+    return withRules(memberId, scanView(await deps.call(memberId, "scan_status", {})));
   } catch (err) {
     return scanView({ error: `the mail tool could not be reached: ${(err as Error).message}` });
   }
+}
+
+/** Each named sender with the member's rule on it, if any. */
+function withRules(memberId: string, v: ScanView): ScanView {
+  const rules = new Map(listSenderRules(memberId).map((r) => [r.address, r.days]));
+  return {
+    ...v,
+    mailboxes: v.mailboxes.map((b) => ({ ...b, top_senders: b.top_senders.map((t) => ({ ...t, rule_days: rules.get(t.sender) ?? null })) })),
+  };
 }
 
 /** After an account is added: start the walk and do not wait for it. */
@@ -236,15 +246,18 @@ export function analyseMailboxInBackground(memberId: string): void {
  *  an address book was added or read by hand. Free, headers only; nothing
  *  to do for a member without mail. Does not wait. */
 export function retriageInBackground(memberId: string): void {
+  retriage(memberId).catch((err) => console.warn(`[mail] triage for ${memberId}: ${(err as Error).message}`));
+}
+
+/** The same, awaited: after a sender rule changed, the card shows the
+ *  new numbers in the answer. Nothing for a member without mail. */
+export async function retriage(memberId: string): Promise<void> {
   if (!listMailAccounts(memberId).length) return;
   const contacts = contactAddresses(memberId);
-  deps
-    .call(memberId, "triage_mailbox", { contacts })
-    .then((t) => {
-      if (t?.error || t?.raw) console.warn(`[mail] triage for ${memberId} with ${contacts.length} contact address(es): ${t.error ?? t.raw}`);
-      else console.log(`[mail] triage for ${memberId} with ${contacts.length} contact address(es): ${JSON.stringify(t?.counts ?? {})}`);
-    })
-    .catch((err) => console.warn(`[mail] triage for ${memberId}: ${(err as Error).message}`));
+  const rules = senderRulesForTriage(memberId);
+  const t = await deps.call(memberId, "triage_mailbox", { contacts, rules });
+  if (t?.error || t?.raw) throw new Error(String(t.error ?? t.raw));
+  console.log(`[mail] triage for ${memberId} with ${contacts.length} contact address(es), ${Object.keys(rules).length} sender rule(s): ${JSON.stringify(t?.counts ?? {})}`);
 }
 
 // ── The night ────────────────────────────────────────────────────────────
@@ -407,7 +420,8 @@ async function measure(memberId: string, d: MailScanDeps): Promise<ReadingEstima
   } catch (err) {
     console.warn(`[mail] nightly: contacts for ${memberId}: ${(err as Error).message}`);
   }
-  const t = await d.call(memberId, "triage_mailbox", { contacts });
+  // The member's senders set aside go with every triage: their windows slide.
+  const t = await d.call(memberId, "triage_mailbox", { contacts, rules: senderRulesForTriage(memberId) });
   if (t?.error || t?.raw) failed(t, "triage_mailbox");
   const c = await d.call(memberId, "calibrate_reading", {});
   // A window with nothing to read cannot be calibrated, and need not be:

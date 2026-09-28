@@ -216,6 +216,32 @@ def test_scan_status_says_each_mailbox_its_messages_and_its_reading(tmp_path):
     assert box["reading"] == {"window": 9, "to_light": 0, "kept": 2, "skipped": 7, "to_read": 2, "read": 0}
 
 
+def test_a_sender_set_aside_is_not_read_and_a_window_keeps_only_its_last_days(tmp_path):
+    svc, _client = ready(tmp_path)
+    # ami1 set aside entirely; the old sender kept only for its last 30 days
+    # (its one message is from 2018); ami2 untouched.
+    out = svc.triage(alex(svc), rules={"ami1@example.org": 0, "Vieux <vieux@example.org>": 30})
+    assert out["rules"] == 2
+    import sqlite3
+    with sqlite3.connect(store().path) as conn:
+        kinds = {m: (k, why) for m, k, why in conn.execute("SELECT message, kind, reason FROM triage")}
+    by_sender = {r["sender_address"]: r["id"] for r in store().messages()}
+    assert kinds[by_sender["ami1@example.org"]] == ("bulk", "sender_rule")
+    assert kinds[by_sender["vieux@example.org"]] == ("bulk", "sender_rule")
+    assert kinds[by_sender["ami2@example.org"]][0] != "bulk"
+    # Not a candidate for the passes any more; still named on the card, as set aside.
+    ids = [m["id"] for m in svc.reading_next(alex(svc), stage="light", limit=50)["messages"]]
+    assert by_sender["ami1@example.org"] not in ids
+    [box] = svc.scan_status(alex(svc))["mailboxes"]
+    ami1 = next(t for t in box["top_senders"] if t["sender"] == "ami1@example.org")
+    assert ami1 == {"sender": "ami1@example.org", "messages": 1, "set_aside": 1}
+    # A window that covers the message: read again.
+    svc.triage(alex(svc), rules={"ami1@example.org": 36500})
+    with sqlite3.connect(store().path) as conn:
+        kinds = {m: k for m, k in conn.execute("SELECT message, kind FROM triage")}
+    assert kinds[by_sender["ami1@example.org"]] != "bulk"
+
+
 def test_control_moves_the_job_and_measures_the_capacity_that_the_estimate_then_uses(tmp_path):
     svc, _client = ready(tmp_path)
     acc = alex(svc)

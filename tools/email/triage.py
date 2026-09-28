@@ -55,11 +55,22 @@ def _addresses(raw: str | None) -> set[str]:
     return out
 
 
-def classify(row: dict[str, Any], *, member: set[str], replied: set[str], contacts: set[str]) -> tuple[str, str]:
-    """``(kind, reason)`` for one ``messages`` row."""
+def classify(
+    row: dict[str, Any], *, member: set[str], replied: set[str], contacts: set[str], cutoffs: dict[str, str] | None = None
+) -> tuple[str, str]:
+    """``(kind, reason)`` for one ``messages`` row.
+
+    ``cutoffs`` are the member's sender rules (28 September 2026): a sender's
+    mail dated before its cutoff is not to be read — a support desk's tickets
+    past the last week, a tracker's notifications past three weeks, or all of
+    it (a cutoff in the far future). The rule comes before everything but the
+    member's own mail: a sender they answer is still one they chose to set
+    aside."""
     sender = row.get("sender_address")
     if sender and sender in member:
         return "correspondence", "sent"
+    if sender and cutoffs and sender in cutoffs and (row.get("date") or "") < cutoffs[sender]:
+        return "bulk", "sender_rule"
     if sender and sender in replied:
         return "correspondence", "replied"
     if sender and sender in contacts:
@@ -86,19 +97,36 @@ def replied_addresses(rows: Iterable[dict[str, Any]], member: set[str]) -> set[s
     return out - member
 
 
-def triage_store(store: MailStore, member: set[str], contacts: set[str] | None = None) -> dict[str, Any]:
+NEVER = "9999"
+
+
+def rule_cutoffs(rules: dict[str, int | None] | None, now: datetime | None = None) -> dict[str, str]:
+    """Sender → the date before which their mail is not read: ``days`` back
+    from now, or never read at all for 0 (or no number)."""
+    now = now or datetime.now(timezone.utc)
+    out: dict[str, str] = {}
+    for address, days in (rules or {}).items():
+        a = bare_address(str(address)) or str(address).strip().lower()
+        if not a:
+            continue
+        out[a] = NEVER if not days or int(days) <= 0 else (now - timedelta(days=int(days))).strftime("%Y-%m-%dT%H:%M:%S")
+    return out
+
+
+def triage_store(store: MailStore, member: set[str], contacts: set[str] | None = None, rules: dict[str, int | None] | None = None) -> dict[str, Any]:
     """Recompute the verdict of every message in the store. Two passes over
     the headers — the first to learn who the member answers, the second to
     decide — and one transaction to write."""
     member = {m.lower() for m in member}
     contacts = {c.lower() for c in (contacts or set())}
+    cutoffs = rule_cutoffs(rules)
     replied = replied_addresses(store.headers(), member)
     at = now_iso()
     verdicts: list[tuple[str, str, str, str]] = []
     counts: dict[str, int] = {k: 0 for k in KINDS}
     reasons: dict[str, int] = defaultdict(int)
     for row in store.headers():
-        kind, reason = classify(row, member=member, replied=replied, contacts=contacts)
+        kind, reason = classify(row, member=member, replied=replied, contacts=contacts, cutoffs=cutoffs)
         verdicts.append((row["id"], kind, reason, at))
         counts[kind] += 1
         reasons[reason] += 1
@@ -110,6 +138,7 @@ def triage_store(store: MailStore, member: set[str], contacts: set[str] | None =
         "member_addresses": sorted(member),
         "replied_to": len(replied),
         "contacts": len(contacts),
+        "rules": len(cutoffs),
         "computed_at": at,
     }
 

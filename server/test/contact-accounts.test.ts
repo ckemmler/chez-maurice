@@ -247,7 +247,7 @@ test("a book added by a member with mail sorts their mail again with the address
   db.run(`INSERT INTO mail_accounts (id, member_id, address, secret) VALUES ('ca-mail', ?, 'anna@icloud.com', 'v1:x')`, [ANNA]);
   await req(annaAuth, "/", { method: "POST", body: JSON.stringify({ username: "anna@icloud.com", password: "good" }) });
   await Bun.sleep(10);
-  expect(triaged).toEqual([{ contacts: ["claire@x.org", "jean.d@gmail.com", "jean@x.org"] }]);
+  expect(triaged).toEqual([{ contacts: ["claire@x.org", "jean.d@gmail.com", "jean@x.org"], rules: {} }]);
   // Without mail, nothing to sort.
   await req(benAuth, "/", { method: "POST", body: JSON.stringify({ username: "ben@icloud.com", password: "good" }) });
   await Bun.sleep(10);
@@ -273,5 +273,5 @@ test("a book added by a member with mail sorts their mail again with the address
     contacts: async (id: string) => { await svc.syncContacts(id); return svc.contactAddresses(id); },
   } as any);
   expect(outcome).toBe("walked");
-  expect(triaged).toEqual([{ contacts: ["claire@x.org", "e@y.org", "jean.d@gmail.com", "jean@x.org"] }]);
+  expect(triaged).toEqual([{ contacts: ["claire@x.org", "e@y.org", "jean.d@gmail.com", "jean@x.org"], rules: {} }]);
 });

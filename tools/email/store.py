@@ -214,6 +214,10 @@ def store_path(member_id: str) -> Path:
     return mail_dir() / f"{_SAFE.sub('_', member_id)}.db"
 
 
+# The senders a mailbox's card names, heaviest first.
+TOP_SENDERS = 5
+
+
 class MailStore:
     def __init__(self, path: Path) -> None:
         self.path = Path(path)
@@ -630,7 +634,7 @@ class MailStore:
             ).fetchone()
         return {k: int(row[k] or 0) for k in ("messages", "to_light", "kept", "skipped", "to_read", "read")}
 
-    def per_address(self, kinds: tuple[str, ...], since: str) -> list[dict[str, Any]]:
+    def per_address(self, kinds: tuple[str, ...], since: str) -> list[dict[str, Any]]:  # noqa: C901
         """Each mailbox on its own (28 September 2026): the messages the store
         holds for it, those not triaged yet, and where the reading stands over
         the window — to judge, kept, skipped, to read, read. A message present
@@ -656,10 +660,30 @@ class MailStore:
                     GROUP BY l.address""",
                 (*kinds, since),
             ).fetchall()
+            # Who weighs most in what a reading would take, per mailbox: the
+            # senders of the window's messages to read, and of those a sender
+            # rule set aside — so a rule stays in sight to be changed.
+            weigh = conn.execute(
+                f"""SELECT l.address, LOWER(m.sender_address) AS sender, COUNT(DISTINCT m.id) AS n,
+                           SUM(CASE WHEN t.reason = 'sender_rule' THEN 1 ELSE 0 END) AS ruled
+                    FROM messages m JOIN triage t ON t.message = m.id JOIN locations l ON l.message = m.id
+                    WHERE (t.kind IN ({','.join('?' * len(kinds))}) OR t.reason = 'sender_rule')
+                      AND t.reason != 'sent' AND m.sender_address IS NOT NULL
+                      AND m.date >= ? AND m.date < '3000' AND m.gone_at IS NULL
+                    GROUP BY l.address, LOWER(m.sender_address)""",
+                (*kinds, since),
+            ).fetchall()
         by = {r["address"]: {"window": int(r["window"] or 0), **{k: int(r[k] or 0) for k in ("to_light", "kept", "skipped", "to_read", "read")}} for r in window}
+        tops: dict[str, list[dict[str, Any]]] = {}
+        for r in weigh:
+            tops.setdefault(r["address"], []).append({"sender": r["sender"], "messages": int(r["n"] or 0), "set_aside": int(r["ruled"] or 0)})
         empty = {"window": 0, "to_light": 0, "kept": 0, "skipped": 0, "to_read": 0, "read": 0}
         return [
-            {"address": r["address"], "messages": int(r["messages"] or 0), "untriaged": int(r["untriaged"] or 0), "reading": by.get(r["address"], empty)}
+            {
+                "address": r["address"], "messages": int(r["messages"] or 0), "untriaged": int(r["untriaged"] or 0),
+                "reading": by.get(r["address"], empty),
+                "top_senders": sorted(tops.get(r["address"], []), key=lambda e: (-e["messages"], e["sender"]))[:TOP_SENDERS],
+            }
             for r in held
         ]
 

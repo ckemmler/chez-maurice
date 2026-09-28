@@ -220,7 +220,14 @@ async def list_tools() -> list[Tool]:
             ),
             inputSchema={
                 "type": "object",
-                "properties": {"contacts": {"type": "array", "items": {"type": "string"}, "description": "Addresses of your contacts, if you have them."}},
+                "properties": {
+                    "contacts": {"type": "array", "items": {"type": "string"}, "description": "Addresses of your contacts, if you have them."},
+                    "rules": {
+                        "type": "object",
+                        "additionalProperties": {"type": ["integer", "null"]},
+                        "description": "Senders set aside: address → the days of their mail still read (0: none).",
+                    },
+                },
             },
         ),
         Tool(
@@ -451,7 +458,12 @@ def dispatch(service: EmailService, name: str, args: dict[str, Any], *, member_i
         return service.reconcile_start(accounts, account=args.get("account"))
     if name == "triage_mailbox":
         contacts = args.get("contacts")
-        return service.triage(accounts, contacts=[str(c) for c in contacts] if isinstance(contacts, list) else None)
+        rules = args.get("rules")
+        return service.triage(
+            accounts,
+            contacts=[str(c) for c in contacts] if isinstance(contacts, list) else None,
+            rules={str(k): v for k, v in rules.items()} if isinstance(rules, dict) else None,
+        )
     if name == "mailbox_report":
         return service.report(accounts, years=args.get("years") or 3)
     if name == "calibrate_reading":
