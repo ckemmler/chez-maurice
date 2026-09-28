@@ -53,8 +53,10 @@ interface StreamEvent {
   usage?: TurnUsage;
 }
 
-// Cap on agentic tool rounds per user turn — prevents runaway loops.
-const MAX_TOOL_ROUNDS = 6;
+// Cap on agentic tool rounds per user turn — prevents runaway loops. A turn
+// that reaches it gets one round more, without tools, to answer from what it
+// found (see LAST_ROUND_NOTICE).
+export const MAX_TOOL_ROUNDS = 6;
 
 function getHouseholdConfig(): {
   apiKey: string | null;
@@ -481,8 +483,9 @@ function logToolCall(
   );
 }
 
-/** Logged when a turn hits MAX_TOOL_ROUNDS — the one signal today's silent
- *  "stopped after several tool steps" message gives the user nothing about.
+/** Logged when a turn spends its last tool round and goes on to the answer
+ *  round (LAST_ROUND_NOTICE) — the signal the "stopped after several tool
+ *  steps" line, when that round still gives nothing, tells the user nothing about.
  *  The ordered call list is exactly what a by-hand autopsy has to otherwise
  *  reconstruct from messages.data across several turns. */
 function logToolCapHit(
@@ -551,6 +554,34 @@ const wantsPeople = (name: string, input: any): boolean => {
 export const HELD_FOR_PEOPLE =
   "Not run: in the same round you looked at the people. Their fiche comes first — a fiche hit carries `person`: who they are, their addresses, and when you last exchanged. " +
   "Answer from it; call this again next round only if the fiche is missing or does not answer.";
+
+// ── The round after the last tool round ─────────────────────────────────────
+//
+// A turn asked to take up Buteyko breathing again (27 September 2026) read the
+// domain brief, the garden, the conversations and the breathing signals over
+// six rounds, held everything its answer needed — the phases, the BOLT scores,
+// the last session logged — and was cut off before writing a word of it: the
+// cap ended the loop once the sixth round's tools had run, and the member read
+// "stopped after several tool steps" and nothing else. The model had never been
+// told the rounds were counted.
+//
+// The last tool round's results now carry this notice, and the turn gets one
+// round more to answer, with `tool_choice: "none"` where the provider takes
+// it. The tools stay in that request: they head the cached prefix, and
+// Anthropic refuses a history holding a tool_use without the tool's
+// definition. A model that asks for a tool anyway gets nothing run, and the
+// member gets the old "stopped" line after whatever it did write.
+
+export const LAST_ROUND_NOTICE =
+  "That was your last tool round for this turn: no further tool call will run. " +
+  "Answer now from what the results above give you, and say briefly what is still missing, if anything.";
+
+/** What the answer-only round adds to an OpenAI-style request. Z.ai documents
+ *  `tool_choice: "auto"` alone, and a strict server refuses what it does not
+ *  know, so it gets the notice only. Exported for tests. */
+export function answerOnlyBody(provider: string): Record<string, unknown> {
+  return provider === "zai" ? {} : { tool_choice: "none" };
+}
 
 /** The positions, in one round's calls, of the mail tools held back. */
 export function heldForPeople(batch: Array<{ name: string; input: any }>): Set<number> {
@@ -693,11 +724,15 @@ async function* runOllamaAgentic(
   const searches = newSearchLedger();
 
   let useTools = tools.length > 0;
-  for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
+  for (let round = 0; round <= MAX_TOOL_ROUNDS; round++) {
     if (signal?.aborted) return;
+    // Past the cap: one round to answer, none to look anything else up. Ollama
+    // has no tool_choice; the notice on the last results does the asking.
+    const answerOnly = round === MAX_TOOL_ROUNDS;
     let content = "";
     let toolCalls: OllamaToolCall[] = [];
     let unsupported = false;
+    let failed = false;
     const started = performance.now();
     for await (const ev of ollamaTurn(model, convo, useTools ? tools : [], maxTokens, signal, thinking)) {
       if (ev.type === "text") {
@@ -711,6 +746,9 @@ async function* runOllamaAgentic(
         // Some local models don't support tool-calling — retry as plain chat.
         if (useTools && /does ?n.t support tools|tools.*not supported/i.test(ev.message)) {
           unsupported = true;
+        } else if (answerOnly) {
+          failed = true; // the member gets the line this round was meant to replace
+          break;
         } else {
           yield { type: "error", message: ev.message };
           return;
@@ -723,6 +761,9 @@ async function* runOllamaAgentic(
       continue;
     }
     logRound({ conversationId, provider: "ollama", model, round }, performance.now() - started, null, toolCalls.length);
+    // Nothing usable from the answer round — it failed, stayed silent, or
+    // asked for another tool, which does not run.
+    if (answerOnly && (failed || toolCalls.length || !content)) break;
     if (!toolCalls.length) {
       yield { type: "done", message_id: crypto.randomUUID() };
       return;
@@ -742,8 +783,11 @@ async function* runOllamaAgentic(
       if (r.data != null) yield { type: "tool_data", tool: name, data: r.data };
       convo.push({ role: "tool", content: r.text });
     }
+    if (round === MAX_TOOL_ROUNDS - 1) {
+      logToolCapHit(conversationId, "ollama", MAX_TOOL_ROUNDS, calls);
+      convo[convo.length - 1].content += `\n\n[${LAST_ROUND_NOTICE}]`;
+    }
   }
-  logToolCapHit(conversationId, "ollama", MAX_TOOL_ROUNDS, calls);
   yield { type: "text_delta", text: t(lang, "chat.stopped_tool_steps") };
   yield { type: "done", message_id: crypto.randomUUID() };
 }
@@ -866,8 +910,10 @@ async function* runOpenAIAgentic(
     cacheKey: PROMPT_CACHE_KEY_PROVIDERS.has(provider) ? conversationId : undefined,
     extraBody: thinkingBody(provider, thinking),
   };
-  for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
+  for (let round = 0; round <= MAX_TOOL_ROUNDS; round++) {
     if (signal?.aborted) { yield* reportUsage(); return; }
+    // Past the cap: one round to answer, none to look anything else up.
+    const answerOnly = round === MAX_TOOL_ROUNDS;
     // The fuse. Checked every round, not just before the first: a turn with six
     // tool rounds is six billed requests, and a cap consulted once would let the
     // other five through. `priceUsage` gives what this turn has run up so far,
@@ -882,8 +928,12 @@ async function* runOpenAIAgentic(
     usage.rounds++;
     let content = "";
     let toolCalls: OpenAIToolCall[] = [];
+    let failed = false;
+    const roundOpts = answerOnly
+      ? { ...turnOpts, extraBody: { ...turnOpts.extraBody, ...answerOnlyBody(provider) } }
+      : turnOpts;
     const started = performance.now();
-    for await (const ev of openaiTurn(baseUrl, apiKey, model, convo, tools, temperature, turnOpts)) {
+    for await (const ev of openaiTurn(baseUrl, apiKey, model, convo, tools, temperature, roundOpts)) {
       if (ev.type === "text") {
         content += ev.text;
         yield { type: "text_delta", text: ev.text };
@@ -900,6 +950,9 @@ async function* runOpenAIAgentic(
           usage.output += ev.usage.completion;
         }
       } else if (ev.type === "error") {
+        // A provider that refuses `tool_choice: "none"` must not turn a turn
+        // whose tools all ran into an error: the old line stands in.
+        if (answerOnly) { failed = true; break; }
         yield* reportUsage();
         // A billing refusal is not a bug to show a member a status code for — it
         // is an errand for the admin. `out_of_credits` reuses the Anthropic
@@ -914,6 +967,9 @@ async function* runOpenAIAgentic(
         return;
       }
     }
+    // Nothing usable from the answer round — it failed, stayed silent, or
+    // asked for another tool, which does not run.
+    if (answerOnly && (failed || toolCalls.length || !content)) break;
     if (!toolCalls.length) {
       yield* reportUsage();
       yield { type: "done", message_id: crypto.randomUUID() };
@@ -944,8 +1000,11 @@ async function* runOpenAIAgentic(
       if (r.data != null) yield { type: "tool_data", tool: name, data: r.data };
       convo.push({ role: "tool", tool_call_id: tc.id, content: r.text });
     }
+    if (round === MAX_TOOL_ROUNDS - 1) {
+      logToolCapHit(conversationId, provider, MAX_TOOL_ROUNDS, calls);
+      convo[convo.length - 1].content += `\n\n[${LAST_ROUND_NOTICE}]`;
+    }
   }
-  logToolCapHit(conversationId, provider, MAX_TOOL_ROUNDS, calls);
   yield { type: "text_delta", text: t(lang, "chat.stopped_tool_steps") };
   yield* reportUsage();
   yield { type: "done", message_id: crypto.randomUUID() };
@@ -1581,7 +1640,9 @@ function trackedBooks(
   }
 
   try {
-    for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
+    for (let round = 0; round <= MAX_TOOL_ROUNDS; round++) {
+      // Past the cap: one round to answer, none to look anything else up.
+      const answerOnly = round === MAX_TOOL_ROUNDS;
       // The fuse — see the twin of this check in the OpenAI-compatible loop.
       const budget = budgetVerdict("anthropic", resolved, priceUsage(usage).cost ?? 0, memberId);
       if (!budget.ok) {
@@ -1602,6 +1663,7 @@ function trackedBooks(
       };
       if (temperature !== undefined) body.temperature = temperature;
       if (tools.length) body.tools = tools;
+      if (answerOnly && tools.length) body.tool_choice = { type: "none" };
       // Adaptive thinking is the one on-mode of the 4.6+ family (the fixed
       // budget is gone from the newer models); sampling parameters are refused
       // beside it on 4.7+, so the persona's creativity yields to its choice to
@@ -1628,6 +1690,7 @@ function trackedBooks(
       // someone wants to know what it cost — reporting only on the happy path
       // makes an expensive failure look free.
       if (!response.ok) {
+        if (answerOnly) break; // the old line stands in; see the OpenAI-style loop
         const errBody = await response.text();
         if (errBody.includes("credit balance is too low")) {
           yield { type: "text_delta", text: t(userLang, "chat.out_of_credits") };
@@ -1654,6 +1717,7 @@ function trackedBooks(
       const contentBlocks: any[] = []; // final assistant content (text + tool_use)
       const blockState: Record<number, { type: string; text?: string; id?: string; name?: string; partialJson?: string; thinking?: string; signature?: string; data?: string }> = {};
       let stopReason: string | null = null;
+      let failed = false;
       // Output tokens already credited to `usage` for this round, so the running
       // total from message_delta can be applied as a delta rather than a sum.
       let roundOutput = 0;
@@ -1751,6 +1815,7 @@ function trackedBooks(
               roundOutput = event.usage.output_tokens;
             }
           } else if (event.type === "error") {
+            if (answerOnly) { failed = true; break; }
             // message_start has already reported this round's input tokens, and
             // earlier rounds are fully billed — report before bailing.
             yield* reportUsage();
@@ -1758,6 +1823,7 @@ function trackedBooks(
             return;
           }
         }
+        if (failed) break;
       }
 
       roundUsage.completion = roundOutput;
@@ -1766,6 +1832,11 @@ function trackedBooks(
         performance.now() - roundStarted, roundUsage,
         contentBlocks.filter((b) => b.type === "tool_use").length,
       );
+
+      // Nothing usable from the answer round — it failed, stayed silent, or
+      // asked for another tool, which does not run.
+      const wrote = contentBlocks.some((b) => b.type === "text" && b.text);
+      if (answerOnly && (failed || stopReason === "tool_use" || !wrote)) break;
 
       // Not a tool turn → we're done.
       if (stopReason !== "tool_use") {
@@ -1800,6 +1871,11 @@ function trackedBooks(
         });
       }
 
+      // After the tool_result blocks, where Anthropic wants any text beside them.
+      if (round === MAX_TOOL_ROUNDS - 1) {
+        logToolCapHit(conversationId, "anthropic", MAX_TOOL_ROUNDS, calls);
+        toolResults.push({ type: "text", text: LAST_ROUND_NOTICE });
+      }
       messages.push({ role: "user", content: toolResults });
 
       // Hand the tail breakpoint to the results just appended, so the next round
@@ -1812,8 +1888,7 @@ function trackedBooks(
       // loop again with the tool results appended
     }
 
-    // Hit the round cap.
-    logToolCapHit(conversationId, "anthropic", MAX_TOOL_ROUNDS, calls);
+    // The answer round gave nothing usable.
     yield {
       type: "text_delta",
       text: t(userLang, "chat.stopped_tool_steps_more"),
