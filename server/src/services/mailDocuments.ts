@@ -522,6 +522,32 @@ async function exchangesWith(d: MailDocumentsDeps, memberId: string, addresses: 
 class Capped extends Error {}
 
 /** Write the fiches and digests a member's readings allow. Never throws. */
+/** Notes written at once. One at a time, the owner's first contactoffice
+ *  pass wrote a note a minute — the model waiting, not busy — for a pass of
+ *  several hundred (28 September 2026). What a worker decides after its
+ *  model call (the slug, the file) holds no await, so the workers do not
+ *  race on names. */
+export const DOC_CONCURRENCY = 4;
+
+/** Run `fn` over `items`, `n` at a time. The first error stops the
+ *  workers taking more, and is thrown once they have all settled. */
+async function inPool<T>(items: T[], n: number, fn: (item: T) => Promise<void>): Promise<void> {
+  let next = 0;
+  let failure: unknown = null;
+  const worker = async () => {
+    while (failure === null && next < items.length) {
+      const item = items[next++]!;
+      try {
+        await fn(item);
+      } catch (err) {
+        failure ??= err;
+      }
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(n, items.length) }, worker));
+  if (failure !== null) throw failure;
+}
+
 /** Where a documents pass is, for the app (28 September 2026): the fiches
  *  and digests it has in hand, how many it went through, how many it wrote.
  *  In memory: a pass lives in this process, and nothing is shown once it is
@@ -646,7 +672,7 @@ async function documentsPass(memberId: string, d: MailDocumentsDeps): Promise<Do
         byKey.delete(`person:${k}`);
       }
     }
-    for (const p of people) {
+    await inPool(people, DOC_CONCURRENCY, async (p) => {
       step();
       const artefact = byKey.get(`person:${p.key}`) ?? null;
       const exchanges = await exchangesWith(d, memberId, p.identities.map((i) => i.address).filter((a) => !fiches.rejected.get(a)?.has(p.key)));
@@ -670,23 +696,23 @@ async function documentsPass(memberId: string, d: MailDocumentsDeps): Promise<Do
         recorded.push({ kind: "person", key: p.key, slug: o.basename, locale: o.locale, title: o.title, sources: o.covered });
         run.written.push({ kind: "person", key: p.key, slug: o.basename, title: o.title, web_path: o.webPath, sources: o.cited });
       }
-    }
+    });
     const pt = progress.get(memberId);
     if (pt) pt.stage = "threads";
-    for (const g of threads) {
+    await inPool(threads, DOC_CONCURRENCY, async (g) => {
       step();
       const kind = "thread" as const;
       const what = decide(kind, g);
       if (what !== "write") {
         run.skipped[what]++;
-        continue;
+        return;
       }
       const msgs = g.messages.slice(-MAX_PER_NOTE);
       const r = await ask(threadSystem(name, language), materialBlock(msgs));
       const rendered = renderThread(r.text, g, w, locale, labels);
       if (!rendered) {
         console.warn(`[mail] documents for ${memberId}: nothing usable for ${kind} ${g.key} (${r.stop})`);
-        continue;
+        return;
       }
       // The file name follows the title. A second pass that names the person
       // or the matter otherwise — the first pass had fewer messages to go on —
@@ -725,7 +751,7 @@ async function documentsPass(memberId: string, d: MailDocumentsDeps): Promise<Do
       // night.
       recorded.push({ kind, key: g.key, slug, locale, title: rendered.title, sources: g.messages.map((m) => m.id) });
       run.written.push({ kind, key: g.key, slug, title: rendered.title, web_path: noteWebPath(garden.username, locale, slug), sources: rendered.ids.length });
-    }
+    });
   } catch (err) {
     const message = (err as Error).message;
     if (!(err instanceof Capped)) {

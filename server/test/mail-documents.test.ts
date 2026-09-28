@@ -472,8 +472,13 @@ test("the member's cap stops the run before the call; a model answer with no sou
   budget.setMemberDailyCap(ANNA, 0.001);
   const r = await docs.writeMailDocuments(ANNA);
   expect(r.outcome).toBe("capped");
-  expect(writes).toHaveLength(1);
-  expect(r.written.map((n) => n.kind)).toEqual(["hub", "person"]); // the first went; the second was refused
+  // The workers that passed the check before the first spend landed may
+  // each make their call — never more than there are workers; the rest are
+  // refused before the call.
+  expect(writes.length).toBeGreaterThanOrEqual(1);
+  expect(writes.length).toBeLessThanOrEqual(docs.DOC_CONCURRENCY);
+  expect(r.written[0]!.kind).toBe("hub");
+  expect(r.written.filter((n) => n.kind === "person").length).toBeGreaterThanOrEqual(1);
   budget.setMemberDailyCap(ANNA, null);
   fs.rmSync(gardenRoot, { recursive: true, force: true }); fs.mkdirSync(notesDir, { recursive: true });
   artefacts = [];
