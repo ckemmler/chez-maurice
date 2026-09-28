@@ -52,7 +52,7 @@ const FULL_OUTPUT_SHARE = 0.1;
 /** Euros for `tokens` in and `out` out on a model, from the price sheet.
  *  Null when the sheet does not know the model — never zero, which would
  *  read as free. An Ollama model is free by construction. */
-function eurosFor(model: string, tokensIn: number, tokensOut: number): number | null {
+export function eurosFor(model: string, tokensIn: number, tokensOut: number): number | null {
   const provider = getModel(model)?.provider ?? "";
   if (provider !== "ollama" && !priceFor(model)) return null;
   // priceUsage holds the sheet, the EUR rate and Ollama's zero: one place.

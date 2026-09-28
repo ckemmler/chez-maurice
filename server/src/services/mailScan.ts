@@ -8,7 +8,8 @@ import { corpusCall } from "./mcpClient";
 import { openConversation, type OpenRequest, type OpenResult } from "./openedConversations";
 import { listUsers } from "./users";
 import { backfillMailConversations, linkMailConversation } from "./mailApproval";
-import { readingWanted, runMailReading } from "./mailReading";
+import { readingWanted, startMailReading } from "./mailReading";
+import { mailboxViews, type MailboxView } from "./mailboxEstimate";
 import { writeMailDocuments } from "./mailDocuments";
 import { contactAddresses, listContactAccounts, syncContacts } from "./contactAccounts";
 import { listMailAccounts } from "./mailAccounts";
@@ -76,6 +77,8 @@ export interface ScanView {
    *  answered, then `approved` or `declined` — and, once lot 4 runs it,
    *  the job's own states. `decided_at` is when the word was given. */
   reading: { state: string; decided_at: string | null; years: number | null; job_id: string } | null;
+  /** Each mailbox: its messages, its reading, what is left and its estimate. */
+  mailboxes: MailboxView[];
 }
 
 /** What the run needs from the world, replaceable by a test. */
@@ -120,7 +123,9 @@ export function mailToolCall(memberId: string, tool: string, args: any): Promise
 
 const defaultDeps: MailScanDeps = {
   call: emailCall, members: () => listUsers(), open: openConversation, locale: memberLocale,
-  read: (memberId) => runMailReading(memberId), wantsReading: readingWanted,
+  // Through the shared launcher: a reading the member started in the day is
+  // joined, not run twice.
+  read: (memberId) => startMailReading(memberId), wantsReading: readingWanted,
   document: (memberId) => writeMailDocuments(memberId),
   contacts: freshContacts,
 };
@@ -165,6 +170,7 @@ export function scanView(payload: any): ScanView {
     last_error: job?.last_error ?? null,
     error: error ? String(error) : null,
     reading: readingView(payload?.reading),
+    mailboxes: error ? [] : mailboxViews(payload),
   };
 }
 
@@ -204,6 +210,26 @@ export function startMailScanInBackground(memberId: string): void {
       else console.log(`[mail] scan for ${memberId}: ${v.state} (${v.messages} message(s) in the store)`);
     })
     .catch((err) => console.warn(`[mail] scan for ${memberId}: ${(err as Error).message}`));
+}
+
+/**
+ * A mailbox was just added: walk its headers, then do at once the free work
+ * the night would do — the contacts, the triage, the calibration — so that
+ * the mailbox's card can say what reading it will take while the member is
+ * still looking at it (28 September 2026). Nothing is read: the reading is
+ * the member's word, given for the store, and launched from the card.
+ */
+export function analyseMailboxInBackground(memberId: string): void {
+  (async () => {
+    const { view, skipped } = await walkMailbox(memberId);
+    if (skipped || view.state !== "done") return;
+    await measure(memberId, deps);
+    const boxes = (await mailScanStatus(memberId)).mailboxes;
+    console.log(
+      `[mail] analysed after adding a mailbox for ${memberId}: ` +
+        boxes.map((b) => `${b.address} ${b.messages} messages${b.estimate ? `, ${b.estimate.to_read} to read, ~${b.estimate.hours} h, ${b.estimate.euros ?? "?"} €` : ", nothing left"}`).join("; "),
+    );
+  })().catch((err) => console.warn(`[mail] analysis after adding a mailbox for ${memberId}: ${(err as Error).message}`));
 }
 
 /** Sort the member's mail again with their contacts as they stand — after

@@ -188,6 +188,13 @@ def progress(store: MailStore, job: dict[str, Any] | None, now: datetime | None 
     return store.reading_progress(READ_KINDS, _since(job, now))
 
 
+def per_mailbox(store: MailStore, job: dict[str, Any] | None, now: datetime | None = None) -> list[dict[str, Any]]:
+    """Each mailbox's messages and reading, over the window of the reading
+    when there is one, else the default window — what the app shows under
+    each mailbox."""
+    return store.per_address(READ_KINDS, _since(job, now))
+
+
 def next_batch(
     store: MailStore, sessions: dict[str, Session], job: dict[str, Any], stage: str, limit: int = 20, *, now: datetime | None = None
 ) -> dict[str, Any]:

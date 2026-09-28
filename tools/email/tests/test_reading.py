@@ -202,6 +202,20 @@ def test_verdicts_and_readings_are_kept_the_reading_sealed_and_the_job_counts_mo
     assert len(store().readings()) == 1
 
 
+def test_scan_status_says_each_mailbox_its_messages_and_its_reading(tmp_path):
+    svc, _client = ready(tmp_path)
+    status = svc.scan_status(alex(svc))
+    [box] = status["mailboxes"]
+    assert box["address"] == "alex@icloud.com"
+    assert box["messages"] == 13 and box["untriaged"] == 0
+    assert box["reading"] == {"window": 9, "to_light": 9, "kept": 0, "skipped": 0, "to_read": 0, "read": 0}
+    batch = svc.reading_next(alex(svc), stage="light", limit=9)
+    ids = [m["id"] for m in batch["messages"]]
+    svc.reading_record(alex(svc), verdicts=[{"id": i, "keep": i in ids[:2], "reason": "r"} for i in ids])
+    [box] = svc.scan_status(alex(svc))["mailboxes"]
+    assert box["reading"] == {"window": 9, "to_light": 0, "kept": 2, "skipped": 7, "to_read": 2, "read": 0}
+
+
 def test_control_moves_the_job_and_measures_the_capacity_that_the_estimate_then_uses(tmp_path):
     svc, _client = ready(tmp_path)
     acc = alex(svc)

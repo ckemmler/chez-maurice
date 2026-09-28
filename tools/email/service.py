@@ -315,7 +315,12 @@ class EmailService:
         reconcile = store.latest_job(RECONCILE_KIND)
         reading = reading_mod.status(store)
         running = any(j and j["state"] == "running" for j in (job, reconcile, reading))
-        return {"running": running, "job": job, "reconcile": reconcile, "reading": reading, **self._scan_summary(store)}
+        return {
+            "running": running, "job": job, "reconcile": reconcile, "reading": reading,
+            **self._scan_summary(store),
+            "mailboxes": reading_mod.per_mailbox(store, reading),
+            "calibration": store.calibration(),
+        }
 
     @staticmethod
     def _scan_summary(store: MailStore) -> dict[str, Any]:

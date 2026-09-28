@@ -107,6 +107,21 @@ function lightSystem(name: string): string {
   );
 }
 
+/** What a pass sends and gets back per message beyond the message itself,
+ *  in tokens, from the prompts as they are written — for the estimate a
+ *  member without a reading history is shown (services/mailboxEstimate.ts).
+ *  The light pass shares its instructions across a batch; a full reading
+ *  carries them whole and answers with a JSON of a few hundred tokens. */
+export function passOverhead(): { light_in: number; light_out: number; full_in: number; full_out: number } {
+  const t = (s: string) => Math.ceil(s.length / 3);
+  return {
+    light_in: Math.ceil(t(lightSystem("Name")) / LIGHT_BATCH) + 40,
+    light_out: 25,
+    full_in: t(fullSystem("Name", "English")) + 40,
+    full_out: 300,
+  };
+}
+
 function lightPrompt(messages: any[]): string {
   return messages
     .map((m, i) => {

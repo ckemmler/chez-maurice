@@ -10,7 +10,11 @@ import {
   restoreSecret,
   type MailAccount,
 } from "../services/mailAccounts";
-import { mailScanStatus, startMailScan, startMailScanInBackground } from "../services/mailScan";
+import { analyseMailboxInBackground, mailScanStatus, startMailScan, type ScanView } from "../services/mailScan";
+import { withoutMoney } from "../services/mailboxEstimate";
+import { mailReadingStatus, readingWanted, startMailReading } from "../services/mailReading";
+import { writeMailDocuments } from "../services/mailDocuments";
+import { getUser } from "../services/users";
 import { decideReading, mailConversationOf, sayReadingDecided, type ReadingAction } from "../services/mailApproval";
 import { forgetMailbox } from "../services/mailForget";
 import { memberLocale } from "../services/domainBriefs";
@@ -61,6 +65,12 @@ function fail(c: any, err: unknown) {
 
 accounts.get("/", (c) => c.json({ accounts: listMailAccounts(c.get("userId")).map(view) }));
 
+/** The operator sees what a reading costs; a member sees the volume and the
+ *  time (the rule of 26 September 2026: no money shown to members). */
+function forViewer(uid: string, v: ScanView): ScanView {
+  return getUser(uid)?.role === "admin" ? v : { ...v, mailboxes: withoutMoney(v.mailboxes) };
+}
+
 /** Add a mailbox: `{ address, password }`, plus `provider` for a Google
  *  Workspace domain, or `host` (`port`, `security`, `username`) for a server
  *  the address's domain does not name. 201 once the login worked; 422 with
@@ -79,17 +89,38 @@ accounts.post("/", async (c) => {
     deleteMailAccount(uid, created.id);
     return c.json({ error: checked.last_error ?? "the mailbox refused the login", detail: checked.last_error }, 422);
   }
-  startMailScanInBackground(uid);
+  // The headers, then the free work of the night at once (triage,
+  // calibration): the card says what reading this mailbox will take.
+  analyseMailboxInBackground(uid);
   return c.json(view(checked), 201);
 });
 
 /** Where the header walk is: its state, the counts of the current or last
  *  job, what the store holds — `state: "none"` for a member without mail. */
-accounts.get("/scan", async (c) => c.json(await mailScanStatus(c.get("userId"))));
+accounts.get("/scan", async (c) => c.json(forViewer(c.get("userId"), await mailScanStatus(c.get("userId")))));
 
 /** Start the walk again — after a pause, or to pick up new mail now rather
  *  than tonight. A walk already going is joined, not doubled. */
-accounts.post("/scan", async (c) => c.json(await startMailScan(c.get("userId"))));
+accounts.post("/scan", async (c) => c.json(forViewer(c.get("userId"), await startMailScan(c.get("userId")))));
+
+/** Read now rather than tonight — the reading the member approved, over
+ *  every mailbox, as long as it takes (twelve hours at most), then the
+ *  documents it allows. A run already going (the night's, or one started
+ *  before) is joined. 409 without the member's yes. */
+accounts.post("/reading/run", async (c) => {
+  const uid = c.get("userId");
+  if (!readingWanted(uid)) return c.json({ error: "the reading has not been approved" }, 409);
+  const already = mailReadingStatus(uid).running;
+  if (!already) {
+    startMailReading(uid, { maxMs: 12 * 60 * 60 * 1000 })
+      .then(async (r) => {
+        if (r.read > 0) await writeMailDocuments(uid);
+      })
+      .catch((err) => console.warn(`[mail] reading started from the app for ${uid}: ${(err as Error).message}`));
+    console.log(`[mail] reading started from the app for ${uid}`);
+  }
+  return c.json({ ...forViewer(uid, await mailScanStatus(uid)), started: !already, running: true });
+});
 
 /** The member's word on the reading, from the card: `{ action: "approve" |
  *  "decline" }`. Records it in their store through the tool, mirrors it,
@@ -104,7 +135,7 @@ accounts.post("/reading", async (c) => {
     const d = await decideReading(uid, action as ReadingAction);
     // Said once: a second identical word changes nothing and says nothing.
     const said = d.already ? null : sayReadingDecided(uid, action as ReadingAction);
-    const view = await mailScanStatus(uid);
+    const view = forViewer(uid, await mailScanStatus(uid));
     return c.json({ ...view, decision: { ...d, said, conversation_id: mailConversationOf(uid)?.conversation_id ?? null } });
   } catch (err) {
     return c.json({ error: (err as Error).message }, 422);

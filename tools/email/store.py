@@ -630,6 +630,39 @@ class MailStore:
             ).fetchone()
         return {k: int(row[k] or 0) for k in ("messages", "to_light", "kept", "skipped", "to_read", "read")}
 
+    def per_address(self, kinds: tuple[str, ...], since: str) -> list[dict[str, Any]]:
+        """Each mailbox on its own (28 September 2026): the messages the store
+        holds for it, those not triaged yet, and where the reading stands over
+        the window — to judge, kept, skipped, to read, read. A message present
+        in two mailboxes counts in both."""
+        with self._connect() as conn:
+            held = conn.execute(
+                """SELECT l.address, COUNT(DISTINCT m.id) AS messages,
+                          COUNT(DISTINCT CASE WHEN t.message IS NULL THEN m.id END) AS untriaged
+                   FROM locations l JOIN messages m ON m.id = l.message LEFT JOIN triage t ON t.message = m.id
+                   WHERE m.gone_at IS NULL GROUP BY l.address"""
+            ).fetchall()
+            window = conn.execute(
+                f"""SELECT l.address,
+                      COUNT(DISTINCT m.id) AS window,
+                      COUNT(DISTINCT CASE WHEN r.light IS NULL THEN m.id END) AS to_light,
+                      COUNT(DISTINCT CASE WHEN r.light = 'keep' THEN m.id END) AS kept,
+                      COUNT(DISTINCT CASE WHEN r.light = 'skip' THEN m.id END) AS skipped,
+                      COUNT(DISTINCT CASE WHEN r.light = 'keep' AND r.reading_sealed IS NULL THEN m.id END) AS to_read,
+                      COUNT(DISTINCT CASE WHEN r.reading_sealed IS NOT NULL THEN m.id END) AS read
+                    FROM messages m JOIN triage t ON t.message = m.id JOIN locations l ON l.message = m.id
+                    LEFT JOIN readings r ON r.message = m.id
+                    WHERE t.kind IN ({','.join('?' * len(kinds))}) AND m.date >= ? AND m.date < '3000' AND m.gone_at IS NULL
+                    GROUP BY l.address""",
+                (*kinds, since),
+            ).fetchall()
+        by = {r["address"]: {"window": int(r["window"] or 0), **{k: int(r[k] or 0) for k in ("to_light", "kept", "skipped", "to_read", "read")}} for r in window}
+        empty = {"window": 0, "to_light": 0, "kept": 0, "skipped": 0, "to_read": 0, "read": 0}
+        return [
+            {"address": r["address"], "messages": int(r["messages"] or 0), "untriaged": int(r["untriaged"] or 0), "reading": by.get(r["address"], empty)}
+            for r in held
+        ]
+
     def write_light(self, verdicts: list[tuple[str, str, str, int | None, str]]) -> None:
         """``(message, keep|skip, reason, tokens, at)`` per message judged."""
         with self._transaction() as conn:
