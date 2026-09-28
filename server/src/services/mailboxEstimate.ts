@@ -30,6 +30,8 @@ export const LIGHT_PER_HOUR = 6000;
 export const FULL_PER_HOUR = 1600;
 /** The share kept by the light pass before a member has any: a third. */
 const DEFAULT_KEEP = 0.33;
+/** Below this many messages left, a mailbox says no estimate. */
+const MIN_LEFT = 20;
 /** A member's history is worth using past this much of it. */
 const MIN_JUDGED = 500;
 const MIN_READ = 100;
@@ -113,7 +115,8 @@ export function mailboxViews(payload: any): MailboxView[] {
     // Not sorted yet: its window is unknown, the whole box stands for it.
     const toSort = r.to_light + (b.untriaged > 0 ? Math.round(b.untriaged * (r.window && b.messages ? r.window / b.messages : 0.5)) : 0);
     const toRead = r.to_read + Math.round(toSort * keep);
-    const left = toSort + toRead > 0;
+    // A handful left (a message that failed, a straggler) is not worth a warning.
+    const left = toSort + toRead >= MIN_LEFT;
     return {
       address: b.address,
       messages: b.messages,

@@ -33,7 +33,7 @@ const box = (address: string, messages: number, untriaged: number, r: Partial<es
 test("each mailbox says its own numbers; a finished one has no estimate", async () => {
   const views = est.mailboxViews({
     mailboxes: [
-      box("done@x", 1000, 0, { window: 400, kept: 100, skipped: 300, read: 100 }),
+      box("done@x", 1000, 0, { window: 400, kept: 100, skipped: 300, read: 98, to_read: 2 }),
       box("new@x", 37000, 0, { window: 36000, to_light: 12000, kept: 1000, skipped: 3000, to_read: 1000 }),
     ],
     calibration: { sampled: 100, tokens: 22000, preview_tokens: 140 },
