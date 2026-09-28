@@ -79,7 +79,7 @@ if ssh "$HOST" "test -f $REMOTE_DIR/defaults.env"; then
   ssh "$HOST" "cd $REMOTE_DIR && for f in households/*.env; do
     [ -e \"\$f\" ] || continue
     n=\$(basename \"\$f\" .env)
-    if grep -qs '^MAURICE_SUSPENDED=1' \"\$f\"; then echo \"  \$n: paused — left stopped\"; continue; fi
+    if [ \"\$(sed -n 's/^MAURICE_SUSPENDED=//p' \"\$f\" | tail -1)\" = 1 ]; then echo \"  \$n: paused — left stopped\"; continue; fi
     docker compose -p maurice-\$n --env-file image.env --env-file \"\$f\" \
       -f compose.household.yml up -d
   done"

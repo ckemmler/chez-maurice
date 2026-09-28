@@ -80,10 +80,13 @@ snapshot_dbs() { # <container>
 
 backup_one() { # <name>
   local name="$1" container="maurice-$1" volume="maurice-$1_home"
-  # Paused from outside (MAURICE_SUSPENDED=1, MULTI-HOUSEHOLD.md): nothing in
-  # it can change while it is stopped, so its last snapshot stands and
-  # nothing is owed. Not a failure.
-  if grep -qs '^MAURICE_SUSPENDED=1' "$DIR/households/$name.env"; then
+  # Paused from outside (MAURICE_SUSPENDED=1 as the env file's last word on
+  # it, MULTI-HOUSEHOLD.md) *and* stopped: nothing in it can change, so its
+  # last snapshot stands and nothing is owed. Marked but running — a stop that
+  # failed, a restart by hand — is backed up like any other household: the
+  # mark alone must never silence one that is still being written to.
+  if [ "$(sed -n 's/^MAURICE_SUSPENDED=//p' "$DIR/households/$name.env" 2>/dev/null | tail -1)" = 1 ] &&
+     [ "$(docker inspect -f '{{.State.Status}}' "$container" 2>/dev/null)" != running ]; then
     say "$name: paused — its last snapshot stands"; return 0
   fi
   if [ "$(docker inspect -f '{{.State.Status}}' "$container" 2>/dev/null)" != running ]; then

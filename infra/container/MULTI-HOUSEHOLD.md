@@ -84,7 +84,9 @@ stopped, is a paused household: `scripts/deploy.sh` leaves it stopped rather
 than waking it on the new image, and `infra/host/backup.sh` skips it without
 calling it a failure — nothing in it changes while it is stopped, so its last
 snapshot stands. Its volume is untouched. Remove the line and `up` it to wake
-it. Whatever manages a household's subscription sets and clears it; nothing
+it. The last `MAURICE_SUSPENDED=` line of the file decides, as it does for
+Docker; and a household marked but still running is backed up like any
+other — the mark never silences one that is still being written to. Whatever manages a household's subscription sets and clears it; nothing
 in this repository does.
 
 ## Updating everyone

@@ -158,6 +158,11 @@ list)
 
 up|restart)
   name="${1:?which household?}"
+  # A paused household (MULTI-HOUSEHOLD.md) runs if asked, but say so: what
+  # paused it will stop it again, and the next deploy leaves it stopped.
+  if [ "$(remote "sed -n 's/^MAURICE_SUSPENDED=//p' $REMOTE_DIR/households/$name.env 2>/dev/null | tail -1")" = 1 ]; then
+    echo "  ! $name is marked paused (MAURICE_SUSPENDED=1) — starting it anyway"
+  fi
   [ "$cmd" = restart ] && dc_household "$name" restart || dc_household "$name" up -d
   echo "✓ $name $cmd"
   ;;
