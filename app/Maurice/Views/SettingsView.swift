@@ -1074,6 +1074,8 @@ private struct MailPane: View {
     @State private var readNowBusy = false
     /// The sender whose rule is being written (the triage runs again).
     @State private var ruleBusy: String?
+    /// The mailbox whose drawer is open: its own numbers and its actions.
+    @State private var managing: MailAccountRow?
 
     private var api: APIClient? { session.serverURL.map { APIClient(baseURL: $0) } }
 
@@ -1120,32 +1122,24 @@ private struct MailPane: View {
                 await loadScan()
             }
         }
-        .confirmationDialog(session.localized("mail.remove"), isPresented: Binding(
-            get: { removing != nil }, set: { if !$0 { removing = nil } }
-        ), titleVisibility: .visible, presenting: removing) { account in
-            Button(session.localized("mail.remove"), role: .destructive) { Task { await remove(account) } }
-            Button(L("common.cancel"), role: .cancel) {}
-        } message: { account in
-            Text(session.localized("mail.remove.confirm", account.address))
-        }
-        // Forgetting is not removing: what was read from this mailbox leaves
-        // the household's server and the garden — and, when asked, its history.
-        .alert(session.localized("mail.forget.title"), isPresented: Binding(
-            get: { forgetting != nil }, set: { if !$0 { forgetting = nil } }
-        ), presenting: forgetting) { account in
-            Button(session.localized("mail.forget"), role: .destructive) { Task { await forget(account, history: false) } }
-            Button(session.localized("mail.forget.history"), role: .destructive) { Task { await forget(account, history: true) } }
-            Button(L("common.cancel"), role: .cancel) {}
-        } message: { account in
-            Text(session.localized("mail.forget.message", account.address))
+        // Each mailbox's drawer: its numbers, what reading it takes, its
+        // senders, and the actions that used to line up on the card.
+        .sheet(item: $managing) { account in
+            manageSheet(account)
+            #if os(iOS)
+                .presentationDetents([.medium, .large])
+                .presentationDragIndicator(.visible)
+            #endif
         }
     }
 
     // MARK: Accounts
 
+    /// A mailbox on one line: its address, whether it answers, what it holds
+    /// and where its reading is — its own numbers — and one way in.
     private func accountCard(_ account: MailAccountRow) -> some View {
         SetCard {
-            VStack(alignment: .leading, spacing: 10) {
+            Button { managing = account } label: {
                 HStack(spacing: 11) {
                     RoundedRectangle(cornerRadius: 8, style: .continuous)
                         .fill(accent.opacity(0.14)).frame(width: 26, height: 26)
@@ -1155,57 +1149,189 @@ private struct MailPane: View {
                         Text(account.address).font(.system(size: 13.5)).foregroundStyle(theme.ink)
                             .lineLimit(1).truncationMode(.middle)
                         stateLine(account)
+                        if let box = box(of: account) {
+                            Text(summary(box)).font(.system(size: 11.5)).foregroundStyle(theme.inkMute)
+                                .lineLimit(2)
+                        }
                     }
-                    Spacer(minLength: 0)
-                }
-                if let box = scan?.mailboxes?.first(where: { $0.address.lowercased() == account.address.lowercased() }) {
-                    boxStatus(box)
-                }
-                if account.state == "error", let reason = account.last_error {
-                    Text(reason).font(.system(size: 11, design: .monospaced)).foregroundStyle(theme.inkMute)
-                        .textSelection(.enabled)
-                }
-                if renewing == account.id {
-                    HStack(spacing: 8) {
-                        SecureField(session.localized("mail.password"), text: $newPassword)
-                            .textFieldStyle(.roundedBorder)
-                        Button(session.localized("mail.save")) { Task { await renew(account) } }
-                            .glassProminentButton()
-                            .disabled(busy || newPassword.trimmingCharacters(in: .whitespaces).isEmpty)
+                    Spacer(minLength: 6)
+                    HStack(spacing: 4) {
+                        Text(session.localized("mail.manage")).font(.system(size: 12.5, weight: .medium))
+                        Image(systemName: "chevron.right").font(.system(size: 10, weight: .semibold))
                     }
+                    .foregroundStyle(theme.inkSoft)
+                    .fixedSize()
                 }
-                HStack(spacing: 8) {
-                    Button(session.localized("mail.check")) { Task { await check(account) } }
-                        .glassBorderedButton().disabled(busy)
-                    Button(session.localized("mail.new_password")) {
-                        newPassword = ""
-                        renewing = renewing == account.id ? nil : account.id
-                    }
-                    .glassBorderedButton().disabled(busy)
-                    Spacer(minLength: 0)
-                    Button(session.localized("mail.remove"), role: .destructive) { removing = account }
-                        .glassBorderedButton().disabled(busy)
-                    Button(session.localized("mail.forget"), role: .destructive) { forgetting = account }
-                        .glassBorderedButton().disabled(busy)
-                }
-                .font(.system(size: 12))
+                .padding(13)
+                .contentShape(Rectangle())
             }
-            .padding(13)
+            .buttonStyle(.plain)
         }
+    }
+
+    /// A count as the member's locale writes it: 37 335, not 37335.
+    private func num(_ n: Int) -> String { n.formatted(.number) }
+
+    private func box(of account: MailAccountRow) -> MailboxStatus? {
+        scan?.mailboxes?.first(where: { $0.address.lowercased() == account.address.lowercased() })
+    }
+
+    /// "37 335 messages · 71 read, 1 548 to read · reading" — this mailbox's.
+    private func summary(_ box: MailboxStatus) -> String {
+        let r = box.reading
+        var line: String
+        if r.to_read + r.to_light > 0 {
+            line = session.localized("mail.box.summary.reading", num(box.messages), num(r.read), num(r.to_read + r.to_light))
+        } else if r.read > 0 {
+            line = session.localized("mail.box.summary.done", num(box.messages), num(r.read))
+        } else {
+            line = session.localized("mail.box.summary.none", num(box.messages))
+        }
+        if scan?.running == true, r.to_read + r.to_light > 0 { line += " · " + session.localized("mail.box.summary.running") }
+        return line
+    }
+
+    // MARK: A mailbox's drawer
+
+    private func manageSheet(_ account: MailAccountRow) -> some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 18) {
+                    HStack(spacing: 8) {
+                        stateLine(account)
+                        Spacer(minLength: 0)
+                    }
+                    if account.state == "error", let reason = account.last_error {
+                        Text(reason).font(.system(size: 11, design: .monospaced)).foregroundStyle(theme.inkMute)
+                            .textSelection(.enabled)
+                    }
+                    if let box = box(of: account) {
+                        detailSection(session.localized("mail.detail.scan.title")) {
+                            Text(session.localized("mail.detail.scan", num(box.messages)))
+                            if box.untriaged > 0 { Text(session.localized("mail.detail.untriaged", num(box.untriaged))) }
+                        }
+                        detailSection(session.localized("mail.detail.reading.title")) {
+                            readingDetail(box)
+                        }
+                        boxStatus(box)
+                    }
+                    detailSection(session.localized("mail.detail.actions")) {
+                        actions(account)
+                    }
+                }
+                .padding(16)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .background(theme.surface)
+            .navigationTitle(account.address)
+            #if os(iOS)
+            .navigationBarTitleDisplayMode(.inline)
+            #endif
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button(L("common.done")) { managing = nil }.tint(theme.ink)
+                }
+            }
+            // While something runs, the numbers move: read them again.
+            .task(id: scan?.running == true) {
+                guard scan?.running == true else { return }
+                while !Task.isCancelled {
+                    try? await Task.sleep(for: .seconds(5))
+                    await loadScan()
+                }
+            }
+        }
+        .confirmationDialog(session.localized("mail.remove"), isPresented: Binding(
+            get: { removing != nil }, set: { if !$0 { removing = nil } }
+        ), titleVisibility: .visible, presenting: removing) { account in
+            Button(session.localized("mail.remove"), role: .destructive) { Task { await remove(account); managing = nil } }
+            Button(L("common.cancel"), role: .cancel) {}
+        } message: { account in
+            Text(session.localized("mail.remove.confirm", account.address))
+        }
+        // Forgetting is not removing: what was read from this mailbox leaves
+        // the household's server and the garden — and, when asked, its history.
+        .alert(session.localized("mail.forget.title"), isPresented: Binding(
+            get: { forgetting != nil }, set: { if !$0 { forgetting = nil } }
+        ), presenting: forgetting) { account in
+            Button(session.localized("mail.forget"), role: .destructive) { Task { await forget(account, history: false); managing = nil } }
+            Button(session.localized("mail.forget.history"), role: .destructive) { Task { await forget(account, history: true); managing = nil } }
+            Button(L("common.cancel"), role: .cancel) {}
+        } message: { account in
+            Text(session.localized("mail.forget.message", account.address))
+        }
+    }
+
+    private func detailSection<Content: View>(_ title: String, @ViewBuilder _ content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(title.uppercased()).font(.system(size: 11, weight: .semibold)).tracking(0.6).foregroundStyle(theme.inkMute)
+            VStack(alignment: .leading, spacing: 4) { content() }
+                .font(.system(size: 13)).foregroundStyle(theme.ink)
+        }
+    }
+
+    /// The reading of this mailbox, said for what it counts: the exchanges of
+    /// the window (not the newsletters), how many were sorted and kept, how
+    /// many read and left.
+    @ViewBuilder private func readingDetail(_ box: MailboxStatus) -> some View {
+        let r = box.reading
+        let years = scan?.reading?.years ?? 3
+        if r.window == 0 {
+            Text(session.localized("mail.detail.nothing", years))
+        } else {
+            Text(session.localized("mail.detail.window", num(r.window), years))
+            if r.kept + r.skipped > 0 { Text(session.localized("mail.detail.sorted", num(r.kept + r.skipped), num(r.kept), num(r.skipped))) }
+            if r.to_light > 0 { Text(session.localized("mail.detail.to_sort", num(r.to_light))) }
+            Text(session.localized("mail.detail.read", num(r.read), num(r.to_read)))
+            if scan?.running == true, r.to_read + r.to_light > 0 {
+                Label(session.localized("mail.box.running"), systemImage: "arrow.triangle.2.circlepath")
+                    .foregroundStyle(theme.inkMute)
+            }
+        }
+    }
+
+    /// What used to be four buttons on the card, one per line.
+    @ViewBuilder private func actions(_ account: MailAccountRow) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Button { Task { await check(account) } } label: {
+                Label(session.localized("mail.check"), systemImage: "arrow.clockwise")
+            }
+            .disabled(busy)
+            Button {
+                newPassword = ""
+                renewing = renewing == account.id ? nil : account.id
+            } label: {
+                Label(session.localized("mail.new_password"), systemImage: "key")
+            }
+            .disabled(busy)
+            if renewing == account.id {
+                HStack(spacing: 8) {
+                    SecureField(session.localized("mail.password"), text: $newPassword)
+                        .textFieldStyle(.roundedBorder)
+                    Button(session.localized("mail.save")) { Task { await renew(account) } }
+                        .glassProminentButton()
+                        .disabled(busy || newPassword.trimmingCharacters(in: .whitespaces).isEmpty)
+                }
+            }
+            Divider().padding(.vertical, 2)
+            Button(role: .destructive) { removing = account } label: {
+                Label(session.localized("mail.remove"), systemImage: "minus.circle")
+            }
+            .disabled(busy)
+            Button(role: .destructive) { forgetting = account } label: {
+                Label(session.localized("mail.forget"), systemImage: "trash")
+            }
+            .disabled(busy)
+        }
+        .buttonStyle(.plain)
+        .font(.system(size: 14))
     }
 
     /// What this mailbox holds and where its reading is — its own numbers,
     /// not the store's — then, while something is left, what it will take,
     /// and the way to read it now rather than over the coming nights.
     @ViewBuilder private func boxStatus(_ box: MailboxStatus) -> some View {
-        let r = box.reading
-        VStack(alignment: .leading, spacing: 6) {
-            Label(session.localized("mail.box.messages", box.messages), systemImage: "tray")
-                .font(.system(size: 12)).foregroundStyle(theme.inkSoft)
-            if r.window > 0 {
-                Label(session.localized("mail.box.reading", r.kept + r.skipped, r.to_read, r.read), systemImage: "book.closed")
-                    .font(.system(size: 12)).foregroundStyle(theme.inkSoft)
-            }
+        VStack(alignment: .leading, spacing: 12) {
             if let e = box.estimate {
                 VStack(alignment: .leading, spacing: 6) {
                     Label(estimateLine(e), systemImage: "exclamationmark.circle")
@@ -1213,22 +1339,17 @@ private struct MailPane: View {
                     if e.pending {
                         Text(session.localized("mail.box.pending")).font(.system(size: 11)).foregroundStyle(theme.inkMute)
                     }
-                    if readingApproved {
+                    if readingApproved, scan?.running != true {
                         HStack(spacing: 8) {
-                            if scan?.running == true {
-                                ProgressView().controlSize(.small)
-                                Text(session.localized("mail.box.running")).font(.system(size: 12)).foregroundStyle(theme.inkMute)
-                            } else {
-                                Button { Task { await readNow() } } label: {
-                                    Label(session.localized("mail.box.read_now"), systemImage: "play.fill")
-                                        .font(.system(size: 12.5, weight: .medium))
-                                        .padding(.horizontal, 10).padding(.vertical, 5)
-                                }
-                                .glassProminentButton()
-                                .tint(session.activeDeviceUser?.color ?? .blue)
-                                .disabled(readNowBusy)
-                                .help(session.localized("mail.box.read_now.help"))
+                            Button { Task { await readNow() } } label: {
+                                Label(session.localized("mail.box.read_now"), systemImage: "play.fill")
+                                    .font(.system(size: 12.5, weight: .medium))
+                                    .padding(.horizontal, 10).padding(.vertical, 5)
                             }
+                            .glassProminentButton()
+                            .tint(session.activeDeviceUser?.color ?? .blue)
+                            .disabled(readNowBusy)
+                            .help(session.localized("mail.box.read_now.help"))
                             Spacer(minLength: 0)
                         }
                     }
@@ -1237,8 +1358,8 @@ private struct MailPane: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .background(RoundedRectangle(cornerRadius: 8).fill(Color.orange.opacity(0.10)))
             }
-            let senders = Array((box.top_senders ?? []).prefix(3))
-            if !senders.isEmpty, box.estimate != nil || senders.contains(where: { $0.rule_days != nil }) {
+            let senders = box.top_senders ?? []
+            if !senders.isEmpty {
                 senderRules(senders)
             }
         }
@@ -1255,7 +1376,7 @@ private struct MailPane: View {
                 HStack(spacing: 8) {
                     VStack(alignment: .leading, spacing: 1) {
                         Text(s.sender).font(.system(size: 12)).foregroundStyle(theme.ink).lineLimit(1).truncationMode(.middle)
-                        Text(session.localized("mail.sender.count", s.messages)).font(.system(size: 11)).foregroundStyle(theme.inkMute)
+                        Text(session.localized("mail.sender.count", num(s.messages))).font(.system(size: 11)).foregroundStyle(theme.inkMute)
                     }
                     Spacer(minLength: 4)
                     if ruleBusy == s.sender {
@@ -1315,7 +1436,9 @@ private struct MailPane: View {
     /// when the server sent them (the operator).
     private func estimateLine(_ e: MailboxEstimate) -> String {
         let hours = e.hours < 1 ? session.localized("mail.box.under_hour") : session.localized("mail.box.hours", Int(e.hours.rounded()))
-        var line = session.localized("mail.box.left", e.to_sort, e.to_read, hours)
+        var line = e.to_sort > 0
+            ? session.localized("mail.box.left", num(e.to_sort), num(e.to_read), hours)
+            : session.localized("mail.box.left.read", num(e.to_read), hours)
         if let euros = e.euros { line += " · " + session.localized("mail.box.euros", euros.formatted(.number.precision(.fractionLength(0...2)))) }
         return line
     }
@@ -1356,11 +1479,12 @@ private struct MailPane: View {
                 HStack(spacing: 11) {
                     RoundedRectangle(cornerRadius: 8, style: .continuous)
                         .fill(accent.opacity(0.14)).frame(width: 26, height: 26)
-                        .overlay(Image(systemName: scan?.running == true ? "tray.full" : "tray")
+                        .overlay(Image(systemName: scan?.state == "running" ? "tray.full" : "tray")
                             .font(.system(size: 13)).foregroundStyle(accent.legible(onDark: theme.isDark)))
                     VStack(alignment: .leading, spacing: 2) {
                         Text(scanLine).font(.system(size: 13.5)).foregroundStyle(theme.ink)
-                        if let scan, scan.running {
+                        Text(session.localized("mail.scope.all", accounts?.count ?? 0)).font(.system(size: 11.5)).foregroundStyle(theme.inkMute)
+                        if let scan, scan.state == "running" {
                             Label(session.localized("mail.scan.running.hint"), systemImage: "arrow.triangle.2.circlepath")
                                 .font(.system(size: 11.5)).foregroundStyle(theme.inkMute)
                         } else if let reason = scan?.last_error ?? scan?.error {
@@ -1371,7 +1495,7 @@ private struct MailPane: View {
                     Spacer(minLength: 0)
                 }
                 HStack(spacing: 8) {
-                    if scan?.running == true {
+                    if scan?.state == "running" {
                         ProgressView().controlSize(.small)
                     } else {
                         Button {
@@ -1410,6 +1534,7 @@ private struct MailPane: View {
                             .font(.system(size: 13)).foregroundStyle(accent.legible(onDark: theme.isDark)))
                     VStack(alignment: .leading, spacing: 2) {
                         Text(readingLine).font(.system(size: 13.5)).foregroundStyle(theme.ink)
+                        Text(session.localized("mail.scope.reading", accounts?.count ?? 0)).font(.system(size: 11.5)).foregroundStyle(theme.inkMute)
                         if let readingError {
                             Text(readingError).font(.system(size: 11, design: .monospaced)).foregroundStyle(theme.inkMute)
                                 .lineLimit(3).textSelection(.enabled)
@@ -1486,10 +1611,10 @@ private struct MailPane: View {
     private var scanLine: String {
         guard let scan else { return session.localized("mail.scan.loading") }
         switch scan.state {
-        case "running": return session.localized("mail.scan.running", scan.messages)
-        case "paused": return session.localized("mail.scan.paused", scan.messages)
-        case "done": return session.localized("mail.scan.done", scan.messages)
-        case "failed": return session.localized("mail.scan.failed", scan.messages)
+        case "running": return session.localized("mail.scan.running", num(scan.messages))
+        case "paused": return session.localized("mail.scan.paused", num(scan.messages))
+        case "done": return session.localized("mail.scan.done", num(scan.messages))
+        case "failed": return session.localized("mail.scan.failed", num(scan.messages))
         default: return session.localized("mail.scan.idle")
         }
     }
