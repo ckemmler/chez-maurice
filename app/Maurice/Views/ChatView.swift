@@ -288,6 +288,9 @@ struct ChatView: View {
                         .padding(.horizontal, 36)
                         #endif
                         .frame(maxWidth: .infinity, alignment: .leading)
+                        #if os(iOS)
+                        .background(HorizontalOffsetPin())
+                        #endif
                     }
                     .coordinateSpace(name: "chatScroll")
                     // Any scroll hides the keyboard; tokens only auto-follow while
@@ -521,6 +524,48 @@ private struct UserScrollModifier: ViewModifier {
         }
     }
 }
+
+#if os(iOS)
+/// Holds the thread's scroll view at its resting horizontal offset.
+///
+/// The thread only scrolls vertically, yet on iPad it kept coming back from
+/// the app switcher shoved right by about the sidebar's width, laid out at the
+/// right width but offset, until a finger dragged it home. The system re-lays
+/// the app out in the background for its snapshots, the sidebar's inset comes
+/// and goes, and UIScrollView leaves `contentOffset.x` wherever that put it:
+/// it only settles an offset back inside its bounds on a touch. Nothing in
+/// SwiftUI reaches that axis, so this finds the enclosing UIScrollView and puts
+/// x back at rest whenever it moves: after a relayout, a scrollTo, a drag.
+private struct HorizontalOffsetPin: UIViewRepresentable {
+    func makeUIView(context: Context) -> PinView { PinView() }
+    func updateUIView(_ uiView: PinView, context: Context) {}
+
+    final class PinView: UIView {
+        private var observation: NSKeyValueObservation?
+
+        override func didMoveToWindow() {
+            super.didMoveToWindow()
+            observation = nil
+            guard window != nil else { return }
+            var view = superview
+            while let v = view, !(v is UIScrollView) { view = v.superview }
+            guard let scroll = view as? UIScrollView else { return }
+            scroll.alwaysBounceHorizontal = false
+            // contentOffset is only ever set on the main thread.
+            observation = scroll.observe(\.contentOffset) { scroll, _ in
+                MainActor.assumeIsolated { PinView.settle(scroll) }
+            }
+            PinView.settle(scroll)
+        }
+
+        private static func settle(_ scroll: UIScrollView) {
+            let rest = -scroll.adjustedContentInset.left
+            guard abs(scroll.contentOffset.x - rest) > 0.5 else { return }
+            scroll.contentOffset = CGPoint(x: rest, y: scroll.contentOffset.y)
+        }
+    }
+}
+#endif
 
 /// Reports the bottom anchor's position within the scroll viewport, so we can
 /// tell whether the user is following the stream or has scrolled up to re-read.
