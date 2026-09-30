@@ -101,12 +101,13 @@ Builds appear under TestFlight in App Store Connect after a few minutes' process
 up CI), re-create/import these. Provisioning profiles install to
 `~/Library/MobileDevice/Provisioning Profiles/<UUID>.{provisionprofile,mobileprovision}`.
 
-## Download links (landing page)
+## Links on the landing page
 
-`design/landing/index.html` hardcodes them in the markup (no JS wiring):
-- **server** → `/docs#start`, the container install guide. There is no binary to
-  download any more; see §1.
-- **mac** and **ios** → the **same TestFlight public link** (see below).
+`design/landing/index.html` is the hosted household offer (styles in `home.css`;
+`docs.html`, the self-host guide, keeps `landing.css`). Every call to action —
+*Get started*, *Download*, *Start with €1 of free usage* — points at the plan card
+on the page (`#download`) until `account.chezmaurice.eu` answers; then they go
+there. The self-host guide is linked from the footer (*Self-host* → `/docs`).
 
 ## TestFlight: one link for all platforms
 
