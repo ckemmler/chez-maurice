@@ -104,10 +104,13 @@ up CI), re-create/import these. Provisioning profiles install to
 ## Links on the landing page
 
 `design/landing/index.html` is the hosted household offer (styles in `home.css`;
-`docs.html`, the self-host guide, keeps `landing.css`). Every call to action —
-*Get started*, *Download*, *Start with €1 of free usage* — points at the plan card
-on the page (`#download`) until `account.chezmaurice.eu` answers; then they go
-there. The self-host guide is linked from the footer (*Self-host* → `/docs`).
+`docs.html`, the self-host guide, keeps `landing.css`). Its two sign-up buttons —
+*Get started* and *Start with €1 of free usage* — go to the tower's form at
+`https://account.chezmaurice.eu/?via=landing`; *Download* in the nav scrolls to
+the plan card. `/essai` and `/trial` (`_redirects`) are the short doors to the
+same form, for links shared elsewhere. The tower (sign-up, trial, accounts) lives
+in its own private repository, `chezmaurice-tower`. The self-host guide is linked
+from the footer (*Self-host* → `/docs`).
 
 ## TestFlight: one link for all platforms
 

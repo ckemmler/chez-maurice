@@ -3,3 +3,8 @@
 # 200, so `curl -O` saves an HTML file called ChezMaurice.pkg. Send people to
 # the install guide instead.
 /ChezMaurice.pkg  /docs  301
+
+# Short, shareable doors to the sign-up form (the tower, account.chezmaurice.eu).
+# The form picks its language from the browser; /essai says French outright.
+/essai  https://account.chezmaurice.eu/?lang=fr  302
+/trial  https://account.chezmaurice.eu/?lang=en  302
