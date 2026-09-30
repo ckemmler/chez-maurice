@@ -5,6 +5,8 @@
 /ChezMaurice.pkg  /docs  301
 
 # Short, shareable doors to the sign-up form (the tower, account.chezmaurice.eu).
-# The form picks its language from the browser; /essai says French outright.
-/essai  https://account.chezmaurice.eu/?lang=fr  302
-/trial  https://account.chezmaurice.eu/?lang=en  302
+# No query string on the right: Pages then passes the visitor's own through, so
+# /essai?via=hn reaches the tower's funnel. The form takes its language from the
+# browser.
+/essai  https://account.chezmaurice.eu/  302
+/trial  https://account.chezmaurice.eu/  302
