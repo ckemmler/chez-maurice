@@ -105,7 +105,7 @@ up CI), re-create/import these. Provisioning profiles install to
 
 `design/landing/index.html` is the hosted household offer (styles in `home.css`;
 `docs.html`, the self-host guide, keeps `landing.css`). Its two sign-up buttons —
-both *Start with €1 of free usage*, in the hero and on the plan card — go to the tower's form at
+both *Try it free for 30 days*, in the hero and on the plan card — go to the tower's form at
 `https://account.chezmaurice.eu/?via=landing`; *Download* in the nav scrolls to
 the plan card. `/essai` and `/trial` (`_redirects`) are the short doors to the
 same form, for links shared elsewhere. The tower (sign-up, trial, accounts) lives
