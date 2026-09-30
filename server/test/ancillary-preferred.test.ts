@@ -130,7 +130,7 @@ test("neither Z.ai nor Anthropic is ever preferred", () => {
   // Anthropic is out by decision, not by size: American and dear, for work
   // that a small European model does as well.
   expect(all.filter((id) => id.startsWith("claude-"))).toEqual([]);
-  expect(PREFERRED.light[0]).toBe("mistral-small-3.2-24b-instruct-2506");
+  expect(PREFERRED.light[0]).toBe("qwen3.6-35b-a3b");
 });
 
 test("nothing is advised for a function that dispatches its own turn", () => {
@@ -139,17 +139,17 @@ test("nothing is advised for a function that dispatches its own turn", () => {
   expect(own.length).toBeGreaterThan(0);
   for (const inv of own) expect(recommendedModel(inv.id)).toBe(null);
   // …while the ones that ask the server for their turn are advised normally.
-  expect(recommendedModel("moc_evocations")).toBe("mistral-small-3.2-24b-instruct-2506");
+  expect(recommendedModel("moc_evocations")).toBe("qwen3.6-35b-a3b");
 });
 
 test("Aline's shape: a GLM chat with a Scaleway key advises Scaleway", () => {
   household("glm-5.3-flash", { zai_api_key: "k-zai", scaleway_api_key: "k-scw" });
   expect(hasRecommendations()).toBe(true);
-  expect(recommendedModel(firstOfTier("light"))).toBe("mistral-small-3.2-24b-instruct-2506");
+  expect(recommendedModel(firstOfTier("light"))).toBe("qwen3.6-35b-a3b");
   expect(recommendedModel("conversation_summary")).toBe("gpt-oss-120b");
   expect(recommendedModel("flashcards")).toBe("qwen3.5-397b-a17b");
   // The garden tool asks the server for its turn, so it is advised too.
-  expect(recommendedModel("moc_evocations")).toBe("mistral-small-3.2-24b-instruct-2506");
+  expect(recommendedModel("moc_evocations")).toBe("qwen3.6-35b-a3b");
 
   const seeded = seedAncillaryPinsOnce();
   // The documentation tool has a computed default instead of advice (P3-A).

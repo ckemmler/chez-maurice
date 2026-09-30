@@ -822,11 +822,11 @@ try {
   if (!hh?.scaleway_seeded) {
     // id, name, vendor, ctx (k), vision, descr, sort
     const SCW: Array<[string, string, string, number, number, string, number]> = [
-      ["mistral-small-3.2-24b-instruct-2506", "Mistral Small 3.2",  "Mistral",  128, 1, "Quick, cheap, reads images — the everyday default on Scaleway.",     40],
+      ["mistral-small-3.2-24b-instruct-2506", "Mistral Small 3.2",  "Mistral",  128, 1, "Quick, cheap, reads images.",                                        40],
       ["gemma-4-26b-a4b-it",                  "Gemma 4 26B",        "Google",   256, 1, "Google's small frontier model: agentic, multilingual, reads images.",  41],
       ["qwen3.6-35b-a3b",                     "Qwen 3.6 35B",       "Qwen",     256, 1, "Small, fast reasoning model with tool use and vision.",               42],
       ["gpt-oss-120b",                        "GPT-OSS 120B",       "OpenAI",   128, 0, "OpenAI's open-weight reasoning model. Text only.",                    43],
-      ["deepseek-v4-flash-0731",              "DeepSeek V4 Flash",  "DeepSeek", 256, 0, "Fast reasoning model with a cached-input price. Text only.",          44],
+      ["deepseek-v4-flash-0731",              "DeepSeek V4 Flash",  "DeepSeek", 256, 0, "The everyday default: fast reasoning, a cached-input price. Text only.", 44],
       ["qwen3.5-397b-a17b",                   "Qwen 3.5 397B",      "Qwen",     250, 1, "Qwen's frontier reasoning model; reads images.",                      45],
       ["qwen3-235b-a22b-instruct-2507",       "Qwen 3 235B",        "Qwen",     250, 0, "Large instruct model, no reasoning phase. Text only.",                46],
       ["llama-3.3-70b-instruct",              "Llama 3.3 70B",      "Meta",     100, 0, "Meta's dependable generalist. Text only.",                            47],

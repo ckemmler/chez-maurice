@@ -29,9 +29,9 @@ test("the range: the light pass at the low end, a full reading on top at the hig
   expect(cost.low).toBeGreaterThan(0);
   expect(cost.high).toBeGreaterThan(cost.low);
   expect(cost.light_model).toBe(opener.LIGHT_MODEL);
-  // The light pass: 60 000 tokens in on mistral-small plus 40 out per message.
+  // The light pass: 60 000 tokens in on the small Qwen plus 100 out per message.
   const small = priceFor(opener.LIGHT_MODEL)!;
-  const expectedLow = ((60000 / 1e6) * small.input + ((466 * 40) / 1e6) * small.output) / 1.1537;
+  const expectedLow = ((60000 / 1e6) * small.input + ((466 * 100) / 1e6) * small.output) / 1.1537;
   expect(cost.low).toBeCloseTo(expectedLow, 6);
   // A model the sheet does not know is not priced at zero.
   expect(opener.readingCost(est, "some-unknown-model")).toBeNull();

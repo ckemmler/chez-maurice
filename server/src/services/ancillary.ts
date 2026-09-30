@@ -89,11 +89,14 @@ export interface AncillaryInvocation {
   defaultModel?: () => string | null;
 }
 
-/** The night model P0 bis chose, and its fallback — see `prefer` above. */
+/** The night model P0 bis chose, and its fallbacks — see `prefer` above.
+ *  Scaleway's models first, and no Mistral where Scaleway has another (30
+ *  September 2026: the owner found them too poor); `mistral-small-latest` stays
+ *  last only for a household whose one key is Mistral's. */
 const NIGHT_MODELS = [
   "deepseek-v4-flash-0731",              // scaleway — the brief that reads like one
-  "mistral-small-3.2-24b-instruct-2506", // scaleway — five times cheaper, summarises
-  "mistral-small-latest",                // mistral
+  "qwen3.6-35b-a3b",                     // scaleway — the small Qwen
+  "mistral-small-latest",                // mistral, for a Mistral-only household
 ];
 
 export const ANCILLARY_INVOCATIONS: AncillaryInvocation[] = [
@@ -133,12 +136,13 @@ export const ANCILLARY_INVOCATIONS: AncillaryInvocation[] = [
   // The mail reading (services/mailReading.ts, lot 4 of the mail import): two
   // passes over a member's approved window, in their name and under their
   // reading job's id. The light one sorts on the first 600 characters —
-  // mistral-small, the spec's choice, cheap enough to see every survivor;
+  // the small Qwen (the spec said mistral-small, dropped on 30 September
+  // 2026), cheap enough to see every survivor;
   // the full one reads what it kept on the household's everyday model, the
   // one the member's cost range was priced on.
   { id: "mail_read_light", side: "server", tier: "light", label: "Mail sorting",
     blurb: "The light pass of the mail reading: keep or skip, from the headers and the first characters of each message.",
-    prefer: ["mistral-small-3.2-24b-instruct-2506", "mistral-small-latest"] },
+    prefer: ["qwen3.6-35b-a3b", "mistral-small-latest"] },
   { id: "mail_write", side: "server", tier: "standard", label: "Mail documents",
     blurb: "The fiches and digests written in the garden from the mail readings — the night's model, as the domain notes.",
     prefer: NIGHT_MODELS },
@@ -225,8 +229,8 @@ export function presentInvocations(): AncillaryInvocation[] {
 export const PREFERRED: Record<AncillaryTier, string[]> = {
   // A sentence, a title, three tags. The cheapest capable model wins.
   light: [
-    "mistral-small-3.2-24b-instruct-2506", // scaleway, reads images too
-    "mistral-small-latest",                // mistral
+    "qwen3.6-35b-a3b",                     // scaleway — the small Qwen, reads images too
+    "mistral-small-latest",                // mistral, for a Mistral-only household
   ],
   // A paragraph of prose: summaries, syntheses, briefings. Output tokens are
   // what these spend, so the order follows the output price.

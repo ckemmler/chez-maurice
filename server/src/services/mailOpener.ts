@@ -43,9 +43,11 @@ export interface CostRange {
 // ── The price ────────────────────────────────────────────────────────────
 
 /** The light pass reads the first characters of each message and answers
- *  in a few words; mistral-small is the spec's choice for it. */
-export const LIGHT_MODEL = "mistral-small-3.2-24b-instruct-2506";
-const LIGHT_OUTPUT_TOKENS_PER_MESSAGE = 40;
+ *  in a few words, on the small Qwen (30 September 2026; the spec said
+ *  mistral-small). It thinks before it answers, and its reasoning is billed as
+ *  output: 100 tokens a message is a guess until a real reading measures it. */
+export const LIGHT_MODEL = "qwen3.6-35b-a3b";
+const LIGHT_OUTPUT_TOKENS_PER_MESSAGE = 100;
 /** A full reading writes: a share of what it read, as output. */
 const FULL_OUTPUT_SHARE = 0.1;
 

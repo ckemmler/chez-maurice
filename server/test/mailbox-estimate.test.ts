@@ -12,7 +12,7 @@ const est = await import("../src/services/mailboxEstimate");
 const { setPinnedModel } = await import("../src/services/ancillary");
 const { addModel } = await import("../src/services/models");
 
-const LIGHT = "mistral-small-3.2-24b-instruct-2506";
+const LIGHT = "qwen3.6-35b-a3b";
 const FULL = "mistral-medium-latest";
 const WRITE = "deepseek-v4-flash-0731";
 

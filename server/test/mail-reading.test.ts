@@ -27,7 +27,7 @@ const admin = (await import("../src/routes/admin")).default;
 
 const ANNA = "mr-anna";
 const BOSS = "mr-admin";
-const LIGHT = "mistral-small-3.2-24b-instruct-2506";
+const LIGHT = "qwen3.6-35b-a3b";
 const FULL = "mistral-medium-3.5-128b";
 
 /** The member's store, as a stub: the window's messages and what the passes leave. */
@@ -107,7 +107,7 @@ beforeAll(() => {
   db.run(`INSERT OR IGNORE INTO users (id, username, display_name, role) VALUES (?, ?, ?, 'admin')`, [BOSS, BOSS, "Boss"]);
   db.run(`UPDATE households SET default_model = ?, scaleway_api_key = 'k' WHERE id = 'default'`, [FULL]);
   for (const id of [LIGHT, FULL]) addModel({ id, name: id, tier: "cloud", vendor: "mistral", provider: "scaleway" });
-  // What the boot does for a new invocation with a preference: the light pass lands on mistral-small.
+  // What the boot does for a new invocation with a preference: the light pass lands on the small Qwen.
   pinNewInvocations();
   bossAuth = `Bearer ${createSession(BOSS).token}`;
   reading.setMailReadingDeps({ call: tool, write, language: () => "French" });
