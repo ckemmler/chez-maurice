@@ -1,6 +1,6 @@
 ---
 title: The MCP tool ecosystem
-date: '2026-09-28'
+date: '2026-09-30'
 flags: []
 locale: en
 description: 'The gateway that gives Maurice his capabilities: discovery, per-member
@@ -364,7 +364,8 @@ readings, each reading sealed under the household key before the disk),
 the run's measure into `capacity`) and `reading_progress`; CLI
 `reading-progress`. The server side is `services/mailReading.ts`: the
 **light pass** on the new invocation `mail_read_light` (prefers
-mistral-small, pinned at boot like the night's functions) in batches of
+the small Qwen, `qwen3.6-35b-a3b`, since 30 September 2026 — mistral-small
+before; pinned at boot like the night's functions) in batches of
 twenty — keep a real exchange, skip what no person wrote to the member in
 particular — a missing verdict kept rather than lost; the **full pass** on
 `mail_read_full` (computed default: the household's everyday model, the one
