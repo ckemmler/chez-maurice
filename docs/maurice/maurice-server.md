@@ -1,6 +1,6 @@
 ---
 title: The server
-date: '2026-09-28'
+date: '2026-09-29'
 flags: []
 locale: en
 description: 'The Hono/Bun engine: API surface, the streaming agentic loop, prompt
@@ -188,6 +188,35 @@ recorded whether the brief was kept or not. `GET /api/admin/usage` lists the
 night last, as "Maurice, at night", and the briefs card shows what it spent
 today and this month.
 
+**Since 29 September 2026 a household can hold a monthly budget, and each
+member a share of it.** `households.budget_monthly_eur` (in euros, and named
+so — unlike the older `_usd` columns, which hold euros too) is set on the
+console's main screen, in the *Budget* section under the members, together
+with each member's share in percent (`users.budget_share_pct`). A share left
+empty is "auto": the members on auto split what the set shares leave, so a new
+member is never born at zero and a household that sets no share splits evenly;
+the console refuses shares adding up to more than 100, and the reader scales
+them down if a hand-edited database says otherwise. A member's allowance is
+their share of the budget over the calendar month (UTC), counted on their own
+turns — one more member layer of the verdict, weighed after their daily cap.
+Its refusal names **no amount** ("Your share of this month's budget is used
+up…"): a member never reads euros. What the night spends counts against no
+member's share. With no budget set the layer is off.
+
+The member reads it on `GET /api/me/budget` —
+`{limited, left (0…1 or null), resets_at (ISO, first of next month UTC),
+can_top_up}` — never an amount. The apps draw it as a ring beside the
+identity chip in the sidebar: full, with ∞ in it, when there is no budget;
+shrinking as the share is spent, orange from 20 %, red from 5 %. They re-read
+it at sign-in, on return to the foreground and after every turn, and raise a
+toast when the share falls to 20, 10 and 5 % — each once per member and month,
+remembered on the device; a member who drops past two thresholds in one turn
+hears only the deeper one. The ring, the toast and a new *Budget* row in
+Settings all open the *Budget* pane: the ring large with the percentage, the
+reset date, and a "Top up by card" button. **Topping up is a stub**: Stripe
+is not wired, the button says card payment is coming, `can_top_up` is always
+false, and nothing records a top-up yet.
+
 ## Prompt caching
 
 Anthropic caches by prefix, at explicit breakpoints, and bills a cached read at a tenth of a fresh token. The loop is what makes this worth doing: every round re-sends the system prompt, the tool roster and the whole history. Three breakpoints, inside the cap of four: on the last system block (which covers the tools, rendered ahead of it), on the end of the conversation history (carries from one turn to the next), and on the growing tool-result trail (moved along each round). Placement only lands on blocks the server builds itself, never on a history message, so the cache key is computed from bytes that don't change. The cost meter shows what caching saved next to what the turn cost.
@@ -298,7 +327,7 @@ The **chat engine** (`server/src`) is core and ships with the server app, as do 
 ## Gaps & open questions
 
 - **Git runtime.** The server performs git operations on the gardens, but whether git is bundled or assumed present on the host is unresolved — see [[maurice-architecture]].
-- **The fuse knows the member since 19 September 2026** — per-member and per-household daily caps, and a usage view for each member and for the admin (see *The spending fuse*). A balance, a quota that is prepaid money, and a statement are still missing — see §4 of [[maurice-commercialisation]].
+- **The fuse knows the member since 19 September 2026** — per-member and per-household daily caps, and a usage view for each member and for the admin (see *The spending fuse*); since 29 September a monthly budget split into shares, which the member sees as a ring. Still missing: paying — Stripe, a top-up that adds to a share (and whether it outlives the month), a statement — see §4 of [[maurice-commercialisation]]. A top-up in the middle of a month will not raise the 20/10/5 % toasts again for thresholds already told that month.
 - **The ancillary calls made for a member are charged to nobody** — except one. Since 19 September 2026 the ledger knows the member's turns, the night's briefs, and (P3-A) the documentation tool's sub-turn, recorded under the member who asked; the summaries, flashcards and signal parses a member's action triggers still go through `ancillaryComplete` without a spender, so they cost money the ledger never sees. The fix is one field on the ancillary request and a `recordSpend` in the door. And the sub-turn's cost, while in the ledger, is **not in the turn's own usage figure** (the meter the app shows is one provider and one model): a question about Maurice looks like a tenth of a cent in the chat and eight cents in the ledger.
 - **Scaleway's cache is invisible on nine models out of ten.** Measured 18 September 2026: only DeepSeek V4 Flash reports cached tokens, and only a hot, shared prefix hits; the other models' usage carries no cache detail, so their meter figure is the uncached one whatever Scaleway bills. Cockpit is the only place to see it.
 - **A model can imitate the tool trail** (closed 24 September 2026). It was appended to the assistant's own turns, and GLM-5.3-Flash reproduced the bracketed block at the end of a reply, where the app displayed it. The trail now rides on the following user turn as a system-reminder — the clock has ridden there from the start and, over twenty thousand replies, has never been echoed back. Nothing strips an echo should one still happen.
