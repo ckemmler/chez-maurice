@@ -19,5 +19,8 @@ PROJECT="${CF_PAGES_PROJECT:-chezmaurice}"
 [[ -d "$SITE" ]] || { echo "ERROR: site dir missing: $SITE"; exit 1; }
 
 echo "==> Deploying $SITE to Cloudflare Pages project '$PROJECT'..."
-npx wrangler pages deploy "$SITE" --project-name="$PROJECT"
+# --branch=main: wrangler otherwise names the deploy after the current git
+# branch, and from any other branch (a worktree's) it lands as a preview that
+# www.chezmaurice.eu never serves.
+npx wrangler pages deploy "$SITE" --project-name="$PROJECT" --branch=main
 echo "==> Done. Live at your Pages URL / www.chezmaurice.eu once the custom domain is attached."
