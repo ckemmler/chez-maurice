@@ -24,6 +24,7 @@ text labels:
 - OpenAI — `server/assets/brand/openai.svg`
 - Google Gemini — `server/assets/brand/gemini.svg`
 - Mistral — `server/assets/brand/mistral.png`
+- DeepSeek, Qwen (Alibaba), Gemma (Google), Meta (for Llama) — `design/landing/icons/*.svg`; OpenAI (for GPT-OSS) and GitHub — inline in `design/landing/index.html`. Drawings from Lobe Icons (`@lobehub/icons-static-svg`, MIT).
 
 The Apple and TestFlight marks used on the landing page are likewise the property
 of Apple Inc., used nominatively to indicate platform/distribution.

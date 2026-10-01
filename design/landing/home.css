@@ -61,6 +61,8 @@ a:hover { color: var(--green-deep); text-decoration: underline; }
 .btn-primary:hover { background: var(--green-deep); color: #fff; }
 .btn-outline { height: 40px; padding: 0 18px; border-radius: 10px; border: 1px solid var(--ink); color: var(--ink); }
 .btn-outline:hover { background: var(--ink); color: var(--page); }
+.with-icon { display: inline-flex; align-items: center; gap: 8px; }
+.ic { width: 16px; height: 16px; flex-shrink: 0; fill: currentColor; }
 
 /* ---------- nav ---------- */
 .nav { height: 76px; }
@@ -124,15 +126,6 @@ a:hover { color: var(--green-deep); text-decoration: underline; }
 .fact h3 { font-size: 18px; font-weight: 600; }
 .fact p { font-size: 16px; line-height: 1.5; color: var(--ink-2); }
 
-/* ---------- the app and the household ---------- */
-.apps { padding: 0 0 112px; }
-.apps .steps { display: flex; flex-direction: column; gap: 32px; }
-#apps { scroll-margin-top: 96px; }
-.btn-soon {
-  height: 50px; padding: 0 20px; font-size: 16px; cursor: default;
-  border: 1px dashed var(--avatar); color: var(--muted);
-}
-
 /* ---------- sections ---------- */
 .section { padding: 112px 0; }
 .stack { display: flex; flex-direction: column; gap: 24px; }
@@ -165,7 +158,8 @@ a:hover { color: var(--green-deep); text-decoration: underline; }
 .models .lede { color: var(--dark-muted); }
 .pills { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .pills .label { font-size: 14px; color: var(--dark-muted); margin-right: 8px; }
-.pill { padding: 7px 16px; border-radius: 980px; border: 1px solid var(--dark-pill); font-size: 15px; }
+.pill { display: inline-flex; align-items: center; gap: 8px; padding: 7px 16px; border-radius: 980px; border: 1px solid var(--dark-pill); font-size: 15px; }
+.pill img { display: block; }
 .pill.bare { border-color: transparent; color: var(--dark-muted); }
 .grid4 { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; }
 .model {
@@ -178,6 +172,18 @@ a:hover { color: var(--green-deep); text-decoration: underline; }
 .model .tag { font-size: 12px; font-weight: 600; color: var(--dark-muted); }
 .model.is-default .tag { color: var(--mint); }
 .model p:not(.tag) { font-size: 15px; line-height: 1.5; color: var(--dark-muted); }
+
+/* apps */
+.apps .checks { margin-top: 4px; }
+.btn-soon {
+  height: 50px; padding: 0 20px; font-size: 16px; cursor: default;
+  border: 1px dashed var(--avatar); color: var(--muted);
+}
+.phone { justify-self: center; width: 100%; max-width: 320px; }
+.phone img {
+  display: block; width: 100%; height: auto;
+  border-radius: 40px; border: 1px solid var(--line); background: var(--card);
+}
 
 /* pricing */
 .also { margin-top: 16px; display: flex; flex-direction: column; gap: 20px; }
@@ -220,7 +226,7 @@ a:hover { color: var(--green-deep); text-decoration: underline; }
   .grid3 { grid-template-columns: minmax(0, 1fr); gap: 32px; }
   .hero { padding: 40px 0 72px; }
   .section { padding: 80px 0; }
-  .facts, .apps { padding-bottom: 80px; }
+  .facts { padding-bottom: 80px; }
   .import-head { margin-bottom: 40px; }
   .nav-links { gap: 22px; }
   .nav-links .opt { display: none; }

@@ -105,13 +105,14 @@ up CI), re-create/import these. Provisioning profiles install to
 
 `design/landing/index.html` is the hosted household offer (styles in `home.css`;
 `docs.html`, the self-host guide, keeps `landing.css`). Its sign-up buttons —
-*Try it free for 30 days* in the hero and on the plan card, *Create your household*
-in *How it works* — go to the tower's form at
-`https://account.chezmaurice.eu/?via=landing`. *Get the app* in the nav scrolls to
-*How it works* (`#apps`), which says the app is free and empty without a household
-and gives the three steps in order; its TestFlight button is marked *soon* until
-the public link is restored after the transfer to the company — put the link back
-there (a real `<a>`), and in the tower's account page, which still names the old one.
+*Try it free for 30 days*, in the hero and on the plan card — go to the tower's
+form at `https://account.chezmaurice.eu/?via=landing`. *Get the app* in the nav
+scrolls to the last section, *Apps* (`#apps`), which presents the native apps and
+nothing else — the marketing sections are left alone. Its TestFlight button is
+marked *soon* until the public link is restored after the transfer to the company:
+put the link back there (a real `<a>`), and in the tower's account page, which
+still names the old one. Its screenshot (`app-iphone.jpg`, from
+`screenshots/hero-chat.png`) dates from June 2026 and shows an older interface.
 `/essai` and `/trial` (`_redirects`) are the short doors to the
 same form, for links shared elsewhere. The tower (sign-up, trial, accounts) lives
 in its own private repository, `chezmaurice-tower`. The self-host guide is linked
