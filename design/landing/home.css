@@ -124,6 +124,15 @@ a:hover { color: var(--green-deep); text-decoration: underline; }
 .fact h3 { font-size: 18px; font-weight: 600; }
 .fact p { font-size: 16px; line-height: 1.5; color: var(--ink-2); }
 
+/* ---------- the app and the household ---------- */
+.apps { padding: 0 0 112px; }
+.apps .steps { display: flex; flex-direction: column; gap: 32px; }
+#apps { scroll-margin-top: 96px; }
+.btn-soon {
+  height: 50px; padding: 0 20px; font-size: 16px; cursor: default;
+  border: 1px dashed var(--avatar); color: var(--muted);
+}
+
 /* ---------- sections ---------- */
 .section { padding: 112px 0; }
 .stack { display: flex; flex-direction: column; gap: 24px; }
@@ -211,7 +220,7 @@ a:hover { color: var(--green-deep); text-decoration: underline; }
   .grid3 { grid-template-columns: minmax(0, 1fr); gap: 32px; }
   .hero { padding: 40px 0 72px; }
   .section { padding: 80px 0; }
-  .facts { padding-bottom: 80px; }
+  .facts, .apps { padding-bottom: 80px; }
   .import-head { margin-bottom: 40px; }
   .nav-links { gap: 22px; }
   .nav-links .opt { display: none; }
