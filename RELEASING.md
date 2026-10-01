@@ -111,8 +111,9 @@ scrolls to the last section, *Apps* (`#apps`), which presents the native apps an
 nothing else — the marketing sections are left alone. Its TestFlight button is
 marked *soon* until the public link is restored after the transfer to the company:
 put the link back there (a real `<a>`), and in the tower's account page, which
-still names the old one. Its screenshot (`app-iphone.jpg`, from
-`screenshots/hero-chat.png`) dates from June 2026 and shows an older interface.
+still names the old one. It carries no screenshot yet.
+The stylesheet link is versioned (`home.css?v=…`): bump it when the CSS changes,
+or a browser shows the new page with the old styles.
 `/essai` and `/trial` (`_redirects`) are the short doors to the
 same form, for links shared elsewhere. The tower (sign-up, trial, accounts) lives
 in its own private repository, `chezmaurice-tower`. The self-host guide is linked

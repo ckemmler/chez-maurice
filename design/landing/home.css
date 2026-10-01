@@ -174,17 +174,12 @@ a:hover { color: var(--green-deep); text-decoration: underline; }
 .model p:not(.tag) { font-size: 15px; line-height: 1.5; color: var(--dark-muted); }
 
 /* apps */
+.apps .stack { max-width: 720px; }
 .apps .checks { margin-top: 4px; }
 .btn-soon {
   height: 50px; padding: 0 20px; font-size: 16px; cursor: default;
   border: 1px dashed var(--avatar); color: var(--muted);
 }
-.phone { justify-self: center; width: 100%; max-width: 320px; }
-.phone img {
-  display: block; width: 100%; height: auto;
-  border-radius: 40px; border: 1px solid var(--line); background: var(--card);
-}
-
 /* pricing */
 .also { margin-top: 16px; display: flex; flex-direction: column; gap: 20px; }
 .also > div { display: flex; flex-direction: column; gap: 6px; padding-top: 20px; border-top: 1px solid var(--line); }
