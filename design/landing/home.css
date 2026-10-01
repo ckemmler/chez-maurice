@@ -72,7 +72,8 @@ a:hover { color: var(--accent-deep); text-decoration: underline; }
 .brand { display: flex; align-items: center; gap: 10px; color: var(--ink); }
 .brand:hover { color: var(--ink); text-decoration: none; }
 .brand svg { width: 30px; height: 22px; color: var(--ink); }
-.brand span { font-family: var(--serif); font-size: 24px; font-weight: 500; }
+.brand span { font-family: var(--serif); font-size: 24px; font-weight: 500; white-space: nowrap; }
+.nav .btn { white-space: nowrap; }
 .nav-links { display: flex; align-items: center; gap: 36px; font-size: 15px; }
 .nav-links a:not(.btn) { color: var(--ink); }
 
@@ -230,6 +231,8 @@ a:hover { color: var(--accent-deep); text-decoration: underline; }
 }
 @media (max-width: 560px) {
   .wrap { padding: 0 16px; }
+  .brand span { font-size: 22px; }
+  .nav .btn { padding: 0 14px; }
   .nav-links { gap: 16px; font-size: 14px; }
   .nav-links a:not(.btn) { display: none; }
   .grid4 { grid-template-columns: minmax(0, 1fr); }
