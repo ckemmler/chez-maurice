@@ -1,6 +1,6 @@
 ---
 title: Households, rooms & devices
-date: '2026-09-25'
+date: '2026-10-03'
 flags: []
 locale: en
 description: Members and roles, guests, multi-person rooms, device pairing and PINs,
@@ -43,6 +43,8 @@ Three roles (`server/src/services/users.ts`): **admin** (manages members and hou
 
 `SessionStore` holds an array of paired households, each with its **own per-household session token** (`maurice.token.<household>.<user>`); `switchHousehold()` flips the active one, and `refreshFoyers()` polls each household's `/api/health` and unread count for the switcher badges. The picker shows a pill per household with a "+" to pair another server. So the same device is your own household *and* the one where you're a guest — and a notification can route a tap to the right one via its `household_tag`.
 
+Each household's face in that switcher is its own: `households.name`, `icon` (an SF Symbol name) and `color` (`#rrggbb`), served by `/api/health`. The admin sets them through `PATCH /api/admin/settings` (`server/src/routes/admin.ts`), which refuses a malformed icon or colour rather than storing it and clears on an empty value; the app falls back to an icon and colour derived from the household's id when they are unset. A hosted household gets all three at sign-up: the tower asks the owner to *describe* their household ("Famille Magi-Kemmler", "Aline Mercier") — that text becomes the name — suggests short addresses from it, lets them pick an icon and colour, and sends the three to the new household. Before 28 September 2026 every household was called "Home".
+
 ## Rooms (multi-person conversations)
 
 A conversation is a **room**; a 1:1 chat is just a room with one human. Membership is `conversation_participants`, and access is participant-based — `listConversations()` joins on membership, so you only see rooms you're in. `addParticipant()` enforces guest reach, fans the event to the room, and notifies the newcomer.
@@ -76,6 +78,7 @@ All of this — members, roles, guests, rooms, device enrollment, PINs, foyer sw
 - **The server is single-tenant.** There is one hardcoded `'default'` household per server; "multiple households" is a *client* capability (one device, many servers). The schema carries `household_id` everywhere, but a single server doesn't host multiple households. At home this is literal: each extra household is its own launchd agent, on its own port, with its own data directory and gardens root (see [[maurice-architecture]]).
 - **A device-pairing ceremony exists but is unused.** `/api/auth/pair` + the `devices` table (one-time pairing tokens) are implemented, yet the app pairs via the unauthenticated `/api/health` — the token flow is currently orphaned.
 - **Sessions don't expire** in this version.
+- **No in-app place to rename a household or change its face.** The API is there (admin only) and the tower uses it once, at creation; after that it takes a direct API call or the database. A household made before the tower keeps its derived icon until someone sets one.
 - **An open invitation makes a standard member, never a guest** — a guest needs their reach configured (contacts, Maurices), which is still the console's. And `maurice://` links open only the iOS app: the macOS target generates its Info.plist and declares no URL scheme, so on a Mac the invitation link is pasted into the address field.
 - **Guest persona access has no override** — it reuses each persona's `maurice_access` list rather than a guest-specific grant.
 - **"Child" is a box, not a birth date** — the server knows nothing of ages; the admin ticks it, and only what Maurice does on his own reads it (opening a conversation, the night's proposals). It does not change a child's model access or content rules, which are their own settings.
