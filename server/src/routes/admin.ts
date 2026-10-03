@@ -106,6 +106,18 @@ admin.patch("/settings", async (c) => {
     sets.push("name = ?");
     params.push(body.name);
   }
+  // The foyer's face in the apps' switcher (/api/health): an SF Symbol name and
+  // a #rrggbb colour. Anything else is refused rather than stored, since the
+  // apps would silently fall back to a derived face; "" or null clears it.
+  for (const [key, shape] of [["icon", /^[a-z0-9]+(\.[a-z0-9]+)*$/], ["color", /^#[0-9a-fA-F]{6}$/]] as const) {
+    const v = body[key];
+    if (v === undefined) continue;
+    if (v !== null && v !== "" && (typeof v !== "string" || v.length > 60 || !shape.test(v))) {
+      return c.json({ error: `invalid ${key}` }, 400);
+    }
+    sets.push(`${key} = ?`);
+    params.push(v || null);
+  }
 
   if (sets.length > 0) {
     db.run(
@@ -121,6 +133,8 @@ admin.patch("/settings", async (c) => {
   // Don't return the raw API key
   return c.json({
     name: updated.name,
+    icon: updated.icon,
+    color: updated.color,
     has_api_key: !!updated.api_key,
     has_fal_api_key: !!updated.fal_api_key,
     default_model: updated.default_model,
