@@ -1,6 +1,6 @@
 ---
 title: Maurice — architecture overview
-date: '2026-09-22'
+date: '2026-10-03'
 flags: []
 locale: en
 description: The five cooperating parts of Maurice, how a message flows end-to-end,
@@ -214,6 +214,16 @@ and a member costs a directory.
 `infra/container/MULTI-HOUSEHOLD.md` is how several live on one machine — one
 compose project per household, its own volume, behind one Caddy that routes by
 name; `ops/household.sh` adds and removes them.
+
+**A household can be paused from outside, since 3 October 2026.** A line
+`MAURICE_SUSPENDED=1` — the last such line of its env file decides, as it does
+for Docker — with its container stopped: `scripts/deploy.sh` leaves it stopped
+rather than waking it on the new image, and the nightly backup skips it, since
+nothing in it can change; its last snapshot stands. Only while it is *also*
+stopped: a household marked but running (a stop that failed, a restart by
+hand) is backed up like any other, and `ops/household.sh up` says it is
+starting a marked one. Whatever manages a hosted household's subscription sets
+and clears the line; nothing in the repository does.
 
 **The first rented host, 17 September 2026.** `maurice-fleet`, a Scaleway
 BASIC2-A2C-8G in Paris — 2 ARM vCPU, 8 GB, 40 GB of block storage, about 25 €

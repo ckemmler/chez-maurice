@@ -1,6 +1,6 @@
 ---
 title: The server
-date: '2026-10-01'
+date: '2026-10-03'
 flags: []
 locale: en
 description: 'The Hono/Bun engine: API surface, the streaming agentic loop, prompt
@@ -137,6 +137,15 @@ A refusal emits the turn's usage and then an `error` event carrying prose meant
 to be read by the person refused — the allowance is spent, nothing is lost, the
 conversation and the garden are still there. §4 of [[maurice-commercialisation]]
 calls that moment the one that decides whether people trust the meter.
+
+**Euros, and the operator's own words (3 October 2026).** The refusals name
+their caps in euros (`€1.00`), which the meter has counted in since 24
+September; they printed a dollar sign until then. And an operator may replace
+the sentence said when the instance's *total* allowance is spent with
+`MAURICE_SPEND_CAP_MESSAGE` (`{cap}` stands for the amount): a household hosted
+on a prepaid allowance — a trial, a balance topped up — is told, in its own
+language, where to go next, rather than only that the money is gone.
+`compose.household.yml` passes it through; unset, nothing changes.
 
 Spend is recorded in `spend_ledger` by `addMessage` — the one place every
 persisted turn passes through, whichever route produced it. See
