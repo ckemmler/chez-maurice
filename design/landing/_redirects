@@ -10,3 +10,26 @@
 # browser.
 /essai  https://account.chezmaurice.eu/  302
 /trial  https://account.chezmaurice.eu/  302
+
+# The detail pages the landing links to are not written yet. Until each one
+# exists, its address goes back to the part of the landing that speaks of it —
+# otherwise Pages answers an unknown path with the English homepage, unstyled
+# under /fr/. Delete a line when its page is added.
+/garden          /#how        302
+/memory          /#how        302
+/writing         /#how        302
+/publishing      /#how        302
+/your-data       /#how        302
+/household       /#household  302
+/carnet          /#carnet     302
+/clipper         /#carnet     302
+/models          /#models     302
+/fr/jardin       /fr/#how        302
+/fr/memoire      /fr/#how        302
+/fr/ecrire       /fr/#how        302
+/fr/publier      /fr/#how        302
+/fr/vos-donnees  /fr/#how        302
+/fr/foyer        /fr/#household  302
+/fr/carnet       /fr/#carnet     302
+/fr/extension    /fr/#carnet     302
+/fr/modeles      /fr/#models     302
