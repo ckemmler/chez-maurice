@@ -110,7 +110,7 @@ a:hover { color: var(--accent-deep); text-decoration: underline; }
 .row .who { display: flex; flex-direction: column; gap: 2px; }
 .row .who b { font-weight: 500; }
 .row .who small, .row .dim { font-size: 13px; color: var(--muted); }
-.row .dim { font-size: 15px; }
+.row .dim { font-size: 15px; white-space: nowrap; }
 
 .bill { display: flex; flex-direction: column; gap: 8px; padding: 0 4px; font-size: 15px; }
 .bill-line { display: flex; justify-content: space-between; gap: 16px; }
@@ -121,18 +121,38 @@ a:hover { color: var(--accent-deep); text-decoration: underline; }
 }
 .bill-note { font-size: 13px; line-height: 1.45; color: var(--muted); }
 
-/* ---------- three facts ---------- */
-.facts { padding: 0 0 112px; }
 .grid3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 48px; }
-.facts .grid3 { padding-top: 40px; border-top: 1px solid var(--line); }
-.fact { display: flex; flex-direction: column; gap: 10px; }
-.fact h3 { font-size: 18px; font-weight: 600; }
-.fact p { font-size: 16px; line-height: 1.5; color: var(--ink-2); }
+
+/* ---------- what we believe ---------- */
+.creed { padding: 88px 0; }
+.creed-text {
+  max-width: 900px; margin-top: 20px;
+  font-family: var(--serif); font-size: clamp(24px, 2.7vw, 34px); line-height: 1.32; letter-spacing: -0.005em;
+}
+.creed-sig { margin-top: 28px; font-size: 15px; color: var(--muted); }
+
+/* ---------- six tenets ---------- */
+.tenets .grid3 { row-gap: 64px; }
+.tenet { display: flex; flex-direction: column; gap: 12px; padding-top: 24px; border-top: 2px solid var(--ink); }
+.tenet h3 { font-family: var(--serif); font-weight: 400; font-size: 30px; line-height: 1.12; letter-spacing: -0.01em; }
+.tenet p:not(.eyebrow) { font-size: 16px; line-height: 1.55; color: var(--ink-2); }
 
 /* ---------- sections ---------- */
 .section { padding: 112px 0; }
 .stack { display: flex; flex-direction: column; gap: 24px; }
 .stack-sm { display: flex; flex-direction: column; gap: 16px; }
+
+/* the household (dark) */
+.household { background: var(--dark); color: var(--dark-ink); }
+.household .eyebrow, .household .mention { color: var(--accent-on-dark); }
+.household .lede, .household .card-head p, .msg p { color: var(--dark-muted); }
+.household .card { background: var(--dark-card); border-color: var(--dark-line); }
+.room { display: flex; flex-direction: column; gap: 18px; }
+.msg { display: flex; gap: 12px; align-items: flex-start; }
+.msg .avatar { flex-shrink: 0; color: var(--ink); }
+.msg .avatar.is-maurice { background: var(--accent-on-dark); }
+.msg b { display: block; font-size: 14px; font-weight: 600; }
+.msg p { font-size: 15px; line-height: 1.5; }
 
 /* your own instance */
 .instance .card { padding: 24px; gap: 14px; }
@@ -152,29 +172,6 @@ a:hover { color: var(--accent-deep); text-decoration: underline; }
 .step .n { font-family: var(--serif); font-size: 32px; color: var(--accent); }
 .step h3 { font-size: 19px; font-weight: 600; }
 .step p { font-size: 16px; line-height: 1.55; color: var(--ink-2); }
-
-/* models (dark) */
-.models { background: var(--dark); color: var(--dark-ink); }
-.models .wrap { display: flex; flex-direction: column; gap: 48px; }
-.models .split { align-items: end; }
-.models .eyebrow { color: var(--accent-on-dark); }
-.models .lede { color: var(--dark-muted); }
-.pills { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-.pills .label { font-size: 14px; color: var(--dark-muted); margin-right: 8px; }
-.pill { display: inline-flex; align-items: center; gap: 8px; padding: 7px 16px; border-radius: 980px; border: 1px solid var(--dark-pill); font-size: 15px; }
-.pill img { display: block; }
-.pill.bare { border-color: transparent; color: var(--dark-muted); }
-.grid4 { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; }
-.model {
-  border-radius: 16px; padding: 24px; display: flex; flex-direction: column; gap: 10px;
-  background: var(--dark-card); border: 1px solid var(--dark-line);
-}
-.model.is-default { border-color: var(--accent-on-dark); }
-.model-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
-.model h3 { font-size: 18px; font-weight: 600; }
-.model .tag { font-size: 12px; font-weight: 600; color: var(--dark-muted); }
-.model.is-default .tag { color: var(--accent-on-dark); }
-.model p:not(.tag) { font-size: 15px; line-height: 1.5; color: var(--dark-muted); }
 
 /* apps */
 .apps .stack { max-width: 720px; }
@@ -216,15 +213,14 @@ a:hover { color: var(--accent-deep); text-decoration: underline; }
 /* ---------- narrower screens ---------- */
 @media (max-width: 1080px) {
   .split { gap: 56px; }
-  .grid4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 @media (max-width: 900px) {
-  .split, .models .split { grid-template-columns: minmax(0, 1fr); gap: 48px; align-items: start; }
-  .models .split { gap: 20px; }
+  .split { grid-template-columns: minmax(0, 1fr); gap: 48px; align-items: start; }
   .grid3 { grid-template-columns: minmax(0, 1fr); gap: 32px; }
   .hero { padding: 40px 0 72px; }
   .section { padding: 80px 0; }
-  .facts { padding-bottom: 80px; }
+  .creed { padding: 64px 0; }
+  .tenets .grid3 { row-gap: 40px; }
   .import-head { margin-bottom: 40px; }
   .nav-links { gap: 22px; }
   .nav-links .opt { display: none; }
@@ -234,8 +230,7 @@ a:hover { color: var(--accent-deep); text-decoration: underline; }
   .brand span { font-size: 22px; }
   .nav .btn { padding: 0 14px; }
   .nav-links { gap: 16px; font-size: 14px; }
-  .nav-links a:not(.btn) { display: none; }
-  .grid4 { grid-template-columns: minmax(0, 1fr); }
+  .nav-links a:not(.btn):not(.lang) { display: none; }
   .card { padding: 20px; }
   .plan { padding: 24px; }
   .hero-sub { font-size: 18px; }
