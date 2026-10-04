@@ -118,18 +118,24 @@ struct ContentView: View {
                 )
             }
         }
+        // These sheets hang outside the theme's environment above, so each is
+        // handed the theme again: without it they drew in the default (light)
+        // palette under a dark window, and their "Done" — ink on the system's
+        // dark sheet chrome — could not be seen on the Mac.
         .sheet(isPresented: listBinding) {
             DomainsListSheet(onOpen: { preferredColumn = .detail })
+                .environment(\.mauriceTheme, theme)
         }
         .sheet(isPresented: briefBinding) {
             if let domain = domains.briefFor {
                 DomainBriefSheet(maurice: domain, onOpen: { preferredColumn = .detail })
+                    .environment(\.mauriceTheme, theme)
             }
         }
         #if os(iOS)
-        .fullScreenCover(isPresented: editorBinding) { editorView }
+        .fullScreenCover(isPresented: editorBinding) { editorView.environment(\.mauriceTheme, theme) }
         #else
-        .sheet(isPresented: editorBinding) { editorView }
+        .sheet(isPresented: editorBinding) { editorView.environment(\.mauriceTheme, theme) }
         #endif
         .onChange(of: session.hasActiveSession) {
             isLoading = true
