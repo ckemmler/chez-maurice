@@ -530,6 +530,7 @@
 
 /* Domains — the list, the editor, the greeting (19 September 2026) */
 "chat.send" = "Enviar a Maurice";
+"persona.field.icon" = "ICONO";
 "persona.field.kind" = "TIPO";
 "persona.kind.domain" = "Dominio";
 "persona.kind.companion" = "Compañero de lectura";

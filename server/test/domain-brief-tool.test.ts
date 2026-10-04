@@ -45,6 +45,14 @@ test("it reads the brief behind a line of the index", () => {
   expect((r.data as any).domain).toBe("Pratique du violon");
 });
 
+test("it says which domain was read, for the pastille the app wears — an empty brief included", () => {
+  db.run(`UPDATE maurices SET icon = 'guitars' WHERE id = 'dbt-violin'`);
+  const r = runDomainBriefTool({ name: "violon" }, ANNA);
+  expect(r.data).toMatchObject({ domain: "Pratique du violon", domain_id: "dbt-violin", icon: "guitars" });
+  const empty = runDomainBriefTool({ name: "Santé et bien-être" }, ANNA);
+  expect(empty.data).toEqual({ domain: "Santé et bien-être", domain_id: "dbt-health", icon: null });
+});
+
 test("the name is matched the way a model retypes it, not the way an id is copied", () => {
   expect(runDomainBriefTool({ name: "pratique du violon" }, ANNA).isError).toBe(false);
   expect(runDomainBriefTool({ name: "  Pratique du Violon  " }, ANNA).isError).toBe(false);

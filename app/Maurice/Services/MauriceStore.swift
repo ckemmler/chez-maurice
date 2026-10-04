@@ -21,6 +21,9 @@ struct Maurice: Identifiable, Equatable {
     var name: String
     /// "domain" or "companion" (the server's `kind`).
     var kind: String = "domain"
+    /// The SF Symbol that stands for the domain (the server's `icon`): the
+    /// night's pick or the member's, nil until one of them chose.
+    var icon: String? = nil
     var model: String?
     var temp: Double = 0.5
     /// For a model that reasons optionally: nil = the provider's own default,
@@ -55,8 +58,15 @@ struct Maurice: Identifiable, Equatable {
     func isDomain(of memberId: String?) -> Bool {
         isEditable && kind == "domain" && createdBy != nil && createdBy == memberId
     }
-    /// The symbol that stands for this row where a hat used to.
-    var symbol: String { isCompanion ? "book.pages" : "book.closed" }
+    /// The symbol that stands for this row where a hat used to: a domain's
+    /// own icon, else a closed book; open pages for a reading companion. A
+    /// name this system has no glyph for falls back too — it would draw as
+    /// nothing.
+    var symbol: String {
+        if isCompanion { return "book.pages" }
+        if let icon, DomainIcons.exists(icon) { return icon }
+        return DomainIcons.fallback
+    }
 
     /// The everyday Maurice — conversations with no binding resolve to it.
     static let everyday = Maurice(
@@ -79,6 +89,7 @@ struct Maurice: Identifiable, Equatable {
             rawId: id,
             name: name,
             kind: d["kind"] as? String ?? "domain",
+            icon: d["icon"] as? String,
             model: d["model"] as? String,
             temp: (d["temp"] as? NSNumber)?.doubleValue ?? 0.5,
             thinking: d["thinking"] as? Bool,
@@ -422,6 +433,14 @@ final class MauriceStore {
     }
 
     private static func body(from m: Maurice) -> [String: Any] {
+        var body = fields(from: m)
+        // Sent only when there is one: a draft opened before the night chose
+        // must not wipe the night's choice by saving a nil over it.
+        if let icon = m.icon { body["icon"] = icon }
+        return body
+    }
+
+    private static func fields(from m: Maurice) -> [String: Any] {
         [
             "name": m.name,
             "kind": m.kind,

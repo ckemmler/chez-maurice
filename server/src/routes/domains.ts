@@ -183,6 +183,7 @@ domains.get("/", (c) => {
       name: d.name,
       tagline: d.tagline,
       kind: d.kind,
+      icon: d.icon,
       created_by: d.created_by,
       mine,
       count: d.count,

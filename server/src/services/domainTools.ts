@@ -69,11 +69,16 @@ export function runDomainBriefTool(input: any, memberId: string | undefined): Br
     };
   }
   const { name, brief } = found;
+  // Which domain was drawn on travels to the client beside the reply (the
+  // `tool_data` channel, kept on the message): the app wears it as a pastille
+  // at the top of the conversation, and opens the domain's page from it. An
+  // empty brief counts — Maurice went and looked.
+  const which = { domain: name, domain_id: found.id, icon: found.icon };
   if (!brief || !brief.text.trim()) {
-    return { text: `The brief on "${name}" is empty — nothing has been written into it yet.`, isError: false };
+    return { text: `The brief on "${name}" is empty — nothing has been written into it yet.`, isError: false, data: which };
   }
   const payload = {
-    domain: name,
+    ...which,
     // A brief the member rewrote themselves outranks anything Maurice
     // remembers otherwise, and the model is told so rather than left to infer
     // it from an author field it has never seen.

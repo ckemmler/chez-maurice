@@ -530,6 +530,7 @@
 
 /* Domains — the list, the editor, the greeting (19 September 2026) */
 "chat.send" = "Naar Maurice sturen";
+"persona.field.icon" = "ICOON";
 "persona.field.kind" = "SOORT";
 "persona.kind.domain" = "Domein";
 "persona.kind.companion" = "Leesgezel";

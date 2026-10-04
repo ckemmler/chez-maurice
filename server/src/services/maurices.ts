@@ -30,6 +30,7 @@ interface MauriceRow {
   household_id: string;
   name: string;
   kind: MauriceKind | null;
+  icon: string | null;
   model: string | null;
   temp: number;
   thinking: number | null;
@@ -48,6 +49,9 @@ export interface Maurice {
   /** `domain` (the default; a NULL column reads as such) or `companion`, a
    *  reading companion. */
   kind: MauriceKind;
+  /** The SF Symbol that stands for the domain, or null (the client draws its
+   *  default glyph). Picked by the night or by the member. */
+  icon: string | null;
   model: string | null;
   temp: number;
   /** For a model that reasons optionally: null = the provider's own default,
@@ -75,6 +79,9 @@ export interface MauriceInput {
   /** `domain` or `companion`; anything else (or nothing) leaves the stored
    *  value alone — `domain` on creation. */
   kind?: MauriceKind;
+  /** an SF Symbol name; null clears it (the night picks again); undefined, or
+   *  anything that is not shaped like a symbol name, leaves it alone */
+  icon?: string | null;
   model?: string | null;
   temp?: number;
   /** see Maurice.thinking; undefined leaves the stored value alone */
@@ -126,6 +133,7 @@ function toMaurice(row: MauriceRow): Maurice {
     id: row.id,
     name: row.name,
     kind: row.kind === "companion" ? "companion" : "domain",
+    icon: row.icon ?? null,
     model: row.model,
     temp: row.temp,
     thinking: row.thinking == null ? null : row.thinking === 1,
@@ -152,6 +160,28 @@ function toMaurice(row: MauriceRow): Maurice {
 /** `domain` or `companion` when the input says so, else undefined. */
 export function parseKind(v: unknown): MauriceKind | undefined {
   return v === "domain" || v === "companion" ? v : undefined;
+}
+
+/** An SF Symbol name (`figure.run`, `cross.case`): the same shape the
+ *  household's icon is held to, since the client hands it to the system as is. */
+const ICON_SHAPE = /^[a-z0-9]+(\.[a-z0-9]+)*$/;
+
+/** The icon a body asks for: a symbol name, null to clear, undefined when the
+ *  body does not say or says something that is not a symbol name. */
+export function parseIcon(v: unknown): string | null | undefined {
+  if (v === null) return null;
+  return typeof v === "string" && v.length <= 64 && ICON_SHAPE.test(v) ? v : undefined;
+}
+
+function iconColumn(asked: unknown, stored: string | null): string | null {
+  const icon = parseIcon(asked);
+  return icon === undefined ? stored : icon;
+}
+
+/** Set a domain's icon without touching the rest of the row (the night's
+ *  pick: no `updated_at`, the member changed nothing). */
+export function setMauriceIcon(id: string, icon: string | null): void {
+  db.run(`UPDATE maurices SET icon = ? WHERE id = ?`, [icon, id]);
 }
 
 /** A domain proper: a stored row of kind `domain` (not a companion). The
@@ -245,12 +275,13 @@ export function createMaurice(
   const id = crypto.randomUUID();
   db.run(
     `INSERT INTO maurices
-       (id, name, kind, model, temp, thinking, tagline, prompt, context_json, tool_families, created_by)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       (id, name, kind, icon, model, temp, thinking, tagline, prompt, context_json, tool_families, created_by)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       id,
       input.name.trim(),
       parseKind(input.kind) ?? "domain",
+      parseIcon(input.icon) ?? null,
       input.model ?? null,
       input.temp ?? 0.5,
       thinkingColumn(input.thinking ?? null),
@@ -288,12 +319,13 @@ export function updateMaurice(
 
   db.run(
     `UPDATE maurices SET
-       name = ?, kind = ?, model = ?, temp = ?, thinking = ?, tagline = ?,
+       name = ?, kind = ?, icon = ?, model = ?, temp = ?, thinking = ?, tagline = ?,
        prompt = ?, context_json = ?, tool_families = ?, updated_at = datetime('now')
      WHERE id = ?`,
     [
       (input.name ?? row.name).trim(),
       parseKind(input.kind) ?? row.kind ?? "domain",
+      iconColumn(input.icon, row.icon),
       input.model !== undefined ? input.model : row.model,
       input.temp ?? row.temp,
       input.thinking !== undefined ? thinkingColumn(input.thinking) : row.thinking,

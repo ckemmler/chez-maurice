@@ -128,6 +128,124 @@ struct DomainMark: View {
     }
 }
 
+// MARK: - The icons
+
+/// The symbols a domain can wear. The same short list the server's night
+/// chooses from (`services/domainIcons.ts`), in the same order — the editor
+/// offers it to the member, whose choice prevails.
+enum DomainIcons {
+    static let fallback = "book.closed"
+
+    static let all: [String] = [
+        "cross.case", "brain.head.profile", "moon.zzz", "figure.run", "figure.pool.swim", "bicycle",
+        "figure.mind.and.body", "mountain.2", "fork.knife", "wineglass", "leaf", "pawprint",
+        "house", "hammer", "building.2", "building.columns", "banknote", "briefcase",
+        "lightbulb", "megaphone", "chevron.left.forwardslash.chevron.right", "server.rack", "cpu", "graduationcap",
+        "character.book.closed", "books.vertical", "pencil.and.outline", "text.quote", "clock.arrow.circlepath", "atom",
+        "music.note", "guitars", "pianokeys", "paintpalette", "camera", "film",
+        "theatermasks", "gamecontroller", "airplane", "car", "sailboat", "globe.europe.africa",
+        "person.2", "figure.2.and.child.holdinghands", "heart", "sparkles", "envelope", "cart",
+        "tshirt", "calendar", "trophy", "bolt", "shield", "newspaper",
+    ]
+
+    /// Whether this system has a glyph by that name.
+    static func exists(_ symbol: String) -> Bool {
+        #if os(macOS)
+        NSImage(systemSymbolName: symbol, accessibilityDescription: nil) != nil
+        #else
+        UIImage(systemName: symbol) != nil
+        #endif
+    }
+}
+
+// MARK: - The pastilles
+
+/// The domains a conversation has drawn on, as round marks beside the back
+/// button: the one it is bound to, then each one whose brief Maurice read on
+/// the way (the `domain_brief` tool's data, kept on the reply — so the mark
+/// appears while the turn is still running, and is there again on reopening).
+/// A tap opens the domain's page.
+struct DomainPastilles: View {
+    @Environment(ChatService.self) private var chat
+    @Environment(MauriceStore.self) private var store
+    @Environment(SessionStore.self) private var session
+    @Environment(DomainsState.self) private var domains
+    @Environment(\.mauriceTheme) private var theme
+    var size: CGFloat = 30
+    /// More than this many and the rest fold into a "+N" menu.
+    var max = 4
+    /// iPhone: the marks float over the stream, on their own glass.
+    var glass = false
+
+    /// The member's own domains this conversation mobilised, in the order
+    /// they came in. Only their own: a brief is its creator's, and so is the
+    /// page a pastille opens.
+    @MainActor
+    static func mobilised(chat: ChatService, store: MauriceStore, session: SessionStore) -> [Maurice] {
+        let own = store.domains.filter { $0.isDomain(of: session.activeUserId) }
+        guard !own.isEmpty else { return [] }
+        var seen = Set<String>()
+        var out: [Maurice] = []
+        func add(_ m: Maurice?) {
+            guard let m, seen.insert(m.id).inserted else { return }
+            out.append(m)
+        }
+        if let bound = chat.activeConversation?.maurice_id {
+            add(own.first { $0.rawId == bound })
+        }
+        let blocks = chat.messages.flatMap { $0.data ?? [] } + chat.streamingData
+        for block in blocks where block.tool == "domain_brief" {
+            // Replies older than the id in the payload carry the name only.
+            let id = block.data["domain_id"]?.stringValue
+            let name = block.data["domain"]?.stringValue
+            add(own.first { $0.rawId == id } ?? own.first { $0.name == name })
+        }
+        return out
+    }
+
+    var body: some View {
+        let all = Self.mobilised(chat: chat, store: store, session: session)
+        if !all.isEmpty {
+            let shown = Array(all.prefix(max))
+            let rest = Array(all.dropFirst(max))
+            let row = HStack(spacing: 5) {
+                ForEach(shown) { m in
+                    Button { domains.openBrief(m) } label: {
+                        DomainMark(maurice: m, size: size, radius: size / 2)
+                            .contentShape(Circle())
+                    }
+                    .buttonStyle(.plain)
+                    .help(m.name)
+                    .accessibilityLabel(m.name)
+                }
+                if !rest.isEmpty {
+                    Menu {
+                        ForEach(rest) { m in
+                            Button { domains.openBrief(m) } label: { Label(m.name, systemImage: m.symbol) }
+                        }
+                    } label: {
+                        Text("+\(rest.count)")
+                            .font(.system(size: size * 0.38, weight: .medium))
+                            .foregroundStyle(theme.inkSoft)
+                            .frame(minWidth: size, minHeight: size)
+                            .contentShape(Circle())
+                    }
+                    .buttonStyle(.plain)
+                    .menuIndicator(.hidden)
+                    .fixedSize()
+                }
+            }
+            .animation(.easeOut(duration: 0.2), value: all.map(\.id))
+            if glass {
+                row.padding(.horizontal, 7).frame(height: 44)
+                    .glassControl(theme, in: Capsule())
+            } else {
+                row
+            }
+        }
+    }
+}
+
 // MARK: - The list
 
 /// The member's domains and reading companions. A domain of the member's own

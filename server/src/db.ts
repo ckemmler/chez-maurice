@@ -679,6 +679,12 @@ try { db.run(`ALTER TABLE maurices ADD COLUMN thinking INTEGER`); } catch {}
 // revisited. `hat` and `palette` stay as columns nothing writes or reads any
 // more; dropping the column brings the personas back as they were.
 try { db.run(`ALTER TABLE maurices ADD COLUMN kind TEXT`); } catch {}
+// The glyph that stands for a domain wherever it is named — the list, its
+// page, the pastilles of a conversation that drew on it (3 October 2026). An
+// SF Symbol name, chosen by the night from a short list
+// (services/domainIcons.ts) or by the member in the editor; NULL reads as the
+// closed book every domain wore before.
+try { db.run(`ALTER TABLE maurices ADD COLUMN icon TEXT`); } catch {}
 
 /** A row whose bound context is exactly one book followed at the reading
  *  position is a reading companion; anything else is a domain. The rule is

@@ -144,6 +144,12 @@ struct ChatView: View {
         .sheet(isPresented: $showAddParticipant) { AddParticipantSheet() }
     }
 
+    /// Whether the bar has pastilles to show (`DomainPastilles`) — asked before
+    /// adding the toolbar item, since an empty one still draws its glass.
+    private var hasMobilisedDomains: Bool {
+        !DomainPastilles.mobilised(chat: chat, store: maurices, session: session).isEmpty
+    }
+
     #if os(macOS)
     /// Add someone + "…" (details: title, metadata, room actions), as toolbar
     /// items — shown from the start so a room can have people added before the
@@ -155,6 +161,13 @@ struct ChatView: View {
         // bar (removing the system one from the detail's scope never took —
         // the toggle belongs to the split view, not to this column).
         if let convo = chat.activeConversation {
+            // The one thing that does sit on the leading side: the domains
+            // this conversation drew on, when there are any.
+            if hasMobilisedDomains {
+                ToolbarItem(placement: .navigation) {
+                    DomainPastilles(size: 24)
+                }
+            }
             // A flexible spacer pins the actions to the trailing edge, as on iOS.
             if #available(macOS 26.0, *) {
                 ToolbarSpacer(.flexible)
@@ -198,6 +211,12 @@ struct ChatView: View {
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel(session.localized("chat.back_to_conversations"))
+                }
+                .plainGlass()
+            }
+            if hasMobilisedDomains {
+                ToolbarItem(placement: .topBarLeading) {
+                    DomainPastilles(size: 26)
                 }
                 .plainGlass()
             }
@@ -631,6 +650,10 @@ private struct ConversationHeaderView: View {
                 .buttonStyle(.plain)
                 .glassControl(theme, in: Circle())
                 .accessibilityLabel(session.localized("chat.back_to_conversations"))
+
+                // The domains this conversation drew on; a tap opens the page.
+                DomainPastilles(size: 30, max: 3, glass: true)
+                    .padding(.leading, 8)
 
                 Spacer(minLength: 8)
 

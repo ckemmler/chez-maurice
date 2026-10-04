@@ -29,6 +29,7 @@ struct DomainEditor: View {
     @State private var ctx: ComposerStore
     @State private var isEdit: Bool
     @State private var showAddContext = false
+    @State private var showIcons = false
     @State private var saving = false
     @State private var confirmDelete = false
 
@@ -202,7 +203,16 @@ struct DomainEditor: View {
         Section(number: 1, title: session.localized("persona.section.identity"), theme: theme) {
             VStack(alignment: .leading, spacing: 16) {
                 HStack(spacing: 14) {
-                    DomainMark(maurice: draft, size: 60)
+                    // The mark is the way to its icon: a tap unfolds the choice.
+                    if draft.kind == "domain" {
+                        Button { withAnimation(.easeOut(duration: 0.15)) { showIcons.toggle() } } label: {
+                            DomainMark(maurice: draft, size: 60)
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel(session.localized("persona.field.icon"))
+                    } else {
+                        DomainMark(maurice: draft, size: 60)
+                    }
                     VStack(alignment: .leading, spacing: 8) {
                         TextField(session.localized("persona.field.name"), text: $draft.name)
                             .textFieldStyle(.plain)
@@ -222,6 +232,11 @@ struct DomainEditor: View {
                 .background(RoundedRectangle(cornerRadius: 10).fill(theme.bg))
                 .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(theme.rule, lineWidth: 0.5))
 
+                if showIcons && draft.kind == "domain" {
+                    fieldLabel(session.localized("persona.field.icon"))
+                    iconGrid
+                }
+
                 // Domain or reading companion. The server sorted the rows
                 // that predate the distinction once; this is the member's
                 // hand on it.
@@ -233,6 +248,27 @@ struct DomainEditor: View {
                 Text(session.localized("persona.kind.hint"))
                     .font(.system(size: 11)).foregroundStyle(theme.inkMute)
                     .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
+    /// The symbols a domain can wear (`DomainIcons`); the one it wears now is
+    /// ringed, whether the night chose it or the member did.
+    private var iconGrid: some View {
+        LazyVGrid(columns: [GridItem(.adaptive(minimum: 36), spacing: 6)], spacing: 6) {
+            ForEach(DomainIcons.all.filter(DomainIcons.exists), id: \.self) { symbol in
+                let on = draft.symbol == symbol
+                Button { draft.icon = symbol } label: {
+                    Image(systemName: symbol)
+                        .font(.system(size: 15, weight: .medium))
+                        .foregroundStyle(on ? accent.legible(onDark: theme.isDark) : theme.inkSoft)
+                        .frame(width: 36, height: 36)
+                        .background(RoundedRectangle(cornerRadius: 9, style: .continuous).fill(on ? accent.opacity(0.14) : theme.bg))
+                        .overlay(RoundedRectangle(cornerRadius: 9, style: .continuous)
+                            .strokeBorder(on ? accent : theme.rule, lineWidth: on ? 1 : 0.5))
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
             }
         }
     }

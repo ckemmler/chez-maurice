@@ -56,6 +56,9 @@ beforeAll(() => {
   db.run(`INSERT INTO maurices (id, name, tagline, created_by) VALUES ('dom-health', 'Health', 'Blood tests and cholesterol', ?)`, [ANNA]);
   db.run(`INSERT INTO maurices (id, name, tagline, created_by) VALUES ('dom-house', 'House', 'The flat and its works', ?)`, [ANNA]);
   db.run(`INSERT INTO maurices (id, name, tagline, created_by) VALUES ('dom-guest', 'Visit', '', ?)`, [GUEST]);
+  // Each wears an icon already, so a rewrite makes its two calls and no third
+  // (ensureDomainIcon; the tests at the end take the icon away to see it come).
+  db.run(`UPDATE maurices SET icon = 'book.closed' WHERE id IN ('dom-health', 'dom-house', 'dom-guest')`);
 
   convo("c-bound", ANNA, "My cholesterol results", "dom-health", [
     ["user", "My LDL came back at 160, is that a worry?", "2026-09-10 10:00:00"],
@@ -89,7 +92,8 @@ beforeAll(() => {
 /** The brief's own call, not the one-liner's: every rewrite now makes two, the
  *  second asking for the index entry that stands for the brief in the everyday
  *  prompt (services/domainBriefs.ts, writeSummary). */
-const briefCalls = () => requests.filter((r) => !r.system.includes("one-line index entry"));
+const iconCalls = () => requests.filter((r) => r.system.includes("choose the icon"));
+const briefCalls = () => requests.filter((r) => !r.system.includes("one-line index entry") && !r.system.includes("choose the icon"));
 const summaryCalls = () => requests.filter((r) => r.system.includes("one-line index entry"));
 
 beforeEach(() => {
@@ -283,4 +287,44 @@ test("off under test, and due an hour after the corpus", async () => {
   const at = (h: number) => new Date(2026, 8, 19, h, 5);
   expect(isDue(at(3), null, 4)).toBe(false);
   expect(isDue(at(4), null, 4)).toBe(true);
+});
+
+// ── The icon (3 October 2026) ────────────────────────────────────────────────
+
+test("a domain without an icon gets one from the night model's answer, once", async () => {
+  db.run(`UPDATE maurices SET icon = NULL WHERE id = 'dom-health'`);
+  reply = { text: "`cross.case`", stop: "end", cost: 0.001 };
+  expect(await briefs.ensureDomainIcon(health(), ANNA)).toBe("cross.case");
+  expect(health().icon).toBe("cross.case");
+  expect(iconCalls()).toHaveLength(1);
+  expect(iconCalls()[0]!.prompt).toContain("Health");
+  expect(budget.spentTodayUsd(budget.SYSTEM_SPENDER)).toBeCloseTo(0.001, 6);
+  // It has one now: nothing is asked again, and the member's own choice would
+  // be left alone the same way.
+  requests = [];
+  expect(await briefs.ensureDomainIcon(health(), ANNA)).toBe("cross.case");
+  expect(requests).toHaveLength(0);
+});
+
+test("an answer that is not on the list falls back on the words of the name", async () => {
+  db.run(`UPDATE maurices SET icon = NULL WHERE id = 'dom-health'`);
+  reply = { text: "stethoscope.fancy", stop: "end", cost: 0.001 };
+  expect(await briefs.ensureDomainIcon(health(), ANNA)).toBe("cross.case");
+});
+
+test("a capped night still gives the icon the words suggest, without a call", async () => {
+  db.run(`UPDATE maurices SET icon = NULL WHERE id = 'dom-house'`);
+  budget.setSystemDailyCap(0.001);
+  budget.recordSpend(usage(0.002), budget.SYSTEM_SPENDER);
+  expect(await briefs.ensureDomainIcon(getMaurice("dom-house")!, ANNA)).toBe("house");
+  expect(requests).toHaveLength(0);
+});
+
+test("a rewrite gives the domain its icon on the way", async () => {
+  db.run(`UPDATE maurices SET icon = NULL WHERE id = 'dom-health'`);
+  db.run(`DELETE FROM domain_briefs`);
+  await briefs.refreshBrief(health(), ANNA);
+  expect(iconCalls()).toHaveLength(1);
+  // The brief's prose is not a symbol name: the words of the name decide.
+  expect(health().icon).toBe("cross.case");
 });

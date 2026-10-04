@@ -10,7 +10,8 @@ import { searchConversations } from "./conversationSearch";
 import { isDue } from "./corpusNightly";
 import { userLocale } from "./i18n";
 import { domainMail, mailExcerpt } from "./domainMail";
-import { isDomain, listMaurices, type Maurice } from "./maurices";
+import { iconMenu, keywordIcon, parseIconAnswer } from "./domainIcons";
+import { getMaurice, isDomain, listMaurices, setMauriceIcon, type Maurice } from "./maurices";
 import { corpusCall } from "./mcpClient";
 import { getModel } from "./models";
 import { listUsers } from "./users";
@@ -266,15 +267,18 @@ export function briefsForPrompt(memberId: string, memberName: string, budgetToke
  *  an id — but never across members: the query is scoped to the domains this
  *  member created, so a name that belongs to someone else simply does not
  *  exist here. */
-export function findBriefByName(memberId: string, name: string): { name: string; brief: BriefRow | null } | null {
+export function findBriefByName(
+  memberId: string,
+  name: string,
+): { id: string; name: string; icon: string | null; brief: BriefRow | null } | null {
   const wanted = name.trim().toLowerCase();
   if (!wanted) return null;
   const rows = db
     .query(
-      `SELECT m.id, m.name FROM maurices m
+      `SELECT m.id, m.name, m.icon FROM maurices m
        WHERE m.created_by = ? AND (m.kind IS NULL OR m.kind = 'domain')`,
     )
-    .all(memberId) as Array<{ id: string; name: string }>;
+    .all(memberId) as Array<{ id: string; name: string; icon: string | null }>;
   const exact = rows.find((r) => r.name.trim().toLowerCase() === wanted);
   const loose =
     exact ??
@@ -286,7 +290,7 @@ export function findBriefByName(memberId: string, name: string): { name: string;
   // The domain exists even when nothing has been written into it. Saying "no
   // such domain" there would send the model looking for a name it read in its
   // own prompt; "nothing written yet" is the truth and ends the search.
-  return { name: loose.name, brief: getBrief(loose.id, memberId) };
+  return { id: loose.id, name: loose.name, icon: loose.icon ?? null, brief: getBrief(loose.id, memberId) };
 }
 
 /** The names of the member's domains, for a tool's error message: a model that
@@ -640,7 +644,14 @@ export function refreshBrief(domain: Maurice, memberId: string): Promise<Refresh
   const key = `${domain.id}:${memberId}`;
   const running = inFlight.get(key);
   if (running) return running;
-  const task = doRefresh(domain, memberId).finally(() => inFlight.delete(key));
+  // The icon rides along: a domain met here without one gets it now, whatever
+  // became of the brief (most nights it is unchanged).
+  const task = doRefresh(domain, memberId)
+    .then(async (r) => {
+      await ensureDomainIcon(domain, memberId);
+      return r;
+    })
+    .finally(() => inFlight.delete(key));
   inFlight.set(key, task);
   return task;
 }
@@ -775,6 +786,56 @@ export async function writeSummary(domain: Maurice, memberId: string, brief: str
   } catch (err) {
     console.warn(`[briefs] "${domain.name}": no summary written (${(err as Error).message})`);
   }
+}
+
+/**
+ * Give a domain its icon when it has none: the night model's choice among the
+ * list of services/domainIcons.ts, the words of its name when the model is
+ * capped, fails or answers with something that is not on the list. A domain
+ * the member gave an icon to is left alone, and so is one nothing fits — it
+ * keeps the closed book, and the next night asks again.
+ *
+ * Never throws. What it costs (a few hundred tokens in, one word out) is the
+ * household's, like the brief.
+ */
+export async function ensureDomainIcon(domain: Maurice, memberId: string): Promise<string | null> {
+  const stored = getMaurice(domain.id);
+  if (!stored || stored.icon) return stored?.icon ?? null;
+  const about = [domain.tagline, getBrief(domain.id, memberId)?.summary ?? "", domainStatement(domain, 400)]
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .join("\n");
+  // The symbols the member's other domains wear: two pastilles side by side
+  // should not be the same glyph when another one fits.
+  const taken = domainsOf(memberId)
+    .filter((d) => d.id !== domain.id && d.icon)
+    .map((d) => d.icon!);
+  let icon: string | null = null;
+  try {
+    const modelId = ancillaryModel("domain_brief");
+    if (verdict(getModel(modelId)?.provider ?? null, modelId, 0, SYSTEM_SPENDER).ok) {
+      const result = await deps.write({
+        invocation: "domain_brief",
+        system:
+          `You choose the icon that stands for a domain of someone's life. ` +
+          `Answer with ONE symbol name from the list, exactly as written, and nothing else. ` +
+          `Choose the one a person would recognise the domain by at a glance` +
+          (taken.length ? `; prefer one that is not already used by their other domains (${taken.join(", ")}) unless nothing else fits` : "") +
+          `.\n\n${iconMenu()}`,
+        prompt: `Domain: ${domain.name}${about ? `\n\n${about}` : ""}`,
+        // Room for a reasoning model to think before its one word.
+        maxTokens: 600,
+        temperature: 0,
+      });
+      recordSpend(result.usage, SYSTEM_SPENDER);
+      icon = parseIconAnswer(result.text);
+    }
+  } catch (err) {
+    console.warn(`[briefs] "${domain.name}": no icon chosen (${(err as Error).message})`);
+  }
+  icon ??= keywordIcon(domain.name, about, taken);
+  if (icon) setMauriceIcon(domain.id, icon);
+  return icon;
 }
 
 // ── The night ────────────────────────────────────────────────────────────────
