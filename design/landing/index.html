@@ -3,14 +3,14 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Maurice — pick up the thread of your own mind</title>
-<meta name="description" content="Social networks learned to capture our attention. Maurice uses AI to do the opposite: gather what you read, write and receive, help you think it through, and leave you the last word. Private beta, by invitation." />
+<title>Chez Maurice — a place where you can hear yourself think</title>
+<meta name="description" content="Chez Maurice is a quiet place on the network: an assistant who knows you, a table for a few people close to you, and a board where you put up what is worth sharing. Private beta, by invitation." />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400&amp;display=swap" rel="stylesheet" />
 <link rel="alternate" hreflang="fr" href="https://www.chezmaurice.eu/fr/" />
 <link rel="alternate" hreflang="en" href="https://www.chezmaurice.eu/" />
-<link rel="stylesheet" href="home.css?v=20261005a" />
+<link rel="stylesheet" href="home.css?v=20261005b" />
 </head>
 <body>
 
@@ -26,11 +26,78 @@
   <symbol id="check" viewBox="0 0 18 18"><path d="M4 9.5l3.2 3.2L14 5.5" fill="none" stroke="#003399" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
 </svg>
 
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <!-- Drawings: one pen, one weight, hatching for shade. Keep any new one to the same rules (see .ill in home.css). -->
+  <symbol id="ill-table" viewBox="0 0 480 410">
+    <ellipse cx="240" cy="230" rx="170" ry="38"/>
+    <path d="M70 230v11a170 38 0 0 0 340 0v-11"/>
+    <path d="M96 262l6 8M118 270l6 8M142 276l6 8M168 280l6 8M196 283l6 8M224 285l6 8M252 285l6 8M280 283l6 8M308 280l6 8M334 276l6 8M358 270l6 8M380 262l6 8"/>
+    <path d="M231 279v78M249 279v78M236 290v60M243 290v60"/>
+    <path d="M231 357q-44 10-92 30M249 357q44 10 92 30M240 357v36"/>
+    <path d="M128 393h30M226 399h30M322 393h30M176 403h128"/>
+    <!-- the boater -->
+    <ellipse cx="120" cy="214" rx="46" ry="11"/>
+    <path d="M90 212v-24a30 7 0 0 1 60 0v24"/>
+    <path d="M90 200a30 7 0 0 0 60 0M90 206a30 7 0 0 0 60 0"/>
+    <path d="M97 203v5M105 205v5M113 206v5M121 207v5M129 206v5M137 205v5M144 203v5"/>
+    <!-- the notebook, open -->
+    <path d="M182 218l66-12 8 27-64 15z"/>
+    <path d="M248 206l72 6 6 28-70-7z"/>
+    <path d="M194 222l44-8M197 229l44-8M200 236l30-5M262 214l46 4M264 221l46 4M266 228l28 3"/>
+    <path d="M192 248l64-15 70 7M193 251l63-15 70 7"/>
+    <path d="M286 262l62-16M286 262l-9 5 8-10M342 247l4 5"/>
+    <!-- the cup -->
+    <ellipse cx="356" cy="212" rx="30" ry="8"/>
+    <path d="M338 190v13a18 6 0 0 0 36 0v-13"/>
+    <ellipse cx="356" cy="190" rx="18" ry="5"/>
+    <path d="M374 194q13 1 3 12"/>
+    <path d="M350 176q-6-8 0-16t0-16M362 178q-6-8 0-16t0-14"/>
+  </symbol>
+  <symbol id="ill-carnet" viewBox="0 0 64 64">
+    <rect x="15" y="8" width="34" height="46" rx="3"/>
+    <path d="M21 8v46M43 8v46M27 20h10M27 26h10"/>
+    <path d="M31 54v7l3-3 3 3v-7"/>
+  </symbol>
+  <symbol id="ill-ardoise" viewBox="0 0 64 64">
+    <rect x="13" y="7" width="38" height="40"/>
+    <path d="M18 13h20M18 20h28M18 27h24M18 34h14"/>
+    <path d="M17 47l-6 13M47 47l6 13M32 47v9"/>
+  </symbol>
+  <symbol id="ill-patron" viewBox="0 0 64 64">
+    <ellipse cx="32" cy="42" rx="27" ry="7"/>
+    <path d="M15 40V25a17 5 0 0 1 34 0v15"/>
+    <path d="M15 32a17 5 0 0 0 34 0M15 36a17 5 0 0 0 34 0"/>
+    <path d="M21 35v3M27 36v3M32 37v3M37 36v3M43 35v3"/>
+  </symbol>
+  <symbol id="ill-gueridon" viewBox="0 0 64 64">
+    <ellipse cx="32" cy="20" rx="25" ry="6"/>
+    <path d="M7 20v3a25 6 0 0 0 50 0v-3"/>
+    <path d="M30 29v22M34 29v22M30 51q-8 2-14 8M34 51q8 2 14 8M32 51v9"/>
+  </symbol>
+  <symbol id="ill-cle" viewBox="0 0 64 64">
+    <circle cx="19" cy="32" r="10"/>
+    <circle cx="19" cy="32" r="4"/>
+    <path d="M29 32h27M46 32v9M52 32v6M56 32v9"/>
+  </symbol>
+  <symbol id="ill-addition" viewBox="0 0 64 64">
+    <path d="M17 6h30v52l-5-4-5 4-5-4-5 4-5-4-5 4z"/>
+    <path d="M23 16h18M23 23h18M23 30h12M23 40h8M36 40h5"/>
+  </symbol>
+  <symbol id="ill-affiche" viewBox="0 0 96 136">
+    <rect x="2" y="2" width="92" height="132"/>
+    <path d="M2 96h92"/>
+    <circle cx="66" cy="34" r="12"/>
+    <path d="M2 96l26-34 18 20 14-12 34 26"/>
+    <path d="M12 108h46M12 118h30"/>
+    <path d="M8 12l8-8M8 22l18-18M8 32l28-28"/>
+  </symbol>
+</svg>
+
 <header class="nav">
   <div class="wrap">
     <a class="brand" href="#top"><svg width="30" height="22" aria-hidden="true"><use href="#hat"/></svg><span>Chez Maurice</span></a>
     <nav class="nav-links">
-      <a href="#context">The idea</a>
+      <a href="#voice">The idea</a>
       <a href="#models">Models</a>
       <a href="#pricing">Pricing</a>
       <a class="lang" href="/fr/" lang="fr" hreflang="fr">Français</a>
@@ -44,17 +111,18 @@
 
 <!-- Hero -->
 <section class="hero" id="top">
-  <div class="wrap">
+  <div class="wrap split">
     <div class="hero-copy">
       <p class="eyebrow">Private beta · by invitation</p>
-      <h1>Pick up the thread of your own mind.</h1>
-      <p class="hero-sub">Social networks learned to capture our attention. Maurice uses AI to do the opposite: gather what you read, write and receive, help you think it through, and leave you the last word. On your own, or with the few people you invite into your household.</p>
+      <h1>A place where you can hear yourself think.</h1>
+      <p class="hero-sub">At Chez Maurice you find again what you have read, received and thought, talk it over with an assistant who knows you, and share what is worth sharing. Alone at your table, with a few people close to you, or on your board for those who pass by.</p>
       <div class="hero-cta">
         <a class="btn btn-primary" href="https://account.chezmaurice.eu/?via=landing">I have an invitation code</a>
         <a class="more" href="mailto:bonjour@chezmaurice.eu?subject=An%20invitation%20to%20Maurice">Ask for an invitation →</a>
       </div>
-      <p class="aside">We’re opening Maurice a few households at a time.</p>
+      <p class="aside">The house opens to a few circles at a time.</p>
     </div>
+    <svg class="ill hero-ill" role="img" aria-label="A café table with a straw boater, an open notebook and a cup"><use href="#ill-table"/></svg>
   </div>
 </section>
 
@@ -66,14 +134,68 @@
   </div>
 </section>
 
-<!-- Your context: what he has read, what you switch on -->
-<section class="section context" id="context">
+<!-- From the notebook to the board -->
+<section class="section path" id="voice">
+  <div class="wrap">
+    <div class="split path-head">
+      <div class="stack">
+        <svg class="ill vignette" aria-hidden="true"><use href="#ill-carnet"/></svg>
+        <p class="eyebrow">From the notebook to the board</p>
+        <h2 class="display">From what you read <em>to what you put up.</em></h2>
+        <p class="lede">You saw a film, you finished a book, an article stayed with you. A few lines in your own words, and it is on your own site. No feed, no audience to feed.</p>
+      </div>
+      <div class="card cardex">
+        <div class="card-head">
+          <h3>On Claire’s board</h3>
+          <p>Example</p>
+        </div>
+        <div class="cardex-body">
+          <svg class="ill affiche" aria-hidden="true"><use href="#ill-affiche"/></svg>
+          <div>
+            <b>Perfect Days</b>
+            <small>Film · Wim Wenders, 2023</small>
+            <p>Seen on Sunday. A man cleans public toilets in Tokyo, and it is the most soothing film of the year. I came out wanting to tidy my life and listen to cassettes.</p>
+          </div>
+        </div>
+        <p class="bill-note">claire-dupont.eu · published a moment ago</p>
+      </div>
+    </div>
+    <div class="grid4">
+      <div class="step">
+        <p class="n">1</p>
+        <h3>You saw a film, you read a book.</h3>
+        <p>Tell Maurice. He finds the right reference, with its poster or its cover, and opens its page in Carnet.</p>
+      </div>
+      <div class="step">
+        <p class="n">2</p>
+        <h3>You note what stopped you.</h3>
+        <p>In Carnet, on iPhone and iPad: a passage highlighted in a book or in an article you set aside, a remark on the way out of the cinema.</p>
+      </div>
+      <div class="step">
+        <p class="n">3</p>
+        <h3>You talk it over with your host.</h3>
+        <p>Maurice has your notes in front of him, and what he knows about you. He ties what you just read to what is on your mind.</p>
+      </div>
+      <div class="step">
+        <p class="n">4</p>
+        <h3>You put it up on your board.</h3>
+        <p>A few lines in your own words, published on your own site. Your friends get a link: they have nothing to install.</p>
+      </div>
+    </div>
+    <p class="closing">In time, you know what you think. And you have something to show for it.</p>
+    <p class="learn-row"><a class="learn" href="/carnet">More about Carnet →</a><a class="learn" href="/clipper">The browser extension →</a><a class="learn" href="/publishing">Publishing your site →</a></p>
+  </div>
+</section>
+
+<!-- The host: what he has read, what you switch on -->
+<section class="section band context" id="context">
   <div class="wrap">
     <div class="split">
       <div class="stack">
-        <p class="eyebrow">Your context</p>
+        <svg class="ill vignette" aria-hidden="true"><use href="#ill-patron"/></svg>
+        <p class="eyebrow">Your host</p>
         <h2 class="display">Ten years of mail, three years of conversations. <em>He has already read it all.</em></h2>
-        <p class="lede">Connect your mailbox, drop in your ChatGPT or Claude history. Maurice draws out the subjects that matter in your life, the people, what is under way. You have nothing to explain to him.</p>
+        <p class="lede">Maurice is the host, and a good host knows his regulars. Connect your mailbox, drop in your ChatGPT or Claude history: he draws out the subjects that matter in your life, the people, what is under way. You have nothing to explain to him.</p>
         <p class="lede">He asks before reading your mail, and he has no way to send or delete a message.</p>
         <a class="learn" href="/memory">How Maurice learns →</a>
       </div>
@@ -111,78 +233,45 @@
   </div>
 </section>
 
-<!-- Your voice: from reading to publishing -->
-<section class="section band path" id="voice">
-  <div class="wrap">
-    <div class="import-head">
-      <p class="eyebrow">Your voice</p>
-      <h2 class="display">From what you read <em>to what you publish.</em></h2>
-      <p class="lede">An assistant for writing and publishing documented notes, the kind that start from within.</p>
-    </div>
-    <div class="grid4">
-      <div class="step">
-        <p class="n">1</p>
-        <h3>You read, you annotate.</h3>
-        <p>In Carnet, on iPhone and iPad: a book, or an article set aside from your browser. What stops you, you highlight.</p>
-      </div>
-      <div class="step">
-        <p class="n">2</p>
-        <h3>You talk it over with someone who knows you.</h3>
-        <p>Maurice has your highlights in front of him, and what he knows about you. He ties this reading to what is on your mind.</p>
-      </div>
-      <div class="step">
-        <p class="n">3</p>
-        <h3>You keep a page on it.</h3>
-        <p>On an article, a book, an author, a film, a series: what you took from it, with your passages.</p>
-      </div>
-      <div class="step">
-        <p class="n">4</p>
-        <h3>You publish on your own ground.</h3>
-        <p>On your own site, not on a platform. In your words: Maurice doesn’t write for you.</p>
-      </div>
-    </div>
-    <p class="closing">In time, you know what you think. And you have something to show for it.</p>
-    <p class="learn-row"><a class="learn" href="/carnet">More about Carnet →</a><a class="learn" href="/clipper">The browser extension →</a><a class="learn" href="/publishing">Publishing your site →</a></p>
-  </div>
-</section>
-
-<!-- The household -->
+<!-- Your table -->
 <section class="section household" id="household">
   <div class="wrap split">
     <div class="stack">
-      <p class="eyebrow">The household</p>
-      <h2 class="display">A circle you trust, <em>where the AI waits to be asked.</em></h2>
-      <p class="lede">A household is a few people close to you: family, friends, those you trust. You trade ideas in shared conversations, around a context you hold in common.</p>
-      <p class="lede">Maurice is there, but he stays quiet until someone turns to him. And what he knows about each of you in private stays out of the room.</p>
-      <a class="learn" href="/household">More about households →</a>
+      <svg class="ill vignette" aria-hidden="true"><use href="#ill-gueridon"/></svg>
+      <p class="eyebrow">Your table</p>
+      <h2 class="display">A table for a few people close to you, <em>where the host waits to be called.</em></h2>
+      <p class="lede">Your circle is the people you sit down with: a partner, a spouse, the members of a project you run together. You trade ideas in shared conversations, around a context you hold in common.</p>
+      <p class="lede">Maurice is there, but he stays quiet until someone turns to him. And what he knows about each of you in private stays away from the table.</p>
+      <a class="learn" href="/household">More about circles →</a>
     </div>
     <div class="card">
       <div class="card-head">
-        <h3>Dad’s 70th</h3>
-        <p>Household conversation</p>
+        <h3>The spring programme</h3>
+        <p>A circle’s conversation</p>
       </div>
       <div class="room">
-        <div class="msg"><span class="avatar">C</span><div><b>Claire</b><p>What are we doing for Dad’s 70th?</p></div></div>
-        <div class="msg"><span class="avatar">M</span><div><b>Marc</b><p>He kept talking about Brittany last year.</p></div></div>
-        <div class="msg"><span class="avatar">L</span><div><b>Léa</b><p><span class="mention">@Maurice</span>, any idea for a weekend there in May?</p></div></div>
-        <div class="msg"><span class="avatar is-maurice"><svg width="18" height="13" aria-hidden="true"><use href="#hat"/></svg></span><div><b>Maurice</b><p>For four people in May: Saint-Malo, Belle-Île or the Gulf of Morbihan. Shall I work out the one you like?</p></div></div>
+        <div class="msg"><span class="avatar">C</span><div><b>Claire</b><p>We still have no speaker for the March evening.</p></div></div>
+        <div class="msg"><span class="avatar">M</span><div><b>Marc</b><p>What about the woman who wrote on urban gardens?</p></div></div>
+        <div class="msg"><span class="avatar">I</span><div><b>Inès</b><p><span class="mention">@Maurice</span>, what did we say about her after the October talk?</p></div></div>
+        <div class="msg"><span class="avatar is-maurice"><svg width="18" height="13" aria-hidden="true"><use href="#hat"/></svg></span><div><b>Maurice</b><p>You noted that she was clear and funny, and that she had offered to come back. I can find her address in the exchange with Marc.</p></div></div>
       </div>
     </div>
   </div>
 </section>
 
 <!-- Your own instance -->
-<section class="section band instance" id="privacy">
+<section class="section instance" id="privacy">
   <div class="wrap split top">
     <div class="stack">
-      <p class="eyebrow">Privacy</p>
+      <svg class="ill vignette" aria-hidden="true"><use href="#ill-cle"/></svg>
+      <p class="eyebrow">The house</p>
       <h2 class="display">Not a seat on someone’s platform. <em>Your own instance.</em></h2>
-      <p class="lede">Every household gets its own Maurice, with its own server, databases and documents. Nothing in it is pooled with other customers, and nothing is used to train anyone’s model.</p>
-      <p class="lede">Inside the house, each member’s conversations are sealed too. Being the admin doesn’t let you read anyone else’s.</p>
+      <p class="lede">Every circle gets its own Maurice, with its own server, databases and documents. Nothing in it is pooled with other customers, and nothing is used to train anyone’s model.</p>
+      <p class="lede">Inside the circle, each member’s conversations are sealed too. Being the admin doesn’t let you read anyone else’s.</p>
     </div>
     <div class="stack-sm">
       <div class="card">
-        <h3>Dupont household</h3>
+        <h3>Claire’s circle</h3>
         <div class="well">
           <div class="row plain"><p>Location</p><p class="dim">Paris, France</p></div>
           <div class="row plain"><p>Documents</p><p class="dim">1,240 files</p></div>
@@ -194,7 +283,7 @@
         <div class="well">
           <div class="row"><div class="member"><span class="avatar">C</span><p>Claire</p></div><p class="dim">Private</p></div>
           <div class="row"><div class="member"><span class="avatar">M</span><p>Marc</p></div><p class="dim">Admin · Private</p></div>
-          <div class="row"><div class="member"><span class="avatar">L</span><p>Léa, 12</p></div><p class="dim">Private</p></div>
+          <div class="row"><div class="member"><span class="avatar">I</span><p>Inès</p></div><p class="dim">Private</p></div>
         </div>
       </div>
       <p class="aside">Delete the instance, and it’s gone.</p>
@@ -236,7 +325,7 @@
       </div>
       <div class="model">
         <h3>Per member</h3>
-        <p>A simpler, cheaper model for the kids. Whatever you prefer for yourself.</p>
+        <p>A simpler model for one, a stronger one for another. To each their own.</p>
       </div>
     </div>
     <p class="learn-row"><a class="learn" href="/models">More about models →</a></p>
@@ -247,30 +336,30 @@
 <section class="section band" id="pricing">
   <div class="wrap split top">
     <div class="stack">
-      <p class="eyebrow">Pricing</p>
-      <h2 class="display">One plan for the whole household.</h2>
-      <p class="lede">No per-seat pricing: add everyone who lives with you. You pay a flat fee for hosting and upkeep, and top up a credit for what the household uses. For the family of four below, September came to €16.50. About €4 each.</p>
+      <svg class="ill vignette" aria-hidden="true"><use href="#ill-addition"/></svg>
+      <p class="eyebrow">The bill</p>
+      <h2 class="display">One subscription, for you and your circle.</h2>
+      <p class="lede">One person subscribes and invites those close to them: no price per seat. You pay a flat fee for hosting and upkeep, and top up a credit for what the circle uses. For the circle of three below, September came to €14.52.</p>
       <div class="card">
         <div class="card-head">
           <h3>September</h3>
-          <p>Example household of four</p>
+          <p>Example circle of three</p>
         </div>
         <div class="well">
           <div class="row"><div class="who"><b>Claire</b><small>160 messages · 6.5 M tokens</small></div><p class="num">€2.64</p></div>
-          <div class="row"><div class="who"><b>Léa</b><small>120 messages, mostly homework · 4.9 M tokens</small></div><p class="num">€1.98</p></div>
           <div class="row"><div class="who"><b>Marc</b><small>80 messages · 3.2 M tokens</small></div><p class="num">€1.32</p></div>
-          <div class="row"><div class="who"><b>Noé</b><small>40 messages · 1.6 M tokens</small></div><p class="num">€0.66</p></div>
+          <div class="row"><div class="who"><b>Inès</b><small>40 messages · 1.6 M tokens</small></div><p class="num">€0.66</p></div>
         </div>
         <div class="bill">
-          <div class="bill-line"><p>Everyday model · from your credit</p><p class="num">€6.60</p></div>
+          <div class="bill-line"><p>Everyday model · from your credit</p><p class="num">€4.62</p></div>
           <div class="bill-line"><p>Platform and hosting</p><p class="num">€9.90</p></div>
-          <div class="bill-total"><p>September total</p><p class="num">€16.50</p></div>
-          <p class="bill-note">Plus €0.22 for two frontier-model questions, paid to the provider with your own key.</p>
+          <div class="bill-total"><p>September total</p><p class="num">€14.52</p></div>
+          <p class="bill-note">Your readers pay nothing and need no account: they receive a link.</p>
         </div>
       </div>
       <div class="also">
         <div>
-          <h3>One account, several profiles</h3>
+          <h3>One circle, several profiles</h3>
           <p>Everyone signs in as themselves, with their own history and settings.</p>
         </div>
         <div>
@@ -282,8 +371,8 @@
 
     <div class="card plan" id="plan">
       <div class="plan-head">
-        <h3>Household</h3>
-        <p>For everyone under one roof</p>
+        <h3>Circle</h3>
+        <p>For you and those close to you</p>
       </div>
       <div class="price">
         <div class="price-main"><p class="amount">€9.90</p><p class="per">/ month</p></div>
@@ -295,7 +384,7 @@
       </div>
       <ul class="checks">
         <li><svg width="18" height="18" aria-hidden="true"><use href="#check"/></svg>Your own instance, hosted in the EU</li>
-        <li><svg width="18" height="18" aria-hidden="true"><use href="#check"/></svg>A private profile for each member</li>
+        <li><svg width="18" height="18" aria-hidden="true"><use href="#check"/></svg>A private space for each member</li>
         <li><svg width="18" height="18" aria-hidden="true"><use href="#check"/></svg>Usage shown per member, every month</li>
         <li><svg width="18" height="18" aria-hidden="true"><use href="#check"/></svg>Import from ChatGPT and Claude</li>
         <li><svg width="18" height="18" aria-hidden="true"><use href="#check"/></svg>Apps for Mac, iPhone and iPad</li>
@@ -317,12 +406,12 @@
         <li><svg width="18" height="18" aria-hidden="true"><use href="#check"/></svg>Answers that stream as they’re written</li>
         <li><svg width="18" height="18" aria-hidden="true"><use href="#check"/></svg>Dictation that stays on your device</li>
         <li><svg width="18" height="18" aria-hidden="true"><use href="#check"/></svg>Notes, files and past conversations as context</li>
-        <li><svg width="18" height="18" aria-hidden="true"><use href="#check"/></svg>Shared conversations for the whole family</li>
+        <li><svg width="18" height="18" aria-hidden="true"><use href="#check"/></svg>Shared conversations with your circle</li>
       </ul>
       <div class="hero-cta">
         <span class="btn btn-soon with-icon" aria-disabled="true"><svg class="ic" width="16" height="16" aria-hidden="true"><use href="#apple"/></svg>TestFlight beta · soon</span>
       </div>
-      <p class="aside">The public beta is moving to a new TestFlight link and reopens shortly. The App Store follows. The app is free and opens onto your household: create yours first.</p>
+      <p class="aside">The public beta is moving to a new TestFlight link and reopens shortly. The App Store follows. The app is free and opens onto your circle: create yours first.</p>
     </div>
   </div>
 </section>

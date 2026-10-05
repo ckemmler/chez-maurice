@@ -84,7 +84,7 @@ a:hover { color: var(--accent-deep); text-decoration: underline; }
   gap: 88px; align-items: center;
 }
 .split.top { align-items: start; }
-.hero-copy { display: flex; flex-direction: column; gap: 28px; max-width: 920px; }
+.hero-copy { display: flex; flex-direction: column; gap: 28px; }
 .hero h1 {
   font-family: var(--serif); font-weight: 400;
   font-size: clamp(46px, 5.6vw, 76px); line-height: 1.02; letter-spacing: -0.02em;
@@ -129,6 +129,22 @@ a:hover { color: var(--accent-deep); text-decoration: underline; }
   max-width: 900px; margin-top: 20px;
   font-family: var(--serif); font-size: clamp(24px, 2.7vw, 34px); line-height: 1.32; letter-spacing: -0.005em;
 }
+
+/* ---------- drawings ----------
+   One pen for every drawing: ink colour, no fill, one weight, round ends;
+   shade is hatching, never a tint. The symbols are at the top of each page. */
+.ill { fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; color: var(--ink); overflow: visible; }
+.vignette { width: 56px; height: 56px; }
+.hero-ill { width: 100%; max-width: 520px; height: auto; aspect-ratio: 480 / 410; justify-self: center; stroke-width: 1.3; }
+.household .ill { color: var(--dark-ink); }
+
+/* an example card, as it reads on a member's site */
+.path-head { margin-bottom: 72px; }
+.cardex-body { display: flex; gap: 20px; align-items: flex-start; }
+.affiche { flex-shrink: 0; width: 96px; height: 136px; stroke-width: 1.2; }
+.cardex-body b { display: block; font-family: var(--serif); font-weight: 500; font-size: 26px; line-height: 1.1; }
+.cardex-body small { display: block; margin-top: 4px; font-size: 13px; color: var(--muted); }
+.cardex-body p { margin-top: 12px; font-size: 16px; line-height: 1.5; color: var(--ink-2); }
 
 /* ---------- your context ---------- */
 .context .split + .split { margin-top: 112px; }
@@ -272,6 +288,8 @@ a:hover { color: var(--accent-deep); text-decoration: underline; }
   .context .split + .split { margin-top: 72px; }
   .flip > :first-child { order: 0; }
   .closing { margin-top: 48px; }
+  .hero-ill { max-width: 360px; justify-self: start; }
+  .path-head { margin-bottom: 48px; }
   .import-head { margin-bottom: 40px; }
   .nav-links { gap: 22px; }
   .nav-links .opt { display: none; }
