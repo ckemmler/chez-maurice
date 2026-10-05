@@ -361,9 +361,13 @@ function memberDisplayName(memberId: string): string {
 }
 
 /** Whether the night should read for this member: their word is yes (the
- *  mirror, no gateway call); the job's own state decides the rest inside. */
+ *  mirror, no gateway call); the job's own state decides the rest inside.
+ *  A yes given from the card before Maurice opened the mail conversation
+ *  has no mirror yet: the mailboxes it approved speak for it. */
 export function readingWanted(memberId: string): boolean {
-  return mailConversationOf(memberId)?.reading === "approved";
+  const mc = mailConversationOf(memberId);
+  if (!mc) return approvedMailboxAddresses(memberId).length > 0;
+  return mc.reading === "approved";
 }
 
 // ── Runs by hand, in the background ──────────────────────────────────────

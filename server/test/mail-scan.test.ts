@@ -260,3 +260,66 @@ test("a calibration with nothing to read does not stop the numbers", async () =>
   expect(await scan.runMailNightly(deps)).toBe("walked");
   expect(opened[0].text).toContain("je n'y trouve aucun vrai échange à lire");
 });
+
+// ── At once, when the mailbox is added (5 October 2026) ──────────────────
+
+const approval = await import("../src/services/mailApproval");
+const reading = await import("../src/services/mailReading");
+const { createConversation, getMessages } = await import("../src/services/conversations");
+const { MAIL_OPENER_STRINGS } = await import("../src/services/mailOpener");
+
+/** The deps of a day: a walk that is done at the first look, and an opening
+ *  that makes a real conversation, as Maurice's. */
+const day = (answers: (member: string, tool: string) => any = () => undefined) => night({
+  call: gateway((m, tool) => answers(m, tool) ?? (tool === "scan_mailbox" ? { status: "started", job: { id: "job_1", state: "running" } } : tool === "scan_status" ? done(12) : undefined)),
+  open: async (r: any) => {
+    opened.push(r);
+    return { ok: true as const, conversation: createConversation(r.memberId, null, { openedBy: "maurice" }) as any, message: {} as any };
+  },
+});
+
+const add = (address: string) => req("/", { method: "POST", body: JSON.stringify({ address, password: "good" }) });
+const settle = () => new Promise((r) => setTimeout(r, 150));
+
+test("a member's first mailbox opens the conversation with the numbers at once; a second opens nothing more", async () => {
+  db.run(`DELETE FROM mail_conversations WHERE member_id = ?`, [ANNA]);
+  scan.setMailScanDeps(day());
+  expect((await add("anna@gmail.com")).status).toBe(201);
+  await settle();
+  expect(opened.map((o) => o.memberId)).toEqual([ANNA]);
+  expect(opened[0].text).toContain("20");
+  const mc = approval.mailConversationOf(ANNA)!;
+  expect(mc).toMatchObject({ reading: "pending" });
+  expect(scan.mailNightlyStatus().members[ANNA]).toMatchObject({ conversation_id: mc.conversation_id });
+  // No yes yet: nothing is read, and nothing is said after the question.
+  expect(reading.readingWanted(ANNA)).toBe(false);
+  expect(getMessages(mc.conversation_id).filter((m) => m.content === MAIL_OPENER_STRINGS.en!.approved)).toHaveLength(0);
+
+  expect((await add("anna2@gmail.com")).status).toBe(201);
+  await settle();
+  expect(opened).toHaveLength(1);
+});
+
+test("a yes from the card before the conversation is kept: read now, and carried into the conversation when it opens", async () => {
+  db.run(`DELETE FROM mail_conversations WHERE member_id = ?`, [ANNA]);
+  // The first mailbox's walk never gets to the numbers: no conversation.
+  scan.setMailScanDeps(day((_m, tool) => (tool === "scan_mailbox" ? { error: "MailboxError: the mailbox could not be reached" } : undefined)));
+  expect((await add("anna@gmail.com")).status).toBe(201);
+  await settle();
+  expect(opened).toHaveLength(0);
+  expect(reading.readingWanted(ANNA)).toBe(false);
+  // The yes, as decideReading leaves it on the mailbox, with no row to mirror it.
+  expect(accountsSvc.approveMailboxes(ANNA)).toBe(1);
+  expect(approval.mailConversationOf(ANNA)).toBeNull();
+  expect(reading.readingWanted(ANNA)).toBe(true);
+
+  // The conversation opens later: the yes is mirrored and said there.
+  scan.setMailScanDeps(day());
+  expect((await add("anna2@gmail.com")).status).toBe(201);
+  await settle();
+  expect(opened).toHaveLength(1);
+  const mc = approval.mailConversationOf(ANNA)!;
+  expect(mc.reading).toBe("approved");
+  expect(getMessages(mc.conversation_id).at(-1)).toMatchObject({ role: "assistant", content: MAIL_OPENER_STRINGS.en!.approved });
+  expect(reading.readingWanted(ANNA)).toBe(true);
+});

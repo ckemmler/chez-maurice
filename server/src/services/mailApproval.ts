@@ -1,7 +1,7 @@
 import db from "../db";
 import { addMessage } from "./conversations";
 import { memberLocale } from "./domainBriefs";
-import { approveMailboxes, listMailAccounts } from "./mailAccounts";
+import { approvedMailboxAddresses, approveMailboxes, listMailAccounts } from "./mailAccounts";
 import { mailOpenerStrings } from "./mailOpener";
 import { mailToolCall, type MemberMailState } from "./mailScan";
 import type { McpTool } from "./mcpClient";
@@ -169,6 +169,19 @@ export function sayReadingDecided(memberId: string, action: ReadingAction): stri
   const msg = addMessage(mc.conversation_id, "assistant", readingReply(action, memberLocale(memberId)), { mauriceId: null });
   publishToRoom(mc.conversation_id, { type: "message", message: msg });
   return msg.id;
+}
+
+/** A yes given before the conversation existed — from the card, while the
+ *  mailbox was still being walked — had no row to be mirrored in: the
+ *  mailboxes it approved kept it. Once the conversation is linked, mirror
+ *  it and say it there, so Maurice's question does not stand unanswered
+ *  above a reading already agreed. Returns whether a yes was carried. */
+export function carryReadingApproval(memberId: string): boolean {
+  const mc = mailConversationOf(memberId);
+  if (!mc || mc.reading !== "pending" || !approvedMailboxAddresses(memberId).length) return false;
+  mirror(memberId, "approved");
+  sayReadingDecided(memberId, "approve");
+  return true;
 }
 
 // ── The tool ─────────────────────────────────────────────────────────────

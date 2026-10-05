@@ -7,7 +7,7 @@ import { describeCost, mailOpenerStrings, mailOpeningTitle, readingCost, renderM
 import { corpusCall } from "./mcpClient";
 import { openConversation, type OpenRequest, type OpenResult } from "./openedConversations";
 import { listUsers } from "./users";
-import { backfillMailConversations, ensureMailConversationTitle, linkMailConversation, mailConversationOf } from "./mailApproval";
+import { backfillMailConversations, carryReadingApproval, ensureMailConversationTitle, linkMailConversation, mailConversationOf } from "./mailApproval";
 import { readingWanted, startMailReading } from "./mailReading";
 import { mailboxViews, newMailboxNotice, type MailboxView } from "./mailboxEstimate";
 import { addMessage } from "./conversations";
@@ -43,6 +43,10 @@ import { approvedMailboxAddresses, getMailAccount, listMailAccounts } from "./ma
 // once per member, Maurice opens a conversation with the numbers and the
 // question — settled 26 September 2026: opened late, only when the walk
 // is done; numbers and nothing else; past the opening guard, this once.
+// Since 5 October 2026 the same free work and the same opening follow the
+// walk of a mailbox just added (`analyseMailboxInBackground`): a member's
+// first mailbox gets its conversation the same day, and the night is left
+// with the daily increments and whoever was missed.
 // The "yes" is lot 3 (services/mailApproval.ts): the conversation opened
 // here is linked to its member in `mail_conversations`, which is what
 // grants the tool that takes the yes.
@@ -250,7 +254,11 @@ export function analyseMailboxInBackground(memberId: string, accountId: string |
       if (!missing.length) break;
       console.log(`[mail] ${missing.map((a) => a.address).join(", ")} added during the walk for ${memberId}: walking again`);
     }
-    await measure(memberId, deps);
+    const est = await measure(memberId, deps);
+    // The member's first mailbox: the conversation with the numbers opens
+    // now, not at the night's rendezvous (5 October 2026) — the night is
+    // for the daily increments. Once per member, as at night.
+    if (await announce(memberId, est, deps, new Date())) saveState(loadState());
     const boxes = (await mailScanStatus(memberId)).mailboxes;
     console.log(
       `[mail] analysed after adding a mailbox for ${memberId}: ` +
@@ -479,8 +487,10 @@ async function announce(memberId: string, est: ReadingEstimate, d: MailScanDeps,
   ms.conversation_id = opened.conversation.id;
   // The link that grants the tool taking the yes (services/mailApproval.ts).
   linkMailConversation(memberId, opened.conversation.id);
+  // A word already given from the card, before there was a conversation.
+  if (carryReadingApproval(memberId)) console.log(`[mail] the reading was already approved for ${memberId}: said in the conversation just opened`);
   // What it would cost is the operator's to know, not the member's.
-  console.log(`[mail] nightly: conversation ${opened.conversation.id} opened for ${memberId} with the numbers; ${est.to_read} to read, ${describeCost(readingCost(est))}`);
+  console.log(`[mail] conversation ${opened.conversation.id} opened for ${memberId} with the numbers; ${est.to_read} to read, ${describeCost(readingCost(est))}`);
   return true;
 }
 
