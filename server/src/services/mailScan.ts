@@ -13,7 +13,7 @@ import { mailboxViews, newMailboxNotice, type MailboxView } from "./mailboxEstim
 import { addMessage } from "./conversations";
 import { publishToRoom } from "./roomBus";
 import { listSenderRules, senderRulesForTriage } from "./mailSenderRules";
-import { writeMailDocuments } from "./mailDocuments";
+import { startMailDocuments } from "./mailDocuments";
 import { contactAddresses, listContactAccounts, syncContacts } from "./contactAccounts";
 import { approvedMailboxAddresses, getMailAccount, listMailAccounts } from "./mailAccounts";
 
@@ -133,7 +133,10 @@ const defaultDeps: MailScanDeps = {
   // Through the shared launcher: a reading the member started in the day is
   // joined, not run twice.
   read: (memberId) => startMailReading(memberId), wantsReading: readingWanted,
-  document: (memberId) => writeMailDocuments(memberId),
+  // Through the shared launcher too: a reading started from the app writes
+  // its documents when it ends, and the night that joined it would write
+  // them again at the same moment.
+  document: (memberId) => startMailDocuments(memberId),
   contacts: freshContacts,
 };
 let deps: MailScanDeps = defaultDeps;

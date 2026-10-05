@@ -673,3 +673,23 @@ test("the relation section is read and replaced in place, or put first", () => {
   expect(people.withSection(withRel, "La relation", "Une amie.")).toBe("## La relation\n\nUne amie.\n\n## Journal\n\n- un\n");
   expect(people.sectionOf(body, "La relation")).toBeNull();
 });
+
+test("two launches at the same moment are one pass: the night and a reading started from the app both write after it", async () => {
+  // What both do when the reading they share ends (routes/mailAccounts.ts,
+  // services/mailScan.ts): the second joins the first, nothing is asked twice.
+  writes = [];
+  const fromTheApp = docs.startMailDocuments(ANNA);
+  const fromTheNight = docs.startMailDocuments(ANNA);
+  expect(fromTheNight).toBe(fromTheApp);
+  expect(docs.mailDocumentsStatus(ANNA).running).toBe(true);
+  const r = await fromTheApp;
+  expect(await fromTheNight).toBe(r);
+  expect(docs.mailDocumentsStatus(ANNA)).toMatchObject({ running: false, last: r });
+  // And the two callers are wired to it, not to the pass itself.
+  const fs2 = await import("fs");
+  for (const f of ["../src/routes/mailAccounts.ts", "../src/services/mailScan.ts"]) {
+    const src = fs2.readFileSync(new URL(f, import.meta.url), "utf8");
+    expect(src).not.toMatch(/\bwriteMailDocuments\(/);
+    expect(src).toMatch(/\bstartMailDocuments\(/);
+  }
+});

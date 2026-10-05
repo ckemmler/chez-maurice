@@ -16,7 +16,7 @@ import { analyseMailboxInBackground, mailScanStatus, retriage, startMailScan, ty
 import { setSenderRule } from "../services/mailSenderRules";
 import { withoutMoney } from "../services/mailboxEstimate";
 import { mailReadingStatus, readingWanted, startMailReading } from "../services/mailReading";
-import { mailDocumentsProgress, writeMailDocuments } from "../services/mailDocuments";
+import { mailDocumentsProgress, startMailDocuments } from "../services/mailDocuments";
 import { getUser } from "../services/users";
 import { decideReading, mailConversationOf, sayReadingDecided, widenReading, type ReadingAction } from "../services/mailApproval";
 import { forgetMailbox } from "../services/mailForget";
@@ -74,7 +74,9 @@ function startReadingNow(uid: string): boolean {
   if (mailReadingStatus(uid).running) return false;
   startMailReading(uid, { maxMs: 12 * 60 * 60 * 1000 })
     .then(async (r) => {
-      if (r.read > 0) await writeMailDocuments(uid);
+      // Through the shared launcher: the night joins this reading and writes
+      // after it too — one pass for the member, not two side by side.
+      if (r.read > 0) await startMailDocuments(uid);
     })
     .catch((err) => console.warn(`[mail] reading started from the app for ${uid}: ${(err as Error).message}`));
   console.log(`[mail] reading started from the app for ${uid}`);
