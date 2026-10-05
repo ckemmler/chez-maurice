@@ -345,6 +345,8 @@ app.route("/api/tool-families", toolFamilies);
 app.route("/api/admin", admin);
 app.route("/api/me", me);
 app.route("/api/import", importRoutes);
+// With the trailing slash too: a 404 there reads as "the admin is gone".
+app.get("/admin/", (c) => c.redirect("/admin"));
 app.route("/admin", webAdmin);
 app.route("/login", webLogin);
 app.route("/api/v1/gardens", gardens);
@@ -901,8 +903,8 @@ console.log(`
   ${host}
   data: ${dataDir}
   tls: ${hasTls ? "tailscale" : "none"}
-  setup: ${adminExists() ? "complete" : "open http://localhost:" + port + "/admin"}
-  admin: http://localhost:${port}/admin
+  setup: ${adminExists() ? "complete" : "open " + (hasTls ? "https" : "http") + "://localhost:" + port + "/admin"}
+  admin: ${hasTls ? "https" : "http"}://localhost:${port}/admin
 `);
 
 /** True if the request carries a valid session — Bearer token or the
