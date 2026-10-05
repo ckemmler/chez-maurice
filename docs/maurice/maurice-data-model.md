@@ -43,6 +43,8 @@ Anthropic's key stays in `households.api_key`; the other providers got their own
 | `device_tokens` | `token` (PK), `user_id`, `platform`, `household_tag` | APNs push; `household_tag` routes a tap to the right foyer in a multi-household app. |
 | `devices` | `id`, `household_id`, `name`, `pairing_token` (unique), `paired_at` | Programmatic device pairing. |
 | `guest_contacts` | `guest_user_id` + `member_id` (PK) | The people a guest may reach; enforced both directions. |
+| `erasures` | `id`, `member_id` (no FK — the member may be gone), `scope ∈ {data,account}`, `erased_at`, `pending` | The register of erasures (3 October 2026, `services/memberErase.ts`): an opaque id and a date, nothing that says who. `pending` holds the garden's path while the corpus step waits for the gateway, and is emptied when it succeeds. |
+| `member_imports` | `member_id` (cascade) + `archive_id` (PK), `imported_at` | A member archive goes into an account once (`services/memberArchive.ts`). Emptied by an erasure, so a member can take their own archive back in. |
 
 ## Conversations & messages
 
@@ -226,6 +228,7 @@ Identity, auth, conversations, messages, files, gardens, personas, reports, and 
 
 ## Gaps & notes
 
+- **Deleting a member is a walk, not a cascade (3 October 2026).** The cascades of `maurice.db` never covered everything: `messages.author_id` (no action — it blocked the delete of anyone who had written in someone else's room), `mail_conversations.member_id`, `spend_ledger.user_id`, `garden_settings.id` and `reports.target_id` carry a member id without one, and nothing outside `maurice.db` cascades at all. `purgeMauriceDb` and `purgeDataDb` (`services/memberErase.ts`) take a database as an argument and assume nothing about its schema beyond what they find, so the same two functions rewrite an old snapshot. The ledger keeps its amounts; on an account's deletion `user_id` is emptied.
 - **Single household per server.** "Multiple households" is multiple servers (foyer switcher; one launchd agent per household at home), not multiple `households` rows. There is no cross-server schema; coordination is the app's job.
 - **Room context is shared, not per-participant.** `composer_specs` is keyed per account, anticipating private per-participant room context (the shared-rooms idea), but today everyone in a room shares the loaded context as common ground.
 - **The ledger knows the member (19 September 2026).** `spend_ledger` carries `user_id` (indexed with `at`), written by `recordSpend` with the member whose turn it was — in a room, the sender of the message Maurice answered; rows from before stay null and count only in household sums. Two new columns hold the caps: `households.spend_cap_daily_usd REAL` and `users.spend_cap_daily_usd REAL` (null = no cap of its own); the latter is added before the guest-role rebuild of `users` and listed in both of its column lists — which is how it came out that `everyday_model` and `experimental_tools` had been left out of those lists and were dropped on any database old enough to be rebuilt; both are carried across now, and a test boots the schema over a hand-made pre-guest database to prove it. Precedence: instance (env) ≥ household ≥ member, the tightest wins; the first two are summed over the household, the third over the member. Routes: `GET /api/me/usage`, `GET /api/admin/usage`.
