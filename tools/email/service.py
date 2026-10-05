@@ -395,6 +395,11 @@ class EmailService:
         _member_id, store = self._member_store(accounts)
         return reading_mod.record(store, self._reading_job(store), verdicts=verdicts, readings=readings, addresses=addresses)
 
+    def reading_window(self, accounts: list[Account], years: int) -> dict[str, Any]:
+        """The window taken further back, for a member who said yes."""
+        _member_id, store = self._member_store(accounts)
+        return reading_mod.widen(store, self._reading_job(store), years)
+
     def reading_control(
         self, accounts: list[Account], state: str, *, error: str | None = None, measured: dict[str, Any] | None = None, seconds: float | None = None
     ) -> dict[str, Any]:

@@ -736,6 +736,12 @@
 "mail.detail.to_sort" = "%@ aún por clasificar";
 "mail.detail.read" = "%1$@ leídos · %2$@ por leer";
 "mail.detail.nothing" = "Nada que leer en este buzón en los últimos %d años.";
+"mail.detail.window.all" = "%@ intercambios en todo su correo — mensajes de personas, no envíos masivos ni remitentes apartados";
+"mail.detail.nothing.all" = "Nada que leer en este buzón.";
+"mail.window.more" = "Leer más atrás";
+"mail.window.years" = "Los últimos %d años";
+"mail.window.all" = "Todo mi correo";
+"mail.window.help" = "Lo que ya se leyó no se vuelve a leer.";
 "mail.detail.actions" = "Acciones";
 "mail.scope.all" = "Todos tus buzones juntos (%d)";
 "mail.scope.reading" = "Abarca todos tus buzones (%d); el detalle está en cada uno";

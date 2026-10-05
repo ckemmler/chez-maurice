@@ -736,6 +736,12 @@
 "mail.detail.to_sort" = "%@ still to sort";
 "mail.detail.read" = "%1$@ read · %2$@ to read";
 "mail.detail.nothing" = "Nothing to read in this mailbox over the last %d years.";
+"mail.detail.window.all" = "%@ exchanges in all your mail — messages from people, not bulk mail or senders set aside";
+"mail.detail.nothing.all" = "Nothing to read in this mailbox.";
+"mail.window.more" = "Read further back";
+"mail.window.years" = "The last %d years";
+"mail.window.all" = "All my mail";
+"mail.window.help" = "What is already read is not read again.";
 "mail.detail.actions" = "Actions";
 "mail.scope.all" = "All your mailboxes together (%d)";
 "mail.scope.reading" = "Covers all your mailboxes (%d); the detail is under each one";

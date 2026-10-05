@@ -736,6 +736,12 @@
 "mail.detail.to_sort" = "%@ ancora da smistare";
 "mail.detail.read" = "%1$@ letti · %2$@ da leggere";
 "mail.detail.nothing" = "Niente da leggere in questa casella negli ultimi %d anni.";
+"mail.detail.window.all" = "%@ scambi in tutta la sua posta — messaggi di persone, non invii di massa né mittenti messi da parte";
+"mail.detail.nothing.all" = "Niente da leggere in questa casella.";
+"mail.window.more" = "Leggi più indietro";
+"mail.window.years" = "Gli ultimi %d anni";
+"mail.window.all" = "Tutta la mia posta";
+"mail.window.help" = "Ciò che è già stato letto non viene riletto.";
 "mail.detail.actions" = "Azioni";
 "mail.scope.all" = "Tutte le tue caselle insieme (%d)";
 "mail.scope.reading" = "Riguarda tutte le tue caselle (%d); il dettaglio è sotto ciascuna";

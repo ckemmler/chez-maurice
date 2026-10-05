@@ -736,6 +736,12 @@
 "mail.detail.to_sort" = "%@ ainda por triar";
 "mail.detail.read" = "%1$@ lidas · %2$@ por ler";
 "mail.detail.nothing" = "Nada para ler nesta caixa nos últimos %d anos.";
+"mail.detail.window.all" = "%@ trocas em todo o seu correio — mensagens de pessoas, não envios em massa nem remetentes postos de lado";
+"mail.detail.nothing.all" = "Nada para ler nesta caixa.";
+"mail.window.more" = "Ler mais para trás";
+"mail.window.years" = "Os últimos %d anos";
+"mail.window.all" = "Todo o meu correio";
+"mail.window.help" = "O que já foi lido não é lido de novo.";
 "mail.detail.actions" = "Ações";
 "mail.scope.all" = "Todas as tuas caixas juntas (%d)";
 "mail.scope.reading" = "Abrange todas as tuas caixas (%d); o detalhe está em cada uma";

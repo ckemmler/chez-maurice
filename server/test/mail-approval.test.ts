@@ -47,6 +47,15 @@ function gateway(member: string, tool: string, args: any) {
     jobs[member] = job;
     return { status: want, job, already: false };
   }
+  if (tool === "reading_window") {
+    const cur = jobs[member];
+    if (!cur || cur.state === "declined") return { error: "AccessDenied: the member has not approved the reading of their mail" };
+    const previous = cur.cursor.years;
+    const years = Math.max(previous, args.years);
+    cur.cursor = { years };
+    return { job: cur, years, previous, changed: years > previous };
+  }
+  if (tool === "reading_progress") return { job: null, progress: null };
   if (tool === "scan_status") return { running: false, job: { id: "walk", state: "done", counts: { seen: 5, written: 5 } }, reading: jobs[member] ?? null, totals: { messages: 5, locations: 5 } };
   throw new Error(`unexpected tool ${tool}`);
 }
@@ -191,6 +200,31 @@ test("the link is rebuilt from the nightly record at boot, once, and the night w
   expect(approval.mailConversationOf(ANNA)).toMatchObject({ conversation_id: c, opened_at: "2026-09-26 13:52:00", reading: "pending" });
   expect(approval.mailConversationMemberOf(c)).toBe(ANNA);
   expect(approval.mailConversationOf(BEN)).toBeNull();
+});
+
+test("read further back: the window widens, never narrows, and only after a yes", async () => {
+  const window = (years: unknown) => req("/reading/window", { method: "POST", body: JSON.stringify({ years }) });
+  // Not without the member's yes, and not with years that are not years.
+  expect((await window(10)).status).toBe(409);
+  mailConversation(ANNA);
+  await req("/reading", { method: "POST", body: JSON.stringify({ action: "approve" }) });
+  for (const bad of [0, -2, 2.5, "ten", null]) expect((await window(bad)).status).toBe(400);
+
+  const wider = await (await window(10)).json();
+  expect(wider.window).toEqual({ years: 10, previous: 3, changed: true, job_id: `job_${ANNA}` });
+  expect(wider.started).toBe(true);
+  expect(wider.reading).toMatchObject({ state: "approved", years: 10 });
+  expect(calls.find((c) => c.tool === "reading_window")).toEqual({ member: ANNA, tool: "reading_window", args: { years: 10 } });
+
+  // Narrower changes nothing and starts nothing; everything is fifty years.
+  const narrower = await (await window(5)).json();
+  expect(narrower.window).toMatchObject({ years: 10, changed: false });
+  expect(narrower.started).toBe(false);
+  await new Promise((r) => setTimeout(r, 20));
+  const all = await (await window(4000)).json();
+  expect(all.window).toMatchObject({ years: approval.READING_ALL_YEARS, previous: 10, changed: true });
+  expect(isServerOnlyTool("email__reading_window")).toBe(true);
+  await new Promise((r) => setTimeout(r, 20));
 });
 
 test("the two tool-side words are the server's, never a model's", () => {

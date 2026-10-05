@@ -77,7 +77,7 @@ const EMAIL_SERVER_ONLY = [
   "email__approve_reading", "email__decline_reading",
   // And the passes' material (lot 4, services/mailReading.ts): bodies for
   // the server's own reading, never for a conversation's model.
-  "email__reading_next", "email__reading_record", "email__reading_control", "email__reading_progress",
+  "email__reading_next", "email__reading_record", "email__reading_control", "email__reading_progress", "email__reading_window",
   // And the documents' (lot 5, services/mailDocuments.ts).
   "email__reading_material", "email__reading_reset", "email__documents_record", "email__documents_reset", "email__forget_mailbox",
 ];

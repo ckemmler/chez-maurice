@@ -336,6 +336,18 @@ async def list_tools() -> list[Tool]:
             },
         ),
         Tool(
+            name="reading_window",
+            description=(
+                "Server-side: take the window of the approved reading further back — `years`, 50 or more for "
+                "the whole mailbox. Only ever wider; nothing already judged or read is read again."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {"years": {"type": "integer", "minimum": 1}},
+                "required": ["years"],
+            },
+        ),
+        Tool(
             name="reading_progress",
             description="The reading job, where the passes are over the window (to judge, kept, skipped, to read, read), and the measured capacity.",
             inputSchema={"type": "object", "properties": {"addresses": {"type": "array", "items": {"type": "string"}, "description": "Only these mailboxes (the ones the member approved for reading); omit for all."},}},
@@ -490,6 +502,8 @@ def dispatch(service: EmailService, name: str, args: dict[str, Any], *, member_i
         return service.reading_control(
             accounts, str(args["state"]), error=args.get("error"), measured=args.get("measured"), seconds=args.get("seconds")
         )
+    if name == "reading_window":
+        return service.reading_window(accounts, int(args["years"]))
     if name == "reading_progress":
         return service.reading_progress(accounts, addresses=_addresses(args))
     if name == "get_by_id":

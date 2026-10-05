@@ -152,6 +152,28 @@ export async function decideReading(memberId: string, action: ReadingAction, opt
   return { reading: state, already: !!r.already, job_id: r?.job?.id ?? null, decided_at: r?.job?.updated_at ?? null };
 }
 
+/** At or past this many years the window is the member's whole mail (the
+ *  tool's ALL_YEARS). */
+export const READING_ALL_YEARS = 50;
+
+export interface WindowChange {
+  years: number;
+  previous: number;
+  changed: boolean;
+  job_id: string | null;
+}
+
+/** Take the reading further back than the years the yes covered (5 October
+ *  2026) — only ever wider. Nothing is read again: the tool keeps a verdict
+ *  and a reading per message, so the wider window adds its own messages and
+ *  no others. Throws when the tool refuses (no yes) or cannot be reached. */
+export async function widenReading(memberId: string, years: number): Promise<WindowChange> {
+  const wanted = Math.max(1, Math.min(Math.floor(years), READING_ALL_YEARS));
+  const r = await mailToolCall(memberId, "reading_window", { years: wanted });
+  if (r?.error || r?.raw) throw new Error(String(r.error ?? r.raw));
+  return { years: Number(r.years), previous: Number(r.previous), changed: !!r.changed, job_id: r?.job?.id ?? null };
+}
+
 /** What Maurice says in the conversation when the word came from the app,
  *  rendered in the member's language, no model. */
 export function readingReply(action: ReadingAction, locale: string): string {

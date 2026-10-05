@@ -88,6 +88,28 @@ def approve(store: MailStore, member_id: str, years: int | None = None) -> dict[
     return {"status": "approved", "job": created, "already": False}
 
 
+#: A window this long is the whole mailbox: the oldest header is younger.
+ALL_YEARS = 50
+
+
+def widen(store: MailStore, job: dict[str, Any], years: int) -> dict[str, Any]:
+    """Take the window of the reading further back (5 October 2026): the
+    member wants more than the three years the yes covered. Only ever wider
+    — what was read stays read. Nothing is read again: the passes keep their
+    state per message, so the candidates of the wider window are the
+    messages it adds. Whatever the job's state: a run under way finds them
+    at its next batch, a job ``done`` is run again by the server."""
+    wanted = max(1, min(int(years), ALL_YEARS))
+    before = _years(job)
+    if wanted <= before:
+        return {"job": job, "years": before, "previous": before, "changed": False}
+    cur = job.get("cursor")
+    cur = dict(cur) if isinstance(cur, dict) else {}
+    cur["years"] = wanted
+    store.update_job(job["id"], cursor=cur)
+    return {"job": store.job(job["id"]), "years": wanted, "previous": before, "changed": True}
+
+
 def decline(store: MailStore, member_id: str) -> dict[str, Any]:
     """Record the no. A job already running (lot 4) is not stopped here —
     that is ``scan_stop``'s — but the word is kept for the next one."""

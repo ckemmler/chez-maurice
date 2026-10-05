@@ -18,7 +18,7 @@ import { withoutMoney } from "../services/mailboxEstimate";
 import { mailReadingStatus, readingWanted, startMailReading } from "../services/mailReading";
 import { mailDocumentsProgress, writeMailDocuments } from "../services/mailDocuments";
 import { getUser } from "../services/users";
-import { decideReading, mailConversationOf, sayReadingDecided, type ReadingAction } from "../services/mailApproval";
+import { decideReading, mailConversationOf, sayReadingDecided, widenReading, type ReadingAction } from "../services/mailApproval";
 import { forgetMailbox } from "../services/mailForget";
 import { memberLocale } from "../services/domainBriefs";
 
@@ -172,6 +172,25 @@ accounts.post("/reading/run", async (c) => {
   if (!readingWanted(uid)) return c.json({ error: "the reading has not been approved" }, 409);
   const started = startReadingNow(uid);
   return c.json({ ...forViewer(uid, await mailScanStatus(uid)), started, running: true });
+});
+
+/** Read further back: `{ years }`, 50 or more for all the member's mail.
+ *  The window only widens, nothing judged or read is read again, and the
+ *  reading of what it adds starts now (the documents after it). 400 on bad
+ *  years, 409 without the member's yes, 422 when the tool refuses. */
+accounts.post("/reading/window", async (c) => {
+  const uid = c.get("userId");
+  const body = await c.req.json().catch(() => ({}));
+  const years = Number(body?.years);
+  if (!Number.isInteger(years) || years < 1) return c.json({ error: "years must be a whole number of years, 1 or more" }, 400);
+  if (!readingWanted(uid)) return c.json({ error: "the reading has not been approved" }, 409);
+  try {
+    const window = await widenReading(uid, years);
+    const started = window.changed ? startReadingNow(uid) : false;
+    return c.json({ ...forViewer(uid, await mailScanStatus(uid)), window, started });
+  } catch (err) {
+    return c.json({ error: (err as Error).message }, 422);
+  }
 });
 
 /** The member's word on the reading, from the card: `{ action: "approve" |

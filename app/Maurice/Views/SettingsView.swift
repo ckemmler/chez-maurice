@@ -1002,6 +1002,7 @@ struct MailReading: Decodable, Equatable {
 }
 private struct ReadingAction: Encodable { let action: String }
 private struct EmptyBody: Encodable {}
+private struct ReadingWindowBody: Encodable { let years: Int }
 private struct NewMailAccount: Encodable {
     let address: String
     let password: String
@@ -1096,6 +1097,7 @@ private struct MailPane: View {
     @State private var readingBusy = false
     @State private var readingError: String?
     @State private var readNowBusy = false
+    @State private var windowBusy = false
     /// The sender whose rule is being written (the triage runs again).
     @State private var ruleBusy: String?
     /// The mailbox whose drawer is open: its own numbers and its actions.
@@ -1328,10 +1330,11 @@ private struct MailPane: View {
     @ViewBuilder private func readingDetail(_ box: MailboxStatus) -> some View {
         let r = box.reading
         let years = scan?.reading?.years ?? 3
+        let all = years >= Self.allYears
         if r.window == 0 {
-            Text(session.localized("mail.detail.nothing", years))
+            Text(all ? session.localized("mail.detail.nothing.all") : session.localized("mail.detail.nothing", years))
         } else {
-            Text(session.localized("mail.detail.window", num(r.window), years))
+            Text(all ? session.localized("mail.detail.window.all", num(r.window)) : session.localized("mail.detail.window", num(r.window), years))
             if r.kept + r.skipped > 0 { Text(session.localized("mail.detail.sorted", num(r.kept + r.skipped), num(r.kept), num(r.skipped))) }
             if r.to_light > 0 { Text(session.localized("mail.detail.to_sort", num(r.to_light))) }
             Text(session.localized("mail.detail.read", num(r.read), num(r.to_read)))
@@ -1339,6 +1342,50 @@ private struct MailPane: View {
                 Label(session.localized("mail.box.running"), systemImage: "arrow.triangle.2.circlepath")
                     .foregroundStyle(theme.inkMute)
             }
+        }
+        if readingApproved, box.approved != false, !all {
+            furtherBack(from: years)
+        }
+    }
+
+    /// At or past this many years the reading covers all the member's mail
+    /// (the server's READING_ALL_YEARS).
+    private static let allYears = 50
+
+    /// The reading taken further back than the years the yes covered: only
+    /// wider windows are offered, and what is already read is not read again.
+    @ViewBuilder private func furtherBack(from years: Int) -> some View {
+        HStack(spacing: 8) {
+            if windowBusy {
+                ProgressView().controlSize(.small)
+            } else {
+                Menu {
+                    ForEach([5, 10].filter { $0 > years }, id: \.self) { y in
+                        Button(session.localized("mail.window.years", y)) { Task { await widenWindow(to: y) } }
+                    }
+                    Button(session.localized("mail.window.all")) { Task { await widenWindow(to: Self.allYears) } }
+                } label: {
+                    HStack(spacing: 4) {
+                        Text(session.localized("mail.window.more")).font(.system(size: 12, weight: .medium))
+                        Image(systemName: "chevron.up.chevron.down").font(.system(size: 9))
+                    }
+                    .foregroundStyle((session.activeDeviceUser?.color ?? .blue).legible(onDark: theme.isDark))
+                }
+                .menuIndicator(.hidden)
+                .fixedSize()
+                .help(session.localized("mail.window.help"))
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.top, 2)
+    }
+
+    private func widenWindow(to years: Int) async {
+        guard let api, let token = session.tokenForActiveUser else { return }
+        windowBusy = true
+        defer { windowBusy = false }
+        if let s: MailScanStatus = try? await api.post("/api/mail-accounts/reading/window", body: ReadingWindowBody(years: years), token: token) {
+            scan = s
         }
     }
 

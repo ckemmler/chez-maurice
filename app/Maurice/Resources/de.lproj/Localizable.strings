@@ -736,6 +736,12 @@
 "mail.detail.to_sort" = "%@ noch zu sortieren";
 "mail.detail.read" = "%1$@ gelesen · %2$@ zu lesen";
 "mail.detail.nothing" = "In diesem Postfach gibt es aus den letzten %d Jahren nichts zu lesen.";
+"mail.detail.window.all" = "%@ Austausche in Ihrer gesamten Post — Nachrichten von Menschen, keine Massenpost und keine zurückgestellten Absender";
+"mail.detail.nothing.all" = "In diesem Postfach gibt es nichts zu lesen.";
+"mail.window.more" = "Weiter zurück lesen";
+"mail.window.years" = "Die letzten %d Jahre";
+"mail.window.all" = "Meine gesamte Post";
+"mail.window.help" = "Was schon gelesen ist, wird nicht noch einmal gelesen.";
 "mail.detail.actions" = "Aktionen";
 "mail.scope.all" = "Alle Postfächer zusammen (%d)";
 "mail.scope.reading" = "Gilt für alle Postfächer (%d); Einzelheiten unter jedem";

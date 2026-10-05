@@ -286,6 +286,37 @@ def test_without_a_yes_the_passes_get_nothing(tmp_path):
         svc.reading_record(alex(svc), verdicts=[])
 
 
+def test_a_wider_window_adds_its_messages_and_reads_nothing_again(tmp_path, monkeypatch):
+    svc, _client = ready(tmp_path)
+    ids = [m["id"] for m in svc.reading_next(alex(svc), stage="light", limit=20)["messages"]]
+    assert len(ids) == 9
+    svc.reading_record(alex(svc), verdicts=[{"id": i, "keep": False, "reason": "judged"} for i in ids])
+    svc.reading_control(alex(svc), "done")
+    assert svc.reading_next(alex(svc), stage="light")["messages"] == []
+    # Narrower or the same: nothing moves.
+    same = svc.reading_window(alex(svc), 2)
+    assert (same["years"], same["previous"], same["changed"]) == (3, 3, False)
+    # Wider — past fifty years it is the whole mailbox — whatever the job's state.
+    r = svc.reading_window(alex(svc), 400)
+    assert (r["years"], r["previous"], r["changed"]) == (reading.ALL_YEARS, 3, True)
+    assert r["job"]["state"] == "done" and r["job"]["cursor"] == {"years": reading.ALL_YEARS}
+    # The one message of 2018 is the only candidate: the nine keep their verdict.
+    more = svc.reading_next(alex(svc), stage="light", limit=20)
+    assert len(more["messages"]) == 1 and "vieux@example.org" in more["messages"][0]["from"]
+    assert more["progress"] == {"messages": 10, "to_light": 1, "kept": 0, "skipped": 9, "to_read": 0, "read": 0}
+    # The word is the server's; it reaches the tool.
+    monkeypatch.setattr(server, "_service", svc)
+    monkeypatch.setattr(server, "get_member_id", lambda: "id-alex")
+    out = json.loads(asyncio.run(server.call_tool("reading_window", {"years": 10}))[0].text)
+    assert out["changed"] is False and out["years"] == reading.ALL_YEARS
+
+
+def test_the_window_is_not_moved_without_a_yes(tmp_path):
+    svc = service(tmp_path)
+    with pytest.raises(Exception, match="not approved"):
+        svc.reading_window(alex(svc), 10)
+
+
 def test_the_pass_tools_are_reachable_and_a_refusing_folder_leaves_its_messages_for_later(tmp_path, monkeypatch):
     svc, client = ready(tmp_path)
     monkeypatch.setattr(server, "_service", svc)

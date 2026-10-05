@@ -736,6 +736,12 @@
 "mail.detail.to_sort" = "%@ nog te sorteren";
 "mail.detail.read" = "%1$@ gelezen · %2$@ te lezen";
 "mail.detail.nothing" = "Niets te lezen in deze mailbox over de laatste %d jaar.";
+"mail.detail.window.all" = "%@ uitwisselingen in al uw mail — berichten van mensen, geen massamail of opzijgezette afzenders";
+"mail.detail.nothing.all" = "Niets te lezen in deze mailbox.";
+"mail.window.more" = "Verder terug lezen";
+"mail.window.years" = "De laatste %d jaar";
+"mail.window.all" = "Al mijn mail";
+"mail.window.help" = "Wat al gelezen is, wordt niet opnieuw gelezen.";
 "mail.detail.actions" = "Acties";
 "mail.scope.all" = "Al je mailboxen samen (%d)";
 "mail.scope.reading" = "Geldt voor al je mailboxen (%d); details onder elke mailbox";
