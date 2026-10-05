@@ -317,27 +317,42 @@ export async function runMailReading(memberId: string, opts: ReadingRunOptions =
         if (!batch.missing?.length || ++stalled >= 2) break;
         continue;
       }
+      // The batch's messages are read together (5 October 2026): one at a
+      // time, a reasoning model took half a minute a message and a mailbox
+      // of six thousand kept messages two days. What was read is recorded
+      // even when one of them stops the run (the cap, a provider's error).
+      const answers = await Promise.allSettled(
+        messages.map((m) => ask("mail_read_full", fullSystem(name, language), fullPrompt(m), FULL_MAX_TOKENS)),
+      );
       const readings: any[] = [];
-      for (const m of messages) {
-        if (outOfTime()) break;
-        const r = await ask("mail_read_full", fullSystem(name, language), fullPrompt(m), FULL_MAX_TOKENS);
+      let stopped: unknown = null;
+      answers.forEach((a, i) => {
+        const m = messages[i];
+        if (a.status === "rejected") {
+          stopped ??= a.reason;
+          return;
+        }
+        const r = a.value;
         const reading = parseReading(r.text);
         if (!reading) {
           // Unusable answer: the message stays to read; a second try is
           // another night's. Named in the log, not fatal.
           console.warn(`[mail] reading for ${memberId}: no usable reading for ${m.id} (${r.stop})`);
-          continue;
+          return;
         }
         const tokens = tokensOf(r.usage);
         readings.push({ id: m.id, reading: { ...reading, model: r.model, truncated: !!m.truncated }, ...(tokens === null ? {} : { tokens }) });
-      }
+      });
       if (readings.length) {
         const rec = await d.call(memberId, "reading_record", { readings, addresses });
         if (rec?.error || rec?.raw) throw new Error(String(rec.error ?? rec.raw));
         run.read += readings.length;
         run.progress = rec.progress ?? run.progress;
         stalled = 0;
-      } else if (++stalled >= 2) {
+      }
+      if (stopped) throw stopped;
+      if (readings.length) continue;
+      if (++stalled >= 2) {
         // Every message of the batch unusable, twice: do not ask for the
         // same five forever; they stay to read for another night.
         break;
