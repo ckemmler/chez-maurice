@@ -1,12 +1,12 @@
 import { Hono } from "hono";
 import { getCookie, setCookie, deleteCookie } from "hono/cookie";
+import { eraseMember } from "../services/memberErase";
 import {
   adminExists,
   createUser,
   listUsers,
   getUser,
   updateUser,
-  deleteUser,
   getUserByUsername,
   setUserRole,
   getGuestContacts,
@@ -1599,13 +1599,19 @@ web.post("/users/:id/invite/revoke", (c) => {
 });
 
 // ── Delete member ───────────────────────────────────────────────
-web.post("/users/:id/delete", (c) => {
+// The account and everything that was theirs, wherever it lives
+// (services/memberErase.ts) — not the one DELETE it was until October 2026.
+web.post("/users/:id/delete", async (c) => {
   const redir = requireWebAdmin(c);
   if (redir) return redir;
   const id = c.req.param("id");
   const session = getAdminSession(c)!;
   if (id === session.userId) return c.redirect("/admin/dashboard?msg=cannot_delete_self");
-  deleteUser(id);
+  try {
+    await eraseMember(id, "account");
+  } catch (e: any) {
+    console.error(`[erase] ${e?.message ?? e}`);
+  }
   return c.redirect("/admin/dashboard?msg=member_removed");
 });
 

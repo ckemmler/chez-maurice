@@ -13,7 +13,7 @@ struct SettingsView: View {
     @Environment(\.mauriceTheme) private var theme
     @Environment(\.dismiss) private var dismiss
 
-    enum Pane: Hashable { case appearance, language, household, members, garden, token, files, importChats, mail, contacts }
+    enum Pane: Hashable { case appearance, language, household, members, garden, token, files, importChats, mail, contacts, myData }
     @State private var pane: Pane? = nil
 
     // MCP token (loaded once; the root row copies, the token pane manages).
@@ -242,6 +242,17 @@ struct SettingsView: View {
                         SetCaption(session.localized("settings.dictation.caption"))
                     }
 
+                    // What the server holds of this member, theirs to take, bring
+                    // back or erase (MyDataView) — guests included: they have an
+                    // account, and the right to leave it.
+                    SetGroup(session.localized("mydata.group")) {
+                        SetCard {
+                            IndexRow(icon: "externaldrive", label: session.localized("mydata.title"),
+                                     accent: accent) { pane = .myData }
+                        }
+                        SetCaption(session.localized("mydata.index_caption"))
+                    }
+
                     SetGroup("SAFETY") {
                         SetCard {
                             IndexRow(icon: "exclamationmark.shield",
@@ -331,6 +342,7 @@ struct SettingsView: View {
                     case .importChats: ImportConversationsView(accent: accent, summary: $importSummary)
                     case .mail:       MailPane(accent: accent, accounts: $mailAccounts)
                     case .contacts:   ContactsPane(accent: accent, accounts: $contactAccounts)
+                    case .myData:     MyDataView(accent: accent, close: { dismiss() })
                     }
                 }
                 .padding(.horizontal, 18).padding(.top, 14).padding(.bottom, 18)
@@ -377,6 +389,7 @@ struct SettingsView: View {
         case .importChats: return session.localized("settings.import.title")
         case .mail:       return session.localized("mail.title")
         case .contacts:   return session.localized("contacts.title")
+        case .myData:     return session.localized("mydata.title")
         }
     }
 

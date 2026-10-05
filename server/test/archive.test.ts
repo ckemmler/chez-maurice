@@ -51,6 +51,11 @@ beforeAll(() => {
   write(path.join(DATA, "signals.db"), "");        // an empty placeholder, as on the Mac
   write(path.join(DATA, "qdrant", "dead.bin"));    // never travels
 
+  fs.mkdirSync(path.join(HOME, "mail"), { recursive: true });
+  const mail = new Database(path.join(HOME, "mail", "u1.db"));
+  mail.exec(`PRAGMA journal_mode = WAL; CREATE TABLE messages (id TEXT PRIMARY KEY); INSERT INTO messages VALUES ('m1');`);
+  mail.close();
+
   write(path.join(HOME, "images", "theo", "a.png"), "PNG");
   write(path.join(HOME, "files", "guide.pdf"));
   write(path.join(HOME, "uploads", "u1", "photo.jpg"));
@@ -96,7 +101,7 @@ describe("household archive", () => {
     expect(manifest.schema_version).toBe(7);
     expect(typeof manifest.server_version).toBe("string");
     expect(manifest.contents).toEqual([
-      "manifest.json", "maurice.db", "data/", "gardens/", "images/", "files/", "uploads/", "avatars/", "config.toml",
+      "manifest.json", "maurice.db", "data/", "mail/", "gardens/", "images/", "files/", "uploads/", "avatars/", "config.toml",
     ]);
     // The staging dir is gone once the file is written.
     expect(fs.readdirSync(OUT).filter((f) => f.startsWith("maurice-archive-"))).toEqual([]);
@@ -105,7 +110,7 @@ describe("household archive", () => {
   test("export: what travels and what stays behind", () => {
     const names = listing(archive);
     for (const wanted of [
-      "manifest.json", "maurice.db", "data/life.db", "data/signals.db",
+      "manifest.json", "maurice.db", "data/life.db", "data/signals.db", "mail/u1.db",
       "gardens/gardens.json", "gardens/theo/notes/en/japan.md", "gardens/theo/.git/HEAD",
       "images/theo/a.png", "files/guide.pdf", "uploads/u1/photo.jpg", "avatars/theo-sq.png", "config.toml",
     ]) expect(names).toContain(wanted);
@@ -150,6 +155,10 @@ describe("household archive", () => {
     const life = new Database(path.join(into, "data", "life.db"), { readonly: true });
     expect((life.query("SELECT title FROM tasks").get() as any).title).toBe("water the plants");
     life.close();
+
+    const mail = new Database(path.join(into, "mail", "u1.db"), { readonly: true });
+    expect((mail.query("SELECT id FROM messages").get() as any).id).toBe("m1");
+    mail.close();
 
     expect(fs.existsSync(path.join(into, "gardens", "theo", ".git", "HEAD"))).toBe(true);
     expect(fs.existsSync(path.join(into, "images", "theo", "a.png"))).toBe(true);

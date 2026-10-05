@@ -494,6 +494,23 @@ class SqliteVecStore:
 
         return _centroids(pairs())
 
+    def forget_member(self, member_id: str) -> bool:
+        """Erase a member's index: the connection closed, the file and its
+        WAL sidecars removed. The shared pool is not a member and is refused.
+        Returns whether there was a file."""
+        key = (member_id or "").strip()
+        if not key or key == _DEFAULT_MEMBER:
+            raise ValueError("forget_member needs a member id")
+        path = self.vectors_dir / _db_filename(key)
+        with self._lock:
+            conn = self._conns.pop(key, None)
+            if conn is not None:
+                conn.close()
+            existed = path.exists()
+            for suffix in ("", "-wal", "-shm"):
+                Path(str(path) + suffix).unlink(missing_ok=True)
+        return existed
+
     def close(self) -> None:
         with self._lock:
             for conn in self._conns.values():

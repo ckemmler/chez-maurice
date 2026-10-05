@@ -17,11 +17,13 @@
 		2A90B07E5E28A6BBC4C8F40B /* SourcesCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 988F2B4726342A3066B8B593 /* SourcesCard.swift */; };
 		2B268BBE8FAF1C5EE355B1D4 /* Localizable.strings in Resources */ = {isa = PBXBuildFile; fileRef = 64254BB6519693E70459014E /* Localizable.strings */; };
 		32D68A2ACC7ECFB3E37DE97F /* ScopePickerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 68242686E76201D100B8C3A9 /* ScopePickerView.swift */; };
+		3B8F2AC09DACB08C880BF36D /* MyDataView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20D9492CD169800719A16C6D /* MyDataView.swift */; };
 		40A5F2A1C32240D14842B8D2 /* DictateIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = CEB5E21AE21611A0C6FC115B /* DictateIntent.swift */; };
 		48A8B2E348C99992B23AA7DF /* SessionStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 405F9AA69C83E58A86FDD625 /* SessionStore.swift */; };
 		523860360F61C3CB54C38030 /* DomainsViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = F2BCD320C3B31E341073ED84 /* DomainsViews.swift */; };
 		52B02D3D7EF2D7154BDB5FD8 /* BoaterHat.swift in Sources */ = {isa = PBXBuildFile; fileRef = EE3170FDE5751A81E295CF2E /* BoaterHat.swift */; };
 		5421D4350871A4F9836C8B60 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 2E85AEEB530CF3C1C5C3E79F /* Assets.xcassets */; };
+		55C05838479D1BE65C3871C7 /* MyDataView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20D9492CD169800719A16C6D /* MyDataView.swift */; };
 		5792B7EEEB4D674709A40D76 /* DomainBriefView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5C3DB8955BF008783D2F7399 /* DomainBriefView.swift */; };
 		58C19733EBF8E99AB41D71A9 /* Hats.swift in Sources */ = {isa = PBXBuildFile; fileRef = DCDEAA0E48CC14C7C18BE8FD /* Hats.swift */; };
 		59B67C643B5A71D878B6A7D1 /* MarkdownUI in Frameworks */ = {isa = PBXBuildFile; productRef = 7C956089E4A23890D03A7C5B /* MarkdownUI */; };
@@ -84,6 +86,7 @@
 		1033DD525DBD3D990DEF6484 /* es */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = es; path = es.lproj/Localizable.strings; sourceTree = "<group>"; };
 		1A0683126686701347E9871B /* MauriceApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MauriceApp.swift; sourceTree = "<group>"; };
 		1E096709042498D4C525711C /* Maurice-iOS-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = "Maurice-iOS-Info.plist"; sourceTree = "<group>"; };
+		20D9492CD169800719A16C6D /* MyDataView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MyDataView.swift; sourceTree = "<group>"; };
 		2CAFCB68E681C9F8D796C959 /* it */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = it; path = it.lproj/Localizable.strings; sourceTree = "<group>"; };
 		2E85AEEB530CF3C1C5C3E79F /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		3B5F6F2E3C5F7D8FFDE02630 /* ImportConversationsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImportConversationsView.swift; sourceTree = "<group>"; };
@@ -199,6 +202,7 @@
 				DCDEAA0E48CC14C7C18BE8FD /* Hats.swift */,
 				3B5F6F2E3C5F7D8FFDE02630 /* ImportConversationsView.swift */,
 				FD148722F24F06001FE66540 /* LifeFactCard.swift */,
+				20D9492CD169800719A16C6D /* MyDataView.swift */,
 				00B700626149A3D1C0D6D5CB /* PairingView.swift */,
 				E787764ABF2A58E353CC45C2 /* PersonReviewView.swift */,
 				68242686E76201D100B8C3A9 /* ScopePickerView.swift */,
@@ -387,6 +391,7 @@
 				7416ECF23A6705C449F95A51 /* MauriceApp.swift in Sources */,
 				72B46D7608456B22303FB423 /* MauriceStore.swift in Sources */,
 				5DF005A2A1E5A2B26E0DBCF4 /* MauriceTheme.swift in Sources */,
+				3B8F2AC09DACB08C880BF36D /* MyDataView.swift in Sources */,
 				13D7AEF70186BD458531FA85 /* PairingView.swift in Sources */,
 				7085533CD7B70C78BF91892F /* PersonReviewView.swift in Sources */,
 				32D68A2ACC7ECFB3E37DE97F /* ScopePickerView.swift in Sources */,
@@ -422,6 +427,7 @@
 				01BF41C8D7454D75BCFE569A /* MauriceApp.swift in Sources */,
 				EE60CB5C6953EB6207373CBA /* MauriceStore.swift in Sources */,
 				775815BED73706273BEE92F3 /* MauriceTheme.swift in Sources */,
+				55C05838479D1BE65C3871C7 /* MyDataView.swift in Sources */,
 				FF9F6DF88F721A8C74CFAEF4 /* PairingView.swift in Sources */,
 				036F8670BB903EA771E48BF9 /* PersonReviewView.swift in Sources */,
 				F8D5EA6FB79DA0781074F0DA /* ScopePickerView.swift in Sources */,

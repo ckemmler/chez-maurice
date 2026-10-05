@@ -2,8 +2,8 @@
  * The household archive — `maurice-archive`, version 1.
  *
  * Everything a household is, as one file it can take elsewhere: the
- * databases, the gardens with their history, the images, files and avatars.
- * Nothing exported a Maurice before this, and three things waited on it — a
+ * databases, the gardens with their history, the mail stores, the images,
+ * files and avatars. Nothing exported a Maurice before this, and three things waited on it — a
  * demo household becoming a paid one on another machine, handing a hosted
  * household over without the operator opening its data, and the portability
  * the GDPR promises. See docs/household-archive.md for the format.
@@ -75,7 +75,7 @@ const LIVE_ENTRIES = ["images", "files", "uploads", "avatars", "config.toml", "s
 /** Patterns tar leaves out of every directory it reads. WAL sidecars belong
  *  to a live database, not to a snapshot; the rest is macOS litter that the
  *  garden engine once read as a note (see scripts/container.sh). */
-const TAR_EXCLUDES = ["*.db-wal", "*.db-shm", "._*", ".DS_Store"];
+export const TAR_EXCLUDES = ["*.db-wal", "*.db-shm", "._*", ".DS_Store"];
 
 // ── Paths ───────────────────────────────────────────────────────
 
@@ -104,7 +104,7 @@ export function archiveFilename(household: string, at = new Date()): string {
 /** A consistent copy of `src` at `dest`. Read-only on the source: VACUUM INTO
  *  only reads, but a read-write handle may still checkpoint a WAL on close,
  *  and the export's promise is that the live files stay untouched. */
-function snapshotDb(src: string, dest: string): void {
+export function snapshotDb(src: string, dest: string): void {
   if (statSync(src).size === 0) {
     // An empty placeholder is not a database; VACUUM fails on it. Copy it so
     // the layout still matches.
@@ -171,7 +171,7 @@ function describe(mauriceDb: string): Pick<ArchiveManifest, "household" | "membe
 /** macOS ships bsdtar, the image GNU tar. They agree on everything used here
  *  but the rename flag and the meaning of exit code 1. */
 let _flavor: "bsd" | "gnu" | null = null;
-function tarFlavor(): "bsd" | "gnu" {
+export function tarFlavor(): "bsd" | "gnu" {
   if (_flavor) return _flavor;
   const r = Bun.spawnSync(["tar", "--version"]);
   _flavor = r.stdout.toString().includes("bsdtar") ? "bsd" : "gnu";
@@ -180,7 +180,7 @@ function tarFlavor(): "bsd" | "gnu" {
 
 /** Exit 1 from GNU tar means "a file changed as we read it" — a live upload
  *  landing mid-export — and the archive is still whole. bsdtar's 1 is an error. */
-function tarFailed(code: number | null, flavor: "bsd" | "gnu"): boolean {
+export function tarFailed(code: number | null, flavor: "bsd" | "gnu"): boolean {
   return code === null || code >= 2 || (code === 1 && flavor === "bsd");
 }
 
@@ -219,12 +219,23 @@ function prepare(opts: ExportOptions): Prepared {
       checkDb(join(staging, "data", f));
     }
 
+    // The mail stores, one database per member (tools/email/store.py): live
+    // WAL databases like the others, so they are snapshotted, not read by tar.
+    const mailDir = join(appDir, "mail");
+    const mailDbs = existsSync(mailDir) ? readdirSync(mailDir).filter((f) => f.endsWith(".db")).sort() : [];
+    if (mailDbs.length) mkdirSync(join(staging, "mail"));
+    for (const f of mailDbs) {
+      snapshotDb(join(mailDir, f), join(staging, "mail", f));
+      checkDb(join(staging, "mail", f));
+    }
+
     const live = LIVE_ENTRIES.filter((e) => existsSync(join(appDir, e)));
     const hasGardens = existsSync(gardensDir) && statSync(gardensDir).isDirectory();
 
     const contents = [
       "manifest.json", "maurice.db",
       ...(dataDbs.length ? ["data/"] : []),
+      ...(mailDbs.length ? ["mail/"] : []),
       ...(hasGardens ? ["gardens/"] : []),
       ...live.map((e) => (statSync(join(appDir, e)).isDirectory() ? `${e}/` : e)),
     ];
@@ -249,7 +260,7 @@ function prepare(opts: ExportOptions): Prepared {
       const flag = flavor === "bsd" ? "-s" : "--transform";
       tarArgs.push(flag, `|^${gname}/|gardens/|`, flag, `|^${gname}$|gardens|`);
     }
-    tarArgs.push("-C", staging, "manifest.json", "maurice.db", ...(dataDbs.length ? ["data"] : []));
+    tarArgs.push("-C", staging, "manifest.json", "maurice.db", ...(dataDbs.length ? ["data"] : []), ...(mailDbs.length ? ["mail"] : []));
     if (live.length) tarArgs.push("-C", appDir, ...live);
     if (hasGardens) tarArgs.push("-C", dirname(gardensDir), gname);
 
@@ -262,7 +273,7 @@ function prepare(opts: ExportOptions): Prepared {
 
 /** The environment tar runs in. COPYFILE_DISABLE stops macOS tar emitting an
  *  AppleDouble `._name` beside every file with extended attributes. */
-const TAR_ENV = { ...process.env, COPYFILE_DISABLE: "1" };
+export const TAR_ENV = { ...process.env, COPYFILE_DISABLE: "1" };
 
 // ── Export ──────────────────────────────────────────────────────
 
@@ -346,7 +357,7 @@ export function exportResponse(): Response {
 
 // ── Import ──────────────────────────────────────────────────────
 
-function tarOut(args: string[]): string {
+export function tarOut(args: string[]): string {
   const r = Bun.spawnSync(["tar", ...args], { env: TAR_ENV });
   if (r.exitCode !== 0) throw new ArchiveError(`tar ${args[0]} failed: ${r.stderr.toString().trim()}`);
   return r.stdout.toString();
@@ -405,8 +416,9 @@ export async function importHousehold(archivePath: string, opts: { into: string 
 
     checkDb(join(into, "maurice.db"));
     const dataDir = join(into, "data");
-    if (existsSync(dataDir)) {
-      for (const f of readdirSync(dataDir).filter((f) => f.endsWith(".db"))) checkDb(join(dataDir, f));
+    for (const dir of [dataDir, join(into, "mail")]) {
+      if (!existsSync(dir)) continue;
+      for (const f of readdirSync(dir).filter((f) => f.endsWith(".db"))) checkDb(join(dir, f));
     }
 
     const config = join(into, "config.toml");

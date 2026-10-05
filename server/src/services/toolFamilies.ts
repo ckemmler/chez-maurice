@@ -63,6 +63,8 @@ const CORPUS_ADMIN = [
   "corpus__import_chat_export",
   "corpus__import_status",
   "corpus__import_history",
+  // Erasing a member's index (services/memberErase.ts).
+  "corpus__forget_member",
 ];
 
 // The `email` tool's two words on the reading (lot 3 of specs/mail-import.md)

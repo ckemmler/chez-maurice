@@ -6,7 +6,6 @@ import {
   createUser,
   updateUser,
   setUserAvatar,
-  deleteUser,
   getUserPreferences,
   updateUserPreferences,
   getGuestContacts,
@@ -18,6 +17,7 @@ import { registerDeviceToken, removeDeviceToken } from "../services/push";
 import { blockMember, unblockMember } from "../services/safety";
 import { createInviteCode, getInviteForUser, revokeInvite } from "../services/auth";
 import { createOpenInvite, listOpenInvites, revokeOpenInvite } from "../services/invites";
+import { EraseError, eraseMember } from "../services/memberErase";
 
 const users = new Hono();
 
@@ -248,16 +248,21 @@ users.patch("/:id", requireAdmin, async (c) => {
   return c.json(user);
 });
 
-// DELETE /api/users/:id (admin deletes a user)
-users.delete("/:id", requireAdmin, (c) => {
+// DELETE /api/users/:id (admin deletes a user) — the account and everything
+// that was theirs, wherever it lives (services/memberErase.ts). An admin
+// leaves through POST /api/me/erase, where their password is asked again.
+users.delete("/:id", requireAdmin, async (c) => {
   const id = c.req.param("id");
   // Prevent self-deletion
   if (id === c.get("userId")) {
     return c.json({ error: "Cannot delete yourself" }, 400);
   }
-  const ok = deleteUser(id);
-  if (!ok) return c.json({ error: "User not found" }, 404);
-  return c.json({ ok: true });
+  try {
+    return c.json({ ok: true, erased: await eraseMember(id, "account") });
+  } catch (e) {
+    if (e instanceof EraseError) return c.json({ error: e.code === "not_found" ? "User not found" : e.code }, e.code === "not_found" ? 404 : 409);
+    throw e;
+  }
 });
 
 // ── Block / unblock another member (self-scoped, per-member) ────

@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Snapshot maurice.db, consistently, and keep the last N.
+# Snapshot maurice.db and every other database of the household, consistently,
+# and keep the last N of each.
 #
 # maurice.db is the single point of failure of the whole install: conversations,
 # personas, API keys, note shares. The gardens are versioned per member; this is
@@ -82,3 +83,20 @@ elif [[ -f "$(dirname "$LIFE_DB")/akita.db" ]]; then
 else
   echo "· no life.db at $LIFE_DB — skipped"
 fi
+
+# The rest of what a member would hate to lose, which until 2026-10-03 no
+# snapshot held: the other data-api databases beside life.db (compte.db,
+# recommendations.db …) and each member's mail store. An empty placeholder
+# (signals.db on some installs) is not a database and is skipped.
+for db in "$(dirname "$LIFE_DB")"/*.db; do
+  [[ -s "$db" ]] || continue
+  name="$(basename "$db" .db)"
+  case "$name" in maurice|life|akita) continue ;; esac
+  snapshot "$db" "$name"
+done
+# `mail-<member id>-<stamp>`: the erasure of a member removes theirs by that
+# name (server/src/services/memberErase.ts).
+for db in "$(dirname "$DB")"/mail/*.db; do
+  [[ -s "$db" ]] || continue
+  snapshot "$db" "mail-$(basename "$db" .db)"
+done

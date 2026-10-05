@@ -61,5 +61,14 @@ class HashStore:
         self._conn.execute("DELETE FROM file_hashes WHERE path = ?", (str(path),))
         self._conn.commit()
 
+    def delete_under(self, directory: Path) -> int:
+        """Forget every file under a directory — a garden that was erased."""
+        prefix = str(directory).rstrip("/") + "/"
+        cursor = self._conn.execute(
+            "DELETE FROM file_hashes WHERE substr(path, 1, ?) = ?", (len(prefix), prefix)
+        )
+        self._conn.commit()
+        return cursor.rowcount
+
 
 __all__ = ["HashStore"]

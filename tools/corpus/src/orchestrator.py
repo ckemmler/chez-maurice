@@ -268,6 +268,21 @@ class CorpusOrchestrator:
         if source is not None:
             await self.index_file(path, source_name, source)
 
+    def forget_member(self, member_id: Optional[str], garden: Optional[str] = None) -> Dict[str, Any]:
+        """Erase everything the corpus holds for one member (the server's
+        services/memberErase.ts): their index file, the hashes of their
+        garden's files, their import runs. Always an explicit id — never the
+        caller's context alone, which would make a stray call destructive."""
+        mid = (member_id or "").strip()
+        if not mid or mid == _SHARED_POOL:
+            return {"error": "member_id required"}
+        forget = getattr(self.indexer, "forget_member", None)
+        index = bool(forget(mid)) if forget else False
+        hashes = self.hash_store.delete_under(Path(garden)) if garden else 0
+        runs = self.import_history.forget_member(mid)
+        self._member_uuid_cache = {k: v for k, v in self._member_uuid_cache.items() if v != mid}
+        return {"member_id": mid, "index": index, "hashes": hashes, "import_runs": runs}
+
     def remove_single(self, source_name: str, path: Path) -> None:
         """Drop one file's chunks under a named source (push hook for delete)."""
         source = self.config.sources.get(source_name)

@@ -309,6 +309,11 @@ class ImportHistoryStore:
         ).fetchone()
         return row[0] if row else None
 
+    def forget_member(self, member_id: str) -> int:
+        cursor = self._conn.execute("DELETE FROM import_runs WHERE member_id = ?", (member_id,))
+        self._conn.commit()
+        return cursor.rowcount
+
     def close(self) -> None:
         self._conn.close()
 

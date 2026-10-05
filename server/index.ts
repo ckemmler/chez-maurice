@@ -53,6 +53,7 @@ import { localiseRemoteImages } from "./src/services/gardenImages";
 import { scheduleDocsRefresh } from "./src/services/mauriceDocsRefresh";
 import { loadProviderPlugins } from "./src/services/providerPluginLoader";
 import { scheduleCorpusNightly } from "./src/services/corpusNightly";
+import { retryPendingErasures } from "./src/services/memberErase";
 import { scheduleMailNightly } from "./src/services/mailScan";
 import { ensureMailConversationTitles } from "./src/services/mailApproval";
 import { scheduleDomainBriefsNightly } from "./src/services/domainBriefs";
@@ -215,6 +216,13 @@ setTimeout(() => {
 // once the server is up, then daily, so a hosted instance stops answering
 // from the notes its image was built with (see services/mauriceDocsRefresh.ts).
 scheduleDocsRefresh();
+// An erasure whose index step found the gateway down is finished here, once
+// it has had time to come up (see services/memberErase.ts).
+setTimeout(() => {
+  retryPendingErasures()
+    .then((n) => { if (n) console.log(`[erase] ${n} pending erasure(s) finished`); })
+    .catch(() => {});
+}, 60_000).unref?.();
 // The search corpus: reconcile every conversation and prune stale file
 // entries once a night, the safety net under the per-turn push (see
 // services/corpusNightly.ts).

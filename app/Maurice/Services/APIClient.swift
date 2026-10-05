@@ -35,9 +35,10 @@ final class APIClient: Sendable {
     func post<T: Decodable>(
         _ path: String,
         body: some Encodable,
-        token: String? = nil
+        token: String? = nil,
+        timeout: TimeInterval? = nil
     ) async throws -> T {
-        var request = buildRequest(path, method: "POST", token: token)
+        var request = buildRequest(path, method: "POST", token: token, timeout: timeout)
         request.httpBody = try JSONEncoder().encode(body)
         return try await perform(request)
     }
@@ -106,6 +107,33 @@ final class APIClient: Sendable {
         part("--\(boundary)--\r\n")
         request.httpBody = body
         return try await perform(request)
+    }
+
+    // MARK: - Download
+
+    /// GET a file to disk, under the name the server gives it
+    /// (Content-Disposition) in a directory of its own. The caller moves or
+    /// removes it.
+    func download(_ path: String, token: String? = nil, fallbackName: String) async throws -> URL {
+        let request = buildRequest(path, method: "GET", token: token, timeout: 1800)
+        let (tmp, response) = try await URLSession.shared.download(for: request)
+        guard let http = response as? HTTPURLResponse else { throw APIError.requestFailed }
+        guard (200...299).contains(http.statusCode) else {
+            let data = (try? Data(contentsOf: tmp)) ?? Data()
+            try? FileManager.default.removeItem(at: tmp)
+            if let body = try? JSONDecoder().decode(ErrorBody.self, from: data) {
+                throw APIError.server(http.statusCode, body.error)
+            }
+            throw APIError.server(http.statusCode, "Request failed")
+        }
+        // The archive's name ends in `.tar.gz`, which `suggestedFilename` keeps.
+        let name = (http.suggestedFilename?.isEmpty == false ? http.suggestedFilename! : fallbackName)
+            .replacingOccurrences(of: "/", with: "-")
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let dest = dir.appendingPathComponent(name)
+        try FileManager.default.moveItem(at: tmp, to: dest)
+        return dest
     }
 
     // MARK: - Streaming (ndjson)

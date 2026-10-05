@@ -401,6 +401,47 @@ async def main() -> int:
     eq("a member file that does not exist yet is open to any model", fresh.total_count(member_id="new"), 0)
     same.close(); fresh.close()
 
+    print("\n── a member who erases their data leaves nothing in the corpus ──")
+    # Until October 2026 nothing removed a member from the corpus: deleting
+    # the account left their index file, the hashes of their garden's files
+    # and their import runs where they were.
+    from src.chat_import import ImportHistoryStore, ImportRun
+    from src.hash_store import HashStore
+
+    forget_dir = TMP / "forget"
+    fstore = SqliteVecStore(vectors_dir=forget_dir, vector_size=VECTOR_SIZE, embedding_model="fake")
+    for member in ("gone", "stays"):
+        fstore.upsert(unit_key="u", unit_hash="h", chunks=[Chunk(text="x", index=0)],
+                      vectors=[[0.0] * VECTOR_SIZE], base_metadata={"source_type": "note"},
+                      embedding_model="fake", member_id=member)
+    eq("forgetting a member answers that there was a file", fstore.forget_member("gone"), True)
+    eq("the file and its sidecars are gone", sorted(p.name for p in forget_dir.iterdir() if p.name.startswith("gone")), [])
+    eq("the other member's index is untouched", fstore.total_count(member_id="stays"), 1)
+    eq("forgetting twice finds nothing", fstore.forget_member("gone"), False)
+    for bad in ("", "_default"):
+        try:
+            fstore.forget_member(bad)
+            check(f"the shared pool is never a member ({bad!r})", False, "accepted")
+        except ValueError:
+            check(f"the shared pool is never a member ({bad!r})", True)
+    fstore.close()
+
+    hashes = HashStore(TMP / "forget-hashes.db")
+    for path in ("/g/ada/notes/fr/a.md", "/g/ada/people/fr/b-fiche.md", "/g/adam/notes/fr/c.md"):
+        hashes.set(Path(path), "h")
+    eq("a garden's hashes go", hashes.delete_under(Path("/g/ada")), 2)
+    eq("a garden whose name merely starts the same stays", hashes.get(Path("/g/adam/notes/fr/c.md")), "h")
+    hashes.close()
+
+    runs = ImportHistoryStore(TMP / "forget-runs.db")
+    for i, member in enumerate(("gone", "gone", "stays")):
+        runs.record(ImportRun(id=f"r{i}", member_id=member, provider="anthropic", range_from=None, range_to="2026-01-01",
+                              conversations=1, messages=1, ran_at="2026-01-02", status="done"))
+    eq("a member's import runs go", runs.forget_member("gone"), 2)
+    eq("with their watermark", runs.watermark("gone", "anthropic"), None)
+    eq("the other member's stay", len(runs.history("stays", "anthropic")), 1)
+    runs.close()
+
     print("\n── the embedder knows what each family wants in front of the text ──")
     from src.embedder import family_prefixes, family_matryoshka
     q, d = family_prefixes("qwen3-embedding:0.6b")

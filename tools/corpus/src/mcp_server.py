@@ -264,6 +264,22 @@ class CorpusMCPServer:
                     },
                 ),
                 Tool(
+                    name="forget_member",
+                    description=(
+                        "Erase everything the corpus holds for one member: their index, "
+                        "the hashes of their garden's files, their import runs. The server's "
+                        "call when a member erases their data — never a conversation's."
+                    ),
+                    inputSchema={
+                        "type": "object",
+                        "properties": {
+                            "member_id": {"type": "string"},
+                            "garden": {"type": "string", "description": "The member's garden directory"},
+                        },
+                        "required": ["member_id"],
+                    },
+                ),
+                Tool(
                     name="index_conversation",
                     description=(
                         "Index/refresh Maurice conversations into per-member search. "
@@ -544,6 +560,10 @@ class CorpusMCPServer:
                     arguments.get("sources"), force=bool(arguments.get("force"))
                 )
                 payload = {"status": "done", **counts}
+            elif name == "forget_member":
+                payload = self.orchestrator.forget_member(
+                    arguments.get("member_id"), arguments.get("garden")
+                )
             elif name == "index_conversation":
                 payload = await self.orchestrator.index_conversations(
                     arguments.get("conversation_id"), background=True

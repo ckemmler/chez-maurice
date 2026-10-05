@@ -20,11 +20,19 @@ manifest.json          what this is, who is in it, which server made it
 maurice.db             the application database, a consistent snapshot
 data/life.db           the data-api databases (compte.db, recommendations.db,
 data/…                 signals.db — whichever exist), same treatment
+mail/<member id>.db    each member's mail store, same treatment
 gardens/gardens.json   the gardens root, exactly as on disk —
 gardens/<member>/      every member garden INCLUDING its .git
 images/  files/  uploads/  avatars/
-config.toml
+config.toml  secret.key
 ```
+
+`secret.key` opens the mail and address-book passwords in `maurice.db` and
+the sealed subjects of the mail stores; without it a moved household keeps
+its accounts and loses every password.
+
+One member's data, asked for by that member, is another file:
+[member-data.md](member-data.md).
 
 `manifest.json`:
 

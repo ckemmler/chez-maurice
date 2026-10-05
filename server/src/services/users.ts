@@ -161,11 +161,6 @@ export function setUserAvatar(id: string, url: string | null): User | null {
   return getUser(id);
 }
 
-export function deleteUser(id: string): boolean {
-  const result = db.run(`DELETE FROM users WHERE id = ?`, [id]);
-  return result.changes > 0;
-}
-
 export function touchUserActivity(userId: string): void {
   db.run(
     `UPDATE users SET last_active_at = datetime('now') WHERE id = ?`,
