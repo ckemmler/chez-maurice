@@ -34,6 +34,7 @@ import { resolveFamilies, toolInFamilies, canUseExperimental, isExperimentalTool
 import { t, userLocale } from "./i18n";
 import { newUsage, priceUsage, hasUsage, type TurnUsage } from "./pricing";
 import { verdict as budgetVerdict } from "./budget";
+import { providerPlugin, type ProviderPlugin } from "./providerPlugins";
 
 interface StreamEvent {
   // thinking: the model is reasoning and nothing visible is coming yet — an
@@ -284,6 +285,11 @@ function toolRosterNotice(toolNames: string[], web: boolean): string {
   }
   return `\n\n## Your tools\nThis turn you have exactly these, and nothing else: ${names.join(", ")}, and maurice_docs, Maurice's own documentation. Use them when they help, and prefer them over guessing for anything about the people here. Every other capability — whatever isn't in that list — is unavailable to you right now, whether or not it exists elsewhere in the household: if asked for it, say you don't have it here rather than pretending to look. When asked what you can do, answer from this list, not from what an assistant like you usually has. Use them quietly: the app shows the member every search you run, so "let me check", "I'm looking into this" and "one more search to be sure" are lines they read between the question and the answer, and a turn of several rounds accumulates them into a running commentary. Say what you found, not that you are about to look. ${docs}`;
 }
+
+/** The roster notice of a turn that holds nothing at all — a plugin provider's
+ *  (services/providerPlugins.ts), which is not handed even maurice_docs. */
+const NO_TOOLS_NOTICE =
+  `\n\n## Your tools\nYou have no tools this turn: no web search, no documentation lookup, and none of the household's personal tools. Answer from what you know and from this conversation. Anything that would need a tool — the calendar, tasks, contacts, health data, the garden, the library — you cannot reach: say so plainly rather than guessing or describing a lookup you didn't make.`;
 
 // Anthropic tool definition for our self-hosted web search.
 const WEB_SEARCH_TOOL = {
@@ -789,6 +795,68 @@ async function* runOllamaAgentic(
     }
   }
   yield { type: "text_delta", text: t(lang, "chat.stopped_tool_steps") };
+  yield { type: "done", message_id: crypto.randomUUID() };
+}
+
+/** One turn on a plugin provider: its events, in the server's own stream. No
+ *  agentic loop — a plugin turn is one request, without tools. */
+async function* runPluginTurn(
+  plugin: ProviderPlugin,
+  model: string,
+  system: string,
+  messages: Array<{ role: string; content: string }>,
+  lang: string,
+  conversationId: string,
+  signal?: AbortSignal,
+  memberId?: string,
+): AsyncGenerator<StreamEvent> {
+  const provider = plugin.provider;
+  // A plugin turn is always somebody's: the access check that resolved this
+  // model was made for a member, and without one there was none.
+  if (!memberId) {
+    yield { type: "error", message: t(lang, "chat.provider_unavailable", provider) };
+    return;
+  }
+  const budget = budgetVerdict(provider, model, 0, memberId);
+  if (!budget.ok) {
+    yield { type: "error", message: budget.reason };
+    return;
+  }
+  const usage = newUsage(provider, model);
+  usage.rounds = 1;
+  function* reportUsage(): Generator<StreamEvent> {
+    if (hasUsage(usage)) yield { type: "usage", usage: priceUsage(usage) };
+  }
+  const started = performance.now();
+  try {
+    for await (const ev of plugin.turn({ conversationId, memberId, model, system, messages, lang, signal })) {
+      if (ev.type === "text") {
+        yield { type: "text_delta", text: ev.text };
+      } else if (ev.type === "thinking") {
+        yield { type: "thinking" };
+      } else if (ev.type === "usage") {
+        usage.input += ev.input;
+        usage.output += ev.output;
+        usage.cache_read += ev.cache_read ?? 0;
+        usage.cache_write += ev.cache_write ?? 0;
+      } else if (ev.type === "error") {
+        yield* reportUsage();
+        yield { type: "error", message: ev.message };
+        return;
+      }
+    }
+  } catch (err: any) {
+    yield* reportUsage();
+    yield { type: "error", message: err?.message ?? String(err) };
+    return;
+  }
+  logRound(
+    { conversationId, provider, model, round: 0 },
+    performance.now() - started,
+    { prompt: usage.input + usage.cache_read, completion: usage.output, cached: usage.cache_read },
+    0,
+  );
+  yield* reportUsage();
   yield { type: "done", message_id: crypto.randomUUID() };
 }
 
@@ -1483,9 +1551,15 @@ function trackedBooks(
   // Which tool families may this turn use? (conversation → persona → household
   // → tier default). Filter the member's MCP tools to those families so a small
   // local model isn't handed all 100+ at once.
-  const families: "all" | string[] = memberId
-    ? resolveFamilies(conversationId, isLocal, memberId)
-    : isLocal ? [] : "all";
+  // A provider that lives outside this repository (services/providerPlugins.ts)
+  // takes text only: no family is gathered for it, and none of the native
+  // tools below are kept.
+  const plugin = providerPlugin(provider);
+  const families: "all" | string[] = plugin
+    ? []
+    : memberId
+      ? resolveFamilies(conversationId, isLocal, memberId)
+      : isLocal ? [] : "all";
   const wantsWeb = families === "all" || families.includes("web");
 
   let mcp: McpSession | null = null;
@@ -1533,8 +1607,10 @@ function trackedBooks(
   // And the two that go with them: reading a brief, and writing down a fact.
   if (carriesDomainIndex) mcpTools = [...mcpTools, domainBriefTool(), rememberFactTool()];
 
+  if (plugin) mcpTools = [];
+
   // Now that the roster is settled, tell the model what it really holds.
-  systemPrompt += toolRosterNotice(mcpTools.map((t) => t.name), wantsWeb && hasWebSearch());
+  systemPrompt += plugin ? NO_TOOLS_NOTICE : toolRosterNotice(mcpTools.map((t) => t.name), wantsWeb && hasWebSearch());
   systemPrompt += corpusNotice(mcpTools.map((t) => t.name));
   systemPrompt += mailNotice(mcpTools.map((t) => t.name), memberId, userDisplayName);
 
@@ -1561,6 +1637,18 @@ function trackedBooks(
   // Non-negotiable content-safety floor — appended LAST so no persona prompt or
   // loaded context above can strip or out-prioritize it (covers every provider).
   systemPrompt += CONTENT_SAFETY_FLOOR;
+
+  if (plugin) {
+    yield* runPluginTurn(plugin, resolved, systemPrompt, toTextMessages(messages), userLang, conversationId, signal, memberId);
+    return;
+  }
+  // A roster row whose provider nothing here answers for — a plugin that is no
+  // longer loaded. Said as such: falling through would send the turn, and the
+  // conversation with it, to Anthropic under a model id it never had.
+  if (provider !== "ollama" && provider !== "anthropic" && !isOpenAIStyle(provider)) {
+    yield { type: "error", message: t(userLang, "chat.provider_unavailable", provider) };
+    return;
+  }
 
   // Local (Ollama) — private, on the Mac mini. Selected tool families only.
   if (provider === "ollama") {

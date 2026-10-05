@@ -51,6 +51,7 @@ import gardenTools from "./src/routes/gardenTools";
 import { maybeRegenerateAdherence } from "./src/services/gardenTools";
 import { localiseRemoteImages } from "./src/services/gardenImages";
 import { scheduleDocsRefresh } from "./src/services/mauriceDocsRefresh";
+import { loadProviderPlugins } from "./src/services/providerPluginLoader";
 import { scheduleCorpusNightly } from "./src/services/corpusNightly";
 import { scheduleMailNightly } from "./src/services/mailScan";
 import { ensureMailConversationTitles } from "./src/services/mailApproval";
@@ -853,6 +854,10 @@ app.notFound(async (c) => {
     return c.text("Web server not available", 502);
   }
 });
+
+// Providers that live outside this repository (MAURICE_PROVIDER_PLUGINS; none
+// by default). Before the server listens, so no turn meets a half-loaded roster.
+await loadProviderPlugins();
 
 // ── TLS ──────────────────────────────────────────────────────────
 // Point MAURICE_TLS_CERT / MAURICE_TLS_KEY at a cert + key (e.g. a Tailscale

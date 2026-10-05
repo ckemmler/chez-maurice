@@ -1,4 +1,5 @@
 import db from "../db";
+import { configuredPluginProviders } from "./providerPlugins";
 
 // The household's model roster — cloud (Anthropic, metered) + local (Ollama,
 // on-device, private). The table is the source of truth; the iOS app and the
@@ -94,7 +95,8 @@ export function toModelInfo(m: Model): ModelInfo {
 }
 
 /** Which providers are usable: local Ollama always, cloud ones only if a key is
- *  set. Keeps keyless providers out of the apps' model lists. */
+ *  set, a plugin's when it is loaded and says so. Keeps the others out of the
+ *  apps' model lists. */
 export function configuredProviders(): Set<string> {
   const row = db
     .query(`SELECT api_key, openai_api_key, mistral_api_key, zai_api_key, scaleway_api_key FROM households WHERE id = 'default'`)
@@ -105,6 +107,15 @@ export function configuredProviders(): Set<string> {
   if (row?.mistral_api_key) s.add("mistral");
   if (row?.zai_api_key) s.add("zai");
   if (row?.scaleway_api_key) s.add("scaleway");
+  for (const p of configuredPluginProviders()) s.add(p);
+  return s;
+}
+
+/** The providers a one-shot ancillary call can be dispatched to: the built-in
+ *  ones. A plugin provider answers conversation turns only. */
+export function ancillaryProviders(): Set<string> {
+  const s = configuredProviders();
+  for (const p of configuredPluginProviders()) s.delete(p);
   return s;
 }
 

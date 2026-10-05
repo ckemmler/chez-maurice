@@ -57,6 +57,7 @@ import { ArchiveError, exportResponse } from "../services/archive";
 import { t, langOf, SUPPORTED } from "../services/i18n";
 import { SYSTEM_SPENDER, spentTodayUsd, spentMonthUsd, memberDailyCap, setMemberDailyCap, setHouseholdDailyCap, setSystemDailyCap } from "../services/budget";
 import { ImportError, importHistory, importStatus, isImportProvider, startImport } from "../services/chatImport";
+import { providerPlugin } from "../services/providerPlugins";
 import { mkdirSync, readFileSync, existsSync } from "fs";
 import { join, resolve, extname } from "path";
 
@@ -1656,6 +1657,21 @@ web.post("/tokens/:id/revoke", (c) => {
   const session = getAdminSession(c)!;
   const revoked = revokeApiToken(c.req.param("id"), session.userId);
   return c.redirect(`/admin/tokens?msg=${revoked ? "token_revoked" : "token_not_found"}`);
+});
+
+// ── A provider plugin's own page ────────────────────────────────
+// services/providerPlugins.ts: a plugin may bring an admin page. It is served
+// here, so it sits behind the same two checks as everything above — the
+// request came from this machine, and an admin is signed in.
+web.all("/x/:provider/*", async (c) => {
+  const redir = requireWebAdmin(c);
+  if (redir) return redir;
+  const name = c.req.param("provider");
+  const plugin = providerPlugin(name);
+  if (!plugin?.admin) return c.notFound();
+  const marker = `/x/${name}/`;
+  const path = new URL(c.req.url).pathname;
+  return plugin.admin(c.req.raw, path.slice(path.indexOf(marker) + marker.length));
 });
 
 export default web;

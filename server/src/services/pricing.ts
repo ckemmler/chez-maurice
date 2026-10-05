@@ -1,3 +1,4 @@
+import { isUnmetered } from "./providerPlugins";
 // What a turn cost, and what it would have cost without the cache.
 //
 // The numbers here are list prices in USD per million tokens — the currency
@@ -143,7 +144,7 @@ export function newUsage(provider: string, model: string): TurnUsage {
 /** Fill in `cost` / `cost_uncached` from the accumulated token counts. Local
  *  models are free rather than unpriced — the distinction matters to the UI. */
 export function priceUsage(u: TurnUsage): TurnUsage {
-  if (u.provider === "ollama") {
+  if (isUnmetered(u.provider)) {
     u.cost = 0;
     u.cost_uncached = 0;
     return u;

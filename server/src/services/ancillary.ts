@@ -26,7 +26,7 @@
 import { existsSync } from "fs";
 import { join } from "path";
 import db from "../db";
-import { getModel, configuredProviders, householdDefaultModel } from "./models";
+import { getModel, ancillaryProviders, householdDefaultModel } from "./models";
 import { getHouseholdConfig, isOpenAIStyle, openaiStyleBaseUrl, openaiStyleKey } from "./claude";
 import { openaiTurn, PROMPT_CACHE_KEY_PROVIDERS } from "./openaiChat";
 import { ollamaTurn } from "./ollama";
@@ -254,7 +254,7 @@ export const PREFERRED: Record<AncillaryTier, string[]> = {
  */
 function callableHere(id: string): boolean {
   const m = getModel(id);
-  return !!m && configuredProviders().has(m.provider);
+  return !!m && ancillaryProviders().has(m.provider);
 }
 
 /** What an invocation should run on, before any pin: the first preferred model
@@ -330,7 +330,7 @@ function usable(id: string | null | undefined): string | null {
   if (!id) return null;
   const m = getModel(id);
   if (!m) return null;
-  return configuredProviders().has(m.provider) ? id : null;
+  return ancillaryProviders().has(m.provider) ? id : null;
 }
 
 export function householdAncillaryModel(): string | null {
@@ -507,7 +507,7 @@ function requestedModel(req: AncillaryRequest): string {
   if (!req.model) return ancillaryModel(req.invocation);
   const model = getModel(req.model);
   if (!model) throw new AncillaryError(`unknown model "${req.model}"`, 400);
-  if (!configuredProviders().has(model.provider)) {
+  if (!ancillaryProviders().has(model.provider)) {
     throw new AncillaryError(`no ${model.provider} key configured for this household`, 422);
   }
   return req.model;

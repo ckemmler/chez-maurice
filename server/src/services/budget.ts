@@ -50,6 +50,7 @@
 
 import db from "../db";
 import { priceFor, type TurnUsage } from "./pricing";
+import { isUnmetered } from "./providerPlugins";
 
 // ── Caps ────────────────────────────────────────────────────────────────────
 
@@ -337,7 +338,7 @@ export function verdict(
   // Nobody is billed for a local model, so no cap can apply to it. Decided by
   // provider rather than by model name, because that is how priceUsage decides
   // it — two places disagreeing about what is free is how a fuse stops working.
-  if (provider === "ollama") return { ok: true, remainingUsd: null };
+  if (isUnmetered(provider)) return { ok: true, remainingUsd: null };
 
   // Priced in? See the header: under a cap, unpriceable means refused.
   if (model && !priceFor(model)) {
