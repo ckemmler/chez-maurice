@@ -36,7 +36,7 @@ let rows: Row[] = [];
 let job: { id: string; state: string; counts: any; last_error: string | null } | null = null;
 let capacity: any[] = [];
 let calls: Array<{ tool: string; args: any }> = [];
-let writes: Array<{ invocation: string; prompt: string; system: string }> = [];
+let writes: Array<{ invocation: string; prompt: string; system: string; reasoning?: string }> = [];
 let refuseNext = 0;
 
 function progress() {
@@ -86,7 +86,7 @@ let lightAnswer: (ids: string[]) => string = (ids) => JSON.stringify({ verdicts:
 let fullAnswer: (prompt: string) => string = (prompt) => JSON.stringify({ summary: `Lu : ${prompt.match(/Subject: (.*)/)?.[1]}`, kind: "personal", people: [{ name: "Ami", address: null, role: "un ami" }], said: ["bonjour"], promised: [], decided: [], asked: [], dates: [], open: [], thread: "le dîner" });
 
 async function write(req: any) {
-  writes.push({ invocation: req.invocation, prompt: req.prompt, system: req.system ?? "" });
+  writes.push({ invocation: req.invocation, prompt: req.prompt, system: req.system ?? "", reasoning: req.reasoning });
   if (req.invocation === "mail_read_light") {
     const ids = [...req.prompt.matchAll(/id: (\S+)/g)].map((m) => m[1]);
     return { text: lightAnswer(ids), model: LIGHT, provider: "scaleway", stop: "end" as const, usage: usage(LIGHT, 100 * ids.length, 20 * ids.length) };
@@ -164,6 +164,22 @@ test("the light pass sorts in batches of twenty on previews, the full pass reads
   expect(calls.filter((c) => c.tool === "reading_control").map((c) => c.args.state)).toEqual(["running", "done"]);
   expect(job!.state).toBe("done");
   expect(capacity).toEqual([{ messages: 68, seconds: expect.any(Number) }]);
+});
+
+test("the light pass asks for no reasoning, the full reading keeps it; only a model tried against its provider has the switch", async () => {
+  seed(4);
+  await reading.runMailReading(ANNA);
+  const light = writes.filter((w) => w.invocation === "mail_read_light");
+  const full = writes.filter((w) => w.invocation === "mail_read_full");
+  expect(light.length).toBeGreaterThan(0);
+  expect(full.length).toBeGreaterThan(0);
+  expect(light.every((w) => w.reasoning === "none")).toBe(true);
+  expect(full.every((w) => w.reasoning === undefined)).toBe(true);
+  const { reasoningBody } = await import("../src/services/ancillary");
+  expect(reasoningBody("scaleway", LIGHT, "none")).toEqual({ reasoning_effort: "none" });
+  expect(reasoningBody("scaleway", LIGHT, undefined)).toBeUndefined();
+  expect(reasoningBody("scaleway", "deepseek-v4-flash-0731", "none")).toBeUndefined();
+  expect(reasoningBody("mistral", "mistral-small-latest", "none")).toBeUndefined();
 });
 
 test("a limit pauses with work left, and the next run carries on from the store", async () => {

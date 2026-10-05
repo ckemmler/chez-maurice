@@ -452,6 +452,23 @@ export function ancillaryTable(): Array<AncillaryInvocation & { pinned: string |
 
 // ── The call ─────────────────────────────────────────────────────────────────
 
+/** The models whose reasoning a request can turn off, each tried against
+ *  its provider before being listed: an unknown field is an error on a
+ *  strict server, and a switch that is ignored is no switch. */
+const REASONING_SWITCH: Record<string, Record<string, unknown>> = {
+  // Scaleway, 5 October 2026, five messages to sort: 1 191 completion tokens
+  // (1 106 of them reasoning) in 19 s by default, 185 and none in 1.8 s with
+  // this. `chat_template_kwargs.enable_thinking: false` and `"low"` changed
+  // nothing; `max_tokens` cut the reasoning short and left no answer.
+  "scaleway:qwen3.6-35b-a3b": { reasoning_effort: "none" },
+};
+
+/** What a request for no reasoning adds to the body, for the models that
+ *  have a switch; undefined otherwise. Exported for tests. */
+export function reasoningBody(provider: string, modelId: string, reasoning: AncillaryRequest["reasoning"]): Record<string, unknown> | undefined {
+  return reasoning === "none" ? REASONING_SWITCH[`${provider}:${modelId}`] : undefined;
+}
+
 export interface AncillaryRequest {
   invocation: string;
   prompt: string;
@@ -460,6 +477,12 @@ export interface AncillaryRequest {
   temperature?: number;
   /** Anthropic-only hint (adaptive thinking budget); other providers ignore it. */
   effort?: "low" | "medium" | "high";
+  /**
+   * Answer without reasoning first, where the model has a switch for it
+   * (`reasoningBody` below) — for work a reasoning model does no better by
+   * thinking about: keep or skip, on a preview. Nothing for the others.
+   */
+  reasoning?: "none";
   /**
    * Run on this model instead of the invocation's pin. For an experiment
    * that compares models on the same prompt — the domains' night model was
@@ -592,7 +615,10 @@ export async function ancillaryComplete(req: AncillaryRequest): Promise<Ancillar
     let text = "";
     let stop: AncillaryResult["stop"] = "end";
     let usage: TurnUsage | null = null;
-    const opts = req.cacheSystem && PROMPT_CACHE_KEY_PROVIDERS.has(provider) ? { cacheKey: `ancillary:${req.invocation}` } : {};
+    const opts = {
+      ...(req.cacheSystem && PROMPT_CACHE_KEY_PROVIDERS.has(provider) ? { cacheKey: `ancillary:${req.invocation}` } : {}),
+      ...(reasoningBody(provider, modelId, req.reasoning) ? { extraBody: reasoningBody(provider, modelId, req.reasoning) } : {}),
+    };
     for await (const ev of openaiTurn(baseUrl, key, modelId, messages, [], req.temperature, opts)) {
       if (ev.type === "text") text += ev.text;
       else if (ev.type === "turn_end") {

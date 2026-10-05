@@ -266,7 +266,9 @@ export async function runMailReading(memberId: string, opts: ReadingRunOptions =
     const modelId = invocation === "mail_read_light" ? lightModel : fullModel;
     const v = budgetVerdict(getModel(modelId)?.provider ?? null, modelId, 0, memberId);
     if (!v.ok) throw new Capped(v.reason);
-    const r = await d.write({ invocation, system, prompt, maxTokens, temperature: 0.2 });
+    // Keep or skip on a preview needs no reasoning: on the small Qwen it was
+    // five in six of the tokens the light pass paid for, and of its time.
+    const r = await d.write({ invocation, system, prompt, maxTokens, temperature: 0.2, ...(invocation === "mail_read_light" ? { reasoning: "none" as const } : {}) });
     recordSpend(r.usage, memberId, run.job_id);
     run.cost += r.usage?.cost ?? 0;
     return r;
