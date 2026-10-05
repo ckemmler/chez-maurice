@@ -34,7 +34,7 @@ import { resolveFamilies, toolInFamilies, canUseExperimental, isExperimentalTool
 import { t, userLocale } from "./i18n";
 import { newUsage, priceUsage, hasUsage, type TurnUsage } from "./pricing";
 import { verdict as budgetVerdict } from "./budget";
-import { providerPlugin, type ProviderPlugin } from "./providerPlugins";
+import { providerPlugin, type ProviderPlugin, type ProviderTool } from "./providerPlugins";
 
 interface StreamEvent {
   // thinking: the model is reasoning and nothing visible is coming yet — an
@@ -286,8 +286,8 @@ function toolRosterNotice(toolNames: string[], web: boolean): string {
   return `\n\n## Your tools\nThis turn you have exactly these, and nothing else: ${names.join(", ")}, and maurice_docs, Maurice's own documentation. Use them when they help, and prefer them over guessing for anything about the people here. Every other capability — whatever isn't in that list — is unavailable to you right now, whether or not it exists elsewhere in the household: if asked for it, say you don't have it here rather than pretending to look. When asked what you can do, answer from this list, not from what an assistant like you usually has. Use them quietly: the app shows the member every search you run, so "let me check", "I'm looking into this" and "one more search to be sure" are lines they read between the question and the answer, and a turn of several rounds accumulates them into a running commentary. Say what you found, not that you are about to look. ${docs}`;
 }
 
-/** The roster notice of a turn that holds nothing at all — a plugin provider's
- *  (services/providerPlugins.ts), which is not handed even maurice_docs. */
+/** The roster notice of a turn that holds nothing at all — a plugin provider
+ *  that takes no tools (services/providerPlugins.ts), not even maurice_docs. */
 const NO_TOOLS_NOTICE =
   `\n\n## Your tools\nYou have no tools this turn: no web search, no documentation lookup, and none of the household's personal tools. Answer from what you know and from this conversation. Anything that would need a tool — the calendar, tasks, contacts, health data, the garden, the library — you cannot reach: say so plainly rather than guessing or describing a lookup you didn't make.`;
 
@@ -798,13 +798,22 @@ async function* runOllamaAgentic(
   yield { type: "done", message_id: crypto.randomUUID() };
 }
 
-/** One turn on a plugin provider: its events, in the server's own stream. No
- *  agentic loop — a plugin turn is one request, without tools. */
+/** How many tool calls a plugin turn may make. The built-in loops count
+ *  rounds; a plugin runs its own loop, so here the calls are what is counted.
+ *  Past it a call is answered with LAST_ROUND_NOTICE instead of being run. */
+export const MAX_PLUGIN_TOOL_CALLS = 16;
+
+/** One turn on a plugin provider: its events, in the server's own stream. The
+ *  plugin runs whatever loop its model needs; each tool call comes back here
+ *  to be executed (`callTool`), so the filters, the cards, the search budget
+ *  and the `[tool]` log are the same as on every other path. */
 async function* runPluginTurn(
   plugin: ProviderPlugin,
   model: string,
   system: string,
   messages: Array<{ role: string; content: string }>,
+  tools: ProviderTool[],
+  mcp: McpSession | null,
   lang: string,
   conversationId: string,
   signal?: AbortSignal,
@@ -827,9 +836,57 @@ async function* runPluginTurn(
   function* reportUsage(): Generator<StreamEvent> {
     if (hasUsage(usage)) yield { type: "usage", usage: priceUsage(usage) };
   }
+
+  // Tool calls arrive from the plugin while its generator is waiting on them,
+  // so what they have to show the member — the call, its card — is queued here
+  // and interleaved with the plugin's own events below.
+  const queue: StreamEvent[] = [];
+  let wake: (() => void) | null = null;
+  const emit = (ev: StreamEvent) => { queue.push(ev); wake?.(); };
+
+  const allowed = new Set(tools.map((tool) => tool.name));
+  const calls: ToolCallLog[] = [];
+  const factsProposed = { n: 0 };
+  const searches = newSearchLedger();
+  // The people-first rule (heldForPeople), as far as it can be kept when calls
+  // come one at a time: a mail tool that follows a look at the people in the
+  // same model request is held. One that precedes it has already run.
+  const peopleRounds = new Set<number>();
+  let capLogged = false;
+
+  const callTool = async (name: string, input: unknown, round: number): Promise<{ text: string; isError: boolean }> => {
+    if (signal?.aborted) return { text: "Not run: the turn was stopped.", isError: true };
+    // Only what this turn was handed: the plugin's model cannot reach a tool
+    // the filters above withheld by naming it.
+    if (!allowed.has(name)) return { text: t(lang, "chat.tool_unavailable", name), isError: true };
+    if (calls.length >= MAX_PLUGIN_TOOL_CALLS) {
+      if (!capLogged) { capLogged = true; logToolCapHit(conversationId, provider, MAX_PLUGIN_TOOL_CALLS, calls); }
+      return { text: `Not run. ${LAST_ROUND_NOTICE}`, isError: true };
+    }
+    if (wantsPeople(name, input)) peopleRounds.add(round);
+    else if (name.startsWith("email__") && peopleRounds.has(round)) return { text: HELD_FOR_PEOPLE, isError: false };
+    emit({ type: "tool_call", tool: name, status: "start" });
+    const r = await executeTool(name, input ?? {}, mcp, { conversationId, provider, round, memberId, factsProposed, searches });
+    emit({ type: "tool_call", tool: name, status: "end" });
+    calls.push({ tool: name, ok: !toolFailed(r) });
+    if (r.data != null) emit({ type: "tool_data", tool: name, data: r.data });
+    const last = calls.length === MAX_PLUGIN_TOOL_CALLS ? `\n\n[${LAST_ROUND_NOTICE}]` : "";
+    return { text: r.text + last, isError: r.isError };
+  };
+
   const started = performance.now();
+  const events = plugin.turn({ conversationId, memberId, model, system, messages, lang, signal, tools, callTool })[Symbol.asyncIterator]();
   try {
-    for await (const ev of plugin.turn({ conversationId, memberId, model, system, messages, lang, signal })) {
+    let next = events.next();
+    for (;;) {
+      while (queue.length) yield queue.shift()!;
+      const woken = new Promise<null>((resolve) => { wake = () => resolve(null); });
+      const step = await Promise.race([next, woken]);
+      wake = null;
+      if (step === null) continue;
+      if (step.done) break;
+      next = events.next();
+      const ev = step.value;
       if (ev.type === "text") {
         yield { type: "text_delta", text: ev.text };
       } else if (ev.type === "thinking") {
@@ -840,11 +897,14 @@ async function* runPluginTurn(
         usage.cache_read += ev.cache_read ?? 0;
         usage.cache_write += ev.cache_write ?? 0;
       } else if (ev.type === "error") {
+        void events.return?.(undefined);
+        while (queue.length) yield queue.shift()!;
         yield* reportUsage();
         yield { type: "error", message: ev.message };
         return;
       }
     }
+    while (queue.length) yield queue.shift()!;
   } catch (err: any) {
     yield* reportUsage();
     yield { type: "error", message: err?.message ?? String(err) };
@@ -854,7 +914,7 @@ async function* runPluginTurn(
     { conversationId, provider, model, round: 0 },
     performance.now() - started,
     { prompt: usage.input + usage.cache_read, completion: usage.output, cached: usage.cache_read },
-    0,
+    calls.length,
   );
   yield* reportUsage();
   yield { type: "done", message_id: crypto.randomUUID() };
@@ -1552,10 +1612,11 @@ function trackedBooks(
   // → tier default). Filter the member's MCP tools to those families so a small
   // local model isn't handed all 100+ at once.
   // A provider that lives outside this repository (services/providerPlugins.ts)
-  // takes text only: no family is gathered for it, and none of the native
-  // tools below are kept.
+  // takes text only unless it says it takes tools: then no family is gathered
+  // for it, and none of the native tools below are kept.
   const plugin = providerPlugin(provider);
-  const families: "all" | string[] = plugin
+  const textOnly = !!plugin && !plugin.acceptsTools?.();
+  const families: "all" | string[] = textOnly
     ? []
     : memberId
       ? resolveFamilies(conversationId, isLocal, memberId)
@@ -1607,10 +1668,10 @@ function trackedBooks(
   // And the two that go with them: reading a brief, and writing down a fact.
   if (carriesDomainIndex) mcpTools = [...mcpTools, domainBriefTool(), rememberFactTool()];
 
-  if (plugin) mcpTools = [];
+  if (textOnly) mcpTools = [];
 
   // Now that the roster is settled, tell the model what it really holds.
-  systemPrompt += plugin ? NO_TOOLS_NOTICE : toolRosterNotice(mcpTools.map((t) => t.name), wantsWeb && hasWebSearch());
+  systemPrompt += textOnly ? NO_TOOLS_NOTICE : toolRosterNotice(mcpTools.map((t) => t.name), wantsWeb && hasWebSearch());
   systemPrompt += corpusNotice(mcpTools.map((t) => t.name));
   systemPrompt += mailNotice(mcpTools.map((t) => t.name), memberId, userDisplayName);
 
@@ -1639,7 +1700,15 @@ function trackedBooks(
   systemPrompt += CONTENT_SAFETY_FLOOR;
 
   if (plugin) {
-    yield* runPluginTurn(plugin, resolved, systemPrompt, toTextMessages(messages), userLang, conversationId, signal, memberId);
+    // The same roster the other paths hand over, or none at all.
+    const tools: ProviderTool[] = [];
+    if (!textOnly) {
+      const fns = mcpTools.map(mcpToolToFunction);
+      if (wantsWeb && hasWebSearch()) fns.push(WEB_SEARCH_FUNCTION);
+      fns.push(mauriceDocsFunction());
+      for (const f of fns) tools.push({ name: f.function.name, description: f.function.description ?? "", inputSchema: f.function.parameters });
+    }
+    yield* runPluginTurn(plugin, resolved, systemPrompt, toTextMessages(messages), tools, mcp, userLang, conversationId, signal, memberId);
     return;
   }
   // A roster row whose provider nothing here answers for — a plugin that is no

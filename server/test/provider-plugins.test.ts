@@ -26,7 +26,7 @@ const realFetch = globalThis.fetch;
 
 // The plugin records who it was called for in a global, since it is loaded
 // from a file of its own and shares nothing else with this suite.
-const calls = ((globalThis as any).__fakePluginCalls = [] as Array<{ memberId: string; system: string; last: string }>);
+const calls = ((globalThis as any).__fakePluginCalls = [] as Array<{ memberId: string; system: string; last: string; tools: string[] }>);
 
 beforeAll(async () => {
   db.run(`INSERT OR IGNORE INTO households (id, name) VALUES ('default', 'Home')`);
@@ -50,8 +50,16 @@ beforeAll(async () => {
          metered: false,
          configured: () => !globalThis.__fakePluginOff,
          admin: (req, path) => new Response("fake admin:" + req.method + ":" + path),
+         acceptsTools: () => !!globalThis.__fakePluginTools,
          async *turn(t) {
-           globalThis.__fakePluginCalls.push({ memberId: t.memberId, system: t.system, last: t.messages.at(-2)?.content ?? "" });
+           globalThis.__fakePluginCalls.push({ memberId: t.memberId, system: t.system, last: t.messages.at(-2)?.content ?? "", tools: t.tools.map((x) => x.name) });
+           if (t.messages.some((m) => m.content.includes("use-tool"))) {
+             yield { type: "text", text: "before|" };
+             const docs = await t.callTool("maurice_docs", { question: "x" }, 1);
+             const withheld = await t.callTool("email__send", {}, 1);
+             yield { type: "text", text: JSON.stringify({ docs: typeof docs.text, withheld }) };
+             return;
+           }
            if (t.messages.some((m) => m.content.includes("boom"))) { yield { type: "error", message: "not signed in" }; return; }
            yield { type: "text", text: "bonjour " };
            yield { type: "text", text: "Anna" };
@@ -67,6 +75,7 @@ afterAll(() => {
   globalThis.fetch = realFetch;
   _resetProviderPlugins();
   delete (globalThis as any).__fakePluginOff;
+  delete (globalThis as any).__fakePluginTools;
   fs.rmSync(dir, { recursive: true, force: true });
 });
 
@@ -108,6 +117,29 @@ test("a granted turn streams the plugin's text, for that member, without tools, 
   expect(calls).toHaveLength(1);
   expect(calls[0]).toMatchObject({ memberId: ANNA, last: "Bonjour" });
   expect(calls[0]!.system).toContain("You have no tools this turn");
+  expect(calls[0]!.tools).toEqual([]);
+});
+
+test("a plugin that takes tools gets the turn's roster, and the server runs the calls", async () => {
+  (globalThis as any).__fakePluginTools = true;
+  calls.length = 0;
+  const events = await turn(ANNA, "use-tool");
+  delete (globalThis as any).__fakePluginTools;
+  // The gateway is unreachable in this suite, so the roster is the native
+  // tools alone — the documentation tool among them, always.
+  expect(calls[0]!.tools).toContain("maurice_docs");
+  expect(calls[0]!.tools).not.toContain("email__send");
+  expect(calls[0]!.system).not.toContain("You have no tools this turn");
+  // The call is shown to the member where it happened: after the text that
+  // preceded it, before the text that followed.
+  const shape = events.map((e) => (e.type === "tool_call" ? `${e.tool}:${e.status}` : e.type));
+  expect(shape.slice(0, 4)).toEqual(["text_delta", "maurice_docs:start", "maurice_docs:end", "text_delta"]);
+  expect(shape.at(-1)).toBe("done");
+  // A tool the turn was not handed is refused by name, never run.
+  const said = JSON.parse(events.filter((e) => e.type === "text_delta")[1].text);
+  expect(said.docs).toBe("string");
+  expect(said.withheld).toEqual({ text: "Tool email__send is unavailable.", isError: true });
+  expect(shape).not.toContain("email__send:start");
 });
 
 test("a plugin's error ends the turn as an error — no other provider answers", async () => {

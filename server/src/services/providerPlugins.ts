@@ -10,7 +10,16 @@
 // This file is the registry alone and imports nothing, so pricing, budget and
 // the model roster can consult it without an import cycle.
 
-/** What a plugin is handed for one turn. Text only: no tools, no attachments. */
+/** A tool the turn may call, in the shape every provider path starts from. */
+export interface ProviderTool {
+  name: string;
+  description: string;
+  /** JSON Schema of the arguments. */
+  inputSchema: unknown;
+}
+
+/** What a plugin is handed for one turn. Text, and — for a plugin that says it
+ *  takes them — the turn's tools. No attachments. */
 export interface ProviderTurn {
   conversationId: string;
   /** Whose turn it is. The server refuses a plugin turn without one. */
@@ -23,6 +32,15 @@ export interface ProviderTurn {
   /** The member's language, for any message the plugin words itself. */
   lang: string;
   signal?: AbortSignal;
+  /** The tools this turn holds — already filtered for this member, this
+   *  conversation and its families. Empty unless the plugin `acceptsTools`. */
+  tools: ProviderTool[];
+  /** Run one of them. The server executes it, as this member, exactly as it
+   *  would for a built-in provider, and shows the member the call and its
+   *  card; the plugin only carries the text back to its model. `round` is the
+   *  plugin's count of the model request the call came from: calls of one
+   *  request share it. A name outside `tools` is refused. */
+  callTool(name: string, input: unknown, round: number): Promise<{ text: string; isError: boolean }>;
 }
 
 export type ProviderEvent =
@@ -44,6 +62,9 @@ export interface ProviderPlugin {
    *  runtime): the turn then costs nothing and no spending cap applies, exactly
    *  as for Ollama. Default true. */
   metered?: boolean;
+  /** Whether a turn may be handed tools right now. Absent or false, the turn is
+   *  text only and its system prompt says so. */
+  acceptsTools?(): boolean;
   turn(t: ProviderTurn): AsyncGenerator<ProviderEvent>;
   /** An admin page of the plugin's own, served under /admin/x/<provider>/ behind
    *  the admin's loopback and session checks. `path` is what follows that prefix. */
