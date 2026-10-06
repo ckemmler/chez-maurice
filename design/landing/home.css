@@ -123,22 +123,16 @@ a:hover { color: var(--accent-deep); text-decoration: underline; }
 
 .grid3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 48px; }
 
-/* ---------- what we believe ---------- */
-.creed { padding: 88px 0; }
-.creed-text {
-  max-width: 900px; margin-top: 20px;
-  font-family: var(--serif); font-size: clamp(24px, 2.7vw, 34px); line-height: 1.32; letter-spacing: -0.005em;
-}
-
 /* ---------- illustrations ----------
    All cut from two generated plates in one style (design/landing/ill): the café
    scene, and a sheet of objects drawn from it. A new one must come from the
    same scene as its reference, or it will not sit with the others. */
-.hero-copy { max-width: 920px; }
-.hero-scene { display: block; width: 100%; height: auto; margin-top: 56px; }
+.hero-scene {
+  display: block; width: 100%; height: auto;
+  -webkit-mask-image: linear-gradient(to right, transparent, #000 9%); mask-image: linear-gradient(to right, transparent, #000 9%);
+}
+.table-scene { display: block; width: 100%; height: auto; border-radius: 20px; background: #fef9f1; }
 .vignette { display: block; height: 84px; width: auto; align-self: flex-start; }
-.vignettes { display: flex; align-items: flex-end; gap: 20px; }
-.vignette.on-dark { height: 96px; padding: 14px; border-radius: 50%; background: var(--page); aspect-ratio: 1; object-fit: contain; }
 
 /* an example card, as it reads on a member's site */
 .path-head { margin-bottom: 72px; }
@@ -178,16 +172,8 @@ a:hover { color: var(--accent-deep); text-decoration: underline; }
 
 /* the household (dark) */
 .household { background: var(--dark); color: var(--dark-ink); }
-.household .eyebrow, .household .mention { color: var(--accent-on-dark); }
-.household .lede, .household .card-head p, .msg p { color: var(--dark-muted); }
-.household .card { background: var(--dark-card); border-color: var(--dark-line); }
-.room { display: flex; flex-direction: column; gap: 18px; }
-.msg { display: flex; gap: 12px; align-items: flex-start; }
-.msg .avatar { flex-shrink: 0; color: var(--ink); }
-.msg .avatar.is-maurice { background: var(--accent-on-dark); }
-.msg b { display: block; font-size: 14px; font-weight: 600; }
-.msg p { font-size: 15px; line-height: 1.5; }
-
+.household .eyebrow { color: var(--accent-on-dark); }
+.household .lede { color: var(--dark-muted); }
 /* your own instance */
 .instance .card { padding: 24px; gap: 14px; }
 .instance .card h3 { font-size: 18px; }
@@ -286,11 +272,9 @@ a:hover { color: var(--accent-deep); text-decoration: underline; }
   .grid3 { grid-template-columns: minmax(0, 1fr); gap: 32px; }
   .hero { padding: 40px 0 72px; }
   .section { padding: 80px 0; }
-  .creed { padding: 64px 0; }
   .context .split + .split { margin-top: 72px; }
   .flip > :first-child { order: 0; }
   .closing { margin-top: 48px; }
-  .hero-scene { margin-top: 40px; }
   .vignette { height: 68px; }
   .path-head { margin-bottom: 48px; }
   .import-head { margin-bottom: 40px; }
