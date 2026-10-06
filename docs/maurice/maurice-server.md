@@ -1,6 +1,6 @@
 ---
 title: The server
-date: '2026-10-05'
+date: '2026-10-06'
 flags: []
 locale: en
 description: 'The Hono/Bun engine: API surface, the streaming agentic loop, prompt
@@ -368,4 +368,5 @@ The **chat engine** (`server/src`) is core and ships with the server app, as do 
 - **Backups are partial** — `maurice.db` and `life.db` only.
 - **The `mcp` token scope is not enforced** (see Auth); only `health` is.
 - **Hand-over of a hosted instance has its script since 19 September 2026**: the owner exports the archive from their own console, the new place imports it (`ops/household.sh add … --from`, `scripts/import-household.sh`, `scripts/container.sh import`) — the operator never opens the data. `resolveBuildInfo` moved to `services/buildInfo.ts` (no database import) so the archive's manifest can name the server version; `health.ts` re-exports it. An error collector is a decision still open.
+- **An imported household starts its nights at once, unless told not to (6 October 2026).** The archive is an allow-list and leaves the night passes' own records behind (`corpus-nightly.json`, `mail-nightly.json`, the two domain ones), so a household started from one believes it has never had a night: within the minute it walks its members' mailboxes with the passwords the archive carries, and rewrites their domains, on the household's keys. For a working copy on another machine that is not wanted. Each pass already had its switch (`MAURICE_CORPUS_NIGHTLY`, `MAURICE_MAIL_NIGHTLY`, `MAURICE_DOMAIN_BRIEFS`, `MAURICE_DOMAIN_MAPPING`, each `off`); the local container's `compose.yml` now passes the four through from the shell that runs `scripts/container.sh up`. **Gap**: nothing sets them for you — an import followed by a plain `up` still runs the nights; and there is no single switch for all four.
 - **data-api hardening (September 2026).** The `/reports/img` proxy now goes through the same SSRF guard as article extraction (DNS-resolved, private/loopback refused, timeout + size cap); the `uploads` and `bank-transactions` routes reject a filename that isn't a bare basename; and a `noPathTraversal` guard fronts the tracks/reports routers, whose `:planId`/`:trackId` params were concatenated into filesystem paths (Hono decodes `%2F`). Still open: those tracks routes carry **no member check** — they are Candide's own research pipeline today, but that's an assumption, not an enforced boundary.
