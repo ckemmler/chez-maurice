@@ -56,6 +56,21 @@ services:
       MAURICE_TLS_CERT: /home/maurice/.maurice/tls/server.crt
       MAURICE_TLS_KEY: /home/maurice/.maurice/tls/server.key
       MAURICE_PUBLIC_HOST: localhost
+      # The corpus config. The checkout's own (tools/corpus/config/corpus.yaml,
+      # which the /app bind mount brings in) is the Mac's: its store is a
+      # /Users path and its embeddings are Ollama on localhost — which, in
+      # here, is the container, where nothing listens. Every search and every
+      # index then failed on "Connection error." and a garden written in the
+      # container was indexed by nothing. So the container takes the deployed
+      # instance's config, whose paths all come from the environment (the
+      # store lands in the corpus-data volume, the gardens are the only
+      # sources), and embeds through the Mac's Ollama with the model the Mac's
+      # own store uses. Each is overridable from the shell that runs `up`.
+      MAURICE_CORPUS_CONFIG: /app/infra/container/corpus.prod.yaml
+      CORPUS_EMBEDDING_BASE_URL: ${CORPUS_EMBEDDING_BASE_URL:-http://host.docker.internal:11434/v1}
+      CORPUS_EMBEDDING_MODEL: ${CORPUS_EMBEDDING_MODEL:-qwen3-embedding:0.6b}
+      CORPUS_EMBEDDING_API_KEY: ${CORPUS_EMBEDDING_API_KEY:-ollama}
+      CORPUS_EMBEDDING_DIM: ${CORPUS_EMBEDDING_DIM:-1024}
       # The four night passes, each switched off by `off` in the shell that
       # runs `container.sh up` (empty, the default, leaves them on). A
       # household imported from an archive comes without the files that say
