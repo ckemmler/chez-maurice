@@ -112,6 +112,18 @@ describe("what reaches the provider", () => {
     expect(thinkingBody("scaleway", undefined)).toBeUndefined();
   });
 
+  test("Scaleway's DeepSeek V4 Flash answers directly when that is the recorded choice, and only then", () => {
+    // The one Scaleway model found to take a switch (`reasoning_effort: "none"`).
+    expect(thinkingBody("scaleway", false, "deepseek-v4-flash-0731")).toEqual({ reasoning_effort: "none" });
+    // No choice, or reasoning asked for: nothing is sent, the model decides.
+    expect(thinkingBody("scaleway", undefined, "deepseek-v4-flash-0731")).toBeUndefined();
+    expect(thinkingBody("scaleway", true, "deepseek-v4-flash-0731")).toBeUndefined();
+    // The other Scaleway models have no switch: an unknown field is a 422.
+    expect(thinkingBody("scaleway", false, "qwen3.5-397b-a17b")).toBeUndefined();
+    // And the roster says the model takes a choice.
+    expect((db.query(`SELECT thinking FROM models WHERE id = 'deepseek-v4-flash-0731'`).get() as any)?.thinking).toBe("optional");
+  });
+
   test("the Chat Completions client sends the extra field as it is", async () => {
     const sse = `data: {"choices":[{"delta":{"content":"ok"}}]}\n\ndata: [DONE]\n\n`;
     const realFetch = globalThis.fetch;

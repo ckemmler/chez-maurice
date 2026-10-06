@@ -1244,9 +1244,12 @@ try {
 // both GLM-5.3 models always think, but take a `reasoning_effort` of low | high
 // | max — turning that dial down to `low` is what makes a three-minute Flash
 // answer a thirty-second one. Scaleway: the models that stream a `reasoning`
-// delta do so with no documented switch, so they are `always`. Local models are set by discovery
-// (Ollama reports a `thinking` capability), not here.
-const THINKING_SEED_GENERATION = 1;
+// delta do so with no documented switch, so they are `always` — except
+// DeepSeek V4 Flash, which was found on 6 October 2026 to take
+// `reasoning_effort: "none"` (generation 2, see `thinkingBody` in claude.ts).
+// Local models are set by discovery (Ollama reports a `thinking` capability),
+// not here.
+const THINKING_SEED_GENERATION = 2;
 try {
   const seeded =
     (db.query(`SELECT thinking_seeded FROM households WHERE id = 'default'`).get() as
@@ -1265,8 +1268,9 @@ try {
     db.run(
       `UPDATE models SET thinking = 'always'
        WHERE provider = 'scaleway'
-         AND id IN ('qwen3.6-35b-a3b', 'gpt-oss-120b', 'deepseek-v4-flash-0731', 'qwen3.5-397b-a17b', 'glm-5.2')`,
+         AND id IN ('qwen3.6-35b-a3b', 'gpt-oss-120b', 'qwen3.5-397b-a17b', 'glm-5.2')`,
     );
+    db.run(`UPDATE models SET thinking = 'optional' WHERE provider = 'scaleway' AND id = 'deepseek-v4-flash-0731'`);
     db.run(`UPDATE households SET thinking_seeded = ? WHERE id = 'default'`, [THINKING_SEED_GENERATION]);
   }
 } catch {}

@@ -992,12 +992,27 @@ export function openaiStyleKey(
  *  answers in 5 to 8. A seeded persona carries `thinking = null` and every one
  *  of them did that, which is not a choice anybody made. No other OpenAI-style
  *  provider here documents a switch (Mistral and OpenAI's models on the roster
- *  do not reason; Scaleway's reasoning models are `always`), so nothing is sent
- *  to them: an unknown field is a 422 on a strict server. Exported for tests. */
-export function thinkingBody(provider: string, thinking: boolean | undefined): Record<string, unknown> | undefined {
+ *  do not reason; Scaleway's other reasoning models are `always`), so nothing
+ *  is sent to them: an unknown field is a 422 on a strict server.
+ *
+ *  Scaleway's DeepSeek V4 Flash does take one, undocumented: tried against
+ *  the API on 6 October 2026, `reasoning_effort: "none"` is accepted and
+ *  leaves no reasoning tokens, with tool calls and answers intact (`low` and
+ *  `minimal` are accepted and change nothing). It is sent only for a recorded
+ *  "answer directly": a turn that made no choice, or asked for reasoning,
+ *  sends nothing and gets the model's own effort, as before. Without
+ *  reasoning the model tends to say a line before its tool calls ("let me
+ *  look…"), which the member sees. Exported for tests. */
+export function thinkingBody(provider: string, thinking: boolean | undefined, model?: string): Record<string, unknown> | undefined {
   if (provider === "zai") return { reasoning_effort: thinking ? "high" : "low" };
+  if (provider === "scaleway" && thinking === false && model && REASONING_OFF[model]) return REASONING_OFF[model];
   return undefined;
 }
+
+/** Scaleway's models with a way to answer without reasoning, and the field. */
+const REASONING_OFF: Record<string, Record<string, unknown>> = {
+  "deepseek-v4-flash-0731": { reasoning_effort: "none" },
+};
 
 /** Agentic loop for an OpenAI-style provider (OpenAI, Mistral, Z.ai, Scaleway). Same shape as
  *  the others, but the Chat Completions message format (assistant tool_calls +
@@ -1036,7 +1051,7 @@ async function* runOpenAIAgentic(
   const turnOpts = {
     signal,
     cacheKey: PROMPT_CACHE_KEY_PROVIDERS.has(provider) ? conversationId : undefined,
-    extraBody: thinkingBody(provider, thinking),
+    extraBody: thinkingBody(provider, thinking, model),
   };
   for (let round = 0; round <= MAX_TOOL_ROUNDS; round++) {
     if (signal?.aborted) { yield* reportUsage(); return; }
