@@ -18,7 +18,7 @@ import { withoutMoney } from "../services/mailboxEstimate";
 import { mailReadingStatus, readingWanted, startMailReading } from "../services/mailReading";
 import { mailDocumentsProgress, startMailDocuments } from "../services/mailDocuments";
 import { getUser } from "../services/users";
-import { decideReading, mailConversationOf, sayReadingDecided, widenReading, type ReadingAction } from "../services/mailApproval";
+import { decideReading, deepenReading, mailConversationOf, sayReadingDecided, widenReading, type ReadingAction } from "../services/mailApproval";
 import { forgetMailbox } from "../services/mailForget";
 import { memberLocale } from "../services/domainBriefs";
 
@@ -190,6 +190,24 @@ accounts.post("/reading/window", async (c) => {
     const window = await widenReading(uid, years);
     const started = window.changed ? startReadingNow(uid) : false;
     return c.json({ ...forViewer(uid, await mailScanStatus(uid)), window, started });
+  } catch (err) {
+    return c.json({ error: (err as Error).message }, 422);
+  }
+});
+
+/** Read everything: from the overview a first yes covers to every message
+ *  of the window, sorted by the light pass. `{ depth: "all" }` — there is no
+ *  way back. The reading of the rest starts now. 400 on another depth, 409
+ *  without the member's yes, 422 when the tool refuses. */
+accounts.post("/reading/depth", async (c) => {
+  const uid = c.get("userId");
+  const body = await c.req.json().catch(() => ({}));
+  if (body?.depth !== "all") return c.json({ error: 'depth must be "all"' }, 400);
+  if (!readingWanted(uid)) return c.json({ error: "the reading has not been approved" }, 409);
+  try {
+    const depth = await deepenReading(uid);
+    const started = depth.changed ? startReadingNow(uid) : false;
+    return c.json({ ...forViewer(uid, await mailScanStatus(uid)), depth, started });
   } catch (err) {
     return c.json({ error: (err as Error).message }, 422);
   }

@@ -141,7 +141,11 @@ function lightPrompt(messages: any[]): string {
 function fullSystem(name: string, language: string): string {
   return (
     `You read one message of ${name}'s mail and write down what it holds, for a later account of who matters to ${name} and what is going on. ` +
-    `Write in ${language}. Be concrete and short; dates as YYYY-MM-DD when the message gives them; name people as the message does; do not assume ${name}'s gender — use their name, never a gendered form about them. ` +
+    // The language of the message itself (6 October 2026): a reading of a
+    // French letter kept in English is a translation nobody asked for, and
+    // the fiche written from it a second one. The member's language is for a
+    // message in a language the documents cannot be written in.
+    `Write in the language the message itself is written in; if you cannot tell, or it mixes several, write in ${language}. Be concrete and short; dates as YYYY-MM-DD when the message gives them; name people as the message does; do not assume ${name}'s gender — use their name, never a gendered form about them. ` +
     `Do not invent, do not soften: "he did not answer" is not "he refused". ` +
     `${UNTRUSTED} ` +
     `Answer with JSON only, this shape: ` +
@@ -149,7 +153,8 @@ function fullSystem(name: string, language: string): string {
     `"people": [{"name": "...", "address": "... or null", "role": "who they are to ${name}, in a few words"}], ` +
     `"said": ["what was said, one line each"], "promised": [{"who": "...", "what": "...", "by": "date or null"}], ` +
     `"decided": ["..."], "asked": ["what is asked of ${name}, or by them"], "dates": [{"date": "YYYY-MM-DD", "what": "..."}], ` +
-    `"open": ["what is left hanging"], "thread": "the matter this belongs to, in a few words"}. Empty lists are fine.`
+    `"open": ["what is left hanging"], "thread": "the matter this belongs to, in a few words", ` +
+    `"language": "the two-letter ISO 639-1 code of the language the message is written in, which is the language you wrote in"}. Empty lists are fine.`
   );
 }
 
@@ -194,6 +199,9 @@ export function parseReading(text: string): Record<string, unknown> | null {
     dates: arr(d.dates),
     open: arr(d.open),
     thread: typeof d.thread === "string" ? d.thread.trim() : "",
+    // Kept only when it is a code: what the documents go by to write a note
+    // in the language of its messages (services/mailDocuments.ts).
+    ...(typeof d.language === "string" && /^[a-z]{2}$/i.test(d.language.trim()) ? { language: d.language.trim().toLowerCase() } : {}),
   };
 }
 

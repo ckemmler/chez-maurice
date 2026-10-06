@@ -174,6 +174,23 @@ export async function widenReading(memberId: string, years: number): Promise<Win
   return { years: Number(r.years), previous: Number(r.previous), changed: !!r.changed, job_id: r?.job?.id ?? null };
 }
 
+export interface DepthChange {
+  depth: "overview" | "all";
+  previous: "overview" | "all";
+  changed: boolean;
+  job_id: string | null;
+}
+
+/** From the overview — the people who count and the last months, what a
+ *  first yes reads since 6 October 2026 — to every message of the window.
+ *  Never back; what the overview read is not read again. Throws when the
+ *  tool refuses (no yes) or cannot be reached. */
+export async function deepenReading(memberId: string): Promise<DepthChange> {
+  const r = await mailToolCall(memberId, "reading_depth", { depth: "all" });
+  if (r?.error || r?.raw) throw new Error(String(r.error ?? r.raw));
+  return { depth: r.depth, previous: r.previous, changed: !!r.changed, job_id: r?.job?.id ?? null };
+}
+
 /** What Maurice says in the conversation when the word came from the app,
  *  rendered in the member's language, no model. */
 export function readingReply(action: ReadingAction, locale: string): string {

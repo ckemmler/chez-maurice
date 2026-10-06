@@ -693,3 +693,39 @@ test("two launches at the same moment are one pass: the night and a reading star
     expect(src).toMatch(/\bstartMailDocuments\(/);
   }
 });
+
+test("a note is written in the language of its messages, and filed in the member's locale; several languages, and it is the member's", async () => {
+  expect(docs.noteLanguage([{ reading: { language: "en" } }, { reading: { language: "EN" } }] as any, "fr")).toBe("en");
+  expect(docs.noteLanguage([{ reading: { language: "en" } }, { reading: { language: "fr" } }] as any, "fr")).toBe("fr");
+  expect(docs.noteLanguage([{ reading: { language: "en" } }, { reading: {} }] as any, "fr")).toBe("fr");   // a reading from before: not known
+  expect(docs.noteLanguage([{ reading: { language: "ja" } }] as any, "fr")).toBe("fr");                      // no words for it
+  expect(docs.noteLanguage([], "fr")).toBe("fr");
+
+  // Jean writes to Anna in English: three messages, one thread of two.
+  seed();
+  for (const m of material) m.reading.language = m.from.includes("jean") || m.subject.includes("Jeudi") ? "en" : "fr";
+  writes = [];
+  await docs.writeMailDocuments(ANNA);
+  const person = writes.find((w) => w.system.includes(PERSON) && w.prompt.includes("Jean"))!;
+  expect(person.system).toContain("Write in English");
+  const thread = writes.find((w) => !w.system.includes(PERSON))!;
+  expect(thread.system).toContain("Write in English");
+  const digest = fs.readFileSync(path.join(notesDir, "jeudi.md"), "utf8");
+  expect(digest).toContain("## What it is about");
+  expect(digest).toContain("## Where it comes from");
+  expect(digest).toMatch(/locale: fr/);
+  expect(digest).toMatch(/language: en/);
+  const fiche = fs.readFileSync(path.join(peopleDir, "jean-derely-fiche.md"), "utf8");
+  expect(fiche).toContain("## The relationship");
+  expect(fiche).toMatch(/language: en/);
+  // The index stays in Anna's language, and Atlas — French notices — was asked in French.
+  expect(fs.readFileSync(path.join(notesDir, "mon-courrier.md"), "utf8")).toContain("## Personnes");
+  expect(writes.find((w) => w.prompt.includes("Atlas Team"))!.system).toContain("Write in French");
+
+  // A second pass with one more message keeps the fiche's language, whatever the new message's.
+  material.push({ ...msg("m10", "Jean Derély <jean@x.org>", ["anna@gmail.com"], "2026-09-20T10:00:00+02:00", "Suite", "<t10@x>", "Jean écrit en français cette fois."), reading: { ...msg("x", "a", [], "", "", "", "Jean écrit en français.").reading, language: "fr" } });
+  writes = [];
+  await docs.writeMailDocuments(ANNA);
+  expect(writes.find((w) => w.system.includes(PERSON))!.system).toContain("Write in English");
+  expect(fs.readFileSync(path.join(peopleDir, "jean-derely-fiche.md"), "utf8")).toContain("## The relationship");
+});

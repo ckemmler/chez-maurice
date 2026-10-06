@@ -40,7 +40,7 @@ def test_a_yes_leaves_one_approved_job_with_no_ceiling_and_nothing_read(tmp_path
     job = out["job"]
     assert job["kind"] == KIND and job["state"] == "approved"
     assert job["budget_eur"] is None and job["spent_eur"] == 0
-    assert job["cursor"] == {"years": 3}
+    assert job["cursor"] == {"years": 3, "depth": "overview"}   # a first yes is for the overview
     # Nothing was fetched: the consent is a row, not a run.
     assert not [c for c in CLIENT.calls if c[0] in ("fetch", "select_folder", "examine")]
     assert store().totals()["messages"] == 0
@@ -51,7 +51,7 @@ def test_a_second_yes_marks_the_same_job_and_opens_no_other(tmp_path):
     first = svc.approve_reading(alex(svc))
     second = svc.approve_reading(alex(svc), years=5)
     assert second["already"] is True and second["job"]["id"] == first["job"]["id"]
-    assert second["job"]["cursor"] == {"years": 3}  # the word given stands; a new window is a new word
+    assert second["job"]["cursor"] == {"years": 3, "depth": "overview"}  # the word given stands; a new window is a new word
     import sqlite3
     with sqlite3.connect(store().path) as conn:
         assert conn.execute("SELECT COUNT(*) FROM jobs WHERE kind = ?", (KIND,)).fetchone()[0] == 1
@@ -65,7 +65,7 @@ def test_a_no_is_kept_and_can_be_turned_around_on_the_same_row(tmp_path):
     assert again["already"] is True and again["job"]["id"] == no["job"]["id"]
     yes = svc.approve_reading(alex(svc), years=2)
     assert yes["status"] == "approved" and yes["already"] is False and yes["job"]["id"] == no["job"]["id"]
-    assert yes["job"]["cursor"] == {"years": 2}
+    assert yes["job"]["cursor"] == {"years": 2, "depth": "overview"}
     back = svc.decline_reading(alex(svc))
     assert back["job"]["id"] == no["job"]["id"] and back["job"]["state"] == "declined"
 
@@ -104,7 +104,7 @@ def test_the_word_is_the_members_and_reaches_the_tools_and_the_cli(tmp_path, mon
     def call(name, args=None):
         return json.loads(asyncio.run(server.call_tool(name, args or {}))[0].text)
 
-    assert call("approve_reading", {"years": 4})["job"]["cursor"] == {"years": 4}
+    assert call("approve_reading", {"years": 4, "depth": "all"})["job"]["cursor"] == {"years": 4, "depth": "all"}
     assert call("scan_status")["reading"]["state"] == "approved"
     assert call("decline_reading")["status"] == "declined"
     # Another member's store is another file: nothing of Alex's in it.
@@ -155,7 +155,7 @@ def ready(tmp_path):
     from .test_scan import scan as walk
     walk(svc)
     svc.triage(alex(svc))
-    svc.approve_reading(alex(svc), years=3)
+    svc.approve_reading(alex(svc), years=3, depth="all")   # every message of the window, as before the overview
     return svc, client
 
 
@@ -299,7 +299,7 @@ def test_a_wider_window_adds_its_messages_and_reads_nothing_again(tmp_path, monk
     # Wider — past fifty years it is the whole mailbox — whatever the job's state.
     r = svc.reading_window(alex(svc), 400)
     assert (r["years"], r["previous"], r["changed"]) == (reading.ALL_YEARS, 3, True)
-    assert r["job"]["state"] == "done" and r["job"]["cursor"] == {"years": reading.ALL_YEARS}
+    assert r["job"]["state"] == "done" and r["job"]["cursor"] == {"years": reading.ALL_YEARS, "depth": "all"}
     # The one message of 2018 is the only candidate: the nine keep their verdict.
     more = svc.reading_next(alex(svc), stage="light", limit=20)
     assert len(more["messages"]) == 1 and "vieux@example.org" in more["messages"][0]["from"]
@@ -364,7 +364,7 @@ def test_the_full_pass_hands_the_reply_without_its_quote_and_wider(tmp_path):
     svc = make_service(tmp_path, {"alex@icloud.com": client})
     from .test_scan import scan as walk
     walk(svc)
-    svc.triage(alex(svc)); svc.approve_reading(alex(svc))
+    svc.triage(alex(svc)); svc.approve_reading(alex(svc), depth="all")
     light = svc.reading_next(alex(svc), stage="light")
     svc.reading_record(alex(svc), verdicts=[{"id": light["messages"][0]["id"], "keep": True, "reason": "x"}])
     full = svc.reading_next(alex(svc), stage="full")
@@ -475,3 +475,116 @@ def test_forgetting_a_mailbox_drops_what_only_it_held_and_keeps_what_another_hol
         assert conn.execute("SELECT count(*) FROM cursors WHERE address = 'alex@icloud.com'").fetchone()[0] == 0
         assert conn.execute("SELECT count(*) FROM triage WHERE message != ?", (shared,)).fetchone()[0] == 0
     assert next(a for a in store.artefacts() if a["key"] == "p")["sources"] == [shared]
+
+
+# ── The overview (6 October 2026) ────────────────────────────────────────
+
+from datetime import datetime, timedelta, timezone  # noqa: E402
+from email.utils import format_datetime  # noqa: E402
+
+
+def overview_box() -> dict[int, bytes]:
+    """Marie, written to and answered over fourteen years; Paul, twice and
+    answered once; a shop that wrote twenty times last year and never got a
+    word; a stranger this month."""
+    now = datetime.now(timezone.utc)
+    out: dict[int, bytes] = {}
+    uid = 0
+
+    def add(subject, sender, when, to=None):
+        nonlocal uid
+        uid += 1
+        out[uid] = build_raw(subject, sender, words(30), date=format_datetime(when), message_id=f"<o{uid}@x>", headers={"To": to} if to else None)
+
+    for year in range(2013, 2027):
+        add(f"Marie {year}", "Marie <marie@example.org>", datetime(year, 1, 5, 9, tzinfo=timezone.utc))
+    for year in (2014, 2020, 2026):
+        add(f"À Marie {year}", "Alex <alex@icloud.com>", datetime(year, 3, 5, 9, tzinfo=timezone.utc), to="Marie <marie@example.org>")
+    for i in range(2):
+        add(f"Paul {i}", "Paul <paul@example.org>", datetime(2024, 5, 1 + i, 9, tzinfo=timezone.utc))
+    add("À Paul", "Alex <alex@icloud.com>", datetime(2024, 5, 3, 9, tzinfo=timezone.utc), to="paul@example.org")
+    for i in range(20):
+        add(f"Commande {i}", "Boutique <boutique@example.org>", now - timedelta(days=200 + i))
+    for i in range(2):
+        add(f"Bonjour {i}", "Inconnu <inconnu@example.org>", now - timedelta(days=3 + i))
+    return out
+
+
+def overview_ready(tmp_path):
+    client = FakeIMAPClient({"INBOX": overview_box()})
+    svc = make_service(tmp_path, {"alex@icloud.com": client})
+    from .test_scan import scan as walk
+    walk(svc)
+    svc.triage(alex(svc))
+    return svc
+
+
+def test_a_first_yes_reads_the_people_who_count_and_the_last_months_and_nothing_else(tmp_path):
+    svc = overview_ready(tmp_path)
+    job = svc.approve_reading(alex(svc))["job"]
+    assert reading.depth_of(job) == "overview"
+    # No light pass: the selection is the verdict, made from the headers.
+    light = svc.reading_next(alex(svc), stage="light", limit=100)
+    assert light["messages"] == [] and light["missing"] == [] and light["progress"]["to_light"] == 0
+    full = svc.reading_next(alex(svc), stage="full", limit=100)
+    subjects = sorted(m["subject"] for m in full["messages"])
+    # Marie: ten of her seventeen, the first and the last among them. Paul: his three.
+    marie = [s for s in subjects if "Marie" in s]
+    assert len(marie) == reading.OVERVIEW_PER_PERSON and "Marie 2013" in marie and "À Marie 2026" in marie
+    assert [s for s in subjects if "Paul" in s] == ["Paul 0", "Paul 1", "À Paul"]
+    # The stranger of this month is read: what is going on now. The shop is not: twenty messages, never a word back.
+    assert [s for s in subjects if s.startswith("Bonjour")] == ["Bonjour 0", "Bonjour 1"]
+    assert not [s for s in subjects if s.startswith("Commande")]
+    assert len(subjects) == 15
+    assert full["progress"] == {"messages": 42, "to_light": 0, "kept": 15, "skipped": 0, "to_read": 15, "read": 0}
+    # Each mailbox's card says the same: nothing waiting to be sorted.
+    assert svc.scan_status(alex(svc))["mailboxes"][0]["reading"]["to_light"] == 0
+    # Why each was chosen is kept where a light verdict's reason would be.
+    reasons = {r["light_reason"] for r in store().readings(kept_only=False)}
+    assert reasons == {"overview: one of the people who count", "overview: the last months"}
+
+
+def test_the_selection_is_made_again_at_each_run_and_moves_nothing_already_decided(tmp_path):
+    svc = overview_ready(tmp_path)
+    svc.approve_reading(alex(svc))
+    first = svc.reading_progress(alex(svc))
+    assert first["selection"] == {"people": 2, "two_way": 2, "recent": 2, "selected": 15, "new": 0}
+    ids = [m["id"] for m in svc.reading_next(alex(svc), stage="full", limit=100)["messages"]]
+    svc.reading_record(alex(svc), readings=[{"id": ids[0], "reading": {"summary": "lu", "language": "fr"}}])
+    again = svc.reading_progress(alex(svc))
+    assert again["selection"]["new"] == 0 and again["progress"]["read"] == 1 and again["progress"]["to_read"] == 14
+
+
+def test_from_the_overview_to_everything_the_light_pass_sorts_the_rest(tmp_path, monkeypatch):
+    svc = overview_ready(tmp_path)
+    svc.approve_reading(alex(svc))
+    monkeypatch.setattr(server, "_service", svc)
+    monkeypatch.setattr(server, "get_member_id", lambda: "id-alex")
+    out = json.loads(asyncio.run(server.call_tool("reading_depth", {"depth": "all"}))[0].text)
+    assert (out["depth"], out["previous"], out["changed"]) == ("all", "overview", True)
+    # Everything is the window of the yes (three years): the shop's twenty, and Marie's two of it the overview passed over.
+    light = svc.reading_next(alex(svc), stage="light", limit=100)
+    assert len([m for m in light["messages"] if m["subject"].startswith("Commande")]) == 20
+    # In that window the overview's choices keep their verdict (seven of them fall in it); the rest is to sort.
+    assert light["progress"]["kept"] == 7 and light["progress"]["to_light"] == len(light["messages"])
+    # Never back.
+    back = svc.reading_depth(alex(svc), "overview")
+    assert back["changed"] is False and back["depth"] == "all"
+
+
+def test_the_plan_ranks_by_mail_both_ways_and_spreads_the_sample():
+    assert reading._spread(list(range(5)), 10) == [0, 1, 2, 3, 4]
+    assert reading._spread(list(range(100)), 4) == [0, 33, 66, 99]
+    now = datetime(2026, 10, 6, tzinfo=timezone.utc)
+    rows = []
+    for i in range(50):   # a newsletter-like sender answered once: fifty against one
+        rows.append({"id": f"n{i}", "sender_address": "loud@example.org", "recipients": "[]", "cc": "[]", "date": f"2020-01-{i % 28 + 1:02d}T09:00:00+00:00", "kind": "other", "reason": "replied"})
+    rows.append({"id": "n-sent", "sender_address": "me@example.org", "recipients": '["loud@example.org"]', "cc": "[]", "date": "2020-02-01T09:00:00+00:00", "kind": "correspondence", "reason": "sent"})
+    for i in range(6):    # a friend: six each way
+        rows.append({"id": f"f{i}", "sender_address": "friend@example.org", "recipients": "[]", "cc": "[]", "date": f"2019-03-{i + 1:02d}T09:00:00+00:00", "kind": "correspondence", "reason": "replied"})
+        rows.append({"id": f"fs{i}", "sender_address": "me@example.org", "recipients": '["Friend <friend@example.org>"]', "cc": "[]", "date": f"2019-04-{i + 1:02d}T09:00:00+00:00", "kind": "correspondence", "reason": "sent"})
+    rows.append({"id": "one-way", "sender_address": "nobody@example.org", "recipients": "[]", "cc": "[]", "date": "2018-01-01T09:00:00+00:00", "kind": "other", "reason": "unmarked"})
+    plan = reading.overview_plan(rows, now)
+    assert [p["address"] for p in plan["people"]] == ["friend@example.org", "loud@example.org"]
+    assert plan["two_way"] == 2 and plan["recent"] == 0
+    assert "one-way" not in plan["selected"] and len(plan["selected"]) == 20

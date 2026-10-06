@@ -42,7 +42,7 @@ from __future__ import annotations
 import json
 import re
 from collections import defaultdict
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from . import sealing
@@ -62,16 +62,34 @@ def status(store: MailStore) -> dict[str, Any] | None:
     return store.latest_job(KIND)
 
 
-def _window(job: dict[str, Any] | None, years: int | None) -> dict[str, Any]:
+#: How deep a reading goes (6 October 2026). ``overview``: the people who
+#: count, chosen on the headers, a sample of their messages, and the last
+#: months whole — what a first yes buys. ``all``: every message of the window,
+#: sorted by the light pass — what every reading was before, and what a job
+#: that does not say is.
+DEPTHS = ("overview", "all")
+
+
+def _window(job: dict[str, Any] | None, years: int | None, depth: str | None = None) -> dict[str, Any]:
     cur = job.get("cursor") if job else None
     cur = dict(cur) if isinstance(cur, dict) else {}
     if years:
         cur["years"] = max(1, int(years))
     cur.setdefault("years", 3)
+    if depth in DEPTHS:
+        cur["depth"] = depth
+    elif job is None:
+        cur["depth"] = "overview"   # a new word starts shallow; an old job keeps what it was
     return cur
 
 
-def approve(store: MailStore, member_id: str, years: int | None = None) -> dict[str, Any]:
+def depth_of(job: dict[str, Any] | None) -> str:
+    cur = job.get("cursor") if job else None
+    d = (cur or {}).get("depth") if isinstance(cur, dict) else None
+    return d if d in DEPTHS else "all"
+
+
+def approve(store: MailStore, member_id: str, years: int | None = None, depth: str | None = None) -> dict[str, Any]:
     """Record the yes. Idempotent: an approved job is answered as it is; a
     declined one turns approved; a job already running or finished (lot 4)
     is left alone and reported, and a new one opens only after that."""
@@ -79,12 +97,12 @@ def approve(store: MailStore, member_id: str, years: int | None = None) -> dict[
     if job is not None and job["state"] == "approved":
         return {"status": "approved", "job": job, "already": True}
     if job is not None and job["state"] in SETTLED_BY_WORD:
-        store.update_job(job["id"], state="approved", cursor=_window(job, years))
+        store.update_job(job["id"], state="approved", cursor=_window(job, years, depth))
         return {"status": "approved", "job": store.job(job["id"]), "already": False}
     if job is not None and job["state"] in ("running", "paused"):
         return {"status": job["state"], "job": job, "already": True,
                 "note": "a reading is already under way; it goes on"}
-    created = store.create_job(member_id, KIND, state="approved", cursor=_window(None, years))
+    created = store.create_job(member_id, KIND, state="approved", cursor=_window(None, years, depth))
     return {"status": "approved", "job": created, "already": False}
 
 
@@ -108,6 +126,116 @@ def widen(store: MailStore, job: dict[str, Any], years: int) -> dict[str, Any]:
     cur["years"] = wanted
     store.update_job(job["id"], cursor=cur)
     return {"job": store.job(job["id"]), "years": wanted, "previous": before, "changed": True}
+
+
+def deepen(store: MailStore, job: dict[str, Any], depth: str) -> dict[str, Any]:
+    """From the overview to everything — never back: what was read stays
+    read. The messages the overview chose keep their verdict; the light pass
+    then sorts the rest of the window."""
+    if depth not in DEPTHS:
+        raise ValueError(f"not a depth: {depth!r}")
+    before = depth_of(job)
+    if depth == before or before == "all":
+        return {"job": job, "depth": before, "previous": before, "changed": False}
+    cur = job.get("cursor")
+    cur = dict(cur) if isinstance(cur, dict) else {}
+    cur["depth"] = depth
+    store.update_job(job["id"], cursor=cur)
+    return {"job": store.job(job["id"]), "depth": depth, "previous": before, "changed": True}
+
+
+# ── The overview's selection ─────────────────────────────────────────────
+
+#: How many people the overview reads, how many of their messages each, how
+#: far back "what is going on now" reaches, and its ceiling.
+OVERVIEW_PEOPLE = 30
+OVERVIEW_PER_PERSON = 10
+OVERVIEW_RECENT_DAYS = 90
+OVERVIEW_RECENT_MAX = 300
+
+
+def _spread(items: list[Any], n: int) -> list[Any]:
+    """``n`` of ``items``, evenly spread, the first and the last among them."""
+    if len(items) <= n:
+        return list(items)
+    if n <= 1:
+        return [items[-1]]
+    picked = sorted({round(i * (len(items) - 1) / (n - 1)) for i in range(n)})
+    return [items[i] for i in picked]
+
+
+def overview_plan(rows: list[dict[str, Any]], now: datetime | None = None) -> dict[str, Any]:
+    """Which messages the overview reads, from the headers and the triage
+    alone — no model, no body. A person counts when mail goes both ways:
+    they wrote, and the member wrote to them. They are ranked by the smaller
+    of the two counts (a hundred newsletters answered once are not a
+    relationship), then by volume, then by how recent the last exchange is;
+    the first ``OVERVIEW_PEOPLE`` are read through ``OVERVIEW_PER_PERSON``
+    messages each, spread from the first to the last. Beside them, the last
+    ``OVERVIEW_RECENT_DAYS`` days are read whole, newest first, up to a
+    ceiling — what is going on now, whoever it is with."""
+    now = now or datetime.now(timezone.utc)
+    recent_since = (now - timedelta(days=OVERVIEW_RECENT_DAYS)).strftime("%Y-%m-%d")
+    people: dict[str, dict[str, Any]] = {}
+
+    def person(address: str) -> dict[str, Any]:
+        return people.setdefault(address, {"address": address, "received": 0, "sent": 0, "last": "", "messages": []})
+
+    recent: list[tuple[str, str]] = []
+    for r in rows:
+        date = r.get("date") or ""
+        if date[:10] >= recent_since:
+            recent.append((date, r["id"]))
+        if r.get("reason") == "sent":
+            for a in sorted(set(_list(r.get("recipients"))) | set(_list(r.get("cc")))):
+                addr = _bare(a)
+                if addr:
+                    p = person(addr)
+                    p["sent"] += 1
+                    p["last"] = max(p["last"], date)
+                    p["messages"].append((date, r["id"]))
+        else:
+            addr = (r.get("sender_address") or "").lower()
+            if addr:
+                p = person(addr)
+                p["received"] += 1
+                p["last"] = max(p["last"], date)
+                p["messages"].append((date, r["id"]))
+    both = [p for p in people.values() if p["sent"] and p["received"]]
+    # Stable sorts, least significant first: the address, the last exchange
+    # (most recent first), then both ways and volume.
+    both.sort(key=lambda p: p["address"])
+    both.sort(key=lambda p: p["last"], reverse=True)
+    both.sort(key=lambda p: (min(p["sent"], p["received"]), p["sent"] + p["received"]), reverse=True)
+    chosen = both[:OVERVIEW_PEOPLE]
+    reasons: dict[str, str] = {}
+    for p in chosen:
+        for _date, mid in _spread(sorted(set(p["messages"])), OVERVIEW_PER_PERSON):
+            reasons.setdefault(mid, "overview: one of the people who count")
+    recent.sort(reverse=True)
+    for _date, mid in recent[:OVERVIEW_RECENT_MAX]:
+        reasons.setdefault(mid, "overview: the last months")
+    return {
+        "people": [{"address": p["address"], "received": p["received"], "sent": p["sent"], "last": p["last"][:10]} for p in chosen],
+        "two_way": len(both),
+        "recent": min(len(recent), OVERVIEW_RECENT_MAX),
+        "selected": reasons,
+    }
+
+
+def _bare(value: str) -> str:
+    m = re.search(r"<([^>]+)>", value or "")
+    return (m.group(1) if m else (value or "")).strip().lower()
+
+
+def select_overview(store: MailStore, job: dict[str, Any], now: datetime | None = None) -> dict[str, Any]:
+    """Mark what the overview reads as kept, for the full pass to take. Run
+    again at every reading: new mail enters the last months, a person newly
+    answered enters the people — and nothing already judged or read moves."""
+    plan = overview_plan(store.overview_rows(READ_KINDS), now)
+    at = now_iso()
+    new = store.keep_selected([(mid, reason, at) for mid, reason in plan["selected"].items()])
+    return {"people": len(plan["people"]), "two_way": plan["two_way"], "recent": plan["recent"], "selected": len(plan["selected"]), "new": new}
 
 
 def decline(store: MailStore, member_id: str) -> dict[str, Any]:
@@ -172,6 +300,10 @@ def _years(job: dict[str, Any] | None) -> int:
 
 
 def _since(job: dict[str, Any] | None, now: datetime | None = None) -> str:
+    # The overview picks across the whole mailbox: its people are those of
+    # twenty years as much as of three.
+    if job is not None and depth_of(job) == "overview":
+        return window_start(ALL_YEARS, now)
     return window_start(_years(job), now)
 
 
@@ -207,14 +339,23 @@ def _subject(sealed: str | None) -> str | None:
 
 
 def progress(store: MailStore, job: dict[str, Any] | None, now: datetime | None = None, addresses: list[str] | None = None) -> dict[str, int]:
-    return store.reading_progress(READ_KINDS, _since(job, now), addresses)
+    p = store.reading_progress(READ_KINDS, _since(job, now), addresses)
+    # In the overview nothing waits for the light pass: what is not chosen
+    # is simply not read.
+    if job is not None and depth_of(job) == "overview":
+        p["to_light"] = 0
+    return p
 
 
 def per_mailbox(store: MailStore, job: dict[str, Any] | None, now: datetime | None = None) -> list[dict[str, Any]]:
     """Each mailbox's messages and reading, over the window of the reading
     when there is one, else the default window — what the app shows under
     each mailbox."""
-    return store.per_address(READ_KINDS, _since(job, now))
+    boxes = store.per_address(READ_KINDS, _since(job, now))
+    if job is not None and depth_of(job) == "overview":
+        for b in boxes:
+            b["reading"]["to_light"] = 0
+    return boxes
 
 
 def next_batch(
@@ -228,7 +369,9 @@ def next_batch(
     if stage not in STAGES:
         raise ValueError(f"not a stage: {stage!r}")
     since = _since(job, now)
-    rows = store.reading_candidates(READ_KINDS, since, stage, max(1, min(int(limit), 100)), addresses)
+    # The overview has no light pass: its selection is the verdict.
+    overview_light = stage == "light" and depth_of(job) == "overview"
+    rows = [] if overview_light else store.reading_candidates(READ_KINDS, since, stage, max(1, min(int(limit), 100)), addresses)
     by_place: dict[tuple[str, str], list[dict[str, Any]]] = defaultdict(list)
     for r in rows:
         by_place[(r["address"], r["folder"])].append(r)

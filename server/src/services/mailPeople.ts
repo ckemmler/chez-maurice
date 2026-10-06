@@ -5,6 +5,7 @@ import { atomicWrite, dumpFrontmatter, fichePath, ficheWebPath, fragmentsDir, is
 import { slugify } from "../../data-api/services/articleExtract";
 import type { AncillaryResult } from "./ancillary";
 import type { ContactCard } from "./contactAccounts";
+import { LANGUAGE } from "./domainBriefs";
 import { parseJsonObject } from "./domainMapping";
 import {
   MAX_PER_NOTE, MIN_MESSAGES, UNTRUSTED, bare, displayName, materialBlock, pointer, shortDate, sourcedLine, wordsFor,
@@ -670,6 +671,11 @@ export interface PersonContext {
   /** What the header store says was exchanged with them; null when it
    *  could not be read, and the fiche's section is then left as it is. */
   exchanges?: Exchanges | null;
+  /** The language of this person's messages, when they share one the
+   *  documents can be written in (6 October 2026): a new fiche is written in
+   *  it, and filed under the member's `locale` all the same — that is where
+   *  their garden is. Absent, the member's language. */
+  noteLanguage?: string | null;
   ask: (system: string, prompt: string) => Promise<AncillaryResult>;
 }
 
@@ -685,7 +691,7 @@ const SECTION_KEYS = ["going_on", "promised", "open"] as const;
 /** Write, or not, one person's fiche and fragments. Throws only what `ask`
  *  throws (the cap). */
 export async function writePerson(ctx: PersonContext, p: Person): Promise<PersonOutcome> {
-  const { garden, w, now } = ctx;
+  const { garden, now } = ctx;
   const a = ctx.artefact;
   // Thrown away, or declined as not a person: never again.
   if (a?.deleted_at) return { kind: "deleted", found: false };
@@ -706,6 +712,13 @@ export async function writePerson(ctx: PersonContext, p: Person): Promise<Person
 
   const byMaurice = !ref || ref.fm.meta?.author === "maurice";
   const locale = ref?.locale ?? ctx.locale;
+  // The language of the text: a fiche keeps the one it was first written in
+  // — its headings are how its sections are found again — and a new one
+  // takes its messages' when they share one, else the member's.
+  const kept = typeof ref?.fm.meta?.language === "string" ? String(ref.fm.meta.language) : null;
+  const lang = ref ? (kept && LANGUAGE[kept] ? kept : LANGUAGE[ref.locale] ? ref.locale : ctx.locale) : (ctx.noteLanguage && LANGUAGE[ctx.noteLanguage] ? ctx.noteLanguage : ctx.locale);
+  const w = lang === ctx.locale ? ctx.w : wordsFor(lang);
+  const language = lang === ctx.locale ? ctx.language : LANGUAGE[lang]!;
   const fragments = ref ? readMailFragments(ref.file) : [];
   const pending = fragments.filter((f) => !f.confirmed);
 
@@ -728,7 +741,7 @@ export async function writePerson(ctx: PersonContext, p: Person): Promise<Person
       touchedIds.push(ref.file);
     }
   }
-  const exchanges = ctx.exchanges ? exchangesSection(ctx.exchanges, w, locale, ctx.labels) : null;
+  const exchanges = ctx.exchanges ? exchangesSection(ctx.exchanges, w, lang, ctx.labels) : null;
 
   // A confirmed relation the person has outgrown: a revision proposed
   // beside it, never in its place. Asked once per growth — the basis moves
@@ -736,9 +749,9 @@ export async function writePerson(ctx: PersonContext, p: Person): Promise<Person
   if (ref && relFm.status === "confirmed" && !relFm.proposed && relText && relationGrown(relFm, p.messages)) {
     const material = p.messages.slice(-MAX_PER_NOTE);
     const confirmed = relText.replace(/\s*[—;]?\s*\[[^\]]*\]\(maurice-mail:[^)]*\)/g, "").replace(/\s+/g, " ").trim();
-    const rr = await ctx.ask(revisitSystem(ctx.member, ctx.language, confirmed), materialBlock(material));
+    const rr = await ctx.ask(revisitSystem(ctx.member, language, confirmed), materialBlock(material));
     const dd = parseJsonObject(rr.text);
-    const proposal = dd?.relation && typeof dd.relation.text === "string" ? sourcedLine(dd.relation.text, material, locale, ctx.labels) : null;
+    const proposal = dd?.relation && typeof dd.relation.text === "string" ? sourcedLine(dd.relation.text, material, lang, ctx.labels) : null;
     const ymd = (v: unknown) => (typeof v === "string" && /^\d{4}(-\d{2})?$/.test(v) ? v : null);
     relFm.basis = basisNow(p.messages);
     if (proposal) {
@@ -770,7 +783,7 @@ export async function writePerson(ctx: PersonContext, p: Person): Promise<Person
   const redo = new Set(pending.flatMap((f) => f.sources));
   const material = p.messages.filter((m) => !covered.has(m.id) || redo.has(m.id)).slice(-MAX_PER_NOTE);
   const settledRelation = relSettled && relFm.status !== "rejected" ? relText : null;
-  const r = await ctx.ask(personSystem(ctx.member, ctx.language, { known: !!p.card, relation: settledRelation }), materialBlock(material));
+  const r = await ctx.ask(personSystem(ctx.member, language, { known: !!p.card, relation: settledRelation }), materialBlock(material));
   const d = parseJsonObject(r.text);
   if (!d) return { kind: "empty", stop: r.stop, files: touchedIds };
   // Not a person — or, for someone in the address book, the member
@@ -784,7 +797,7 @@ export async function writePerson(ctx: PersonContext, p: Person): Promise<Person
   let cited = 0;
   for (const k of SECTION_KEYS) {
     for (const line of Array.isArray(d[k]) ? d[k] : []) {
-      const sl = sourcedLine(String(line), material, locale, ctx.labels);
+      const sl = sourcedLine(String(line), material, lang, ctx.labels);
       if (!sl) continue;
       const first = byId.get(sl.ids[0]!)!;
       const address = p.addressOf.get(first.id) ?? "";
@@ -798,7 +811,7 @@ export async function writePerson(ctx: PersonContext, p: Person): Promise<Person
     }
   }
   let newRelation: { text: string; ids: string[] } | null = null;
-  if (!relSettled && d.relation && typeof d.relation.text === "string") newRelation = sourcedLine(d.relation.text, material, locale, ctx.labels);
+  if (!relSettled && d.relation && typeof d.relation.text === "string") newRelation = sourcedLine(d.relation.text, material, lang, ctx.labels);
   if (!buckets.size && !newRelation && !ref) return { kind: "empty", stop: r.stop, files: touchedIds };
 
   // The fiche.
@@ -832,7 +845,7 @@ export async function writePerson(ctx: PersonContext, p: Person): Promise<Person
       .map((k) => `## ${k === "going_on" ? w.goingOn : k === "promised" ? w.promised : w.open}\n\n${b.sections[k]!.join("\n")}`)
       .join("\n\n") + "\n";
     const dates = [...b.ids].map((i) => byId.get(i)?.date ?? "").filter(Boolean).sort();
-    const span = dates.length ? (shortDate(dates[0]!, locale) === shortDate(dates[dates.length - 1]!, locale) ? shortDate(dates[0]!, locale) : `${shortDate(dates[0]!, locale)} → ${shortDate(dates[dates.length - 1]!, locale)}`) : "";
+    const span = dates.length ? (shortDate(dates[0]!, lang) === shortDate(dates[dates.length - 1]!, lang) ? shortDate(dates[0]!, lang) : `${shortDate(dates[0]!, lang)} → ${shortDate(dates[dates.length - 1]!, lang)}`) : "";
     const label = ctx.labels.get(b.mailbox) ?? b.mailbox;
     const fm = {
       summary: [w.fromMail, b.address, label, span].filter(Boolean).join(" · "),
@@ -901,7 +914,7 @@ export async function writePerson(ctx: PersonContext, p: Person): Promise<Person
   if (Object.keys(relation).length) fm.relation = relation;
   const reviewed = ref ? isOpened(ref.fm) : false;
   fm.meta = byMaurice
-    ? { ...(reviewed ? {} : { opened: false }), author: "maurice", origin: "mail", person_key: p.key, model: r.model, written_at: stamp }
+    ? { ...(reviewed ? {} : { opened: false }), author: "maurice", origin: "mail", person_key: p.key, model: r.model, written_at: stamp, ...(lang !== locale ? { language: lang } : {}) }
     : { ...(ref?.fm.meta ?? {}), person_key: p.key };
   atomicWrite(file, `---\n${dumpFrontmatter(fm)}\n---\n\n${body.replace(/^\n+/, "")}`);
 

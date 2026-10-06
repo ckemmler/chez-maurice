@@ -348,6 +348,18 @@ async def list_tools() -> list[Tool]:
             },
         ),
         Tool(
+            name="reading_depth",
+            description=(
+                "Server-side: take the approved reading from the overview (the people who count, the last "
+                "months) to everything — `depth`: \"all\". Never back; what the overview read stays read."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {"depth": {"type": "string", "enum": ["overview", "all"]}},
+                "required": ["depth"],
+            },
+        ),
+        Tool(
             name="reading_progress",
             description="The reading job, where the passes are over the window (to judge, kept, skipped, to read, read), and the measured capacity.",
             inputSchema={"type": "object", "properties": {"addresses": {"type": "array", "items": {"type": "string"}, "description": "Only these mailboxes (the ones the member approved for reading); omit for all."},}},
@@ -491,7 +503,7 @@ def dispatch(service: EmailService, name: str, args: dict[str, Any], *, member_i
     if name == "estimate_reading":
         return service.estimate(accounts, years=args.get("years") or 3)
     if name == "approve_reading":
-        return service.approve_reading(accounts, years=args.get("years"))
+        return service.approve_reading(accounts, years=args.get("years"), depth=args.get("depth"))
     if name == "decline_reading":
         return service.decline_reading(accounts)
     if name == "reading_next":
@@ -502,6 +514,8 @@ def dispatch(service: EmailService, name: str, args: dict[str, Any], *, member_i
         return service.reading_control(
             accounts, str(args["state"]), error=args.get("error"), measured=args.get("measured"), seconds=args.get("seconds")
         )
+    if name == "reading_depth":
+        return service.reading_depth(accounts, str(args["depth"]))
     if name == "reading_window":
         return service.reading_window(accounts, int(args["years"]))
     if name == "reading_progress":

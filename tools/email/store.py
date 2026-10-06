@@ -715,6 +715,37 @@ class MailStore:
                 verdicts,
             )
 
+    def overview_rows(self, kinds: tuple[str, ...]) -> list[dict[str, Any]]:
+        """What the overview's selection reads (6 October 2026): the headers
+        of every message a reading could take, with what the triage said of
+        it — ``sent`` for the member's own mail, ``replied`` for a sender the
+        member has written to. No body, no subject."""
+        with self._connect() as conn:
+            rows = conn.execute(
+                f"""SELECT m.id, m.sender_address, m.recipients, m.cc, m.date, t.kind, t.reason
+                    FROM messages m JOIN triage t ON t.message = m.id
+                    WHERE t.kind IN ({','.join('?' * len(kinds))}) AND m.gone_at IS NULL
+                      AND m.date >= '1980' AND m.date < '3000'""",
+                kinds,
+            ).fetchall()
+        return [dict(r) for r in rows]
+
+    def keep_selected(self, rows: list[tuple[str, str, str]]) -> int:
+        """``(message, reason, at)`` per message a selection chose: kept for
+        the full pass, as a light verdict would — and only where no verdict
+        stands yet, a model's or an earlier selection's. Returns how many
+        were new."""
+        n = 0
+        with self._transaction() as conn:
+            for message, reason, at in rows:
+                n += conn.execute(
+                    """INSERT INTO readings (message, light, light_reason, light_at) VALUES (?, 'keep', ?, ?)
+                       ON CONFLICT (message) DO UPDATE SET light = 'keep', light_reason = excluded.light_reason,
+                         light_at = excluded.light_at WHERE readings.light IS NULL""",
+                    (message, reason, at),
+                ).rowcount
+        return n
+
     def write_readings(self, rows: list[tuple[str, str, int | None, str]]) -> None:
         """``(message, reading_sealed, tokens, at)`` per message read whole."""
         with self._transaction() as conn:

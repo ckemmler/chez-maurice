@@ -362,11 +362,29 @@ class EmailService:
         return calibrate_mod.estimate(store, years=max(1, int(years or 3)))
 
     # ── lot 3: the member's word on the reading ──────────────────────────
-    def approve_reading(self, accounts: list[Account], years: int | None = None) -> dict[str, Any]:
+    def approve_reading(self, accounts: list[Account], years: int | None = None, depth: str | None = None) -> dict[str, Any]:
         """The yes: a job of kind ``reading`` left ``approved`` for the night
-        (lot 4) to run. Nothing is read or opened here."""
+        (lot 4) to run. Nothing is read or opened here. A first yes is for
+        the overview: what it will read is chosen at once, from the headers,
+        so the mailbox's card can say how much that is."""
         member_id, store = self._member_store(accounts)
-        return reading_mod.approve(store, member_id, years)
+        out = reading_mod.approve(store, member_id, years, depth)
+        self._select(store, out.get("job"))
+        return out
+
+    def _select(self, store: MailStore, job: dict[str, Any] | None) -> dict[str, Any] | None:
+        """The overview's choice, made or brought up to date; nothing for a
+        reading of everything, or one not approved."""
+        if not job or job.get("state") == "declined" or reading_mod.depth_of(job) != "overview":
+            return None
+        if not store.triage_counts()["counts"]:
+            return None
+        return reading_mod.select_overview(store, job)
+
+    def reading_depth(self, accounts: list[Account], depth: str) -> dict[str, Any]:
+        """From the overview to everything, for a member who said yes."""
+        _member_id, store = self._member_store(accounts)
+        return reading_mod.deepen(store, self._reading_job(store), depth)
 
     def decline_reading(self, accounts: list[Account]) -> dict[str, Any]:
         """The no, kept so that it is not asked again."""
@@ -483,7 +501,13 @@ class EmailService:
     def reading_progress(self, accounts: list[Account], addresses: list[str] | None = None) -> dict[str, Any]:
         _member_id, store = self._member_store(accounts)
         job = reading_mod.status(store)
-        return {"job": job, "progress": reading_mod.progress(store, job, addresses=addresses), "capacity": store.capacity()}
+        # Where a run starts from: the overview's choice is brought up to
+        # date first — new mail of the last months, a person newly answered.
+        selection = self._select(store, job)
+        out = {"job": job, "progress": reading_mod.progress(store, job, addresses=addresses), "capacity": store.capacity()}
+        if selection is not None:
+            out["selection"] = selection
+        return out
 
     # ── tools ────────────────────────────────────────────────────────────
     def list_accounts(self, accounts: list[Account]) -> dict[str, Any]:

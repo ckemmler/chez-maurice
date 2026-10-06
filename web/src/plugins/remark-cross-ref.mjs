@@ -61,21 +61,32 @@ const COLLECTION_PATH = {
 
 const GARDEN_COLLECTIONS = Object.keys(COLLECTION_PATH.en);
 
-/** Same root/member resolution as src/lib/garden.ts (kept in sync). */
-function gardenDir() {
+const IN_GARDEN = new RegExp(`^(.*)/(?:${GARDEN_COLLECTIONS.join("|")})/(?:en|fr)/[^/]+\\.mdx?$`);
+
+/** The garden a file belongs to, read off its own path
+ *  (`<garden>/<collection>/<locale>/<file>.md`). One engine serves every
+ *  member of a household (docs/garden-server-mode.md), so the GARDEN
+ *  environment variable names nobody in particular there: going by it, every
+ *  link written in a member's garden was looked up in the default one, found
+ *  nothing, and fell back to /notes/ — a fiche in people/ then led nowhere
+ *  (6 October 2026). The variable is the fallback for a file outside any
+ *  garden, as before. */
+function gardenDir(filePath) {
+  const m = String(filePath ?? "").split(path.sep).join("/").match(IN_GARDEN);
+  if (m) return m[1];
   const root = process.env.MAURICE_GARDENS_DIR || path.join(process.cwd(), "gardens");
   return path.join(root, process.env.GARDEN || "demo");
 }
 
-let _index = null; // { at, map: Map<basename, [{collection, locale, slug, isFiche}]> }
+const _indexes = new Map(); // garden dir → { at, map: Map<basename, [{collection, locale, slug, isFiche}]> }
 const INDEX_TTL_MS = 5000;
 
-/** basename → entries. Rebuilt at most every few seconds; an MCP or Carnet
- *  write shows up on the next render without restarting the engine. */
-function wikiIndex() {
-  if (_index && Date.now() - _index.at < INDEX_TTL_MS) return _index.map;
+/** basename → entries, per garden. Rebuilt at most every few seconds; an MCP
+ *  or Carnet write shows up on the next render without restarting the engine. */
+function wikiIndex(dir) {
+  const cached = _indexes.get(dir);
+  if (cached && Date.now() - cached.at < INDEX_TTL_MS) return cached.map;
   const map = new Map();
-  const dir = gardenDir();
   for (const collection of GARDEN_COLLECTIONS) {
     for (const locale of ["en", "fr"]) {
       let files;
@@ -95,13 +106,13 @@ function wikiIndex() {
       }
     }
   }
-  _index = { at: Date.now(), map };
+  _indexes.set(dir, { at: Date.now(), map });
   return map;
 }
 
 /** URL for a [[target]] seen from a file in `locale`, or null if unknown. */
-function resolveWikiTarget(target, locale) {
-  const hits = wikiIndex().get(target);
+export function resolveWikiTarget(target, locale, filePath) {
+  const hits = wikiIndex(gardenDir(filePath)).get(target);
   if (!hits?.length) return null;
   // Prefer the reader's locale; fall back to whichever locale has the file.
   const hit = hits.find((h) => h.locale === locale) ?? hits[0];
@@ -173,7 +184,7 @@ export default function remarkCrossRef() {
 
         // The wiki-link itself — resolved by basename across the whole garden
         // (Obsidian semantics); an unknown target keeps the old /notes/ guess.
-        const resolved = resolveWikiTarget(target, locale);
+        const resolved = resolveWikiTarget(target, locale, filePath);
         children.push({
           type: "link",
           url: resolved ? resolved.url : `${prefix}/notes/${target}`,

@@ -149,7 +149,12 @@ test("the light pass sorts in batches of twenty on previews, the full pass reads
   const full = writes.filter((w) => w.invocation === "mail_read_full");
   expect(full).toHaveLength(23);
   expect(full[0]!.prompt).toContain("corps 1");
-  expect(full[0]!.system).toContain("Write in French");
+  // In the message's own language; the member's is the fallback.
+  expect(full[0]!.system).toContain("Write in the language the message itself is written in");
+  expect(full[0]!.system).toContain("write in French");
+  expect(full[0]!.system).toContain('"language"');
+  expect(reading.parseReading(JSON.stringify({ summary: "x", language: "FR" }))).toMatchObject({ language: "fr" });
+  expect(reading.parseReading(JSON.stringify({ summary: "x", language: "French" }))).not.toHaveProperty("language");
   // What the tool kept: the verdicts for every id, the readings shaped and stamped.
   expect(rows.filter((x) => x.light === "keep").map((x) => x.id)).toContain("m1");
   const read = rows.find((x) => x.id === "m1")!.reading;
