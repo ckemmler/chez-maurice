@@ -549,17 +549,32 @@ class Capped extends Error {}
  *  race on names. */
 export const DOC_CONCURRENCY = 4;
 
-/** Run `fn` over `items`, `n` at a time. The first error stops the
- *  workers taking more, and is thrown once they have all settled. */
-async function inPool<T>(items: T[], n: number, fn: (item: T) => Promise<void>): Promise<void> {
+/** How many notes in a row may fail on the provider before the pass gives
+ *  up: one 504 is weather, five running is a provider that is down. */
+export const DOC_FAILURES_IN_A_ROW = 5;
+
+/** Run `fn` over `items`, `n` at a time. An error `passing` accepts — a
+ *  provider's 504, a socket closed mid-stream — costs its item and no more:
+ *  the note is not written, nothing is recorded for it, and the next pass
+ *  takes it again (6 October 2026: one such error ended a pass of several
+ *  hundred notes at its fourteenth). `DOC_FAILURES_IN_A_ROW` of them running,
+ *  or any other error (the cap), stops the workers taking more, and is
+ *  thrown once they have all settled. */
+async function inPool<T>(items: T[], n: number, fn: (item: T) => Promise<void>, passing: (err: unknown) => boolean = () => false): Promise<void> {
   let next = 0;
   let failure: unknown = null;
+  let inARow = 0;
   const worker = async () => {
     while (failure === null && next < items.length) {
       const item = items[next++]!;
       try {
         await fn(item);
+        inARow = 0;
       } catch (err) {
+        if (passing(err) && ++inARow < DOC_FAILURES_IN_A_ROW) {
+          console.warn(`[mail] documents: a note not written this time: ${(err as Error)?.message ?? err}`);
+          continue;
+        }
         failure ??= err;
       }
     }
@@ -723,7 +738,7 @@ async function documentsPass(memberId: string, d: MailDocumentsDeps): Promise<Do
         noteBoxes(p.messages, artefact?.sources ?? []);
         run.written.push({ kind: "person", key: p.key, slug: o.basename, title: o.title, web_path: o.webPath, sources: o.cited });
       }
-    });
+    }, (err) => !(err instanceof Capped));
     const pt = progress.get(memberId);
     if (pt) pt.stage = "threads";
     await inPool(threads, DOC_CONCURRENCY, async (g) => {
@@ -782,7 +797,7 @@ async function documentsPass(memberId: string, d: MailDocumentsDeps): Promise<Do
       recorded.push({ kind, key: g.key, slug, locale, title: rendered.title, sources: g.messages.map((m) => m.id) });
       noteBoxes(g.messages, existing?.sources ?? []);
       run.written.push({ kind, key: g.key, slug, title: rendered.title, web_path: noteWebPath(garden.username, locale, slug), sources: rendered.ids.length });
-    });
+    }, (err) => !(err instanceof Capped));
   } catch (err) {
     const message = (err as Error).message;
     if (!(err instanceof Capped)) {

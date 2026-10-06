@@ -729,3 +729,34 @@ test("a note is written in the language of its messages, and filed in the member
   expect(writes.find((w) => w.system.includes(PERSON))!.system).toContain("Write in English");
   expect(fs.readFileSync(path.join(peopleDir, "jean-derely-fiche.md"), "utf8")).toContain("## The relationship");
 });
+
+test("a provider's passing error costs one note, not the pass; the note is written by the next one", async () => {
+  seed();
+  let failed = 0;
+  answer = (req) => {
+    if (req.system.includes(PERSON) && req.prompt.includes("Jean") && failed++ === 0) throw new Error("scaleway error: Provider error 504: ");
+    return defaultAnswer(req);
+  };
+  try {
+    const first = await docs.writeMailDocuments(ANNA);
+    // The digest and the index are there; Jean's fiche is not, and nothing says it was written.
+    expect(first.outcome).toBe("written");
+    expect(first.error).toBeNull();
+    expect(first.written.map((n) => n.kind).sort()).toEqual(["hub", "thread"]);
+    expect(artefacts.some((a) => a.kind === "person" && a.slug)).toBe(false);
+    const second = await docs.writeMailDocuments(ANNA);
+    expect(second.written.filter((n) => n.kind === "person").map((n) => n.slug)).toEqual(["jean-derely-fiche"]);
+    // A provider that is down — every note failing — ends the pass on its error.
+    seed();
+    answer = () => { throw new Error("scaleway error: Provider error 504: "); };
+    material = Array.from({ length: 12 }, (_, i) => [
+      msg(`a${i}`, `P${i} <p${i}@x.org>`, ["anna@gmail.com"], "2026-09-01T10:00:00+02:00", `S${i}`, `<s${i}@x>`, "un"),
+      msg(`b${i}`, `P${i} <p${i}@x.org>`, ["anna@gmail.com"], "2026-09-02T10:00:00+02:00", `S${i}`, `<s${i}@x>`, "deux"),
+    ]).flat();
+    const down = await docs.writeMailDocuments(ANNA);
+    expect(down.outcome).toBe("failed");
+    expect(down.error).toContain("504");
+  } finally {
+    answer = defaultAnswer;
+  }
+});
