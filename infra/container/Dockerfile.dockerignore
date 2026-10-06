@@ -54,15 +54,12 @@ web/src/pages/books
 web/src/pages/briefings
 web/src/pages/compte
 web/src/pages/feeds
-web/src/pages/fiches
 web/src/pages/library
 web/src/pages/research
 web/src/pages/signals
 web/src/pages/tasks
-web/src/pages/fr/fiches
 web/src/pages/fr/reves
 web/src/components/CommandPalette.astro
-web/src/components/FichesList.astro
 web/src/lib/compte-api.ts
 web/src/lib/dossier-api.ts
 web/src/lib/tasks-api.ts

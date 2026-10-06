@@ -1,0 +1,25 @@
+---
+import FicheDetail from "../../../components/FicheDetail.astro";
+import { getCollection } from "@app/lib/content-fs";
+
+export const prerender = process.env.WEB_SSR !== "1";
+
+export async function getStaticPaths() {
+  // A fiche is a working note on a resource: it belongs to the owner's garden
+  // engine and never to a static publish. content-fs enforces that (it returns
+  // no fiche unless WEB_SSR), so this simply comes back empty for a publish.
+  const fiches = await getCollection("fiches", ({ data }) => data.locale === "fr");
+  return fiches.map((fiche) => ({
+    params: { id: fiche.id.replace(/\/fr\//, "/") },
+    props: { fiche },
+  }));
+}
+
+let __props = Astro.props;
+if (!__props.fiche && Astro.locals.owner) {
+  __props = (await getStaticPaths()).find((e) => e.params.id === Astro.params.id)?.props ?? {};
+}
+const { fiche } = __props;
+if (!fiche) return new Response("Not found", { status: 404 });
+---
+<FicheDetail fiche={fiche} locale="fr" />
