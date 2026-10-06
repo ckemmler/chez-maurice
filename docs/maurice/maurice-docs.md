@@ -1,6 +1,6 @@
 ---
 title: Maurice — system documentation
-date: '2026-09-19'
+date: '2026-10-06'
 flags:
 - moc
 locale: en
@@ -37,6 +37,8 @@ The system is five cooperating parts: the native **Maurice app** (conversation),
 [[maurice-domaines|Un seul Maurice, des domaines qui émergent]] — the design decided on 19 September 2026 (in French; being built session by session — see [[maurice-domains]] for what exists): one Maurice, domains that emerge from the conversations, each with a visible *cahier*, proposed in a conversation Maurice opens, the garden seeded on consent; the plan, the data, the costs, the test cases.
 
 [[maurice-commercialisation|Commercialising Maurice — the inventory]] — everything between "it works at home" and "a stranger pays for it": demos, conversion, payment, metering and bundles, import/export, the App Store, the legal frame, documentation, videos, and what the whole thing forces on the operations.
+
+[[maurice-mail-overview|Mail: what a whole mailbox costs, and the overview to build first]] — the measurements of the first whole-mailbox reading and the four-depths specification they led to; not built, shelved. *Internal: kept in this garden.*
 
 ## Architecture — the *how*
 
