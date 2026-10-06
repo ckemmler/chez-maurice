@@ -334,10 +334,19 @@ export async function runMailReading(memberId: string, opts: ReadingRunOptions =
       );
       const readings: any[] = [];
       let stopped: unknown = null;
+      let failedCall: unknown = null;
       answers.forEach((a, i) => {
         const m = messages[i];
         if (a.status === "rejected") {
-          stopped ??= a.reason;
+          // The cap stops the run. A provider's error on one message — a
+          // socket closed mid-stream, a 503 — does not: the message stays
+          // to read and the run goes on; five at a time over hours, one
+          // such error was enough to end a whole reading (6 October 2026).
+          if (a.reason instanceof Capped) stopped ??= a.reason;
+          else {
+            failedCall ??= a.reason;
+            console.warn(`[mail] reading for ${memberId}: ${m.id} not read this time: ${(a.reason as Error)?.message ?? a.reason}`);
+          }
           return;
         }
         const r = a.value;
@@ -360,7 +369,10 @@ export async function runMailReading(memberId: string, opts: ReadingRunOptions =
       }
       if (stopped) throw stopped;
       if (readings.length) continue;
+      // Nothing came of the batch, twice running: if the provider is why,
+      // the run ends on its error and the job says so.
       if (++stalled >= 2) {
+        if (failedCall) throw failedCall;
         // Every message of the batch unusable, twice: do not ask for the
         // same five forever; they stay to read for another night.
         break;

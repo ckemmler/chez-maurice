@@ -187,34 +187,40 @@ test("the light pass asks for no reasoning, the full reading keeps it; only a mo
   expect(reasoningBody("mistral", "mistral-small-latest", "none")).toBeUndefined();
 });
 
-test("the full pass reads a batch's messages together, and keeps what was read when one of them stops the run", async () => {
+test("the full pass reads a batch's messages together; a provider's error leaves its message for later, the cap stops the run", async () => {
   seed(20);
   lightAnswer = (ids) => JSON.stringify({ verdicts: ids.map((id) => ({ id, keep: true, reason: "" })) });
   let inFlight = 0;
   let most = 0;
   let fullCalls = 0;
+  let failAt = new Set([8]);
   const slow = async (req: any) => {
     if (req.invocation !== "mail_read_full") return write(req);
     const n = ++fullCalls;
     most = Math.max(most, ++inFlight);
     await new Promise((r) => setTimeout(r, 15));
     inFlight--;
-    // The eighth reading — the third of the second batch — fails at the provider.
-    if (n === 8) throw new Error("scaleway error: 503");
+    if (failAt.has(n)) throw new Error("scaleway error: 503");
     return write(req);
   };
   try {
     reading.setMailReadingDeps({ call: tool, write: slow, language: () => "French" });
+    // The eighth call fails once: its message is asked again in a later batch, and the run ends done.
     const r = await reading.runMailReading(ANNA);
     expect(most).toBe(reading.FULL_BATCH);
-    expect(r).toMatchObject({ outcome: "failed", judged: 20, read: 9 });
-    expect(r.error).toContain("503");
-    // The first batch whole, the second without the one that failed: nothing read is lost.
-    expect(rows.filter((x) => !!x.reading)).toHaveLength(9);
+    expect(r).toMatchObject({ outcome: "done", judged: 20, read: 20, error: null });
+    expect(fullCalls).toBe(21);
+    expect(job!.state).toBe("done");
+
+    // A provider that answers nothing at all, twice running: the run ends on its error, what was read is kept.
+    seed(10);
+    fullCalls = 0;
+    failAt = new Set(Array.from({ length: 100 }, (_, i) => i + 6));
+    const down = await reading.runMailReading(ANNA);
+    expect(down).toMatchObject({ outcome: "failed", read: 5 });
+    expect(down.error).toContain("503");
+    expect(rows.filter((x) => !!x.reading)).toHaveLength(5);
     expect(job!.state).toBe("failed");
-    // The next run reads the eleven left.
-    reading.setMailReadingDeps({ call: tool, write, language: () => "French" });
-    expect(await reading.runMailReading(ANNA)).toMatchObject({ outcome: "done", read: 11 });
   } finally {
     reading.setMailReadingDeps({ call: tool, write, language: () => "French" });
     lightAnswer = (ids) => JSON.stringify({ verdicts: ids.map((id, i) => ({ id, keep: i % 2 === 0, reason: i % 2 === 0 ? "a real exchange" : "a receipt" })) });

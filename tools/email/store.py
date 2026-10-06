@@ -725,7 +725,7 @@ class MailStore:
                 f"""SELECT m.id, m.sender_address, m.recipients, m.cc, m.date, t.kind, t.reason
                     FROM messages m JOIN triage t ON t.message = m.id
                     WHERE t.kind IN ({','.join('?' * len(kinds))}) AND m.gone_at IS NULL
-                      AND m.date >= '1980' AND m.date < '3000'""",
+                      AND m.date GLOB '[12][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]*' AND m.date >= '1980' AND m.date < '3000'""",
                 kinds,
             ).fetchall()
         return [dict(r) for r in rows]
