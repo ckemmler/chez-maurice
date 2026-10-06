@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { setCookie } from "hono/cookie";
 import { validateApiTokenRaw } from "../middleware/auth";
 import { getUser } from "../services/users";
+import { userLocale } from "../services/i18n";
 
 const webLogin = new Hono();
 
@@ -44,7 +45,11 @@ webLogin.get("/", async (c) => {
   if (to.startsWith("/") && !to.startsWith("//") && !to.includes("\\")) {
     return c.redirect(`${to}${to.includes("?") ? "" : q}`);
   }
-  return c.redirect(`/g/${user.username}/${q}`);
+  // In the language the member reads in: the garden is one site per locale,
+  // English at its root, and a member whose notes are all French landed on an
+  // empty garden, their notes one language link away (6 October 2026).
+  const home = userLocale(user.id) === "fr" ? "fr/" : "";
+  return c.redirect(`/g/${user.username}/${home}${q}`);
 });
 
 function errorPage(message: string): string {
