@@ -580,7 +580,11 @@ export const HELD_FOR_PEOPLE =
 
 export const LAST_ROUND_NOTICE =
   "That was your last tool round for this turn: no further tool call will run. " +
-  "Answer now from what the results above give you, and say briefly what is still missing, if anything.";
+  "Answer now from what the results above give you, and say briefly what is still missing, if anything. " +
+  // A model answering without reasoning replied to this notice itself, in
+  // English, at the top of the answer ("I have enough context… Here's my
+  // response:") — 6 October 2026.
+  "Write only your answer to the person, in the language they wrote in: nothing about this notice, your tools or what you are about to do.";
 
 /** What the answer-only round adds to an OpenAI-style request. Z.ai documents
  *  `tool_choice: "auto"` alone, and a strict server refuses what it does not
