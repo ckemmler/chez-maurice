@@ -1,6 +1,8 @@
 import fs from "node:fs";
 import path from "node:path";
 import { notesDir } from "./garden";
+// @ts-ignore — a plain .mjs remark plugin, with no types of its own
+import { resolveWikiTarget } from "../plugins/remark-cross-ref.mjs";
 
 export interface SubtreeNode {
   slug: string;
@@ -75,6 +77,20 @@ function buildNode(
 
   const filePath = resolveFile(contentBase, locale, slug);
   if (!filePath) {
+    // Not a note: a fiche or a card of another collection, as the body's own
+    // links resolve it (the mail index lists the people's fiches, which live
+    // in people/). Its address is that collection's, its title its own.
+    const elsewhere = resolveWikiTarget(slug, locale, path.join(contentBase, locale, `${slug}.md`));
+    if (elsewhere && elsewhere.hit.collection !== "notes") {
+      let title = slug;
+      try {
+        const file = path.join(path.dirname(contentBase), elsewhere.hit.collection, elsewhere.hit.locale, `${slug}.md`);
+        title = parseFrontmatter(fs.readFileSync(file, "utf-8"))?.fm.title || slug;
+      } catch {
+        // The index saw it a moment ago; the name it was linked by will do.
+      }
+      return { slug, title, isMoc: false, url: elsewhere.url, children: [] };
+    }
     return { slug, title: slug, isMoc: false, url: `/${locale}/notes/${slug}`, missing: true, children: [] };
   }
 
