@@ -1053,6 +1053,15 @@ async function* runOpenAIAgentic(
     cacheKey: PROMPT_CACHE_KEY_PROVIDERS.has(provider) ? conversationId : undefined,
     extraBody: thinkingBody(provider, thinking, model),
   };
+  // A model told to answer without reasoning thinks aloud instead: before a
+  // tool call it writes a line of working notes ("Let me look at…"), often in
+  // English, as content — and content is what the member reads. So on such a
+  // turn a round's text is held until the round says what it was: thrown away
+  // if tool calls follow it, sent in one piece if it is the answer. The member
+  // sees the activity line meanwhile, and loses the answer writing itself out
+  // word by word; a turn that reasons is streamed as before.
+  const holdText = !!turnOpts.extraBody && provider === "scaleway" && thinking === false;
+  let lastHeldSign = -Infinity;
   for (let round = 0; round <= MAX_TOOL_ROUNDS; round++) {
     if (signal?.aborted) { yield* reportUsage(); return; }
     // Past the cap: one round to answer, none to look anything else up.
@@ -1079,7 +1088,12 @@ async function* runOpenAIAgentic(
     for await (const ev of openaiTurn(baseUrl, apiKey, model, convo, tools, temperature, roundOpts)) {
       if (ev.type === "text") {
         content += ev.text;
-        yield { type: "text_delta", text: ev.text };
+        if (!holdText) yield { type: "text_delta", text: ev.text };
+        else if (performance.now() - lastHeldSign > 1000) {
+          // Held text is still a sign of life: once a second, like reasoning.
+          lastHeldSign = performance.now();
+          yield { type: "thinking" };
+        }
       } else if (ev.type === "thinking") {
         yield { type: "thinking" };
       } else if (ev.type === "turn_end") {
@@ -1114,6 +1128,7 @@ async function* runOpenAIAgentic(
     // asked for another tool, which does not run.
     if (answerOnly && (failed || toolCalls.length || !content)) break;
     if (!toolCalls.length) {
+      if (holdText && content) yield { type: "text_delta", text: content };
       yield* reportUsage();
       yield { type: "done", message_id: crypto.randomUUID() };
       return;
