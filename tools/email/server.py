@@ -167,8 +167,10 @@ async def list_tools() -> list[Tool]:
         Tool(
             name="get_attachment",
             description=(
-                "The text of one attachment, by its index from get_message: text, HTML and PDF "
-                "(its text layer — a scan has none). Other types return their metadata only. "
+                "The text of one attachment, by its index from get_message: text, HTML, PDF "
+                "(its text layer — a scan has none) and Word or OpenDocument text (.docx, .doc, .odt). "
+                "Other types return their metadata only. A long document comes in turns: when "
+                "`truncated` is true, call again with `offset` set to `next_offset`. "
                 + UNTRUSTED_NOTE
             ),
             inputSchema={
@@ -179,6 +181,7 @@ async def list_tools() -> list[Tool]:
                     "folder": _FOLDER,
                     "account": _ACCOUNT,
                     "max_bytes": {"type": "integer", "description": "Text budget (default 16000, at most 64000)."},
+                    "offset": {"type": "integer", "description": "Where to start in the text (default 0): the `next_offset` of the previous call."},
                 },
                 "required": ["uid", "index"],
             },
@@ -479,6 +482,7 @@ def dispatch(service: EmailService, name: str, args: dict[str, Any], *, member_i
             account=args.get("account"),
             folder=args.get("folder"),
             max_bytes=args.get("max_bytes") or 16_000,
+            offset=args.get("offset") or 0,
         )
     if name == "scan_mailbox":
         return service.scan_start(accounts, account=args.get("account"))

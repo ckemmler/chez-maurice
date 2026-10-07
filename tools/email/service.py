@@ -28,12 +28,12 @@ from .store import MailStore, store_path
 from .message import (
     attachment_parts,
     attachment_text,
+    window,
     body_text,
     describe_attachments,
     envelope_summary,
     parse_message,
     sender_domain,
-    truncate,
     wrap_untrusted,
 )
 
@@ -800,7 +800,11 @@ class EmailService:
         account: str | None = None,
         folder: str | None = None,
         max_bytes: int = 16_000,
+        offset: int = 0,
     ) -> dict[str, Any]:
+        """One attachment's text. A document longer than the budget is read in
+        turns: ``truncated`` says there is more, ``next_offset`` where it
+        starts, and the same call with ``offset`` set gives it."""
         acc = self._one(accounts, account)
         max_bytes = max(500, min(int(max_bytes or 16_000), MAX_ATTACHMENT_BYTES))
         session = self._session(acc)
@@ -819,8 +823,9 @@ class EmailService:
         part = parts[index]
         filename = part.get_filename() or f"attachment-{index}"
         text, how = attachment_text(part)
-        text, truncated = truncate(text, max_bytes)
-        return {
+        total = len(text.encode("utf-8"))
+        text, end, truncated = window(text, int(offset or 0), max_bytes)
+        out = {
             "account": acc.name,
             "folder": name,
             "uid": uid,
@@ -828,9 +833,13 @@ class EmailService:
             "filename": filename,
             "content_type": part.get_content_type(),
             "extracted_as": how,
+            "total_bytes": total,
             "truncated": truncated,
             "text": wrap_untrusted(text, account=acc.name, uid=uid, attachment=filename),
         }
+        if truncated:
+            out["next_offset"] = end
+        return out
 
     def stats(
         self,

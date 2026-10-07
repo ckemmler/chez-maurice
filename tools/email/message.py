@@ -8,7 +8,8 @@ at the point of use —
   fetched (no images, no linked CSS, no link following — we only ever read the
   bytes IMAP already gave us);
 * an attachment is read the same way: its text, if it has any, comes back
-  inside the same markers — a PDF invoice is as easy to write as a body;
+  inside the same markers — a PDF invoice is as easy to write as a body, and
+  so is a Word document (``documents.py``);
 * the body is returned inside explicit markers and labelled as untrusted data;
 * a body that tries to forge those markers has them defanged first, so it cannot
   close the quotation and speak as the tool.
@@ -23,6 +24,8 @@ from email.message import EmailMessage
 from email.parser import BytesParser
 from email.utils import formataddr, getaddresses, parsedate_to_datetime
 from typing import Any
+
+from . import documents
 
 BEGIN_MARKER = "----- BEGIN UNTRUSTED MESSAGE BODY -----"
 END_MARKER = "----- END UNTRUSTED MESSAGE BODY -----"
@@ -178,6 +181,20 @@ def sender_domain(summary: dict[str, Any]) -> str | None:
     return None
 
 
+def window(text: str, offset: int, max_bytes: int) -> tuple[str, int, bool]:
+    """``max_bytes`` of a text from ``offset`` (UTF-8 bytes, as ``truncate``
+    counts): the slice, where the next one starts, and whether there is one.
+    An offset that falls inside a character moves to the next one."""
+    encoded = text.encode("utf-8")
+    offset = max(0, min(int(offset), len(encoded)))
+    while offset < len(encoded) and (encoded[offset] & 0xC0) == 0x80:
+        offset += 1
+    end = min(len(encoded), offset + max_bytes)
+    while end < len(encoded) and (encoded[end] & 0xC0) == 0x80:
+        end -= 1
+    return encoded[offset:end].decode("utf-8", errors="ignore"), end, end < len(encoded)
+
+
 def truncate(text: str, max_bytes: int) -> tuple[str, bool]:
     encoded = text.encode("utf-8")
     if len(encoded) <= max_bytes:
@@ -226,23 +243,41 @@ def describe_attachments(msg: EmailMessage) -> list[dict[str, Any]]:
                 "filename": part.get_filename() or f"attachment-{index}",
                 "content_type": part.get_content_type(),
                 "size": len(payload),
-                "readable": extractable(part.get_content_type()),
+                "readable": extractable(attachment_kind(part)),
             }
         )
     return out
 
 
+def attachment_kind(part: Any) -> str:
+    """What an attachment is, for reading it: the type its sender declared, or
+    — when the client said only "a file" (``application/octet-stream``) or
+    something this tool does not read — what its filename says."""
+    kind = part.get_content_type()
+    if extractable(kind):
+        return kind
+    extension = (part.get_filename() or "").rsplit(".", 1)[-1].lower()
+    if extension == "pdf":
+        return "application/pdf"
+    return documents.BY_EXTENSION.get(extension, kind)
+
+
 def extractable(content_type: str) -> bool:
-    return content_type.startswith("text/") or content_type in {"application/pdf", "message/rfc822"}
+    return (
+        content_type.startswith("text/")
+        or content_type in {"application/pdf", "message/rfc822"}
+        or content_type in {documents.DOCX, documents.ODT, documents.DOC}
+    )
 
 
 def attachment_text(part: Any) -> tuple[str, str]:
     """(text, how) for an attachment — nothing is executed, nothing is fetched.
 
-    Only text, HTML and PDF have text worth giving a model; anything else comes
-    back empty with the reason, never as bytes.
+    Text, HTML, PDF and the office documents of ``documents.py`` have text
+    worth giving a model; anything else comes back empty with the reason, never
+    as bytes.
     """
-    kind = part.get_content_type()
+    kind = attachment_kind(part)
     payload = part.get_payload(decode=True) or b""
     if kind == "text/html":
         return strip_html(payload.decode(part.get_content_charset() or "utf-8", errors="replace")), "text/html (stripped)"
@@ -254,6 +289,8 @@ def attachment_text(part: Any) -> tuple[str, str]:
         return text, f"forwarded message, {how}"
     if kind == "application/pdf":
         return _pdf_text(payload), "application/pdf (text layer)"
+    if kind in {documents.DOCX, documents.ODT, documents.DOC}:
+        return documents.document_text(kind, payload)
     return "", f"{kind}: no text to extract"
 
 

@@ -16,7 +16,7 @@ the private `mail` tool, which is one person's method; this one assumes none.
 | `list_folders` | every folder of one account, with its role; `counts` adds totals and unread |
 | `search` | envelopes only — date, sender, recipients, subject, flags, uid, folder — newest first |
 | `get_message` | headers, the body as text, the list of attachments |
-| `get_attachment` | the text of one attachment: text, HTML, PDF (text layer), forwarded message |
+| `get_attachment` | the text of one attachment: text, HTML, PDF (text layer), Word and OpenDocument text (`.docx`, `.doc`, `.odt`), forwarded message — a long one in turns (`offset`, `next_offset`) |
 | `stats` | counts per main folder and who writes most, from headers alone |
 | `scan_mailbox` | walk one account (or all) into the member's header store, in the background; joins a walk already running |
 | `scan_status` | the current or last scan: state, counts, where it is, what the store holds |
