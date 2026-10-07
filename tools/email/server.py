@@ -170,7 +170,7 @@ async def list_tools() -> list[Tool]:
                 "The text of one attachment, by its index from get_message: text, HTML, PDF, "
                 "Word or OpenDocument text (.docx, .doc, .odt), and a scanned PDF or a photo "
                 "(JPEG, PNG), whose pages are read as pictures under [page n] marks — that takes "
-                "up to a minute the first time. Other types return their metadata only. "
+                "a minute or two the first time for a long scan. Other types return their metadata only. "
                 "A long document comes in turns: when "
                 "`truncated` is true, call again with `offset` set to `next_offset`. "
                 + UNTRUSTED_NOTE
