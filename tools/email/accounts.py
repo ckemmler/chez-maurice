@@ -106,6 +106,9 @@ class EmailConfig:
     path: Path
     accounts: list[Account] = field(default_factory=list)
     max_message_bytes: int = 10_000_000
+    #: One attachment of a message too large to fetch whole is fetched alone,
+    #: up to this size as transferred (Gmail's largest message is ~35 MB).
+    max_part_bytes: int = 40_000_000
     _member_ids: dict[str, str | None] = field(default_factory=dict)
 
     def for_member(self, member_id: str) -> list[Account]:
@@ -248,6 +251,7 @@ def load_config(path: Path | str | None = None) -> EmailConfig:
         path=config_path,
         accounts=accounts,
         max_message_bytes=int(raw.get("max_message_bytes", 10_000_000)),
+        max_part_bytes=int(raw.get("max_part_bytes", 40_000_000)),
     )
 
 

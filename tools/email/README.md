@@ -51,7 +51,9 @@ syntax (`X-GM-RAW`), which also allows `has_attachment` and a free
 - **One account down is one account down.** The others keep answering; the
   failure is named in the result.
 - **Big messages are not downloaded whole.** Above `max_message_bytes` (10 MB)
-  only the headers and the start of the text are read.
+  only the headers and the start of the text are read. Their attachments are
+  listed from the server's BODYSTRUCTURE and fetched one at a time
+  (`structure.py`), each up to `max_part_bytes` (40 MB as transferred).
 
 ## The header store (`specs/mail-import.md`, lot 1)
 

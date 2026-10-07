@@ -17,6 +17,8 @@ Three things this layer guarantees, whatever the caller asks:
 
 from __future__ import annotations
 
+import re
+
 import logging
 import ssl
 import threading
@@ -551,6 +553,34 @@ class Session:
         if not data:
             raise MailboxError(f"no message with uid {uid} in {folder!r} (UIDs are per folder)")
         return data.get(FULL_KEY) or b""
+
+    def structure(self, folder: str, uid: int) -> Any:
+        """The message's BODYSTRUCTURE: what it is made of, part by part,
+        without any of it crossing the wire (``structure.py`` reads it)."""
+        self.examine(folder)
+        try:
+            fetched = self.client().fetch([uid], ["BODYSTRUCTURE"])
+        except Exception as exc:
+            raise MailboxError(f"fetch of uid {uid} failed in {folder!r}: {exc}") from exc
+        data = fetched.get(uid) or fetched.get(int(uid))
+        if not data or data.get(b"BODYSTRUCTURE") is None:
+            raise MailboxError(f"no message with uid {uid} in {folder!r} (UIDs are per folder)")
+        return data[b"BODYSTRUCTURE"]
+
+    def part(self, folder: str, uid: int, section: str) -> bytes:
+        """One part of a message, peeked, as it was transferred (still in its
+        base64 or quoted-printable)."""
+        if not re.fullmatch(r"\d+(\.\d+)*", section):
+            raise MailboxError(f"not a section of a message: {section!r}")
+        self.examine(folder)
+        try:
+            fetched = self.client().fetch([uid], [f"BODY.PEEK[{section}]"])
+        except Exception as exc:
+            raise MailboxError(f"fetch of uid {uid} failed in {folder!r}: {exc}") from exc
+        data = fetched.get(uid) or fetched.get(int(uid))
+        if not data:
+            raise MailboxError(f"no message with uid {uid} in {folder!r} (UIDs are per folder)")
+        return data.get(f"BODY[{section}]".encode()) or b""
 
     def header_and_text_many(self, folder: str, uids: Sequence[int], text_bytes: int) -> dict[int, tuple[bytes, bool]]:
         """Headers plus the first slice of the text, for several messages in

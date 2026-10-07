@@ -253,13 +253,17 @@ def attachment_kind(part: Any) -> str:
     """What an attachment is, for reading it: the type its sender declared, or
     — when the client said only "a file" (``application/octet-stream``) or
     something this tool does not read — what its filename says."""
-    kind = part.get_content_type()
-    if extractable(kind):
-        return kind
-    extension = (part.get_filename() or "").rsplit(".", 1)[-1].lower()
+    return kind_of(part.get_content_type(), part.get_filename())
+
+
+def kind_of(content_type: str, filename: str | None) -> str:
+    """The same, from a type and a name — what a BODYSTRUCTURE gives."""
+    if extractable(content_type):
+        return content_type
+    extension = (filename or "").rsplit(".", 1)[-1].lower()
     if extension == "pdf":
         return "application/pdf"
-    return documents.BY_EXTENSION.get(extension, kind)
+    return documents.BY_EXTENSION.get(extension, content_type)
 
 
 def extractable(content_type: str) -> bool:

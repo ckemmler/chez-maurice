@@ -7,7 +7,9 @@ that passes is also a proof that looking never marks anything read.
 from __future__ import annotations
 
 import re
+from email import policy
 from email.message import EmailMessage
+from email.parser import BytesParser
 from typing import Any
 
 
@@ -196,9 +198,72 @@ class FakeIMAPClient:
                     oid = self.emailids.get((self.selected, int(uid)))
                     if oid is not None:
                         entry[b"EMAILID"] = (oid.encode(),)
+                elif part == "BODYSTRUCTURE":
+                    entry[b"BODYSTRUCTURE"] = bodystructure(raw)
+                elif re.fullmatch(r"BODY\.PEEK\[[\d.]+\]", str(part)):
+                    section = str(part)[len("BODY.PEEK[") : -1]
+                    entry[f"BODY[{section}]".encode()] = section_body(raw, section)
                 elif str(part).startswith("BODY.PEEK[TEXT]"):
                     # BODY.PEEK[TEXT]<0.n> — hand back n octets, as a server does.
                     count = re.search(r"<0\.(\d+)>", str(part))
                     entry[b"BODY[TEXT]<0>"] = body[: int(count.group(1))] if count else body
             out[int(uid)] = entry
         return out
+
+
+# ── BODYSTRUCTURE, as a server builds it and imapclient parses it ─────────
+#
+# Written from RFC 3501 §7.4.2 and checked against what Gmail answers for a
+# real message: a multipart is (parts, subtype, params, disposition, language);
+# a single part is (type, subtype, params, id, description, encoding, size)
+# followed by its extension fields, a text part having its line count first.
+
+
+def _b(value: str | None) -> bytes | None:
+    return None if value is None else value.encode()
+
+
+def _flat(params: list[tuple[str, str]]) -> tuple | None:
+    return tuple(x for key, value in params for x in (key.upper().encode(), value.encode())) or None
+
+
+def _structure_of(part) -> tuple:
+    if part.is_multipart() and part.get_content_maintype() == "multipart":
+        return ([_structure_of(child) for child in part.iter_parts()], part.get_content_subtype().upper().encode(),
+                (b"BOUNDARY", (part.get_boundary() or "b").encode()), None, None)
+    params = [(k, v) for k, v in (part.get_params() or [])[1:]]
+    disposition = part.get_content_disposition()
+    dparams = [(k, v) for k, v in (part.get_params(header="content-disposition") or [])[1:]]
+    body = _encoded_body(part)
+    base = (
+        part.get_content_maintype().upper().encode(),
+        part.get_content_subtype().upper().encode(),
+        _flat(params),
+        _b(part.get("Content-ID")),
+        None,
+        (part.get("Content-Transfer-Encoding") or "7bit").upper().encode(),
+        len(body),
+    )
+    extension = (None, (disposition.upper().encode(), _flat(dparams)) if disposition else None, None)
+    if part.get_content_maintype() == "text":
+        return base + (body.count(b"\n"),) + extension
+    return base + extension
+
+
+def _encoded_body(part) -> bytes:
+    payload = part.get_payload()
+    return payload.encode("utf-8", errors="surrogateescape") if isinstance(payload, str) else b""
+
+
+def bodystructure(raw: bytes) -> tuple:
+    return _structure_of(BytesParser(policy=policy.default).parsebytes(raw))
+
+
+def section_body(raw: bytes, section: str) -> bytes:
+    part = BytesParser(policy=policy.default).parsebytes(raw)
+    if not part.is_multipart():
+        return _encoded_body(part) if section == "1" else b""
+    for number in section.split("."):
+        children = list(part.iter_parts())
+        part = children[int(number) - 1]
+    return _encoded_body(part)

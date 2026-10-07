@@ -22,6 +22,7 @@ from . import calibrate as calibrate_mod
 from . import sealing
 from . import triage as triage_mod
 from . import reading as reading_mod
+from . import structure as structure_mod
 from .reconcile import KIND as RECONCILE_KIND, Reconciler
 from .scan import KIND as SCAN_KIND, Scanner
 from .store import MailStore, store_path
@@ -31,6 +32,8 @@ from .message import (
     window,
     body_text,
     describe_attachments,
+    extractable,
+    kind_of,
     envelope_summary,
     parse_message,
     sender_domain,
@@ -41,6 +44,12 @@ log = logging.getLogger("maurice.email")
 
 MAX_BODY_BYTES = 32_000
 MAX_ATTACHMENT_BYTES = 64_000
+
+
+def _file_size(part: "structure_mod.PartInfo") -> int:
+    """About what the file weighs, from what the server counts: base64 carries
+    three bytes in four characters, on lines of 76."""
+    return int(part.size * 3 / 4 * 76 / 78) if part.encoding == "base64" else part.size
 MAX_LIMIT = 100
 STATS_CAP = 3000  # messages a sender histogram will look at
 
@@ -770,6 +779,7 @@ class EmailService:
             size = session.size(name, uid)
             whole = size <= self.config.max_message_bytes
             raw = session.raw(name, uid) if whole else session.header_and_text(name, uid, max_bytes * 4)
+            parts = [] if whole else structure_mod.attachments(session.structure(name, uid))
         msg = parse_message(raw)
         body = body_text(msg, max_bytes=max_bytes)
         out = {
@@ -785,9 +795,22 @@ class EmailService:
         if whole:
             out["attachments"] = describe_attachments(msg)
         else:
+            # Too large to fetch whole: the server says what is attached, and
+            # get_attachment fetches the one part asked for.
+            out["attachments"] = [
+                {
+                    "index": index,
+                    "filename": part.filename or f"attachment-{index}",
+                    "content_type": part.content_type,
+                    "size": _file_size(part),
+                    "readable": extractable(kind_of(part.content_type, part.filename)),
+                }
+                for index, part in enumerate(parts)
+            ]
             out["attachments_note"] = (
                 f"message is {size // 1_000_000} MB, over the {self.config.max_message_bytes // 1_000_000} MB "
-                "this tool fetches whole: only the start of the text was read, attachments were not"
+                "this tool fetches whole: only the start of the text was read; "
+                "each attachment can still be read on its own with get_attachment"
             )
         return out
 
@@ -812,15 +835,23 @@ class EmailService:
             name = session.resolve_folder(folder)
             size = session.size(name, uid)
             if size > self.config.max_message_bytes:
-                raise MailboxError(
-                    f"message is {size // 1_000_000} MB, over the {self.config.max_message_bytes // 1_000_000} MB "
-                    "this tool fetches whole"
-                )
-            raw = session.raw(name, uid)
-        parts = attachment_parts(parse_message(raw))
-        if not 0 <= index < len(parts):
-            raise MailboxError(f"message {uid} has {len(parts)} attachment(s); index {index} does not exist")
-        part = parts[index]
+                # The one part, not the message: what makes a message large is
+                # usually a single attachment, and often not the one wanted.
+                infos = structure_mod.attachments(session.structure(name, uid))
+                if not 0 <= index < len(infos):
+                    raise MailboxError(f"message {uid} has {len(infos)} attachment(s); index {index} does not exist")
+                info = infos[index]
+                if info.size > self.config.max_part_bytes:
+                    raise MailboxError(
+                        f"attachment {info.filename or index!r} is {info.size // 1_000_000} MB as sent, over the "
+                        f"{self.config.max_part_bytes // 1_000_000} MB this tool fetches"
+                    )
+                part = structure_mod.as_part(info, session.part(name, uid, info.section))
+            else:
+                parts = attachment_parts(parse_message(session.raw(name, uid)))
+                if not 0 <= index < len(parts):
+                    raise MailboxError(f"message {uid} has {len(parts)} attachment(s); index {index} does not exist")
+                part = parts[index]
         filename = part.get_filename() or f"attachment-{index}"
         text, how = attachment_text(part)
         total = len(text.encode("utf-8"))
