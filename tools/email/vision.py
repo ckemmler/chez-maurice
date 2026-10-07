@@ -46,7 +46,9 @@ INVOCATION = "attachment_vision"
 
 MAX_PAGES = 40
 MAX_SIDE = 2000
-CONCURRENCY = 4
+#: Pages read at once. A page takes 5 to 60 seconds whatever the others do
+#: (measured on Scaleway, 7 October 2026): the wait is the slowest wave's.
+CONCURRENCY = 8
 NO_TEXT = "[no text]"
 
 PROMPT = (
