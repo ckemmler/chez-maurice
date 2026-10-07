@@ -1,6 +1,6 @@
 ---
 title: The chat experience
-date: '2026-10-06'
+date: '2026-10-07'
 flags: []
 locale: en
 description: Streaming render, tool-result data cards, math, markdown, images, dictation,

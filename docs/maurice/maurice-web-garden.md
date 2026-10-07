@@ -1,6 +1,6 @@
 ---
 title: The web garden
-date: '2026-09-27'
+date: '2026-10-07'
 flags: []
 locale: en
 description: 'The Astro renderer: per-request theme engine, content collections, wiki-links,
@@ -49,7 +49,7 @@ Routing is locale-aware: English at `/`, French under `/fr/` (with localized seg
 
 `web/src/plugins/remark-cross-ref.mjs` turns two syntaxes into real links, locale-aware:
 
-- **Wiki-links** `[[slug]]` / `[[slug|Label]]` → `/notes/slug`, tagged `class="wiki-link"`.
+- **Wiki-links** `[[slug]]` / `[[slug|Label]]` → `/notes/slug`, tagged `class="wiki-link"`. A target is resolved the way Obsidian does, by file basename across the garden's collections (`web/src/plugins/remark-cross-ref.mjs`): a card goes to its collection's page, a `-fiche` to `/fiches/<collection>/…`, and only an unknown target keeps the `/notes/` guess. The garden looked in is the one the rendered file belongs to, read off its path — until 6 October 2026 it was the process's `GARDEN`, which names nobody in particular when one engine serves a household, so every link written in a member's garden fell back to `/notes/` and a link to a fiche in `people/` (the mail index's whole *People* section) led nowhere. The subtree diagram of an index (`web/src/lib/subtree-scan.ts`) built `/notes/<target>` for every child on its own; it now resolves a target that is not a note through the same index, and shows the fiche's own title.
 - **Typed cross-refs** `[text](note:slug)`, `(book:…)`, `(movie:…)`, etc. → routed through a `ROUTE_MAP` to the right collection, tagged `cross-ref cross-ref--<type>` for themed styling.
 
 MOC notes render their wiki-link children as cards.

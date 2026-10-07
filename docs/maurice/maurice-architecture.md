@@ -1,6 +1,6 @@
 ---
 title: Maurice — architecture overview
-date: '2026-10-06'
+date: '2026-10-07'
 flags: []
 locale: en
 description: The five cooperating parts of Maurice, how a message flows end-to-end,
