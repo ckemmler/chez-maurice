@@ -68,6 +68,21 @@ test("a picture reaches the provider beside the prompt, and the member is charge
   expect(after.eur).toBeGreaterThan(before.eur);
 });
 
+test("answering directly is asked only of a model that reads a page as well without reasoning", async () => {
+  await post({ invocation: "attachment_vision", prompt: "Transcribe.", images: [page], reasoning: "none" });
+  expect(requests[0].model).toBe("gemma-4-26b-a4b-it");
+  expect(requests[0].reasoning_effort).toBe("none");
+  // The small Qwen has the switch too, but answers "[no text]" to a picture without reasoning.
+  // (It reads images, as seeded; said again here because other tests rewrite the roster.)
+  db.run(`UPDATE models SET vision = 1 WHERE id = 'qwen3.6-35b-a3b'`);
+  await post({ invocation: "attachment_vision", prompt: "Transcribe.", images: [page], reasoning: "none", model: "qwen3.6-35b-a3b" });
+  expect(requests[1].model).toBe("qwen3.6-35b-a3b");
+  expect(requests[1].reasoning_effort).toBeUndefined();
+  // Without a picture it keeps its switch, as the mail's light pass uses it.
+  await post({ invocation: "attachment_vision", prompt: "Sort these.", reasoning: "none", model: "qwen3.6-35b-a3b" });
+  expect(requests[2].reasoning_effort).toBe("none");
+});
+
 test("a turn made for nobody is the household's, as before: nothing under a member's name", async () => {
   const before = spent();
   expect((await post({ invocation: "attachment_vision", prompt: "Transcribe.", images: [page] })).status).toBe(200);

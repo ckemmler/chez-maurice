@@ -136,6 +136,7 @@ def complete_full(
     model: str | None = None,
     images: list[dict] | None = None,
     member_id: str | None = None,
+    reasoning: str | None = None,
 ) -> dict:
     """The same turn, with everything the server said about it: `text`,
     `model`, `provider`, `stop`, and `usage` (tokens and cost in dollars, or
@@ -166,6 +167,8 @@ def complete_full(
         payload["images"] = images
     if member_id:
         payload["member_id"] = member_id
+    if reasoning:  # "none": answer directly, where the model has a switch for it
+        payload["reasoning"] = reasoning
 
     # Loopback to a server whose certificate is its own: verifying it would
     # mean trusting a name we already know is this machine.

@@ -470,7 +470,17 @@ const REASONING_SWITCH: Record<string, Record<string, unknown>> = {
   // this. `chat_template_kwargs.enable_thinking: false` and `"low"` changed
   // nothing; `max_tokens` cut the reasoning short and left no answer.
   "scaleway:qwen3.6-35b-a3b": { reasoning_effort: "none" },
+  // Scaleway, 7 October 2026, three pages of a scan to transcribe: the same
+  // words with and without (`low` changes nothing), 870 to 1 390 completion
+  // tokens and 9 to 17 s by default, 190 to 250 and 2.4 to 4.3 s with this.
+  "scaleway:gemma-4-26b-a4b-it": { reasoning_effort: "none" },
 };
+
+/** The models that read a picture as well without reasoning. Not the small
+ *  Qwen: told not to reason, it answers a page of print with "[no text]"
+ *  (same day, same pages) — so a request for no reasoning that comes with
+ *  pictures is honoured for these only. */
+const READS_PICTURES_DIRECTLY = new Set(["scaleway:gemma-4-26b-a4b-it"]);
 
 /** What a request for no reasoning adds to the body, for the models that
  *  have a switch; undefined otherwise. Exported for tests. */
@@ -650,9 +660,10 @@ export async function ancillaryComplete(req: AncillaryRequest): Promise<Ancillar
         ],
       };
     }
+    const reasoning = images.length && !READS_PICTURES_DIRECTLY.has(`${provider}:${modelId}`) ? undefined : req.reasoning;
     const opts = {
       ...(req.cacheSystem && PROMPT_CACHE_KEY_PROVIDERS.has(provider) ? { cacheKey: `ancillary:${req.invocation}` } : {}),
-      ...(reasoningBody(provider, modelId, req.reasoning) ? { extraBody: reasoningBody(provider, modelId, req.reasoning) } : {}),
+      ...(reasoningBody(provider, modelId, reasoning) ? { extraBody: reasoningBody(provider, modelId, reasoning) } : {}),
     };
     for await (const ev of openaiTurn(baseUrl, key, modelId, messages, [], req.temperature, opts)) {
       if (ev.type === "text") text += ev.text;

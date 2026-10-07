@@ -65,6 +65,9 @@ ancillary.post("/", async (c) => {
     /** An explicit model, for an experiment that compares them; see
      *  AncillaryRequest.model. Checked like a pin: roster and key. */
     model?: string;
+    /** Answer without reasoning first, where the model has a switch for it;
+     *  see AncillaryRequest.reasoning. */
+    reasoning?: "none";
     /** Pictures the prompt is about: `{ media_type, data }`, base64. */
     images?: Array<{ media_type?: string; data?: string }>;
     /** The member this turn is made for. Their caps are weighed before it
@@ -112,6 +115,7 @@ ancillary.post("/", async (c) => {
       effort: body?.effort,
       model: typeof body?.model === "string" && body.model.trim() ? body.model.trim() : undefined,
       images: images.length ? images : undefined,
+      reasoning: body?.reasoning === "none" ? "none" : undefined,
     });
     if (memberId) recordSpend(result.usage, memberId);
     return c.json(result);

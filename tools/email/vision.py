@@ -135,6 +135,9 @@ def transcribe(pages: list[bytes | None], *, member_id: str, complete: Complete 
                 INVOCATION, PROMPT, max_tokens=4000, temperature=0, timeout=180.0,
                 images=[{"media_type": "image/jpeg", "data": base64.b64encode(picture).decode()}],
                 member_id=member_id,
+                # Transcribing is not reasoning: the server sends this only to
+                # a model that reads a page as well without (ancillary.ts).
+                reasoning="none",
             )
         except Exception as exc:
             refusal = refusal or str(exc)
