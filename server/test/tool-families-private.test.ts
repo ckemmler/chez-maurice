@@ -111,3 +111,50 @@ test("the picker shows Email where it is true for this member", async () => {
   // A member with neither a mailbox nor experimental access: not offered.
   expect(email("tf-plain")).toBeUndefined();
 });
+
+// "Keep this in my notes" (7 October 2026): writing a note rides in every
+// private turn; the rest of the family, and all of it in a room, still waits
+// for a conversation that chose it.
+test("writing a note is everyday; deleting and publishing are not", async () => {
+  const { NOTES_EVERYDAY, notesToolAllowed, notesExplicit } = await import("../src/services/toolFamilies");
+  const db = (await import("../src/db")).default;
+  const { createConversation } = await import("../src/services/conversations");
+  const { MEMBER } = await import("./_member");
+
+  expect(NOTES_EVERYDAY).toEqual(["garden__create_note", "garden__update_note", "garden__get_note", "garden__list_notes"]);
+  for (const tool of NOTES_EVERYDAY) expect(notesToolAllowed(tool, false, false)).toBe(true);
+  for (const tool of ["garden__delete_note", "garden__toggle_public", "garden__toggle_private", "garden__set_image"]) {
+    expect(notesToolAllowed(tool, false, false)).toBe(false);
+    expect(notesToolAllowed(tool, true, false)).toBe(true);
+  }
+  // In a room a member's notes are not opened to the others — unless the room chose the family.
+  for (const tool of NOTES_EVERYDAY) expect(notesToolAllowed(tool, false, true)).toBe(false);
+  expect(notesToolAllowed("garden__create_note", true, true)).toBe(true);
+  // Other families are not this rule's business.
+  expect(notesToolAllowed("garden__write_daily_note", false, false)).toBe(true);
+  expect(notesToolAllowed("corpus__search", false, true)).toBe(true);
+
+  expect(notesExplicit("all")).toBe(true);
+  expect(notesExplicit(["garden-notes"])).toBe(true);
+  expect(notesExplicit(["garden"])).toBe(true);
+  expect(notesExplicit(["corpus"])).toBe(false);
+
+  // A conversation that chose nothing holds the family for its member.
+  db.run(`UPDATE households SET default_tool_families = NULL WHERE id = 'default'`);
+  const convo = createConversation(MEMBER.id);
+  expect(selectedFamilies(convo.id)).toEqual([]);
+  expect(resolveFamilies(convo.id, false, MEMBER.id)).toContain("garden-notes");
+  // The journal, the fiches and the rest of the garden are still a choice.
+  expect(resolveFamilies(convo.id, false, MEMBER.id)).not.toContain("garden-journal");
+});
+
+test("a turn that can write a note is told when, and in whose language", async () => {
+  const { notesNotice } = await import("../src/services/claude");
+  expect(notesNotice(["corpus__search"], "fr")).toBe("");
+  const fr = notesNotice(["garden__create_note", "garden__update_note", "garden__get_note", "garden__list_notes"], "fr");
+  expect(fr).toContain("Only when they ask");
+  expect(fr).toContain('`locale`: "fr"');
+  expect(fr).toContain("garden__update_note it rather than writing a second one");
+  expect(fr).toContain("private until they say");
+  expect(notesNotice(["garden__create_note"], "de")).toContain('`locale`: "en"');
+});

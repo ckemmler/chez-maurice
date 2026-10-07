@@ -30,7 +30,7 @@ import { resolveModelId, getModel } from "./models";
 import { resolveUsableModel, getEverydayModel } from "./modelAccess";
 import { ollamaTurn, OLLAMA_NUM_CTX, type OllamaToolCall } from "./ollama";
 import { openaiTurn, PROMPT_CACHE_KEY_PROVIDERS, type OpenAIToolCall } from "./openaiChat";
-import { resolveFamilies, toolInFamilies, canUseExperimental, isExperimentalTool, isPrivateOnlyTool, isServerOnlyTool, corpusToolAllowed, selectedFamilies, familyTitles } from "./toolFamilies";
+import { resolveFamilies, toolInFamilies, canUseExperimental, isExperimentalTool, isPrivateOnlyTool, isServerOnlyTool, corpusToolAllowed, notesToolAllowed, notesExplicit, selectedFamilies, familyTitles } from "./toolFamilies";
 import { t, userLocale } from "./i18n";
 import { newUsage, priceUsage, hasUsage, type TurnUsage } from "./pricing";
 import { verdict as budgetVerdict } from "./budget";
@@ -197,6 +197,25 @@ function buildRoomSystemPrompt(conversationId: string, summonerName: string, ima
 // "tasks, calendar, contacts, notes, health, books" to a member who was granted
 // none of them makes the model answer "I'll check your calendar" with nothing
 // to call — and, asked what tools it has, recite the promise instead of looking.
+/** What a turn that can write a note is told about it (7 October 2026).
+ *  The garden grows by the member's own word and nothing else: the tool is
+ *  there for "keep this in my notes", not for Maurice to decide that
+ *  something is worth keeping. A note is private unless they say otherwise,
+ *  written in their language — the tool's own default is English — and the
+ *  member is told where it is. */
+export function notesNotice(toolNames: string[], locale: string): string {
+  if (!toolNames.includes("garden__create_note")) return "";
+  const canUpdate = toolNames.includes("garden__update_note");
+  return (
+    `\n\n## Their notes\n` +
+    `When they ask you to keep, save or write something in their notes, do it: garden__create_note, with what they asked to keep written out in full in \`body\` (Markdown) — the note must stand on its own, without this conversation. ` +
+    `Only when they ask: never write a note on your own initiative, and never to remember something for yourself. ` +
+    `Give it \`locale\`: "${locale === "fr" ? "fr" : "en"}", a short \`id\` in lowercase with hyphens, a plain \`title\`, and no \`flags\` — a note is private until they say they want it public. ` +
+    (canUpdate ? `To add to or correct a note that exists, find it (garden__list_notes), read it (garden__get_note) and garden__update_note it rather than writing a second one. ` : "") +
+    `Then tell them, in a line, that it is in their notes and under what title.`
+  );
+}
+
 /** What to do with the corpus, when the turn holds it. The briefs above say
  *  what matters to the member; this says where what they actually wrote is
  *  kept, and how to ask for it. Nothing in the corpus ranks the sources — one
@@ -1678,6 +1697,10 @@ function trackedBooks(
         .filter((t) => expOK || !isExperimentalTool(t.name)) // never hand experimental tools to ungated members
         .filter((t) => !isRoom || !isPrivateOnlyTool(t.name))
         .filter((t) => corpusToolAllowed(t.name, corpusExplicit))
+        // Writing a note when asked is everyday; deleting, publishing, and any
+        // of it in a room wait for a turn that chose the family
+        // (toolFamilies.notesToolAllowed).
+        .filter((t) => notesToolAllowed(t.name, notesExplicit(chosen), isRoom))
         .filter((t) => !isServerOnlyTool(t.name)) // the server's own calls, never a model's
         // Tools render at the very front of the cached prefix, so their order has
         // to be stable: the MCP server makes no ordering promise, and a roster
@@ -1707,6 +1730,7 @@ function trackedBooks(
   // Now that the roster is settled, tell the model what it really holds.
   systemPrompt += textOnly ? NO_TOOLS_NOTICE : toolRosterNotice(mcpTools.map((t) => t.name), wantsWeb && hasWebSearch());
   systemPrompt += corpusNotice(mcpTools.map((t) => t.name));
+  systemPrompt += notesNotice(mcpTools.map((t) => t.name), userLang);
   systemPrompt += mailNotice(mcpTools.map((t) => t.name), memberId, userDisplayName);
 
   // Fit the conversation to the model's window. `ctx` is what the roster says

@@ -103,6 +103,31 @@ export function corpusToolAllowed(toolName: string, explicit: boolean): boolean 
   return explicit || CORPUS_EVERYDAY.includes(toolName);
 }
 
+// "Keep this in my notes" (7 October 2026). A member said it in an ordinary
+// conversation, after an hour's work on a file, and Maurice had nothing to
+// keep it with: the garden's tools wait for a conversation that selects their
+// family, and nobody selects a family before knowing they will want a note.
+// So writing one rides in every private turn, like remembering does: create,
+// update, and the two reads an update needs (find the note, read it). The
+// rest of the family — delete, publish, cover images — still waits for a
+// conversation that asks for it by name, and so does all of it in a room,
+// where the reads would open one member's notes to the others.
+export const NOTES_EVERYDAY = ["garden__create_note", "garden__update_note", "garden__get_note", "garden__list_notes"];
+
+/** The notes tools a turn may hold. `explicit` is true when the turn selected
+ *  the family itself (or the whole garden) rather than receiving it as an
+ *  everyday one. */
+export function notesToolAllowed(toolName: string, explicit: boolean, isRoom: boolean): boolean {
+  if (familyOf(toolName) !== "garden-notes") return true;
+  if (explicit) return true;
+  return !isRoom && NOTES_EVERYDAY.includes(toolName);
+}
+
+/** Did the turn choose the notes family by name? */
+export function notesExplicit(chosen: "all" | string[]): boolean {
+  return chosen === "all" || chosen.includes("garden-notes") || chosen.includes("garden");
+}
+
 // Only Notes + Journal are surfaced as everyday garden tools; everything else
 // (the rest of the garden, plus all non-garden families) is Experimental and
 // hidden unless a member has been granted access in the admin page.
@@ -292,7 +317,10 @@ export function resolveFamilies(conversationId: string, isLocal: boolean, member
   // family rides in every one of their turns without a picker or an admin.
   // Rooms still withhold it (PRIVATE_ONLY, applied in claude.ts).
   const mail = memberId && hasMailAccount(memberId) ? ["email"] : [];
-  const withCore = [...new Set([...chosen, ...ALWAYS_ON, ...mail])];
+  // Writing a note when asked rides in every member's turn too: the family is
+  // held, and `notesToolAllowed` says how much of it (NOTES_EVERYDAY above).
+  const notes = memberId ? ["garden-notes"] : [];
+  const withCore = [...new Set([...chosen, ...ALWAYS_ON, ...mail, ...notes])];
   return expOK ? withCore : withCore.filter((id) => groupOf(id) !== "experimental");
 }
 
