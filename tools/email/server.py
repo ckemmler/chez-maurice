@@ -167,9 +167,11 @@ async def list_tools() -> list[Tool]:
         Tool(
             name="get_attachment",
             description=(
-                "The text of one attachment, by its index from get_message: text, HTML, PDF "
-                "(its text layer — a scan has none) and Word or OpenDocument text (.docx, .doc, .odt). "
-                "Other types return their metadata only. A long document comes in turns: when "
+                "The text of one attachment, by its index from get_message: text, HTML, PDF, "
+                "Word or OpenDocument text (.docx, .doc, .odt), and a scanned PDF or a photo "
+                "(JPEG, PNG), whose pages are read as pictures under [page n] marks — that takes "
+                "up to a minute the first time. Other types return their metadata only. "
+                "A long document comes in turns: when "
                 "`truncated` is true, call again with `offset` set to `next_offset`. "
                 + UNTRUSTED_NOTE
             ),

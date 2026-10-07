@@ -134,12 +134,17 @@ def complete_full(
     temperature: float | None = None,
     timeout: float = 120.0,
     model: str | None = None,
+    images: list[dict] | None = None,
+    member_id: str | None = None,
 ) -> dict:
     """The same turn, with everything the server said about it: `text`,
     `model`, `provider`, `stop`, and `usage` (tokens and cost in dollars, or
     None when the provider reported none). `model` runs the turn on that
     model instead of the invocation's pin — for an experiment that compares
-    models, never for a tool to choose its own."""
+    models, never for a tool to choose its own. `images` are pictures the
+    prompt is about (`{"media_type", "data"}`, base64), for an invocation
+    whose model reads them. `member_id` makes the turn that member's: their
+    caps are weighed before it and its cost is written under their name."""
     global _server_base_cache
     import json
     import ssl
@@ -157,6 +162,10 @@ def complete_full(
         payload["temperature"] = temperature
     if model is not None:
         payload["model"] = model
+    if images:
+        payload["images"] = images
+    if member_id:
+        payload["member_id"] = member_id
 
     # Loopback to a server whose certificate is its own: verifying it would
     # mean trusting a name we already know is this machine.

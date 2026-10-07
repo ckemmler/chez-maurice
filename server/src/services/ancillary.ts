@@ -170,6 +170,15 @@ export const ANCILLARY_INVOCATIONS: AncillaryInvocation[] = [
   { id: "signal_report", side: "tools", tier: "standard", label: "Signal report", blurb: "The periodic report over the signals.", needs: "tools/pipelines/research_tracks", ownDispatch: true },
   { id: "resonance_queries", side: "tools", tier: "standard", label: "Résonance queries", blurb: "What to look for when linking an entry to the garden.", needs: "tools/pipelines/research_tracks", ownDispatch: true },
   { id: "resonance_filtering", side: "tools", tier: "standard", label: "Résonance filtering", blurb: "Keeping the links that resonate.", needs: "tools/pipelines/research_tracks", ownDispatch: true },
+  // A scanned page or a photo attached to a mail, transcribed for the member
+  // who asked to read it (tools/email/vision.py), and charged to them. Tried
+  // on 7 October 2026 on two pages of a real scan: Gemma 4 26B, the small Qwen
+  // and the large one wrote the same words; Gemma for a third of the price
+  // (it counts an image as a few hundred tokens) and a little faster. The
+  // small Qwen must be left to reason: told not to, it answers "[no text]".
+  { id: "attachment_vision", side: "tools", tier: "light", label: "Scanned attachments",
+    blurb: "Reading a scanned PDF or a photo attached to a mail, page by page, when a member asks for it.",
+    needs: "tools/email", prefer: ["gemma-4-26b-a4b-it", "qwen3.6-35b-a3b", "qwen3.5-397b-a17b"] },
   { id: "book_classification", side: "tools", tier: "standard", label: "Book classification", blurb: "Front matter, body, back matter — which chapters count.", needs: "tools/calibre" },
 ];
 
@@ -500,6 +509,12 @@ export interface AncillaryRequest {
    * cached price. Nothing for the others.
    */
   cacheSystem?: boolean;
+  /**
+   * Images the prompt is about, base64. The model must read images (its
+   * `vision` flag in the roster): one that does not is refused here rather
+   * than left to answer about a picture it was never shown.
+   */
+  images?: Array<{ mediaType: string; data: string }>;
 }
 
 export interface AncillaryResult {
@@ -552,13 +567,22 @@ export async function ancillaryComplete(req: AncillaryRequest): Promise<Ancillar
   const model = getModel(modelId);
   const provider = model?.provider ?? "anthropic";
   const config = getHouseholdConfig();
+  const images = req.images ?? [];
+  if (images.length && !model?.vision) {
+    throw new AncillaryError(`${modelId} does not read images: choose one that does for "${req.invocation}"`, 422);
+  }
 
   if (provider === "anthropic") {
     if (!config.apiKey) throw new AncillaryError("no Anthropic API key configured for this household", 422);
     const body: Record<string, unknown> = {
       model: modelId,
       max_tokens: req.maxTokens,
-      messages: [{ role: "user", content: req.prompt }],
+      messages: [{
+        role: "user",
+        content: images.length
+          ? [...images.map((i) => ({ type: "image", source: { type: "base64", media_type: i.mediaType, data: i.data } })), { type: "text", text: req.prompt }]
+          : req.prompt,
+      }],
     };
     if (req.system) {
       body.system = req.cacheSystem
@@ -591,11 +615,13 @@ export async function ancillaryComplete(req: AncillaryRequest): Promise<Ancillar
     return { text, model: modelId, provider, stop, usage };
   }
 
-  const messages: Array<{ role: string; content: string }> = [];
+  const messages: Array<{ role: string; content: unknown }> = [];
   if (req.system) messages.push({ role: "system", content: req.system });
   messages.push({ role: "user", content: req.prompt });
 
   if (provider === "ollama") {
+    // The local path sends text only; nothing here has needed more.
+    if (images.length) throw new AncillaryError("images are not sent to a local model from here", 422);
     let text = "";
     let stop: AncillaryResult["stop"] = "end";
     for await (const ev of ollamaTurn(modelId, messages, [], req.maxTokens)) {
@@ -615,6 +641,15 @@ export async function ancillaryComplete(req: AncillaryRequest): Promise<Ancillar
     let text = "";
     let stop: AncillaryResult["stop"] = "end";
     let usage: TurnUsage | null = null;
+    if (images.length) {
+      messages[messages.length - 1] = {
+        role: "user",
+        content: [
+          { type: "text", text: req.prompt },
+          ...images.map((i) => ({ type: "image_url", image_url: { url: `data:${i.mediaType};base64,${i.data}` } })),
+        ],
+      };
+    }
     const opts = {
       ...(req.cacheSystem && PROMPT_CACHE_KEY_PROVIDERS.has(provider) ? { cacheKey: `ancillary:${req.invocation}` } : {}),
       ...(reasoningBody(provider, modelId, req.reasoning) ? { extraBody: reasoningBody(provider, modelId, req.reasoning) } : {}),

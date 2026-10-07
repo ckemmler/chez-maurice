@@ -73,10 +73,10 @@ def test_what_the_bytes_are_wins_over_what_they_were_called(tmp_path):
 
 
 def test_other_files_still_give_only_their_metadata(tmp_path):
-    svc, alex = service_with(tmp_path, [("photo.jpg", "image/jpeg", b"\xff\xd8\xff")])
+    svc, alex = service_with(tmp_path, [("archive.zip", "application/zip", b"PK\x03\x04")])
     assert svc.get_message(alex, uid=1)["attachments"][0]["readable"] is False
     att = svc.get_attachment(alex, uid=1, index=0)
-    assert att["extracted_as"] == "image/jpeg: no text to extract" and att["total_bytes"] == 0
+    assert att["extracted_as"] == "application/zip: no text to extract" and att["total_bytes"] == 0
 
 
 def test_a_long_attachment_is_read_in_turns(tmp_path):

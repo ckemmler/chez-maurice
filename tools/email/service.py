@@ -23,11 +23,15 @@ from . import sealing
 from . import triage as triage_mod
 from . import reading as reading_mod
 from . import structure as structure_mod
+from . import vision as vision_mod
 from .reconcile import KIND as RECONCILE_KIND, Reconciler
 from .scan import KIND as SCAN_KIND, Scanner
 from .store import MailStore, store_path
 from .message import (
     attachment_parts,
+    NO_TEXT_LAYER,
+    SCANNED_IMAGES,
+    attachment_kind,
     attachment_text,
     window,
     body_text,
@@ -144,6 +148,8 @@ class EmailService:
         self._scans_lock = threading.Lock()
         self._stores: dict[str, MailStore] = {}
         self.store_for: Callable[[str], MailStore] = MailStore.for_member
+        # Reading a scan asks the server for a model's turn; a test gives its own.
+        self.read_scan = vision_mod.read_scan
 
     # ── who ──────────────────────────────────────────────────────────────
     def accounts(self, *, member_id: str | None = None, username: str | None = None) -> Accounts:
@@ -854,6 +860,15 @@ class EmailService:
                 part = parts[index]
         filename = part.get_filename() or f"attachment-{index}"
         text, how = attachment_text(part)
+        # A scan or a photo has no text of its own: a model that reads images
+        # reads it, for the member who asked and on their account (vision.py).
+        kind = attachment_kind(part)
+        if (kind == "application/pdf" and text == NO_TEXT_LAYER) or kind in SCANNED_IMAGES:
+            member_id = getattr(accounts, "member_id", None)
+            if member_id:
+                read = self.read_scan(part.get_payload(decode=True) or b"", kind, member_id=member_id)
+                if read is not None:
+                    text, how = read
         total = len(text.encode("utf-8"))
         text, end, truncated = window(text, int(offset or 0), max_bytes)
         out = {

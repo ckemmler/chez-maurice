@@ -34,7 +34,7 @@ def big(**kw):
         ("notes.txt", "text/plain", "Total 84 € — été".encode()),
         ("compte-rendu.doc", "application/msword", (FIXTURES / "note.doc").read_bytes()),
         ("Note finale.docx", "application/octet-stream", (FIXTURES / "note.docx").read_bytes()),
-        ("photo.jpg", "image/jpeg", b"\xff\xd8\xff" + b"\x00" * 300),
+        ("archive.zip", "application/zip", b"PK\x03\x04" + b"\x00" * 300),
     ], **kw)
 
 
@@ -43,7 +43,7 @@ def test_a_large_message_lists_its_attachments_without_being_fetched(tmp_path):
     msg = svc.get_message(alex, uid=1)
     assert "Voir les pièces jointes" in msg["body"] and "get_attachment" in msg["attachments_note"]
     assert [(a["index"], a["filename"], a["readable"]) for a in msg["attachments"]] == [
-        (0, "notes.txt", True), (1, "compte-rendu.doc", True), (2, "Note finale.docx", True), (3, "photo.jpg", False),
+        (0, "notes.txt", True), (1, "compte-rendu.doc", True), (2, "Note finale.docx", True), (3, "archive.zip", False),
     ]
     # About the file's own weight, not the base64's.
     real = len((FIXTURES / "note.doc").read_bytes())
@@ -62,7 +62,7 @@ def test_one_attachment_of_a_large_message_is_fetched_alone(tmp_path):
 
     assert "Total 84 € — été" in svc.get_attachment(alex, uid=1, index=0)["text"]
     assert "Le budget voté" in svc.get_attachment(alex, uid=1, index=2)["text"]
-    assert svc.get_attachment(alex, uid=1, index=3)["extracted_as"] == "image/jpeg: no text to extract"
+    assert svc.get_attachment(alex, uid=1, index=3)["extracted_as"] == "application/zip: no text to extract"
     with pytest.raises(Exception, match="4 attachment"):
         svc.get_attachment(alex, uid=1, index=4)
 

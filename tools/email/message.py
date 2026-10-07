@@ -27,6 +27,13 @@ from typing import Any
 
 from . import documents
 
+#: Pictures a member may ask to have read: what a phone or a scanner sends.
+SCANNED_IMAGES = {"image/jpeg", "image/png"}
+
+#: What a PDF with no text gives — and what `service.get_attachment` takes as
+#: the sign that it is a scan, to be read as pictures (`vision.py`).
+NO_TEXT_LAYER = "[this PDF has no text layer — probably a scan]"
+
 BEGIN_MARKER = "----- BEGIN UNTRUSTED MESSAGE BODY -----"
 END_MARKER = "----- END UNTRUSTED MESSAGE BODY -----"
 BEGIN_ATTACHMENT = "----- BEGIN UNTRUSTED ATTACHMENT -----"
@@ -271,6 +278,7 @@ def extractable(content_type: str) -> bool:
         content_type.startswith("text/")
         or content_type in {"application/pdf", "message/rfc822"}
         or content_type in {documents.DOCX, documents.ODT, documents.DOC}
+        or content_type in SCANNED_IMAGES      # a photo of a page, read as one (vision.py)
     )
 
 
@@ -313,4 +321,4 @@ def _pdf_text(data: bytes) -> str:
     except Exception as exc:  # a malformed PDF is the sender's problem, not a crash
         return f"[the PDF could not be read: {type(exc).__name__}]"
     text = "\n\n".join(p.strip() for p in pages if p.strip())
-    return text or "[this PDF has no text layer — probably a scan]"
+    return text or NO_TEXT_LAYER

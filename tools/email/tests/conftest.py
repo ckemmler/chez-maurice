@@ -19,3 +19,16 @@ def member_registry(monkeypatch):
     was added from the app unless a test says so."""
     monkeypatch.setattr(accounts_mod, "resolve_member_id", lambda username: MEMBER_IDS.get(username))
     monkeypatch.setattr(accounts_mod, "fetch_app_accounts", lambda member_id, taken: ([], None))
+
+
+@pytest.fixture(autouse=True)
+def no_model_turn(monkeypatch):
+    """No test asks the household's server — and so its provider, on its
+    credit — to read a picture: one that reaches for it without giving a
+    reader of its own fails here."""
+    from tools.email import vision
+
+    def refuse():
+        raise AssertionError("a test asked the server for a model's turn")
+
+    monkeypatch.setattr(vision, "_complete", refuse)
