@@ -1,6 +1,6 @@
 ---
 title: Carnet — the pocket companion
-date: '2026-09-19'
+date: '2026-10-08'
 flags: []
 locale: en
 description: 'The iOS/iPadOS companion to Maurice: log what happened, read books and
@@ -88,6 +88,6 @@ Carnet is in daily use at home; the minimal scope is on its way to TestFlight (f
 - **A companion's conversation is not opened from here**; the book page shows and creates the companion, the conversation itself is the Maurice app's.
 - **English only.** Carnet has no localisation; the briefs are in the member's language, the chrome around them is not.
 - **Flashcards** are server-side only so far; the Flashcards line on each media and the review section are the next tranche.
-- **Unified navigation** across the three roles, and a refreshed design pass covering the expanded scope, are on the roadmap (`design/`).
+- **Unified navigation** across the three roles, and a refreshed design pass covering the expanded scope, are under way since 8 October 2026 (`design/STATE.md` in the Carnet repo): one list of entries of every kind in place of the Books / Articles / Domains shelves and the Garden section, each entry showing its source and its two faces (the member's side, the shared side), and the Maurice app's theme in place of the Grid. Built so far: the server's read routes for that list (`garden/entries?view=shelf`, see [[maurice-server]]). Nothing of it is in the app yet — what is described above is still what ships.
 - **Reading is iOS-only**; the Mac reads the garden on the web.
 - **Liquid Glass gaps**: the app icon is still a flat PNG (Icon Composer layers pending); the full scope's custom drawer and the radial log FAB have not been re-thought for iOS 26 (a `NavigationSplitView` or a sidebar-adaptable `TabView` is the likely answer when `.full` returns); nothing has been tested with Reduce Transparency yet.

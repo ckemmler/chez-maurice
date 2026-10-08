@@ -1,6 +1,6 @@
 ---
 title: The server
-date: '2026-10-06'
+date: '2026-10-08'
 flags: []
 locale: en
 description: 'The Hono/Bun engine: API surface, the streaming agentic loop, prompt
@@ -61,6 +61,7 @@ The **data-api** mounts under `/api/v1/*`:
 | `calibre/*`, `books` | Books, chapters, summaries, covers, highlights, reading position, bookmarks — [[maurice-carnet|Carnet]]'s reading backend |
 | `garden/articles` | Save a page as an article fiche (share sheet, clipper, MCP), list and read them, summaries, highlights, notes |
 | `garden/entries` | Every entry of a member's garden, all collections, with its card, fiche and flashcard faces |
+| `garden/entries?view=shelf`, `garden/entries/:collection/:locale/:slug` | The garden read as one list of subjects (books, articles, films, series, podcasts, games, posts; notes and people left out), since 8 October 2026. Each row has up to three parts: the **source** to read (the Calibre book behind a garden book, matched by `meta.calibre_id` or else by exact title, with the member's reading position; an article's captured text, or `captured: false` for a bookmark), **mine** (the fiche: how many notes it holds, counting its prose, the dated blocks under `## Commentaire` and `## Résonances`, Maurice's fragments and the member's highlights) and **shared** (the card's body, `draft` or `published` by its `public` flag). A card is the shared side only once the member has written in it: an empty body or the provider's synopsis is identity, not writing. Calibre books with no garden entry are listed too (`calibre/<id>`); a subject in several locales is one row, in the member's preferred locale, the others under `translations`. The second route returns one entry with both sides in full — the fiche parsed into prose and items, highlights read from their tables rather than copied, each `[[wiki-link]]` of the card resolved to a published address or to none. Read-only; nothing is stored for it (`data-api/services/gardenShelf.ts`). No client uses it yet: it is the first step of the entry-with-two-faces design for Carnet |
 | `garden/links` | Résonances — `[[wiki-links]]` written into the target's markdown |
 | `garden/cards` | Flashcards — generate, list, review, edit |
 | `articles/scrape` | Legacy alias of `garden/articles`, kept for older Carnet builds |

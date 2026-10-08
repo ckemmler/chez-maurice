@@ -88,6 +88,14 @@ export function listHighlights(memberId: string, bookId: number, view?: Highligh
     .all(memberId, bookId) as Highlight[];
 }
 
+/** How many highlights each of a member's books carries — for list rows. */
+export function countHighlights(memberId: string): Map<number, number> {
+  const rows = getDb()
+    .query("SELECT book_id, COUNT(*) AS n FROM highlights WHERE member_id = ? GROUP BY book_id")
+    .all(memberId) as { book_id: number; n: number }[];
+  return new Map(rows.map((r) => [r.book_id, r.n]));
+}
+
 export interface NewHighlight {
   chapterSlug: string;
   quote: string;
