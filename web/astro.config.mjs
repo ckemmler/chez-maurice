@@ -7,6 +7,7 @@ import { resolve } from "node:path";
 import remarkCrossRef from "./src/plugins/remark-cross-ref.mjs";
 import encryptPrivate from "./src/integrations/encrypt-private.ts";
 import gardenImageLinks from "./src/integrations/garden-image-links.ts";
+import publicPages from "./src/integrations/public-pages.ts";
 
 // Theme resolver: `@theme/<path>` → the active theme's file if it exists, else
 // the default theme's (so a theme overrides views/layouts/styles selectively and
@@ -36,7 +37,9 @@ const hasTls = existsSync(certFile) && existsSync(keyFile);
 // https://astro.build/config
 export default defineConfig({
   devToolbar: { enabled: false },
-  integrations: [gardenImageLinks(), encryptPrivate()],
+  // publicPages first: it finishes the URLs of a member's public pages, and
+  // gardenImageLinks then keeps the images those pages point at.
+  integrations: [publicPages(), gardenImageLinks(), encryptPrivate()],
   site: process.env.SITE_URL || "http://localhost:4321",
   // No base. A member's garden is served under /g/<member>/, but that prefix
   // is now a property of the REQUEST, not of the build: one engine serves
@@ -55,7 +58,12 @@ export default defineConfig({
   // and right for the public publish, which goes to Cloudflare Pages. (That
   // build needs an adapter too: a handful of routes are server-rendered
   // there, so it is not a pure static site.)
-  adapter: process.env.WEB_SSR === "1" ? node({ mode: "standalone" }) : cloudflare(),
+  // A member's public pages (PUBLIC_STATIC=1) are plain files served by the
+  // household's own server: no adapter, nothing rendered on request.
+  adapter:
+    process.env.WEB_SSR === "1" ? node({ mode: "standalone" })
+    : process.env.PUBLIC_STATIC === "1" ? undefined
+    : cloudflare(),
   // Hosts the dev server accepts. In the garden topology this engine is only ever
   // reached through the authenticated Bun reverse proxy (server/index.ts) — the
   // single gated ingress that the tunnel / Tailnet / custom domain points at, never

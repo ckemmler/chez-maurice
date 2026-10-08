@@ -23,7 +23,8 @@
 import fs from "node:fs";
 import path from "node:path";
 import db from "../../src/db";
-import { getUserPreferences } from "../../src/services/users";
+import { getUser, getUserPreferences } from "../../src/services/users";
+import { defaultSite } from "./publicPages";
 import { getReadingProgress, type ReadingProgress } from "./bookmarks";
 import { getChapterStats, listBooks, listChapters, type BookMetadata } from "./calibre";
 import { countArticleHighlights, listArticleHighlights } from "./articleHighlights";
@@ -120,13 +121,26 @@ export interface ShelfEntryDetail extends Omit<ShelfEntry, "mine" | "shared"> {
 
 // ── The member's site ──
 
-/** `https://<domain>` when the member publishes a site, else null. */
-export function siteFor(memberId: string): string | null {
+/** `https://<domain>` when the member has a site of their own, on their own domain. */
+export function ownSiteFor(memberId: string): string | null {
   const row = db.query(`SELECT notes_domain FROM users WHERE id = ?`).get(memberId) as
     | { notes_domain: string | null }
     | null;
   const domain = (row?.notes_domain ?? "").trim().replace(/^https?:\/\//, "").replace(/\/+$/, "");
   return domain ? `https://${domain}` : null;
+}
+
+/**
+ * Where what the member publishes is read: their own domain when they have
+ * one, otherwise their pages on the household's host (`/@<member>`, see
+ * publicPages.ts) when the household publishes any. Null when there is
+ * nowhere to publish to.
+ */
+export function siteFor(memberId: string): string | null {
+  const own = ownSiteFor(memberId);
+  if (own) return own;
+  const user = getUser(memberId);
+  return user ? defaultSite(user) : null;
 }
 
 

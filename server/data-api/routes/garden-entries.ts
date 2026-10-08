@@ -136,6 +136,10 @@ app.delete("/entries/:collection/:locale/:slug/shared/publish", (c) =>
   written(c, null, (memberId, garden, ref) => setPublished(memberId, garden, ref, false)));
 
 /** Where the site deploy stands — what the phone shows after "Publish". */
-app.get("/site/deploy", (c) => c.json(deployState()));
+app.get("/site/deploy", (c) => {
+  const garden = gardenFor(c.get("userId") as string);
+  if (!garden) return c.json({ error: "No garden for this member" }, 404);
+  return c.json(deployState(garden.username));
+});
 
 export default app;

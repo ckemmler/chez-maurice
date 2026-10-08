@@ -8,8 +8,10 @@ import fs from "node:fs";
 import path from "node:path";
 import { currentGarden } from "@app/lib/garden-context";
 
-// SSR — read the file at request time (never prerendered/cached).
-export const prerender = false;
+// SSR — read the file at request time (never prerendered/cached). Except in a
+// member's public pages (PUBLIC_STATIC), which are plain files with no server
+// behind them and no one editing live: there it is written once, idle.
+export const prerender = process.env.PUBLIC_STATIC === "1";
 
 const WINDOW_SECONDS = 30;
 

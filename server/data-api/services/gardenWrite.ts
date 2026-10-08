@@ -26,8 +26,9 @@ import {
 import { listGardenEntries, type GardenEntry } from "./gardenEntries";
 import { indexGardenPaths } from "./gardenIndex";
 import {
-  bookFor, isShelfCollection, isWritten, loadLibrary, preferredLocale, readFace, siteFor,
+  bookFor, isShelfCollection, isWritten, loadLibrary, ownSiteFor, preferredLocale, readFace, siteFor,
 } from "./gardenShelf";
+import { buildPublicPages } from "./publicPages";
 
 export class EntryWriteError extends Error {
   constructor(message: string, readonly status: 400 | 404 | 409 | 422) {
@@ -277,16 +278,19 @@ export function setPublished(memberId: string, garden: GardenRef, ref: EntryRef,
     atomicWrite(file, next);
     autoCommit(garden, [file], `Set public ${on ? "on" : "off"}: ${path.basename(file)}`);
   }
-  return requestDeploy(garden);
+  return requestDeploy(garden, deployKind(memberId));
 }
 
-// ── The site deploy ──
+// ── The deploy ──
 //
-// `scripts/publish-web.sh` pulls the garden, builds the static site and
-// uploads it: a few minutes, and nothing stops two from running at once. The
-// phone can ask for one at any moment, so one runs at a time here, and
-// whatever is asked while it runs is folded into a single run that follows —
-// which then carries every flag set in the meantime.
+// Two kinds, by what the member has. A site of their own: `scripts/publish-
+// web.sh` pulls the garden, builds the site and uploads it to its host. Pages
+// on the household's host: built here and swapped into place (publicPages.ts).
+//
+// Either way nothing stops two from running at once, and the phone can ask for
+// one at any moment. So one runs at a time per member, and whatever is asked
+// while it runs is folded into a single run that follows — which then carries
+// every flag set in the meantime.
 
 export interface DeployState {
   status: "idle" | "queued" | "running" | "failed";
@@ -296,6 +300,7 @@ export interface DeployState {
 }
 
 type Runner = (garden: GardenRef) => Promise<void>;
+type Kind = "site" | "pages";
 
 const SCRIPT = path.resolve(import.meta.dir, "../../../scripts/publish-web.sh");
 
@@ -313,52 +318,66 @@ const runScript: Runner = (garden) =>
     child.on("close", (code) => (code === 0 ? resolve() : reject(new Error(tail.trim().split("\n").slice(-3).join(" ⏎ ") || `exit ${code}`))));
   });
 
-let runner: Runner = runScript;
-let state: DeployState = { status: "idle", started_at: null, finished_at: null, error: null };
-let running = false;
-let again: GardenRef | null = null;
+const IDLE: DeployState = { status: "idle", started_at: null, finished_at: null, error: null };
 
-/** Tests replace the script with a stand-in. */
+interface Slot { state: DeployState; running: boolean; again: Kind | null }
+const slots = new Map<string, Slot>();
+const slotFor = (username: string): Slot => {
+  let slot = slots.get(username);
+  if (!slot) slots.set(username, (slot = { state: { ...IDLE }, running: false, again: null }));
+  return slot;
+};
+
+let override: Runner | null = null;
+
+/** Tests replace both deploys with a stand-in. */
 export function setDeployRunner(r: Runner | null): void {
-  runner = r ?? runScript;
-  state = { status: "idle", started_at: null, finished_at: null, error: null };
-  running = false;
-  again = null;
+  override = r;
+  slots.clear();
 }
 
-export function deployState(): DeployState {
-  return { ...state };
+export function deployState(username: string): DeployState {
+  return { ...(slots.get(username)?.state ?? IDLE) };
+}
+
+/** Which deploy a member's publish is: their own site, or their pages here. */
+function deployKind(memberId: string): Kind {
+  return ownSiteFor(memberId) ? "site" : "pages";
 }
 
 /**
- * The script publishes one garden to one Pages project (`GARDEN`, by default
- * the owner's, and `GARDEN_PAGES_PROJECT`). Until a project per member exists,
- * only that garden may be deployed from here — another member's would land on
- * the owner's site.
+ * Can this member publish? With a domain of their own: only the garden the
+ * publish script is set up for (`GARDEN`, by default the owner's, and its
+ * `GARDEN_PAGES_PROJECT`) — another member's would land on the owner's site.
+ * Otherwise: when the household serves public pages, and the member is not a
+ * child (`siteFor` answers both).
  */
 export function canDeploy(memberId: string, garden: GardenRef): boolean {
-  return !!siteFor(memberId) && garden.username === (process.env.GARDEN ?? "candide");
+  if (ownSiteFor(memberId)) return garden.username === (process.env.GARDEN ?? "candide");
+  return !!siteFor(memberId);
 }
 
-export function requestDeploy(garden: GardenRef): DeployState {
-  if (running) {
-    again = garden;
-    state = { ...state, status: "queued" };
-    return deployState();
+export function requestDeploy(garden: GardenRef, kind: Kind = "site"): DeployState {
+  const slot = slotFor(garden.username);
+  if (slot.running) {
+    slot.again = kind;
+    slot.state = { ...slot.state, status: "queued" };
+    return { ...slot.state };
   }
-  running = true;
-  state = { status: "running", started_at: new Date().toISOString(), finished_at: null, error: null };
-  runner(garden)
-    .then(() => { state = { ...state, status: "idle", finished_at: new Date().toISOString(), error: null }; })
+  slot.running = true;
+  slot.state = { status: "running", started_at: new Date().toISOString(), finished_at: null, error: null };
+  const run = override ?? (kind === "pages" ? buildPublicPages : runScript);
+  run(garden)
+    .then(() => { slot.state = { ...slot.state, status: "idle", finished_at: new Date().toISOString(), error: null }; })
     .catch((err: Error) => {
-      console.error("[garden] deploy failed:", err.message);
-      state = { ...state, status: "failed", finished_at: new Date().toISOString(), error: err.message };
+      console.error(`[garden] deploy failed for ${garden.username}:`, err.message);
+      slot.state = { ...slot.state, status: "failed", finished_at: new Date().toISOString(), error: err.message };
     })
     .finally(() => {
-      running = false;
-      const next = again;
-      again = null;
-      if (next) requestDeploy(next);
+      slot.running = false;
+      const next = slot.again;
+      slot.again = null;
+      if (next) requestDeploy(garden, next);
     });
-  return deployState();
+  return { ...slot.state };
 }

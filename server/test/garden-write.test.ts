@@ -182,7 +182,7 @@ describe("publishing", () => {
     release();
     await new Promise((r) => setTimeout(r, 5));
     expect(runs).toHaveLength(2);
-    expect(deployState()).toMatchObject({ status: "idle", error: null });
+    expect(deployState(garden.username)).toMatchObject({ status: "idle", error: null });
 
     expect(setPublished(MEMBER.id, garden, ref, false).status).toBe("running");
     expect(read("movies/fr/while-were-young.md")).toContain("flags: []");
@@ -194,11 +194,11 @@ describe("publishing", () => {
     setDeployRunner(() => Promise.reject(new Error("wrangler: not logged in")));
     requestDeploy(garden);
     await new Promise((r) => setTimeout(r, 5));
-    expect(deployState()).toMatchObject({ status: "failed", error: "wrangler: not logged in" });
+    expect(deployState(garden.username)).toMatchObject({ status: "failed", error: "wrangler: not logged in" });
     setDeployRunner(() => Promise.resolve());
     requestDeploy(garden);
     await new Promise((r) => setTimeout(r, 5));
-    expect(deployState().status).toBe("idle");
+    expect(deployState(garden.username).status).toBe("idle");
   });
 
   test("refused when nothing is written, and when the member has no site", () => {

@@ -108,6 +108,7 @@ import uploads from "./data-api/routes/uploads";
 import articlesScrape from "./data-api/routes/articles-api";
 import gardenArticles from "./data-api/routes/garden-articles";
 import gardenEntries from "./data-api/routes/garden-entries";
+import { servePublicPage } from "./data-api/services/publicPages";
 import gardenLinks from "./data-api/routes/garden-links";
 import gardenCards from "./data-api/routes/garden-cards";
 import bankTransactions from "./data-api/routes/bank-transactions";
@@ -263,6 +264,17 @@ function gardenSlug(path: string): string | null {
 // (set via /login?token=…) or a Bearer token, both resolved by proxyAuth.
 app.use("/*", async (c, next) => {
   const path = c.req.path;
+
+  // A member's public pages (`/@<member>/…`) are the one thing on the web
+  // surface that is not gated: files anyone may read. Only what was built into
+  // that member's folder is served (services/publicPages.ts); anything else
+  // under `/@` falls through to the gate below — which is how the engine's own
+  // `/@vite` and `/@id` stay members-only.
+  if ((c.req.method === "GET" || c.req.method === "HEAD") && path.startsWith("/@")) {
+    const page = servePublicPage(path);
+    if (page) return page;
+  }
+
   const open =
     path.startsWith("/api/") ||
     path === "/healthz" ||
