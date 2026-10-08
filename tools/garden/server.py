@@ -87,7 +87,75 @@ def _api_key(env_var: str, column: str) -> str:
             return str(row[0])
     except Exception:
         pass
-    return ""
+    # No key of its own: a hosted household borrows its host's, through the relay.
+    return _RELAY_KEY if _metadata_relay()[0] else ""
+
+
+# ---------------------------------------------------------------------------
+# The metadata relay (hosted households)
+# ---------------------------------------------------------------------------
+#
+# A host that runs many households holds one key per provider and does not copy
+# it into each of them. It runs a relay instead and gives a household two env
+# vars: where the relay is, and the token the household is known by there. The
+# relay mirrors each provider's own paths, so nothing below changes how a
+# lookup is built: a request that would have carried a key the household does
+# not have is sent to the relay, without the key and with the token.
+#
+# A key the household set itself (admin dashboard, env) still wins, provider by
+# provider. MusicBrainz takes no key, so with a relay it always goes through it:
+# the one-request-a-second rule is per IP, and the host's households share one.
+
+_RELAY_KEY = "@relay"
+
+_RELAY_ROUTES = {
+    "https://api.themoviedb.org/3/": "tmdb",
+    "https://www.googleapis.com/books/v1/": "googlebooks",
+    "https://api.igdb.com/v4/": "igdb",
+    "https://api.podcastindex.org/api/1.0/": "podcastindex",
+    "https://musicbrainz.org/ws/2/": "musicbrainz",
+}
+
+
+def _metadata_relay() -> tuple[str, str]:
+    """(base URL, token) of the host's relay, or two empty strings."""
+    base = (os.environ.get("MAURICE_METADATA_RELAY_URL") or "").strip().rstrip("/")
+    token = (os.environ.get("MAURICE_METADATA_RELAY_TOKEN") or "").strip()
+    return (base, token) if base and token else ("", "")
+
+
+def _via_relay(req: Any) -> Any:
+    """The same lookup addressed to the relay, when it is the relay's to answer."""
+    import urllib.parse
+    import urllib.request
+
+    base, token = _metadata_relay()
+    if not base or isinstance(req, str):
+        return req
+    url = req.full_url
+    route = next(((prefix, name) for prefix, name in _RELAY_ROUTES.items() if url.startswith(prefix)), None)
+    if not route:
+        return req
+    prefix, name = route
+    parts = urllib.parse.urlsplit(url)
+    query = urllib.parse.parse_qsl(parts.query, keep_blank_values=True)
+    borrowed = any(v == _RELAY_KEY for _, v in query) or any(v == _RELAY_KEY for v in req.headers.values())
+    if not borrowed and name != "musicbrainz":
+        return req
+    path = url[len(prefix):].split("?", 1)[0]
+    kept = urllib.parse.urlencode([(k, v) for k, v in query if v != _RELAY_KEY])
+    return urllib.request.Request(
+        f"{base}/v1/{name}/{path}" + (f"?{kept}" if kept else ""),
+        data=req.data,
+        method=req.get_method(),
+        headers={"Authorization": f"Bearer {token}", "User-Agent": "Maurice/1.0", "Accept": "application/json"},
+    )
+
+
+def _urlopen(req: Any, **kwargs: Any) -> Any:
+    import urllib.request
+
+    return urllib.request.urlopen(_via_relay(req), **kwargs)
 
 
 def member_root() -> Path:
@@ -4668,7 +4736,7 @@ def _tmdb_search(title: str, year: int | None, api_key: str) -> list[dict[str, A
         params["year"] = str(year)
     url = f"https://api.themoviedb.org/3/search/movie?{urllib.parse.urlencode(params)}"
     req = urllib.request.Request(url)
-    with urllib.request.urlopen(req) as resp:
+    with _urlopen(req) as resp:
         data = json.loads(resp.read())
     return data.get("results", [])
 
@@ -4678,7 +4746,7 @@ def _tmdb_details(movie_id: int, api_key: str) -> dict[str, Any]:
 
     url = f"https://api.themoviedb.org/3/movie/{movie_id}?api_key={api_key}&append_to_response=credits"
     req = urllib.request.Request(url)
-    with urllib.request.urlopen(req) as resp:
+    with _urlopen(req) as resp:
         return json.loads(resp.read())
 
 
@@ -4694,9 +4762,21 @@ def _download_image(url: str, dest: Path) -> None:
     import urllib.request
 
     dest.parent.mkdir(parents=True, exist_ok=True)
+    import urllib.error
+
     req = urllib.request.Request(url, headers={"User-Agent": "Akita/1.0"})
-    with urllib.request.urlopen(req) as resp:
-        dest.write_bytes(resp.read())
+    try:
+        with _urlopen(req) as resp:
+            data = resp.read()
+    except urllib.error.HTTPError as exc:
+        # The Cover Art Archive redirects to archive.org, which answers 500 now
+        # and then and serves the same file a moment later. Once more, no more.
+        if exc.code < 500:
+            raise
+        time.sleep(1)
+        with _urlopen(req) as resp:
+            data = resp.read()
+    dest.write_bytes(data)
 
 
 def _tmdb_tv_search(title: str, year: int | None, api_key: str) -> list[dict[str, Any]]:
@@ -4708,7 +4788,7 @@ def _tmdb_tv_search(title: str, year: int | None, api_key: str) -> list[dict[str
         params["first_air_date_year"] = str(year)
     url = f"https://api.themoviedb.org/3/search/tv?{urllib.parse.urlencode(params)}"
     req = urllib.request.Request(url)
-    with urllib.request.urlopen(req) as resp:
+    with _urlopen(req) as resp:
         data = json.loads(resp.read())
     return data.get("results", [])
 
@@ -4718,7 +4798,7 @@ def _tmdb_tv_details(series_id: int, api_key: str) -> dict[str, Any]:
 
     url = f"https://api.themoviedb.org/3/tv/{series_id}?api_key={api_key}"
     req = urllib.request.Request(url)
-    with urllib.request.urlopen(req) as resp:
+    with _urlopen(req) as resp:
         return json.loads(resp.read())
 
 
@@ -4735,7 +4815,7 @@ def _google_books_volume(volume_id: str) -> dict[str, Any]:
     if api_key:
         url += f"?key={urllib.parse.quote(api_key)}"
     req = urllib.request.Request(url)
-    with urllib.request.urlopen(req) as resp:
+    with _urlopen(req) as resp:
         return json.loads(resp.read())
 
 
@@ -4755,7 +4835,7 @@ def _google_books_search(
         params["key"] = api_key
     url = f"https://www.googleapis.com/books/v1/volumes?{urllib.parse.urlencode(params)}"
     req = urllib.request.Request(url)
-    with urllib.request.urlopen(req) as resp:
+    with _urlopen(req) as resp:
         data = json.loads(resp.read())
     items = data.get("items", [])
     # Two independent problems, one fix: langRestrict narrows the search but
@@ -4790,7 +4870,7 @@ def _podcastindex_by_id(feed_id: int, api_key: str, api_secret: str) -> dict[str
     headers = _podcastindex_auth_headers(api_key, api_secret)
     url = f"https://api.podcastindex.org/api/1.0/podcasts/byfeedid?{urllib.parse.urlencode({'id': feed_id})}"
     req = urllib.request.Request(url, headers=headers)
-    with urllib.request.urlopen(req) as resp:
+    with _urlopen(req) as resp:
         data = json.loads(resp.read())
     feed = data.get("feed")
     # byfeedid returns [] rather than null when nothing matches.
@@ -4819,7 +4899,7 @@ def _podcastindex_search(title: str, api_key: str, api_secret: str) -> list[dict
     headers = _podcastindex_auth_headers(api_key, api_secret)
     url = f"https://api.podcastindex.org/api/1.0/search/byterm?{urllib.parse.urlencode({'q': title})}"
     req = urllib.request.Request(url, headers=headers)
-    with urllib.request.urlopen(req) as resp:
+    with _urlopen(req) as resp:
         data = json.loads(resp.read())
     return data.get("feeds", [])
 
@@ -4939,7 +5019,7 @@ def _igdb_token(client_id: str, client_secret: str) -> str:
         "grant_type": "client_credentials",
     }).encode()
     req = urllib.request.Request("https://id.twitch.tv/oauth2/token", data=body, method="POST")
-    with urllib.request.urlopen(req) as resp:
+    with _urlopen(req) as resp:
         data = json.loads(resp.read())
     token = str(data.get("access_token", ""))
     if not token:
@@ -4955,7 +5035,8 @@ def _igdb_token(client_id: str, client_secret: str) -> str:
 def _igdb_query(client_id: str, client_secret: str, body: str) -> list[dict[str, Any]]:
     import urllib.request
 
-    token = _igdb_token(client_id, client_secret)
+    # Borrowed credentials buy nothing at Twitch: the relay holds the real ones.
+    token = "" if client_id == _RELAY_KEY else _igdb_token(client_id, client_secret)
     req = urllib.request.Request(
         "https://api.igdb.com/v4/games",
         data=body.encode(),
@@ -4966,7 +5047,7 @@ def _igdb_query(client_id: str, client_secret: str, body: str) -> list[dict[str,
         },
         method="POST",
     )
-    with urllib.request.urlopen(req) as resp:
+    with _urlopen(req) as resp:
         data = json.loads(resp.read())
     return data if isinstance(data, list) else []
 
@@ -5034,7 +5115,7 @@ def _extract_og_metadata(url: str) -> dict[str, str]:
     import urllib.request
 
     req = urllib.request.Request(url, headers={"User-Agent": "Akita/1.0"})
-    with urllib.request.urlopen(req, timeout=15) as resp:
+    with _urlopen(req, timeout=15) as resp:
         html = resp.read().decode("utf-8", errors="replace")
 
     og: dict[str, str] = {}
@@ -5074,7 +5155,7 @@ def _wikidata_search(name: str) -> list[dict[str, Any]]:
     }
     url = f"https://www.wikidata.org/w/api.php?{urllib.parse.urlencode(params)}"
     req = urllib.request.Request(url, headers={"User-Agent": "Akita/1.0"})
-    with urllib.request.urlopen(req) as resp:
+    with _urlopen(req) as resp:
         data = json.loads(resp.read())
     return data.get("search", [])
 
@@ -5091,7 +5172,7 @@ def _wikidata_entity(entity_id: str) -> dict[str, Any]:
     }
     url = f"https://www.wikidata.org/w/api.php?{urllib.parse.urlencode(params)}"
     req = urllib.request.Request(url, headers={"User-Agent": "Akita/1.0"})
-    with urllib.request.urlopen(req) as resp:
+    with _urlopen(req) as resp:
         data = json.loads(resp.read())
     return data.get("entities", {}).get(entity_id, {})
 
@@ -5209,10 +5290,11 @@ def _musicbrainz_get(path: str, params: dict[str, Any]) -> dict[str, Any]:
     # both landing inside the same second.
     with _musicbrainz_lock:
         wait = _MUSICBRAINZ_MIN_INTERVAL - (time.monotonic() - _musicbrainz_last_call)
-        if wait > 0:
+        # Behind a relay the spacing is the relay's, held once for every household.
+        if wait > 0 and not _metadata_relay()[0]:
             time.sleep(wait)
         try:
-            with urllib.request.urlopen(req, timeout=15) as resp:
+            with _urlopen(req, timeout=15) as resp:
                 return json.loads(resp.read())
         finally:
             _musicbrainz_last_call = time.monotonic()
@@ -5461,7 +5543,7 @@ def _create_book_entry_sync(args: dict[str, Any]) -> dict[str, Any]:
         if api_key:
             url += f"?key={api_key}"
         req = urllib.request.Request(url)
-        with urllib.request.urlopen(req) as resp:
+        with _urlopen(req) as resp:
             book_data = json.loads(resp.read())
         volume = book_data.get("volumeInfo", {})
     else:
@@ -5682,7 +5764,7 @@ def _create_podcast_entry_sync(args: dict[str, Any]) -> dict[str, Any]:
         headers = _podcastindex_auth_headers(api_key, api_secret)
         url = f"https://api.podcastindex.org/api/1.0/podcasts/byfeedid?id={feed_id}"
         req = urllib.request.Request(url, headers=headers)
-        with urllib.request.urlopen(req) as resp:
+        with _urlopen(req) as resp:
             data = json.loads(resp.read())
         podcast = data.get("feed", {})
     else:
@@ -5812,7 +5894,7 @@ def _search_podcast_episodes_sync(args: dict[str, Any]) -> dict[str, Any]:
     headers = _podcastindex_auth_headers(api_key, api_secret)
     url = f"https://api.podcastindex.org/api/1.0/episodes/byfeedid?id={feed_id}&max={limit}"
     req = urllib.request.Request(url, headers=headers)
-    with urllib.request.urlopen(req) as resp:
+    with _urlopen(req) as resp:
         data = json.loads(resp.read())
 
     episodes = []
@@ -5846,7 +5928,7 @@ def _search_series_episodes_sync(args: dict[str, Any]) -> dict[str, Any]:
 
     url = f"https://api.themoviedb.org/3/tv/{tmdb_id}/season/{season_num}?api_key={api_key}"
     req = urllib.request.Request(url, headers={"User-Agent": "Akita/1.0"})
-    with urllib.request.urlopen(req) as resp:
+    with _urlopen(req) as resp:
         data = json.loads(resp.read())
 
     episodes = []
@@ -6105,7 +6187,7 @@ async def _handle_generate_hero_image(args: dict[str, Any]) -> dict[str, Any]:
             },
             method="POST",
         )
-        with urllib.request.urlopen(req, timeout=120) as resp:
+        with _urlopen(req, timeout=120) as resp:
             return json.loads(resp.read())
 
     fal_result = await asyncio.to_thread(_call_fal)
@@ -6124,7 +6206,7 @@ async def _handle_generate_hero_image(args: dict[str, Any]) -> dict[str, Any]:
 
     def _download() -> None:
         req = urllib.request.Request(image_url, headers={"User-Agent": "Akita/1.0"})
-        with urllib.request.urlopen(req, timeout=60) as resp:
+        with _urlopen(req, timeout=60) as resp:
             img_dest.write_bytes(resp.read())
 
     await asyncio.to_thread(_download)

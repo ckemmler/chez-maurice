@@ -857,6 +857,7 @@ web.get("/dashboard", async (c) => {
       <section id="sec-other-keys">
         ${sectionHead(t(lang, "dashboard.kicker_keys"), t(lang, "otherkeys.title"), t(lang, "otherkeys.desc"))}
         <form method="POST" action="/admin/other-keys" class="card pad">
+          ${process.env.MAURICE_METADATA_RELAY_URL && process.env.MAURICE_METADATA_RELAY_TOKEN ? `<p class="hint">${escape(t(lang, "otherkeys.relay_note"))}</p>` : ""}
           ${otherKeyField("tmdb_api_key", "otherkeys.tmdb", "otherkeys.tmdb_desc", true)}
           ${otherKeyField("google_books_api_key", "otherkeys.google_books", "otherkeys.google_books_desc", false)}
           <div class="field" style="margin-top:16px">
