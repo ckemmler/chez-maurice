@@ -12,6 +12,17 @@ import { join } from "node:path";
 
 const BASE = "https://localhost:3001/api";
 const tls = { rejectUnauthorized: false } as any;
+
+// This suite acts on the RUNNING household: it signs in as two real members,
+// creates conversations, posts, reports, blocks, and deletes what it made. It
+// used to run with every `bun test`, so every run of the unit tests did that to
+// the household of whoever ran them — and a run cut short left its conversation
+// behind. It now runs only when asked for:
+//
+//   MAURICE_LIVE_TESTS=1 bun test test/safety.test.ts
+//
+const LIVE = process.env.MAURICE_LIVE_TESTS === "1";
+if (!LIVE) console.warn("[safety] skipped: it acts on the running household — MAURICE_LIVE_TESTS=1 to run it");
 // The live data dir, on purpose: this suite talks to the running server and
 // reads its tokens. The test preload redirects MAURICE_DATA_DIR to a temp
 // dir for everyone else and leaves the original here.
@@ -40,6 +51,7 @@ async function api(tok: string, method: string, p: string, body?: any) {
 }
 
 beforeAll(async () => {
+  if (!LIVE) return;
   const db = new Database(join(DATA, "maurice.db"));
   const a = tokenFor(db, "candide"); // admin / operator
   const m = tokenFor(db, "paola");   // standard / member
@@ -57,6 +69,7 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
+  if (!LIVE) return;
   // Unblock + delete the rooms (cascades messages/participants/reports).
   await api(memberTok, "DELETE", `/users/${adminId}/block`);
   if (roomId) await api(adminTok, "DELETE", `/conversations/${roomId}`);
@@ -68,7 +81,7 @@ async function roomMessages(tok: string): Promise<any[]> {
   return r.json?.messages ?? [];
 }
 
-describe("shared-rooms safety surface", () => {
+describe.skipIf(!LIVE)("shared-rooms safety surface", () => {
   it("reports require a shared room and a valid reason", async () => {
     // Member posts nothing yet; report a member with a bad reason → 400.
     const bad = await api(memberTok, "POST", `/conversations/${roomId}/reports`, {
@@ -147,7 +160,7 @@ describe("shared-rooms safety surface", () => {
   });
 });
 
-describe("isolation invariant (admin cannot reach a member's private data)", () => {
+describe.skipIf(!LIVE)("isolation invariant (admin cannot reach a member's private data)", () => {
   it("admin cannot read a member's private 1:1 conversation", async () => {
     const r = await api(adminTok, "GET", `/conversations/${privId}`);
     expect(r.status).toBe(404);

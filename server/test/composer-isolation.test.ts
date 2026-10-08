@@ -16,6 +16,17 @@ import { gardensRoot } from "../src/services/gardensRoot";
 
 const BASE = "https://localhost:3001/api/v1/composer";
 const tls = { rejectUnauthorized: false } as any;
+
+// This suite acts on the RUNNING household: it signs in as two real members,
+// creates conversations, posts, reports, blocks, and deletes what it made. It
+// used to run with every `bun test`, so every run of the unit tests did that to
+// the household of whoever ran them — and a run cut short left its conversation
+// behind. It now runs only when asked for:
+//
+//   MAURICE_LIVE_TESTS=1 bun test test/composer-isolation.test.ts
+//
+const LIVE = process.env.MAURICE_LIVE_TESTS === "1";
+if (!LIVE) console.warn("[composer-isolation] skipped: it acts on the running household — MAURICE_LIVE_TESTS=1 to run it");
 // The live data dir, on purpose: this suite talks to the running server and
 // reads its tokens. The test preload redirects MAURICE_DATA_DIR to a temp
 // dir for everyone else and leaves the original here.
@@ -48,6 +59,7 @@ async function api(tok: string, method: string, p: string, body?: any) {
 }
 
 beforeAll(() => {
+  if (!LIVE) return;
   const db = new Database(join(DATA, "maurice.db"));
   const c = tokenFor(db, "candide");
   const p = tokenFor(db, "paola");
@@ -113,6 +125,7 @@ beforeAll(() => {
 });
 
 afterAll(() => {
+  if (!LIVE) return;
   fs.rmSync(ENCRYPTED_NOTE_PATH, { force: true });
   const live = new Database(join(DATA, "maurice.db"));
   live.run(`DELETE FROM calibre_libraries WHERE account_id = ? AND library_root = ?`, [paolaId, PAOLA_LIB]);
@@ -124,7 +137,7 @@ afterAll(() => {
   db.close();
 });
 
-describe("composer encrypted carry-through (single-user path)", () => {
+describe.skipIf(!LIVE)("composer encrypted carry-through (single-user path)", () => {
   it("an encrypted note resolves (loaded, flagged), not blocked", async () => {
     const r = await api(candideTok, "GET", `/notes/${ENCRYPTED_NOTE}/resolve`);
     expect(r.status).toBe(200);
@@ -143,7 +156,7 @@ describe("composer encrypted carry-through (single-user path)", () => {
   });
 });
 
-describe("composer account isolation", () => {
+describe.skipIf(!LIVE)("composer account isolation", () => {
   it("search: paola sees no candide notes/books", async () => {
     const r = await api(paolaTok, "GET", `/search?q=being`);
     expect(r.status).toBe(200);
