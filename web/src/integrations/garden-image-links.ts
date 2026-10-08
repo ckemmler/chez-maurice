@@ -9,10 +9,10 @@
  * belong and where the on-write download already lived.
  */
 import type { AstroIntegration } from "astro";
-import { symlink, readlink, rm, readdir, mkdir } from "node:fs/promises";
+import { symlink, readlink, rm, readdir, mkdir, readFile, stat } from "node:fs/promises";
 import { existsSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { join, resolve } from "node:path";
+import { join, relative, resolve, sep } from "node:path";
 
 /** Point public/images/<member> at that member's garden images.
  *
@@ -109,6 +109,100 @@ async function ensureAvatarLink(
   }
 }
 
+// ── What a public build may carry ──
+
+/** Every file under a directory, as absolute paths. Symlinks are not followed:
+ *  by build:done the output holds copies, and a stray link is nobody's file. */
+async function walk(dir: string): Promise<string[]> {
+  const out: string[] = [];
+  let names: string[];
+  try {
+    names = await readdir(dir);
+  } catch {
+    return out;
+  }
+  for (const name of names) {
+    const full = join(dir, name);
+    const info = await stat(full).catch(() => null);
+    if (!info) continue;
+    if (info.isDirectory()) out.push(...(await walk(full)));
+    else out.push(full);
+  }
+  return out;
+}
+
+// What a visitor is served. Not the scripts: the adapter's own manifest lists
+// every file of public/, which would make each of them look used.
+const TEXT = /\.(html|json|xml|css|txt)$/;
+
+/**
+ * The image and avatar paths the built pages actually point at, as paths
+ * relative to the output (`images/<member>/resources/books/x.jpg`). A page
+ * names its cover as /images/…, possibly under a base and possibly inside an
+ * absolute URL (og:image), so the match is on the path, wherever it sits.
+ */
+async function referencedAssets(outDir: string): Promise<Set<string>> {
+  const used = new Set<string>();
+  const pattern = /\/((?:images|avatars)\/[^"'()\s<>?#\\]+)/g;
+  for (const file of await walk(outDir)) {
+    if (!TEXT.test(file) || file.includes(`${sep}_worker.js${sep}`)) continue;
+    const text = await readFile(file, "utf-8").catch(() => "");
+    for (const m of text.matchAll(pattern)) {
+      const raw = m[1]!;
+      used.add(raw);
+      try {
+        used.add(decodeURI(raw));
+      } catch {
+        /* not an encoded path */
+      }
+    }
+  }
+  return used;
+}
+
+async function removeEmptyDirs(dir: string): Promise<void> {
+  let names: string[];
+  try {
+    names = await readdir(dir);
+  } catch {
+    return;
+  }
+  for (const name of names) {
+    const full = join(dir, name);
+    const info = await stat(full).catch(() => null);
+    if (info?.isDirectory()) await removeEmptyDirs(full);
+  }
+  if ((await readdir(dir).catch(() => ["x"])).length === 0) await rm(dir, { recursive: true, force: true });
+}
+
+/**
+ * A public build is one member's published pages. public/ is the household's:
+ * it links every member's images, and every member's avatar. Copied as it
+ * stands, a member's site carried the covers of everyone else's entries, and
+ * of their own unpublished ones; the avatars — family photographs — were spared
+ * only because the link that would have brought them in threw before it was
+ * made.
+ *
+ * So the output keeps what its own pages point at, and nothing else: an image
+ * or an avatar no built page names is not part of what was published.
+ */
+async function keepOnlyReferenced(outDir: string, logger: { info: (m: string) => void }): Promise<void> {
+  const used = await referencedAssets(outDir);
+  for (const top of ["images", "avatars"]) {
+    const root = join(outDir, top);
+    if (!existsSync(root)) continue;
+    let removed = 0;
+    for (const file of await walk(root)) {
+      const rel = relative(outDir, file).split(sep).join("/");
+      if (used.has(rel)) continue;
+      await rm(file, { force: true });
+      removed++;
+    }
+    await removeEmptyDirs(root);
+    if (removed) logger.info(`Left ${removed} unreferenced file(s) under ${top}/ out of the build`);
+  }
+}
+
 export default function gardenImageLinks(): AstroIntegration {
   return {
     name: "garden-image-links",
@@ -148,6 +242,13 @@ export default function gardenImageLinks(): AstroIntegration {
       // Pruning here, rather than by linking less, keeps the dev server's view
       // untouched: nothing outside dist/ is modified.
       "astro:build:done": async ({ dir, logger }) => {
+        // The engine's own build (WEB_SSR) serves the household and keeps the
+        // rule below. A static build is published: it keeps only what its
+        // pages use.
+        if (process.env.WEB_SSR !== "1") {
+          await keepOnlyReferenced(fileURLToPath(dir), logger);
+          return;
+        }
         const images = join(fileURLToPath(dir), "images");
         if (!existsSync(images)) return;
         for (const member of await readdir(images)) {
