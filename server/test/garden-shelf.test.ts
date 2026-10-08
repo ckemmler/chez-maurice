@@ -77,6 +77,10 @@ beforeAll(() => {
   write("movies/en/the-lost-city-of-z.md",
     `---\ntitle: The Lost City of Z\ndirector: James Gray\nflags:\n  - public\nlocale: en\ntranslationKey: the-lost-city-of-z\n---\nSlow and beautiful.\n`);
 
+  // An album: nothing to read, an artist for a byline, a listening date.
+  write("music/fr/kind-of-blue.md",
+    `---\ntitle: Kind of Blue\nartist: Miles Davis\ndate_listened: '2026-10-05'\nflags: []\nrating: 5\nlocale: fr\n---\nLe disque qu'on met quand on ne sait pas quoi mettre.\n`);
+
   // What the shelf leaves out.
   write("notes/fr/une-note.md", `---\ntitle: Une note\nlocale: fr\n---\nTexte.`);
   write("people/fr/arnaud-fiche.md", `---\ntitle: Arnaud\nresource_collection: people\nlocale: fr\n---\n`);
@@ -146,6 +150,15 @@ describe("the list", () => {
     expect((soil.source as any).captured).toBe(false);
     expect(soil.mine).toEqual({ notes: 1, opened: true });               // the note; the excerpt is not the member's
   });
+});
+
+test("an album is an entry like the others", async () => {
+  const { kinds, entries } = await listShelf(MEMBER.id, garden, BOOKS as any);
+  expect(entries.find((e) => e.id === "music/fr/kind-of-blue")).toMatchObject({
+    kind: "music", byline: "Miles Davis", date: "2026-10-05", rating: 5,
+    source: null, mine: null, shared: { state: "draft" },
+  });
+  expect(kinds.map((k) => k.kind)).toContain("music");
 });
 
 describe("translations", () => {

@@ -164,7 +164,7 @@ export function listGardenEntries(garden: GardenRef): GardenEntry[] {
         if (!isFiche || !e.title) {
           e.title = String(fm.title ?? meta.title ?? slug);
           e.date = String(
-            fm.date ?? fm.date_watched ?? fm.date_read ?? fm.date_played ?? meta.saved_at ?? "",
+            fm.date ?? fm.date_watched ?? fm.date_read ?? fm.date_listened ?? fm.date_played ?? meta.saved_at ?? "",
           );
         }
         const tags = Array.isArray(fm.tags) ? fm.tags.map(String) : [];

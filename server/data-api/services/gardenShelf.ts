@@ -37,9 +37,9 @@ import { NEEDS_CAPTURE } from "./gardenArticles";
 /** The collections the shelf lists, and the kind each reads as. */
 const KIND_OF: Record<string, ShelfKind> = {
   books: "books", articles: "articles", movies: "movies", series: "series",
-  podcasts: "podcasts", games: "games", blog: "posts", essays: "posts",
+  music: "music", podcasts: "podcasts", games: "games", blog: "posts", essays: "posts",
 };
-export const SHELF_KINDS = ["books", "articles", "movies", "series", "podcasts", "games", "posts"] as const;
+export const SHELF_KINDS = ["books", "articles", "movies", "series", "music", "podcasts", "games", "posts"] as const;
 export type ShelfKind = (typeof SHELF_KINDS)[number];
 
 // ── Shapes ──
@@ -175,7 +175,7 @@ export function isWritten(collection: string, card: Face | null, fiche: Face | n
   return !provided.some((p) => p === body || p.startsWith(body) || body.startsWith(p));
 }
 
-const BYLINE_KEYS = ["author", "director", "creator", "host", "publication", "developer", "platform"];
+const BYLINE_KEYS = ["author", "director", "artist", "creator", "host", "publication", "developer", "platform"];
 
 function byline(collection: string, card: Face | null, fiche: Face | null): string | null {
   // An article is known by where it appeared; its `author` is often the
