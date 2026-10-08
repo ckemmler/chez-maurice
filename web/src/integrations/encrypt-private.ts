@@ -12,13 +12,12 @@ export default function encryptPrivate(): AstroIntegration {
     name: "encrypt-private",
     hooks: {
       "astro:build:done": async ({ dir, logger }) => {
+        // Without a password an encrypted note cannot be encrypted. It used to
+        // be left as it was, with a warning: published in clear, by a build
+        // nobody was watching. It is withheld instead — the page stays, so a
+        // link to it lands somewhere, and says only that there is something
+        // here its author keeps to themself.
         const password = process.env.PRIVATE_CONTENT_PASSWORD;
-        if (!password) {
-          logger.warn(
-            "PRIVATE_CONTENT_PASSWORD not set — private pages left unencrypted"
-          );
-          return;
-        }
 
         const distDir = fileURLToPath(dir);
         const noteDirs = [
@@ -39,16 +38,25 @@ export default function encryptPrivate(): AstroIntegration {
             const filePath = join(noteDir, entry);
             const html = await readFile(filePath, "utf-8");
             if (!html.includes("data-private")) continue;
-            const encrypted = encryptPage(html, password);
-            await writeFile(filePath, encrypted, "utf-8");
+            await writeFile(filePath, password ? encryptPage(html, password) : withholdPage(html), "utf-8");
             count++;
           }
         }
 
-        logger.info(`Encrypted ${count} private page(s)`);
+        if (password) logger.info(`Encrypted ${count} private page(s)`);
+        else if (count) logger.warn(`PRIVATE_CONTENT_PASSWORD not set — ${count} private page(s) withheld from the build`);
       },
     },
   };
+}
+
+/** The page without what it was about: its text, its title, its description. */
+export function withholdPage(html: string): string {
+  return html
+    .replace(/<title>[^<]*<\/title>/, "<title>Private Note</title>")
+    .replace(/<meta\s+(?:name|property)="(?:description|og:[a-z:]+|twitter:[a-z:]+)"\s+content="[^"]*"\s*\/?>/g, "")
+    .replace(/(<article[^>]*>)([\s\S]*?)(<\/article>)/,
+      '$1\n<p style="max-width:65ch;margin-top:2rem">This note is private.</p>\n$3');
 }
 
 function encryptPage(html: string, password: string): string {
