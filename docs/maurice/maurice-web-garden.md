@@ -1,6 +1,6 @@
 ---
 title: The web garden
-date: '2026-10-07'
+date: '2026-10-08'
 flags: []
 locale: en
 description: 'The Astro renderer: per-request theme engine, content collections, wiki-links,
@@ -36,7 +36,7 @@ The shipped garden themes are **manuscript** (default — ivory paper, oxblood l
 Content collections (`web/src/content.config.ts`) load from the member's garden under `~/.maurice/gardens/<member>/` (resolved from one place, `gardensRoot`, in the server, the shell and the engine alike):
 
 - **notes**, **blog**, **essays** (MDX), **pages**
-- **resources**: books, articles, movies, series, podcasts, games, people — the *cards*
+- **resources**: books, articles, movies, series, podcasts, games, music (albums; `/resources/music`, `/fr/trouvailles/musique`), people — the *cards*
 - **fiches** — the working faces (`<slug>-fiche.md`), rendered on the member's private garden with everything the fiche knows about itself (provider metadata, fragments, résonances); left out of the production build. A garden is its fiches and cards too, not only its notes — the garden list is built a page at a time.
 
 A note Maurice wrote at a domain's adoption and the owner has not reviewed yet (`meta.opened: false` in its frontmatter, see [[maurice-knowledge]]) opens on a **banner** — *Written by Maurice, not reviewed yet · From 16 conversations, with deepseek-v4-flash-0731* — with, for the owner, the two gestures that are not the toolbar's: **Keep** (`POST /api/v1/garden-tools/review-note`, the mark goes and the banner fades) and **Throw away** (the toolbar's delete, then back to the notes index; correcting is the toolbar's *Edit*). The notes index and a MOC's child list show *to review* beside such a note. Both are in the default theme's `NoteDetail` and `NotesList`, which every shipped theme inherits; a non-owner sees the banner without the buttons.
