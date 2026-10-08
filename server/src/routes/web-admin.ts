@@ -54,6 +54,7 @@ import { corpusNightlyStatus, reconcileCorpus } from "../services/corpusNightly"
 import { briefsNightlyStatus, runDomainBriefs } from "../services/domainBriefs";
 import { mappingNightlyStatus, runDomainMapping } from "../services/domainMapping";
 import { ArchiveError, exportResponse } from "../services/archive";
+import { publicPagesAvailableOn, publicPagesSwitch, setPublicPagesSwitch } from "../../data-api/services/publicPages";
 import { t, langOf, SUPPORTED } from "../services/i18n";
 import { SYSTEM_SPENDER, spentTodayUsd, spentMonthUsd, memberDailyCap, setMemberDailyCap, setHouseholdDailyCap, setSystemDailyCap } from "../services/budget";
 import { ImportError, importHistory, importStatus, isImportProvider, startImport } from "../services/chatImport";
@@ -908,6 +909,11 @@ web.get("/dashboard", async (c) => {
         ${mappingCard(lang)}
       </section>
 
+      <section id="sec-public-pages">
+        ${sectionHead(t(lang, "dashboard.kicker_advanced"), t(lang, "publicpages.title"), t(lang, "publicpages.desc"))}
+        ${publicPagesCard(lang)}
+      </section>
+
       <section id="sec-archive">
         ${sectionHead(t(lang, "dashboard.kicker_archive"), t(lang, "archive.title"), t(lang, "archive.desc"))}
         <div class="card pad">
@@ -917,6 +923,23 @@ web.get("/dashboard", async (c) => {
       </section>
     </div>`, true, adminName(c), lang));
 });
+
+/**
+ * Public pages: the one switch, and where the pages are. A household that is
+ * not set up to serve any (at home, by default) is told so rather than shown a
+ * switch that would do nothing.
+ */
+function publicPagesCard(lang: string): string {
+  const host = publicPagesAvailableOn();
+  if (!host) return `<div class="card pad"><span class="hint">${escape(t(lang, "publicpages.unavailable"))}</span></div>`;
+  const on = publicPagesSwitch();
+  return `
+        <form method="POST" action="/admin/public-pages" class="card pad">
+          <div class="chips"><label class="chip"><input type="checkbox" name="enabled" ${on ? "checked" : ""} /><span class="cdot"><span class="chk">✓</span></span><span class="clabel">${escape(t(lang, "publicpages.allow"))}</span></label></div>
+          <div class="hint" style="margin:10px 0 14px">${escape(t(lang, on ? "publicpages.hint_on" : "publicpages.hint_off").replace("%@", `https://${host}/@…`))}</div>
+          <button type="submit" class="btn primary">${escape(t(lang, "common.save_changes"))}</button>
+        </form>`;
+}
 
 /** A posted spending cap: "" → null (no cap), a non-negative number → itself,
  *  anything else → undefined (leave the stored value alone). */
@@ -1120,6 +1143,16 @@ web.post("/settings", async (c) => {
     else if (/^\d+$/.test(raw)) setOpensMinDays(Number(raw));
   }
   return c.redirect("/admin/dashboard?msg=settings_saved#sec-settings");
+});
+
+// ── Public pages (POST) ─────────────────────────────────────────
+// A checkbox posts only when ticked: its absence is the "off".
+web.post("/public-pages", async (c) => {
+  const redir = requireWebAdmin(c);
+  if (redir) return redir;
+  const form = await c.req.parseBody();
+  setPublicPagesSwitch(form.enabled !== undefined);
+  return c.redirect("/admin/dashboard?msg=settings_saved#sec-public-pages");
 });
 
 // ── Ancillary models (POST) ─────────────────────────────────────

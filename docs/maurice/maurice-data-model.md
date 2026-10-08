@@ -1,6 +1,6 @@
 ---
 title: The data model
-date: '2026-10-03'
+date: '2026-10-08'
 flags: []
 locale: en
 description: 'The SQLite schema behind the chat engine: identity, conversations, files,
@@ -23,7 +23,7 @@ One **SQLite** file (`maurice.db`, WAL mode, in the Maurice home `~/.maurice/`) 
 
 | Table | Key columns | Notes |
 |---|---|---|
-| `households` | one row `id='default'`; `api_key`, `openai_api_key`, `mistral_api_key`, `zai_api_key`, `fal_api_key`, `default_model`, `max_tokens`, `everyday_thinking` (nullable 0/1, seeded 0), `ollama_host`, `default_tool_families`, `color`, `icon`, `providers_seeded`, `zai_seeded`, `scaleway_seeded`, `vision_seeded`, `thinking_seeded`, `spend_cap_daily_usd`, `spend_cap_system_daily_usd`, `budget_monthly_eur` | **A server is one household.** `everyday_thinking` is the everyday Maurice's reasoning choice — the conversation with no persona has no place in the apps to set anything, so its settings come "from the factory" and are corrected in the admin console only. Multiple households is a multi-*server* feature (the app's foyer switcher, and at home one launchd agent per extra household), not multiple rows. `color`/`icon` give the foyer its identity; the `*_seeded` flags guard the one-time model seeds so a deleted model stays deleted. |
+| `households` | one row `id='default'`; `api_key`, `openai_api_key`, `mistral_api_key`, `zai_api_key`, `fal_api_key`, `default_model`, `max_tokens`, `everyday_thinking` (nullable 0/1, seeded 0), `ollama_host`, `default_tool_families`, `color`, `icon`, `providers_seeded`, `zai_seeded`, `scaleway_seeded`, `vision_seeded`, `thinking_seeded`, `spend_cap_daily_usd`, `spend_cap_system_daily_usd`, `budget_monthly_eur` | **A server is one household.** `everyday_thinking` is the everyday Maurice's reasoning choice — the conversation with no persona has no place in the apps to set anything, so its settings come "from the factory" and are corrected in the admin console only. Multiple households is a multi-*server* feature (the app's foyer switcher, and at home one launchd agent per extra household), not multiple rows. `color`/`icon` give the foyer its identity; the `*_seeded` flags guard the one-time model seeds so a deleted model stays deleted. `public_pages` (1 by default, since 8 October 2026): whether the members may publish to the household's public pages, `/@<member>/` — see [[maurice-server]]. |
 | `users` | `id`, `username` (unique), `display_name`, `role ∈ {admin,standard,guest}`, `password_hash`, `pin_hash`, `avatar_color`, `avatar_url`, `profile_text`, `notes_domain`, `experimental_tools`, `everyday_model` | `everyday_model` = the member's preferred model for the unspecialized Maurice (null → household default). `username` is also the member's garden directory. |
 | `user_preferences` | `user_id` (PK), `theme`, `serif_font`, `density`, `palette`, `locale` | Per-member app appearance and language. |
 

@@ -17,6 +17,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { spawn } from "node:child_process";
+import db from "../../src/db";
 import { getDataDir } from "../lib/config";
 import { gardensRoot } from "../../src/services/gardensRoot";
 import type { GardenRef } from "./gardenFiche";
@@ -24,15 +25,39 @@ import type { GardenRef } from "./gardenFiche";
 const WEB = path.resolve(import.meta.dir, "../../../web");
 
 /**
- * The host the public pages are served on, or null when this household does
- * not publish any. Off unless asked for: a household at home is reachable by
- * whoever its owner let in, and serving pages to anyone there is not a default
- * to take for them. A hosted household sets `MAURICE_PUBLIC_PAGES=1`.
+ * The host this household could serve public pages on, or null when it is not
+ * set up to. Off unless asked for: a household at home is reachable by whoever
+ * its owner let in, and serving pages to anyone there is not a default to take
+ * for them. A hosted household sets `MAURICE_PUBLIC_PAGES=1`.
  */
-export function publicPagesHost(): string | null {
+export function publicPagesAvailableOn(): string | null {
   const host = (process.env.MAURICE_PUBLIC_HOST ?? "").trim();
   if (process.env.MAURICE_PUBLIC_PAGES !== "1" || !host || host === "localhost") return null;
   return host;
+}
+
+/** The admin's switch: may the members of this household publish? On by default. */
+export function publicPagesSwitch(): boolean {
+  const row = db.query(`SELECT public_pages FROM households WHERE id = 'default'`).get() as
+    | { public_pages: number | null }
+    | null;
+  return (row?.public_pages ?? 1) !== 0;
+}
+
+export function setPublicPagesSwitch(on: boolean): void {
+  db.run(`UPDATE households SET public_pages = ? WHERE id = 'default'`, [on ? 1 : 0]);
+}
+
+/**
+ * The host the public pages are served on, or null: the household is set up
+ * for them, and its admin has not turned them off. Turning them off is
+ * immediate and whole — nothing is built, no member has an address, and what
+ * was published stops being served, though it stays on disk and in each
+ * garden, so turning them on again brings it back.
+ */
+export function publicPagesHost(): string | null {
+  const host = publicPagesAvailableOn();
+  return host && publicPagesSwitch() ? host : null;
 }
 
 /** `https://<host>/@<member>` — where a member's pages are, or null. A child's
@@ -98,7 +123,7 @@ export function resolvePublicFile(pathname: string): string | null {
 
 /** The response for a request under `/@…`, or null to let it through. */
 export function servePublicPage(pathname: string): Response | null {
-  if (!pathname.startsWith("/@")) return null;
+  if (!pathname.startsWith("/@") || !publicPagesHost()) return null;
   const file = resolvePublicFile(pathname);
   if (!file) return null;
   return new Response(Bun.file(file), {

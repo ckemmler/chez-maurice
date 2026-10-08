@@ -135,6 +135,45 @@ describe("who has an address", () => {
   });
 });
 
+describe("the admin's switch", () => {
+  test("off: no address, nothing served, no publishing — and on again brings it all back", async () => {
+    const { publicPagesAvailableOn, publicPagesSwitch, setPublicPagesSwitch } =
+      await import("../data-api/services/publicPages");
+    page("anna", "index.html", "<h1>Anna</h1>");
+    expect(publicPagesSwitch()).toBe(true);   // on unless turned off
+    expect(servePublicPage("/@anna/")).not.toBeNull();
+
+    setPublicPagesSwitch(false);
+    try {
+      // Still set up for it; the admin said no.
+      expect(publicPagesAvailableOn()).toBe("magik.chezmaurice.eu");
+      expect(publicPagesHost()).toBeNull();
+      expect(defaultSite({ username: "anna" })).toBeNull();
+      expect(siteFor(MEMBER.id)).toBeNull();
+      expect(canDeploy(MEMBER.id, garden)).toBe(false);
+      expect(servePublicPage("/@anna/")).toBeNull();
+      // What was published is kept, not deleted.
+      expect(resolvePublicFile("/@anna/")).not.toBeNull();
+    } finally {
+      setPublicPagesSwitch(true);
+    }
+    expect(await servePublicPage("/@anna/")!.text()).toBe("<h1>Anna</h1>");
+    expect(siteFor(MEMBER.id)).toBe(`https://magik.chezmaurice.eu/@${MEMBER.username}`);
+  });
+
+  test("a member with a domain of their own is not concerned", async () => {
+    const { setPublicPagesSwitch } = await import("../data-api/services/publicPages");
+    db.run(`UPDATE users SET notes_domain = 'example.org' WHERE id = ?`, [MEMBER.id]);
+    setPublicPagesSwitch(false);
+    try {
+      expect(siteFor(MEMBER.id)).toBe("https://example.org");
+    } finally {
+      setPublicPagesSwitch(true);
+      db.run(`UPDATE users SET notes_domain = NULL WHERE id = ?`, [MEMBER.id]);
+    }
+  });
+});
+
 describe("publishing to one's pages", () => {
   test("builds the member's pages, one build at a time per member", async () => {
     const built: string[] = [];

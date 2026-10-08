@@ -1,3 +1,4 @@
+import { publicPagesAvailableOn, publicPagesSwitch } from "../../data-api/services/publicPages";
 import { Hono } from "hono";
 import { requireAuth, requireAdmin } from "../middleware/auth";
 import { createPairingToken } from "../services/auth";
@@ -76,6 +77,9 @@ admin.get("/status", (c) => {
     messages: messageCount,
     // Maurice's documentation (the maurice_docs tool): which set it reads and how fresh it is.
     docs: docsStatus(),
+    // Public pages (/@<member>/): whether this household can serve any, and
+    // whether its admin lets the members publish.
+    public_pages: { host: publicPagesAvailableOn(), enabled: publicPagesSwitch() },
   });
 });
 
@@ -119,6 +123,12 @@ admin.patch("/settings", async (c) => {
     params.push(v || null);
   }
 
+  if (body.public_pages !== undefined) {
+    if (typeof body.public_pages !== "boolean") return c.json({ error: "invalid public_pages" }, 400);
+    sets.push("public_pages = ?");
+    params.push(body.public_pages ? 1 : 0);
+  }
+
   if (sets.length > 0) {
     db.run(
       `UPDATE households SET ${sets.join(", ")} WHERE id = 'default'`,
@@ -139,6 +149,7 @@ admin.patch("/settings", async (c) => {
     has_fal_api_key: !!updated.fal_api_key,
     default_model: updated.default_model,
     max_tokens: updated.max_tokens,
+    public_pages: updated.public_pages !== 0,
   });
 });
 

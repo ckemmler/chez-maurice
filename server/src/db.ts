@@ -219,6 +219,10 @@ try { db.run(`ALTER TABLE conversations ADD COLUMN maurice_id TEXT`); } catch {}
 // Claude.ai data export. Drives the Anthropic badge in the sidebar.
 try { db.run(`ALTER TABLE conversations ADD COLUMN origin TEXT`); } catch {}
 try { db.run(`ALTER TABLE households ADD COLUMN fal_api_key TEXT`); } catch {}
+// Whether the members of this household may publish to its public pages
+// (`/@<member>/`, data-api/services/publicPages.ts). On unless the admin turns
+// it off; it only means something where the household serves such pages at all.
+try { db.run(`ALTER TABLE households ADD COLUMN public_pages INTEGER NOT NULL DEFAULT 1`); } catch {}
 try { db.run(`ALTER TABLE users ADD COLUMN notes_domain TEXT`); } catch {}
 // Optional photo avatar (a filename served from /api/avatars/<file>); null →
 // the client falls back to an initial on the user's avatar_color.
