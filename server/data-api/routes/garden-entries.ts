@@ -11,6 +11,9 @@ import { gardenFor } from "../services/gardenFiche";
 import { GARDEN_COLLECTIONS, listGardenEntries } from "../services/gardenEntries";
 import { cardsFace } from "../services/flashcards";
 import { getShelfEntry, listShelf, siteFor } from "../services/gardenShelf";
+import {
+  addNote, deployState, entryForBook, EntryWriteError, setPublished, writeShared, type EntryRef,
+} from "../services/gardenWrite";
 
 const app = new Hono();
 
@@ -53,5 +56,86 @@ app.get("/entries/:collection/:locale/:slug", async (c) => {
   if (!entry) return c.json({ error: "No such entry" }, 404);
   return c.json(entry);
 });
+
+// ── Writing (services/gardenWrite.ts) ──
+
+/** Run a write, answer with the entry as it now reads. */
+async function written(c: any, ref: EntryRef | null, work: (memberId: string, garden: any, ref: EntryRef) => unknown) {
+  const memberId = c.get("userId") as string;
+  const garden = gardenFor(memberId);
+  if (!garden) return c.json({ error: "No garden for this member" }, 404);
+  try {
+    const target = ref ?? (c.req.param() as EntryRef);
+    const extra = await work(memberId, garden, target);
+    const entry = await getShelfEntry(memberId, garden, target.collection, target.locale, target.slug);
+    return c.json({ ...entry, ...(extra ? { deploy: extra } : {}) }, extra ? 202 : 201);
+  } catch (e) {
+    if (e instanceof EntryWriteError) return c.json({ error: e.message }, e.status);
+    if (e instanceof Error && /^invalid (slug|locale)/.test(e.message)) return c.json({ error: e.message }, 400);
+    console.error("[garden-entries] write failed:", e);
+    return c.json({ error: "Failed to write" }, 500);
+  }
+}
+
+async function jsonBody(c: any): Promise<Record<string, any> | null> {
+  try {
+    const body = await c.req.json();
+    return body && typeof body === "object" ? body : null;
+  } catch {
+    return null;
+  }
+}
+
+/** A note on the member's side: one dated block under `## Commentaire`. */
+app.post("/entries/:collection/:locale/:slug/notes", async (c) => {
+  const body = await jsonBody(c);
+  if (!body) return c.json({ error: "Body must be JSON" }, 400);
+  return written(c, null, async (memberId, garden, ref) => {
+    // The book the shelf matched by title, so the first write can record it.
+    const before = await getShelfEntry(memberId, garden, ref.collection, ref.locale, ref.slug);
+    const bookId = before?.source?.type === "book" ? before.source.book_id : null;
+    addNote(memberId, garden, ref, { text: body.text, quote: body.quote, where: body.where }, bookId);
+  });
+});
+
+/** The same, on a book of the library that has no entry yet: the fiche is made first. */
+app.post("/entries/from-book", async (c) => {
+  const memberId = c.get("userId") as string;
+  const garden = gardenFor(memberId);
+  if (!garden) return c.json({ error: "No garden for this member" }, 404);
+  const body = await jsonBody(c);
+  const bookId = Number(body?.book_id);
+  if (!body || !Number.isInteger(bookId)) return c.json({ error: "book_id required" }, 400);
+  let ref: EntryRef;
+  try {
+    ref = await entryForBook(memberId, garden, bookId, body.locale);
+  } catch (e) {
+    if (e instanceof EntryWriteError) return c.json({ error: e.message }, e.status);
+    throw e;
+  }
+  const hasNote = String(body.text ?? "").trim() || String(body.quote ?? "").trim();
+  return written(c, ref, (m, g, r) => {
+    if (hasNote) addNote(m, g, r, { text: body.text, quote: body.quote, where: body.where }, bookId);
+  });
+});
+
+/** The shared side: the body of the card, a draft until published. */
+app.put("/entries/:collection/:locale/:slug/shared", async (c) => {
+  const body = await jsonBody(c);
+  if (!body || typeof body.body !== "string") return c.json({ error: "body required" }, 400);
+  return written(c, null, (memberId, garden, ref) => {
+    writeShared(memberId, garden, ref, { body: body.body, title: body.title });
+  });
+});
+
+/** Publish: the `public` flag, then a deploy of the member's site. */
+app.post("/entries/:collection/:locale/:slug/shared/publish", (c) =>
+  written(c, null, (memberId, garden, ref) => setPublished(memberId, garden, ref, true)));
+
+app.delete("/entries/:collection/:locale/:slug/shared/publish", (c) =>
+  written(c, null, (memberId, garden, ref) => setPublished(memberId, garden, ref, false)));
+
+/** Where the site deploy stands — what the phone shows after "Publish". */
+app.get("/site/deploy", (c) => c.json(deployState()));
 
 export default app;

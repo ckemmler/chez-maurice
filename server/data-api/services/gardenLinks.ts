@@ -24,7 +24,7 @@
 
 import fs from "node:fs";
 import path from "node:path";
-import { autoCommit, markOpened, parseFiche, writeFiche, type GardenRef } from "./gardenFiche";
+import { autoCommit, markOpened, parseFiche, publicUrl, writeFiche, type GardenRef } from "./gardenFiche";
 import { listGardenEntries, type GardenEntry } from "./gardenEntries";
 import { indexGardenPaths } from "./gardenIndex";
 
@@ -47,6 +47,9 @@ export interface LinkTarget {
   /** The basename a [[wiki-link]] to this target should use. */
   link_basename: string;
   has_fiche: boolean;
+  /** Where a reader of the member's site would land; null when the target has
+   *  no published page, and the citation stays a private reference. */
+  published_url: string | null;
 }
 
 /**
@@ -56,11 +59,13 @@ export interface LinkTarget {
  * Unopened fiches stay out: "this feeds my X" wants the entries the member has
  * actually taken up, and every article ever shared would drown those.
  */
-export function searchLinkTargets(garden: GardenRef, query: string, limit = 20): LinkTarget[] {
+export function searchLinkTargets(garden: GardenRef, query: string, limit = 20, site: string | null = null): LinkTarget[] {
   const q = query.trim().toLowerCase();
   const scored: { score: number; t: LinkTarget }[] = [];
+  const all = listGardenEntries(garden);
+  const byId = new Map(all.map((e) => [`${e.collection}/${e.locale}/${e.slug}`, e]));
 
-  for (const e of listGardenEntries(garden)) {
+  for (const e of all) {
     if (!e.opened) continue;
     const title = e.title.toLowerCase();
     let score: number;
@@ -80,6 +85,7 @@ export function searchLinkTargets(garden: GardenRef, query: string, limit = 20):
         date: e.date,
         link_basename: e.fiche ? `${e.slug}-fiche` : e.slug,
         has_fiche: !!e.fiche,
+        published_url: null,
       },
     });
   }
@@ -87,7 +93,20 @@ export function searchLinkTargets(garden: GardenRef, query: string, limit = 20):
   return scored
     .sort((a, b) => b.score - a.score || (a.t.date < b.t.date ? 1 : -1))
     .slice(0, limit)
-    .map((s) => s.t);
+    .map((s) => {
+      // Only for the few that are returned: it costs a file read each.
+      const e = byId.get(`${s.t.collection}/${s.t.locale}/${s.t.slug}`);
+      let flags: unknown = null;
+      if (e?.card) {
+        try {
+          flags = parseFiche(fs.readFileSync(path.join(garden.root, e.card.file), "utf-8"))?.frontmatter.flags;
+        } catch {
+          flags = null;
+        }
+      }
+      const isPublic = Array.isArray(flags) && flags.map(String).includes("public");
+      return { ...s.t, published_url: isPublic ? publicUrl(site, garden, e!.card!.web_path) : null };
+    });
 }
 
 // ── Writing a resonance ──

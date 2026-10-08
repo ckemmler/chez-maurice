@@ -194,6 +194,13 @@ function toggleFlag(content: string, flag: string): { content: string; enabled: 
   return { content: replaceFlagsLine(content, [...flags, flag]), enabled: true };
 }
 
+/** Add or remove one flag in a file's frontmatter, leaving the rest as written. */
+export function setFlag(content: string, flag: string, on: boolean): string {
+  const flags = parseFlagsArray(content);
+  if (flags.includes(flag) === on) return content;
+  return replaceFlagsLine(content, on ? [...flags, flag] : flags.filter((f) => f !== flag));
+}
+
 export function setFrontmatterField(content: string, key: string, value: string): string {
   const re = new RegExp(`^${key}:.*$`, "m");
   if (re.test(content)) return content.replace(re, `${key}: ${value}`);

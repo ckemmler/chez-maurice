@@ -28,7 +28,7 @@ import { getReadingProgress, type ReadingProgress } from "./bookmarks";
 import { getChapterStats, listBooks, listChapters, type BookMetadata } from "./calibre";
 import { countArticleHighlights, listArticleHighlights } from "./articleHighlights";
 import { countHighlights, listHighlights } from "./highlights";
-import { fragmentsDir, isOpened, parseFiche, type GardenRef } from "./gardenFiche";
+import { fragmentsDir, isOpened, parseFiche, publicUrl, type GardenRef } from "./gardenFiche";
 import { listGardenEntries, type GardenEntry } from "./gardenEntries";
 import { NEEDS_CAPTURE } from "./gardenArticles";
 
@@ -92,7 +92,8 @@ export interface ShelfEntry {
 }
 
 export type MineItem =
-  | { kind: "note" | "quote"; id: null; date: string | null; text: string; quote: string | null; where: { page: string } | null }
+  | { kind: "note" | "quote"; id: null; date: string | null; text: string; quote: string | null;
+      where: { page?: string; chapter_title?: string } | null }
   | { kind: "resonance"; id: null; date: string | null; text: string; quote: string | null;
       from: { label: string; entry_id: string | null; published_url: string | null } | null }
   | { kind: "highlight"; id: string; date: string; text: string; quote: string;
@@ -128,22 +129,21 @@ export function siteFor(memberId: string): string | null {
   return domain ? `https://${domain}` : null;
 }
 
-/** The public address of a card: its garden path without the `/g/<member>` mount. */
-function publicUrl(site: string | null, garden: GardenRef, webPath: string | null): string | null {
-  if (!site || !webPath) return null;
-  const mount = `/g/${garden.username}`;
-  return site + (webPath.startsWith(mount) ? webPath.slice(mount.length) : webPath);
-}
 
 // ── Reading one face ──
 
-interface Face {
+/** Is this one of the collections the shelf lists? */
+export function isShelfCollection(collection: string): boolean {
+  return collection in KIND_OF;
+}
+
+export interface Face {
   fm: Record<string, any>;
   meta: Record<string, any>;
   body: string;
 }
 
-function readFace(garden: GardenRef, relFile: string | undefined): Face | null {
+export function readFace(garden: GardenRef, relFile: string | undefined): Face | null {
   if (!relFile) return null;
   try {
     const parsed = parseFiche(fs.readFileSync(path.join(garden.root, relFile), "utf-8"));
@@ -224,10 +224,11 @@ function parseBlocks(kind: "note" | "resonance", text: string): MineItem[] {
           : plain ? { label: plain[1]!, entry_id: null, published_url: null } : null,
       });
     } else {
-      const page = cur.colon ? cur.head.match(/^p\.\s*(\S+)$/) : null;
+      // `p. 112` names a page, `ch. Chapitre VII` the chapter being read.
+      const place = cur.colon ? cur.head.match(/^(p|ch)\.\s*(.+)$/) : null;
       items.push({
         kind: quote ? "quote" : "note", id: null, date: cur.date, text, quote: quote || null,
-        where: page ? { page: page[1]! } : null,
+        where: !place ? null : place[1] === "p" ? { page: place[2]! } : { chapter_title: place[2]! },
       });
     }
     cur = null;
@@ -306,14 +307,14 @@ function countFragments(garden: GardenRef, ficheRel: string, collection: string)
 
 // ── Calibre ──
 
-interface Library {
+export interface Library {
   books: BookMetadata[];
   byId: Map<number, BookMetadata>;
   byTitle: Map<string, BookMetadata>;
 }
 
 /** The household's books. A server without a library simply has none. */
-function loadLibrary(given?: BookMetadata[]): Library {
+export function loadLibrary(given?: BookMetadata[]): Library {
   let books: BookMetadata[] = given ?? [];
   if (!given) {
     try {
@@ -335,7 +336,7 @@ function loadLibrary(given?: BookMetadata[]): Library {
  * ever a first one, since the id is written the first time the server writes
  * on the entry.
  */
-function bookFor(lib: Library, title: string, fiche: Face | null): BookMetadata | null {
+export function bookFor(lib: Library, title: string, fiche: Face | null): BookMetadata | null {
   const id = Number(fiche?.meta.calibre_id);
   if (Number.isInteger(id) && lib.byId.has(id)) return lib.byId.get(id)!;
   return lib.byTitle.get(title.trim().toLowerCase()) ?? null;
@@ -492,7 +493,7 @@ function foldTranslations(rows: { row: ShelfEntry; subject: string }[], preferre
   return out;
 }
 
-function preferredLocale(memberId: string): string | null {
+export function preferredLocale(memberId: string): string | null {
   try {
     return getUserPreferences(memberId).locale || null;
   } catch {

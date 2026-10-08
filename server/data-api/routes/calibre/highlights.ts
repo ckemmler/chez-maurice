@@ -7,6 +7,24 @@ import {
   updateHighlight,
   deleteHighlight,
 } from "../../services/highlights";
+import { gardenFor } from "../../services/gardenFiche";
+import { entryForBook } from "../../services/gardenWrite";
+
+/**
+ * A highlight alone is a reading gesture; a highlight with a note is a writing
+ * one, and opens the book's fiche — made on the spot when the book had none —
+ * as an article's already does. Never in the way of the highlight itself.
+ */
+async function openBookFiche(memberId: string, bookId: number, note: unknown): Promise<void> {
+  if (typeof note !== "string" || !note.trim()) return;
+  const garden = gardenFor(memberId);
+  if (!garden) return;
+  try {
+    await entryForBook(memberId, garden, bookId);
+  } catch (e) {
+    console.warn("[highlights] could not open the book's fiche:", (e as Error).message);
+  }
+}
 
 const highlights = new Hono();
 
@@ -57,6 +75,7 @@ highlights.post("/:bookId/highlights", async (c) => {
     endOffset: body.end_offset ?? null,
     view: asHighlightView(body.view),
   });
+  await openBookFiche(memberId, bookId, body.note);
   return c.json(created, 201);
 });
 
@@ -72,6 +91,7 @@ highlights.put("/:bookId/highlights/:id", async (c) => {
     .catch(() => ({}) as { note?: string | null; color?: string });
   const updated = updateHighlight(memberId, id, { note: body.note, color: body.color });
   if (!updated) return c.json({ error: "Highlight not found" }, 404);
+  await openBookFiche(memberId, updated.book_id, body.note);
   return c.json(updated);
 });
 

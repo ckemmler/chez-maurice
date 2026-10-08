@@ -17,6 +17,7 @@ import {
   searchLinkTargets,
   type ResonanceInput,
 } from "../services/gardenLinks";
+import { siteFor } from "../services/gardenShelf";
 
 const app = new Hono();
 
@@ -26,7 +27,7 @@ app.get("/targets", (c) => {
   if (!garden) return c.json({ error: "No garden for this member" }, 404);
 
   const q = c.req.query("q") ?? "";
-  return c.json({ targets: searchLinkTargets(garden, q) });
+  return c.json({ targets: searchLinkTargets(garden, q, 20, siteFor(memberId)) });
 });
 
 app.post("/", async (c) => {

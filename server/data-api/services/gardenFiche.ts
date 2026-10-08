@@ -336,6 +336,13 @@ export function ficheWebPath(
   return `/g/${garden.username}${prefix}/fiches/${collection}/${slug}-fiche`;
 }
 
+/** The public address of a page: its garden path without the `/g/<member>` mount. */
+export function publicUrl(site: string | null, garden: GardenRef, webPath: string | null): string | null {
+  if (!site || !webPath) return null;
+  const mount = `/g/${garden.username}`;
+  return site + (webPath.startsWith(mount) ? webPath.slice(mount.length) : webPath);
+}
+
 export function cardWebPath(
   garden: GardenRef,
   collection: ResourceCollection,
