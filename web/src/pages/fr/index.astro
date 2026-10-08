@@ -4,6 +4,8 @@
 import { themeKind } from "../../lib/theme-registry";
 import Home from "../../components/Home.astro";
 import NotesList from "../../components/NotesList.astro";
+import Published from "../../components/Published.astro";
 const isGarden = themeKind(Astro.locals.theme) === "garden";
+const isPublicPages = process.env.PUBLIC_STATIC === "1";
 ---
-{isGarden ? <NotesList locale="fr" /> : <Home locale="fr" />}
+{isPublicPages ? <Published locale="fr" /> : isGarden ? <NotesList locale="fr" /> : <Home locale="fr" />}

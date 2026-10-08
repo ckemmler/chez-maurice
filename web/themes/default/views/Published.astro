@@ -1,0 +1,115 @@
+---
+// The home of a member's public pages (`/@<member>/`): what they have
+// published, newest first, whatever its kind. In the member's own garden the
+// home is the notes index; a visitor has no notes to browse, only what was
+// made public — and should not have to guess which section it is under.
+import Base from "@app/layouts/Base.astro";
+import type { Locale } from "@app/i18n/config";
+import { t, localizedPath, formatDate, resourceItemPath, stripLocalePrefix } from "@app/i18n/utils";
+import { getCollection } from "@app/lib/content-fs";
+import { isPublic, isEncrypted } from "@app/lib/flags";
+import { listNotes } from "@app/lib/notes-fs";
+import { gardenConfig } from "@app/lib/garden";
+
+interface Props {
+  locale?: Locale;
+}
+
+const { locale = "en" } = Astro.props;
+const garden = gardenConfig();
+
+interface Item { date: Date | null; kind: string; title: string; href: string; description?: string }
+
+const asDate = (v: unknown): Date | null => {
+  if (!v) return null;
+  const d = v instanceof Date ? v : new Date(String(v));
+  return Number.isNaN(d.valueOf()) ? null : d;
+};
+
+const items: Item[] = [];
+
+for (const [collection, label] of [["blog", "blog.title"], ["essays", "nav.essays"]] as const) {
+  for (const post of await getCollection(collection, ({ data }) => data.locale === locale && isPublic(data))) {
+    items.push({
+      date: asDate(post.data.date), kind: t(locale, label), title: post.data.title,
+      href: localizedPath(locale, `/${collection}/${stripLocalePrefix(post.id)}`),
+      description: post.data.description,
+    });
+  }
+}
+
+const RESOURCES = ["books", "articles", "podcasts", "movies", "games", "music", "series"] as const;
+for (const collection of RESOURCES) {
+  for (const entry of await getCollection(collection, ({ data }) => (data as any).locale === locale && isPublic(data as any))) {
+    const d = entry.data as any;
+    // An episode of a show has no page of its own: it is read on the show's.
+    if (d.show) continue;
+    items.push({
+      date: asDate(d.date_read ?? d.date_watched ?? d.date_listened ?? d.date_played ?? d.date),
+      kind: t(locale, `resources.${collection}`), title: d.title,
+      href: resourceItemPath(locale, collection, stripLocalePrefix(entry.id)),
+      description: d.author ?? d.director ?? d.artist ?? d.host,
+    });
+  }
+}
+
+for (const note of listNotes(locale).filter((n) => isPublic(n.data) && !isEncrypted(n.data))) {
+  items.push({
+    date: asDate(note.data.date), kind: t(locale, "notes.title"), title: note.data.title,
+    href: localizedPath(locale, `/notes/${stripLocalePrefix(note.id)}`),
+    description: (note.data as any).description,
+  });
+}
+
+items.sort((a, b) => (b.date?.valueOf() ?? 0) - (a.date?.valueOf() ?? 0));
+---
+
+<Base title={garden.name} description={t(locale, "published.description")} locale={locale}>
+  <article class="prose">
+    <h1>{garden.name}</h1>
+    <p class="text-muted">{t(locale, "published.description")}</p>
+
+    {items.length > 0 ? (
+      <ul class="published-list">
+        {items.map((item) => (
+          <li>
+            <span class="text-muted text-sm published-meta">
+              {item.kind}{item.date && <> · <time datetime={item.date.toISOString()}>{formatDate(item.date, locale, { year: "numeric", month: "short", day: "numeric" })}</time></>}
+            </span>
+            <a href={item.href}>{item.title}</a>
+            {item.description && <p class="text-muted text-sm">{item.description}</p>}
+          </li>
+        ))}
+      </ul>
+    ) : (
+      <p class="text-muted">{t(locale, "published.nothingYet")}</p>
+    )}
+  </article>
+</Base>
+
+<style>
+  .published-list {
+    list-style: none;
+    padding: 0;
+    margin-top: var(--spacing-xl);
+  }
+
+  .published-list li {
+    margin-bottom: var(--spacing-lg);
+  }
+
+  .published-meta {
+    display: block;
+    margin-bottom: var(--spacing-xs);
+    font-size: 1.05rem;
+  }
+
+  .published-list a {
+    font-size: 1.35rem;
+  }
+
+  .published-list p {
+    font-size: 1.1rem;
+    margin-top: var(--spacing-xs);
+  }
+</style>

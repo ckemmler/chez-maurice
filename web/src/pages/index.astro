@@ -4,6 +4,10 @@
 import { themeKind } from "../lib/theme-registry";
 import Home from "../components/Home.astro";
 import NotesList from "../components/NotesList.astro";
+import Published from "../components/Published.astro";
 const isGarden = themeKind(Astro.locals.theme) === "garden";
+// A member's public pages (PUBLIC_STATIC) open on what they published: a
+// visitor has no notes index to land on.
+const isPublicPages = process.env.PUBLIC_STATIC === "1";
 ---
-{isGarden ? <NotesList locale="en" /> : <Home locale="en" />}
+{isPublicPages ? <Published locale="en" /> : isGarden ? <NotesList locale="en" /> : <Home locale="en" />}

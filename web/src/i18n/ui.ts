@@ -69,6 +69,8 @@ export const ui: Record<Locale, Record<string, string>> = {
     "blog.title": "Blog",
     "blog.description": "Informal reflections, notes, and updates.",
     "blog.noPostsYet": "No posts yet.",
+    "published.description": "What has been published here, newest first.",
+    "published.nothingYet": "Nothing has been published here yet.",
     "blog.backToBlog": "← Back to blog",
 
     // Essays
@@ -235,6 +237,8 @@ export const ui: Record<Locale, Record<string, string>> = {
     "blog.title": "Blog",
     "blog.description": "Réflexions, notes et mises à jour.",
     "blog.noPostsYet": "Aucun article pour le moment.",
+    "published.description": "Ce qui a été publié ici, du plus récent au plus ancien.",
+    "published.nothingYet": "Rien n'a encore été publié ici.",
     "blog.backToBlog": "← Retour au blog",
 
     // Essays

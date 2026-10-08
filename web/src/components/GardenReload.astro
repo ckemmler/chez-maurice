@@ -11,7 +11,13 @@
 // when it plausibly concerns this page — the entry it shows, or a list that
 // would include it — so a burst of writes elsewhere does not yank the page
 // from under someone reading it.
+//
+// Only in the member's own garden, which the engine serves (WEB_SSR). A
+// published build is a snapshot: nobody is writing behind it, and its visitor
+// has no session for that stream — every page was asking for it and failing.
+const live = process.env.WEB_SSR === "1";
 ---
+{live && (
 <script>
   (() => {
     const path = location.pathname.replace(/\/+$/, "");
@@ -64,3 +70,4 @@
     addEventListener("pagehide", () => source?.close());
   })();
 </script>
+)}

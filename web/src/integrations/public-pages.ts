@@ -21,13 +21,26 @@ import { fileURLToPath } from "node:url";
 import { join } from "node:path";
 
 /** Files the build leaves beside the pages that nobody is served. */
-const LEFTOVERS = new Set(["_redirects", "content-assets.mjs", "content-modules.mjs", ".gitkeep"]);
+const LEFTOVERS = new Set([
+  "_redirects", "content-assets.mjs", "content-modules.mjs", ".gitkeep",
+  // The fiches index is the owner's: here, an empty page nobody links to.
+  "fiches.html",
+]);
 
 const ATTR = /\b(href|src|data-index-url|data-base)="(\/[^"]*)"/g;
 
-export function withBase(html: string, base: string): string {
-  return html.replace(ATTR, (m, attr: string, url: string) =>
+export function withBase(html: string, base: string, origin = ""): string {
+  let out = html.replace(ATTR, (m, attr: string, url: string) =>
     url.startsWith("//") || url === base || url.startsWith(`${base}/`) ? m : `${attr}="${base}${url}"`);
+  // The page's own absolute addresses (canonical, alternates, og:url) are made
+  // from the site's origin and a root path: the member's prefix is missing
+  // from them too.
+  if (origin) {
+    out = out.split(`="${origin}/`).map((part, i) =>
+      i === 0 || part.startsWith(`${base.slice(1)}/`) || part.startsWith(`${base.slice(1)}"`) ? part : `${base.slice(1)}/${part}`,
+    ).join(`="${origin}/`);
+  }
+  return out;
 }
 
 async function eachFile(dir: string, visit: (file: string, name: string) => Promise<void>): Promise<void> {
@@ -55,7 +68,7 @@ export default function publicPages(): AstroIntegration {
           }
           if (!name.endsWith(".html")) return;
           const html = await readFile(file, "utf-8");
-          const next = withBase(html, base);
+          const next = withBase(html, base, (process.env.SITE_URL ?? "").replace(/\/+$/, ""));
           if (next !== html) {
             await writeFile(file, next);
             rewritten++;

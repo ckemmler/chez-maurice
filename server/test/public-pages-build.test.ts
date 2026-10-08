@@ -159,6 +159,17 @@ describe.skipIf(!canBuild)("a published build holds nothing private", () => {
       expect(resolvePublicFile("/@anna/fr/notes/note-secrete")).toBeNull();
       expect(resolvePublicFile("/@anna/fr/fiches/books/brouillon-fiche")).toBeNull();
       expect(resolvePublicFile("/@anna/fr/notes/note-publique")).not.toBeNull();
+
+      // The home is what was published, each item linking under the prefix —
+      // and the page asks nothing of the owner's side of the server.
+      const home = fs.readFileSync(resolvePublicFile("/@anna/fr/")!, "utf-8");
+      expect(home).toContain('href="/@anna/fr/trouvailles/films/film-publie"');
+      expect(home).toContain('href="/@anna/fr/notes/note-publique"');
+      // Its own absolute addresses (canonical, alternates) carry the prefix too.
+      expect(home).toContain("https://magik.chezmaurice.eu/@anna/");
+      expect(home).not.toMatch(/="https:\/\/magik\.chezmaurice\.eu\/(?!@anna)/);
+      expect(all).not.toContain("garden-tools/events");
+      expect(resolvePublicFile("/@anna/fiches")).toBeNull();
     } finally {
       for (const key of Object.keys(process.env)) if (!(key in saved)) delete process.env[key];
       Object.assign(process.env, saved);
