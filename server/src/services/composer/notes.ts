@@ -328,13 +328,13 @@ export function readNoteBody(memberId: string, slug: string): { title: string; b
 
 /** Collections that hold fiches and cards, mirroring the garden MCP's set. */
 const RESOURCE_COLLECTIONS = [
-  "books", "articles", "movies", "games", "series", "podcasts", "people",
+  "books", "articles", "movies", "games", "music", "series", "podcasts", "people",
 ] as const;
 
 /** French URL segment per collection, mirroring web/src/i18n/config.ts. */
 const FR_SEGMENT: Record<string, string> = {
   books: "livres", articles: "articles", podcasts: "podcasts",
-  movies: "films", games: "jeux", series: "series", people: "personnes",
+  movies: "films", games: "jeux", music: "musique", series: "series", people: "personnes",
 };
 
 export type GardenItemKind = "note" | "fiche" | "card";

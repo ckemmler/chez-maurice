@@ -9,6 +9,7 @@ import os
 import re
 import subprocess
 import sys
+import threading
 import time
 from dataclasses import dataclass
 from datetime import date, datetime
@@ -108,7 +109,7 @@ def content_root() -> Path:
 # escapes the per-member garden into another member's tree (read/write/unlink).
 _SLUG_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
 _LOCALE_RE = re.compile(r"^[a-z]{2}$")
-_RESOURCE_COLLECTIONS = {"books", "articles", "movies", "games", "series", "podcasts", "people"}
+_RESOURCE_COLLECTIONS = {"books", "articles", "movies", "games", "music", "series", "podcasts", "people"}
 
 
 def _safe_slug(value: str, kind: str = "id") -> str:
@@ -200,7 +201,7 @@ _CONTENT_FLAGS = ("public", "encrypted", "moc", "translation", "archived")
 # notes/<locale>/; everything else under <collection>/<locale>/.
 _FLAGGABLE_COLLECTIONS = (
     "notes", "blog", "essays", "pages",
-    "books", "articles", "movies", "games", "series", "podcasts", "people",
+    "books", "articles", "movies", "games", "music", "series", "podcasts", "people",
 )
 
 
@@ -941,7 +942,7 @@ async def list_tools() -> list[Tool]:
                 "type": "object",
                 "required": ["resource_collection", "resource_id"],
                 "properties": {
-                    "resource_collection": {"type": "string", "enum": ["books", "articles", "movies", "games", "series", "podcasts", "people"]},
+                    "resource_collection": {"type": "string", "enum": ["books", "articles", "movies", "games", "music", "series", "podcasts", "people"]},
                     "resource_id": {"type": "string", "description": "Resource slug matching the sibling file stem."},
                     "title": {"type": "string", "description": "Fiche title (defaults to resource_id). Also used as the search query for metadata APIs."},
                     "locale": {"type": "string", "enum": ["en", "fr"], "default": "en"},
@@ -949,7 +950,7 @@ async def list_tools() -> list[Tool]:
                     "tags": {"type": "array", "items": {"type": "string"}, "default": []},
                     "url": {"type": "string", "description": "URL for articles (OG metadata extraction)."},
                     "author": {"type": "string", "description": "Author hint for books (improves Google Books search)."},
-                    "year": {"type": "integer", "description": "Year hint for movies/series (TMDB) and games (IGDB)."},
+                    "year": {"type": "integer", "description": "Year hint for movies/series (TMDB), games (IGDB) and albums (MusicBrainz)."},
                     "skip_metadata": {"type": "boolean", "default": False, "description": "Skip external API calls; create fiche with empty meta."},
                 },
             },
@@ -979,7 +980,7 @@ async def list_tools() -> list[Tool]:
                 "type": "object",
                 "required": ["resource_collection"],
                 "properties": {
-                    "resource_collection": {"type": "string", "enum": ["books", "articles", "movies", "games", "series", "podcasts", "people"]},
+                    "resource_collection": {"type": "string", "enum": ["books", "articles", "movies", "games", "music", "series", "podcasts", "people"]},
                     "title": {"type": "string", "description": "Title of the work (used to search metadata and derive the slug)."},
                     "resource_id": {"type": "string", "description": "Existing resource slug, when known (skips slug derivation)."},
                     "locale": {"type": "string", "enum": ["en", "fr"], "default": "en"},
@@ -992,6 +993,7 @@ async def list_tools() -> list[Tool]:
                     "google_books_id": {"type": "string", "description": "Volume id from search_book — pass it whenever the user picked a candidate."},
                     "podcastindex_id": {"type": "integer", "description": "Feed id from search_podcast — pass it whenever the user picked a candidate."},
                     "igdb_id": {"type": "integer", "description": "IGDB id from search_game — pass it whenever the user picked a candidate."},
+                    "musicbrainz_id": {"type": "string", "description": "MusicBrainz release-group id from search_album — pass it whenever the user picked a candidate."},
                 },
             },
         ),
@@ -1006,7 +1008,7 @@ async def list_tools() -> list[Tool]:
                 "type": "object",
                 "required": ["resource_collection", "resource_id"],
                 "properties": {
-                    "resource_collection": {"type": "string", "enum": ["books", "articles", "movies", "games", "series", "podcasts", "people"]},
+                    "resource_collection": {"type": "string", "enum": ["books", "articles", "movies", "games", "music", "series", "podcasts", "people"]},
                     "resource_id": {"type": "string"},
                     "locale": {"type": "string", "enum": ["en", "fr"], "default": "en"},
                 },
@@ -1026,14 +1028,14 @@ async def list_tools() -> list[Tool]:
                 "If open_fiche pulled the wrong edition or the wrong person (wrong year, wrong "
                 "language, a same-titled remake), do not create a new resource entry or edit one "
                 "— none exists yet, and trying to make one is not how a fiche gets corrected. "
-                "Pass the right tmdb_id/google_books_id/podcastindex_id/igdb_id (from the matching "
+                "Pass the right tmdb_id/google_books_id/podcastindex_id/igdb_id/musicbrainz_id (from the matching "
                 "search_* tool) and this re-fetches metadata and overwrites it in place."
             ),
             inputSchema={
                 "type": "object",
                 "required": ["resource_collection", "resource_id"],
                 "properties": {
-                    "resource_collection": {"type": "string", "enum": ["books", "articles", "movies", "games", "series", "podcasts", "people"]},
+                    "resource_collection": {"type": "string", "enum": ["books", "articles", "movies", "games", "music", "series", "podcasts", "people"]},
                     "resource_id": {"type": "string"},
                     "locale": {"type": "string", "enum": ["en", "fr"], "default": "en"},
                     "title": {"type": "string"},
@@ -1044,6 +1046,7 @@ async def list_tools() -> list[Tool]:
                     "google_books_id": {"type": "string", "description": "Re-fetch metadata from this Google Books id and overwrite it — corrects a wrong pick."},
                     "podcastindex_id": {"type": "integer", "description": "Re-fetch metadata from this Podcast Index id and overwrite it — corrects a wrong pick."},
                     "igdb_id": {"type": "integer", "description": "Re-fetch metadata from this IGDB id and overwrite it — corrects a wrong pick."},
+                    "musicbrainz_id": {"type": "string", "description": "Re-fetch metadata from this MusicBrainz release-group id and overwrite it — corrects a wrong pick."},
                 },
             },
         ),
@@ -1053,7 +1056,7 @@ async def list_tools() -> list[Tool]:
             inputSchema={
                 "type": "object",
                 "properties": {
-                    "resource_collection": {"type": "string", "enum": ["books", "articles", "movies", "games", "series", "podcasts", "people"]},
+                    "resource_collection": {"type": "string", "enum": ["books", "articles", "movies", "games", "music", "series", "podcasts", "people"]},
                     "locale": {"type": "string", "enum": ["en", "fr"], "default": "en"},
                 },
             },
@@ -1065,7 +1068,7 @@ async def list_tools() -> list[Tool]:
                 "type": "object",
                 "required": ["resource_collection", "resource_id"],
                 "properties": {
-                    "resource_collection": {"type": "string", "enum": ["books", "articles", "movies", "games", "series", "podcasts", "people"]},
+                    "resource_collection": {"type": "string", "enum": ["books", "articles", "movies", "games", "music", "series", "podcasts", "people"]},
                     "resource_id": {"type": "string"},
                     "locale": {"type": "string", "enum": ["en", "fr"], "default": "en"},
                 },
@@ -1088,7 +1091,7 @@ async def list_tools() -> list[Tool]:
                 "type": "object",
                 "required": ["resource_collection", "resource_id"],
                 "properties": {
-                    "resource_collection": {"type": "string", "enum": ["books", "articles", "movies", "games", "series", "podcasts", "people"]},
+                    "resource_collection": {"type": "string", "enum": ["books", "articles", "movies", "games", "music", "series", "podcasts", "people"]},
                     "resource_id": {"type": "string"},
                     "locale": {"type": "string", "enum": ["en", "fr"], "default": "en"},
                     "rating": {"type": "integer", "minimum": 1, "maximum": 5},
@@ -1109,7 +1112,7 @@ async def list_tools() -> list[Tool]:
                     "parent_id": {"type": "string", "description": "Resource ID (for fiches) or note slug (for notes)."},
                     "content": {"type": "string", "description": "Markdown content for the fragment."},
                     "summary": {"type": "string", "description": "Short summary displayed as the collapsible header."},
-                    "collection": {"type": "string", "enum": ["books", "articles", "movies", "games", "series", "podcasts", "people", "notes"], "default": "books"},
+                    "collection": {"type": "string", "enum": ["books", "articles", "movies", "games", "music", "series", "podcasts", "people", "notes"], "default": "books"},
                     "locale": {"type": "string", "enum": ["en", "fr"], "default": "en"},
                 },
             },
@@ -1122,7 +1125,7 @@ async def list_tools() -> list[Tool]:
                 "required": ["parent_id"],
                 "properties": {
                     "parent_id": {"type": "string"},
-                    "collection": {"type": "string", "enum": ["books", "articles", "movies", "games", "series", "podcasts", "people", "notes"], "default": "books"},
+                    "collection": {"type": "string", "enum": ["books", "articles", "movies", "games", "music", "series", "podcasts", "people", "notes"], "default": "books"},
                     "locale": {"type": "string", "enum": ["en", "fr"], "default": "en"},
                 },
             },
@@ -1136,7 +1139,7 @@ async def list_tools() -> list[Tool]:
                 "properties": {
                     "parent_id": {"type": "string"},
                     "fragment_id": {"type": "string", "description": "Fragment number as zero-padded string (e.g. '001')."},
-                    "collection": {"type": "string", "enum": ["books", "articles", "movies", "games", "series", "podcasts", "people", "notes"], "default": "books"},
+                    "collection": {"type": "string", "enum": ["books", "articles", "movies", "games", "music", "series", "podcasts", "people", "notes"], "default": "books"},
                     "locale": {"type": "string", "enum": ["en", "fr"], "default": "en"},
                 },
             },
@@ -1151,7 +1154,7 @@ async def list_tools() -> list[Tool]:
                     "parent_id": {"type": "string"},
                     "fragment_id": {"type": "string", "description": "Fragment number as zero-padded string (e.g. '001')."},
                     "content": {"type": "string", "description": "New markdown content."},
-                    "collection": {"type": "string", "enum": ["books", "articles", "movies", "games", "series", "podcasts", "people", "notes"], "default": "books"},
+                    "collection": {"type": "string", "enum": ["books", "articles", "movies", "games", "music", "series", "podcasts", "people", "notes"], "default": "books"},
                     "locale": {"type": "string", "enum": ["en", "fr"], "default": "en"},
                 },
             },
@@ -1165,7 +1168,7 @@ async def list_tools() -> list[Tool]:
                 "properties": {
                     "parent_id": {"type": "string"},
                     "fragment_id": {"type": "string", "description": "Fragment number as zero-padded string (e.g. '001')."},
-                    "collection": {"type": "string", "enum": ["books", "articles", "movies", "games", "series", "podcasts", "people", "notes"], "default": "books"},
+                    "collection": {"type": "string", "enum": ["books", "articles", "movies", "games", "music", "series", "podcasts", "people", "notes"], "default": "books"},
                     "locale": {"type": "string", "enum": ["en", "fr"], "default": "en"},
                 },
             },
@@ -1180,7 +1183,7 @@ async def list_tools() -> list[Tool]:
                     "parent_id": {"type": "string"},
                     "fragment_id": {"type": "string", "description": "Fragment number as zero-padded string (e.g. '001')."},
                     "summary": {"type": "string", "description": "New summary text."},
-                    "collection": {"type": "string", "enum": ["books", "articles", "movies", "games", "series", "podcasts", "people", "notes"], "default": "books"},
+                    "collection": {"type": "string", "enum": ["books", "articles", "movies", "games", "music", "series", "podcasts", "people", "notes"], "default": "books"},
                     "locale": {"type": "string", "enum": ["en", "fr"], "default": "en"},
                 },
             },
@@ -1204,7 +1207,7 @@ async def list_tools() -> list[Tool]:
                 "properties": {
                     "collection": {
                         "type": "string",
-                        "enum": ["blog", "essays", "books", "articles", "movies", "games", "series", "podcasts", "people"],
+                        "enum": ["blog", "essays", "books", "articles", "movies", "games", "music", "series", "podcasts", "people"],
                         "description": "Content collection to publish to",
                     },
                     "content": {"type": "string", "description": "Markdown body"},
@@ -1234,6 +1237,7 @@ async def list_tools() -> list[Tool]:
                     "host": {"type": "string"},
                     "date_listened": {"type": "string", "description": "ISO date"},
                     "developer": {"type": "string", "description": "Game studio"},
+                    "artist": {"type": "string", "description": "Album artist (music)"},
                     "platforms": {"type": "array", "items": {"type": "string"}, "description": "Game platforms"},
                     "date_played": {"type": "string", "description": "ISO date"},
                     "show": {"type": "string", "description": "Parent show slug (marks entry as episode)"},
@@ -1255,6 +1259,23 @@ async def list_tools() -> list[Tool]:
                 "properties": {
                     "title": {"type": "string", "description": "Movie title to search"},
                     "year": {"type": "integer", "description": "Release year to narrow results"},
+                    "limit": {"type": "integer", "default": 5, "description": "Max results to return"},
+                },
+                "required": ["title"],
+            },
+        ),
+        Tool(
+            name="search_album",
+            description=(
+                "Search MusicBrainz for albums (also EPs and singles). "
+                "Returns candidates to review before creating an entry."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "title": {"type": "string", "description": "Album title to search"},
+                    "artist": {"type": "string", "description": "Artist name to narrow results"},
+                    "year": {"type": "integer", "description": "First release year to narrow results"},
                     "limit": {"type": "integer", "default": 5, "description": "Max results to return"},
                 },
                 "required": ["title"],
@@ -1394,6 +1415,29 @@ async def list_tools() -> list[Tool]:
             },
         ),
         Tool(
+            name="create_album_entry",
+            description=(
+                "Create a music entry by looking up an album on MusicBrainz. "
+                "Searches for the album, fetches details (artist, first release year), "
+                "downloads the cover from the Cover Art Archive, and creates a full music entry."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "title": {"type": "string", "description": "Album title to search MusicBrainz"},
+                    "musicbrainz_id": {"type": "string", "description": "MusicBrainz release-group ID (skip search if provided, from search_album)"},
+                    "artist": {"type": "string", "description": "Artist name to disambiguate"},
+                    "year": {"type": "integer", "description": "First release year to disambiguate"},
+                    "rating": {"type": "integer", "minimum": 1, "maximum": 5, "description": "User's rating"},
+                    "content": {"type": "string", "description": "Review body markdown. Leave EMPTY unless the reader supplied the words: a card is their public verdict, in their voice, and is not Maurice's to draft. Metadata is a fact; a verdict is theirs."},
+                    "locale": {"type": "string", "enum": ["en", "fr"], "default": "fr"},
+                    "flags": {"type": "array", "items": {"type": "string"}, "default": [], "description": "Flags array (e.g. ['public'])"},
+                    "tags": {"type": "array", "items": {"type": "string"}, "default": []},
+                },
+                "required": ["title"],
+            },
+        ),
+        Tool(
             name="create_book_entry",
             description=(
                 "Create a book entry by looking up metadata on Google Books. "
@@ -1516,7 +1560,7 @@ async def list_tools() -> list[Tool]:
                 "properties": {
                     "collection": {
                         "type": "string",
-                        "enum": ["books", "articles", "movies", "games", "series", "podcasts", "people"],
+                        "enum": ["books", "articles", "movies", "games", "music", "series", "podcasts", "people"],
                     },
                     "id": {"type": "string", "description": "Filename slug (no extension)"},
                     "locale": {"type": "string", "enum": ["en", "fr"], "default": "en"},
@@ -1535,7 +1579,7 @@ async def list_tools() -> list[Tool]:
                 "properties": {
                     "collection": {
                         "type": "string",
-                        "enum": ["books", "articles", "movies", "games", "series", "podcasts", "people"],
+                        "enum": ["books", "articles", "movies", "games", "music", "series", "podcasts", "people"],
                     },
                     "id": {"type": "string", "description": "Filename slug (no extension)"},
                     "locale": {"type": "string", "enum": ["en", "fr"], "default": "en"},
@@ -1559,6 +1603,7 @@ async def list_tools() -> list[Tool]:
                     "host": {"type": "string"},
                     "date_listened": {"type": "string"},
                     "developer": {"type": "string"},
+                    "artist": {"type": "string"},
                     "platforms": {"type": "array", "items": {"type": "string"}},
                     "date_played": {"type": "string"},
                     "name": {"type": "string"},
@@ -1578,7 +1623,7 @@ async def list_tools() -> list[Tool]:
                 "properties": {
                     "collection": {
                         "type": "string",
-                        "enum": ["books", "articles", "movies", "games", "series", "podcasts", "people"],
+                        "enum": ["books", "articles", "movies", "games", "music", "series", "podcasts", "people"],
                     },
                     "locale": {"type": "string", "enum": ["en", "fr"], "default": "en"},
                     "flag": {"type": "string", "description": "Filter: only entries with this flag (e.g. 'public')."},
@@ -1737,7 +1782,7 @@ The English prefix is omitted entirely (`/notes/foo`, never `/en/notes/foo`).
 **French route segments are translated** — this is the easy mistake to make.
 `/fr/resources/...` and `/fr/essays/...` do not exist. The collection segment maps:
 books→livres, articles→articles, podcasts→podcasts, movies→films, games→jeux,
-series→series, people→personnes. Fiches are the exception: `/fiches` stays
+music→musique, series→series, people→personnes. Fiches are the exception: `/fiches` stays
 `/fiches` in both languages.
 
 ## Link Syntax
@@ -1792,7 +1837,7 @@ A fiche is the back of a card. The card (the resource entry) is the eventual
 public verdict; the fiche is where notes accumulate while the reader is still
 watching, reading or listening. Most fiches never become cards, and that is fine.
 
-When the user asks for a fiche on a film, series, book, podcast or game — or says
+When the user asks for a fiche on a film, series, book, podcast, game or album — or says
 they want to take notes on one — the procedure is:
 
 1. **`open_fiche` first.** It finds an existing fiche or creates one, fetching
@@ -1826,7 +1871,7 @@ wrong language, or wrong person of the same name — do not reach for a
 resource-entry tool (get/update/create_resource_entry, create_*_entry): none
 of that exists yet for a fiche, and trying to make it exist is not how a
 fiche gets corrected. Run the matching `search_*` tool, and pass the right id
-(tmdb_id / google_books_id / podcastindex_id / igdb_id) to `update_fiche`,
+(tmdb_id / google_books_id / podcastindex_id / igdb_id / musicbrainz_id) to `update_fiche`,
 which re-fetches and overwrites the metadata in place.
 
 `promote_fiche` turns a fiche into a card, later, when a verdict exists. Never
@@ -1929,6 +1974,8 @@ async def call_tool(name: str, arguments: Any) -> list[TextContent]:
             result = await _handle_search_movie(args)
         elif name == "search_game":
             result = await _handle_search_game(args)
+        elif name == "search_album":
+            result = await _handle_search_album(args)
         elif name == "search_book":
             result = await _handle_search_book(args)
         elif name == "search_series":
@@ -1945,6 +1992,8 @@ async def call_tool(name: str, arguments: Any) -> list[TextContent]:
             result = await _handle_create_movie_entry(args)
         elif name == "create_game_entry":
             result = await _handle_create_game_entry(args)
+        elif name == "create_album_entry":
+            result = await _handle_create_album_entry(args)
         elif name == "create_book_entry":
             result = await _handle_create_book_entry(args)
         elif name == "create_series_entry":
@@ -2909,7 +2958,7 @@ def _handle_list_backlog(args: dict[str, Any]) -> dict[str, Any]:
 # Fiche handlers
 # ---------------------------------------------------------------------------
 
-FICHE_COLLECTIONS = ["books", "articles", "movies", "games", "series", "podcasts", "people"]
+FICHE_COLLECTIONS = ["books", "articles", "movies", "games", "music", "series", "podcasts", "people"]
 
 
 def _handle_create_fiche(args: dict[str, Any]) -> dict[str, Any]:
@@ -2973,6 +3022,7 @@ _FR_ROUTE_SEGMENT = {
     "podcasts": "podcasts",
     "movies": "films",
     "games": "jeux",
+    "music": "musique",
     "series": "series",
     "people": "personnes",
 }
@@ -3083,7 +3133,7 @@ def _handle_open_fiche(args: dict[str, Any]) -> dict[str, Any]:
         # the-legend-of-zelda-breath-of-the-wild card, which then reads as absent.
         meta = {}
         if not args.get("skip_metadata"):
-            picked = any(args.get(k) for k in ("tmdb_id", "google_books_id", "podcastindex_id", "igdb_id"))
+            picked = any(args.get(k) for k in ("tmdb_id", "google_books_id", "podcastindex_id", "igdb_id", "musicbrainz_id"))
             try:
                 meta = _fetch_fiche_metadata(col, title, args)
             except Exception as exc:
@@ -3132,6 +3182,7 @@ def _handle_open_fiche(args: dict[str, Any]) -> dict[str, Any]:
         "year": meta.get("year"),
         "director": meta.get("director", ""),
         "developer": meta.get("developer", ""),
+        "artist": meta.get("artist", ""),
         "author": meta.get("author", ""),
         "host": meta.get("host", ""),
         "platform": meta.get("platform", ""),
@@ -3173,6 +3224,9 @@ def _fetch_by_provider_id(col: str, args: dict[str, Any]) -> dict[str, Any]:
             game = _igdb_by_id(int(args["igdb_id"]), client_id, client_secret)
             return _game_meta_from_details(game) if game else {}
 
+        if col == "music" and args.get("musicbrainz_id"):
+            return _album_meta_from_release_group(_musicbrainz_by_id(str(args["musicbrainz_id"])))
+
         if col == "books" and args.get("google_books_id"):
             return _book_meta_from_volume(_google_books_volume(str(args["google_books_id"])))
 
@@ -3203,6 +3257,8 @@ def _fetch_fiche_metadata(col: str, title: str, args: dict[str, Any]) -> dict[st
         return _fetch_movie_metadata(title, args.get("year"))
     elif col == "games":
         return _fetch_game_metadata(title, args.get("year"))
+    elif col == "music":
+        return _fetch_album_metadata(title, args.get("artist"), args.get("year"))
     elif col == "series":
         return _fetch_series_metadata(title, args.get("year"))
     elif col == "podcasts":
@@ -3269,6 +3325,23 @@ def _game_meta_from_details(game: dict[str, Any]) -> dict[str, Any]:
         "cover_url": _igdb_cover_url(game),
     }
     year = _igdb_year(game)
+    if year:
+        meta["year"] = year
+    return meta
+
+
+def _album_meta_from_release_group(group: dict[str, Any]) -> dict[str, Any]:
+    mbid = group.get("id")
+    if not mbid:
+        return {}
+    meta: dict[str, Any] = {
+        "musicbrainz_id": mbid,
+        "title": group.get("title", ""),
+        "artist": _musicbrainz_artist(group),
+        "album_type": group.get("primary-type") or "",
+        "cover_url": _coverart_url(mbid),
+    }
+    year = _musicbrainz_year(group)
     if year:
         meta["year"] = year
     return meta
@@ -3341,6 +3414,15 @@ def _fetch_game_metadata(title: str, year: int | None) -> dict[str, Any]:
     if not results:
         return {}
     meta = _game_meta_from_details(results[0])
+    meta["title"] = meta.get("title") or title
+    return meta
+
+
+def _fetch_album_metadata(title: str, artist: str | None, year: int | None) -> dict[str, Any]:
+    group = _musicbrainz_best(title, artist, year)
+    if not group:
+        return {}
+    meta = _album_meta_from_release_group(group)
     meta["title"] = meta.get("title") or title
     return meta
 
@@ -3472,7 +3554,7 @@ def _handle_update_fiche(args: dict[str, Any]) -> dict[str, Any]:
         updated_fields.append("body")
 
     provider_id_args = {
-        k: args[k] for k in ("tmdb_id", "google_books_id", "podcastindex_id", "igdb_id") if k in args
+        k: args[k] for k in ("tmdb_id", "google_books_id", "podcastindex_id", "igdb_id", "musicbrainz_id") if k in args
     }
     if provider_id_args:
         # Reuses the exact lookup open_fiche's initial pick goes through, so a
@@ -3723,6 +3805,17 @@ def _handle_promote_fiche(args: dict[str, Any]) -> dict[str, Any]:
             if image_rel:
                 publish_args["image"] = image_rel
 
+    elif col == "music":
+        publish_args["title"] = meta.get("title", fm.get("title", rid))
+        publish_args["artist"] = meta.get("artist", "")
+        if meta.get("year"):
+            publish_args["year"] = meta["year"]
+        publish_args["content"] = fiche_body
+        if meta.get("cover_url"):
+            image_rel = _download_resource_image(meta["cover_url"], "music", locale, slug)
+            if image_rel:
+                publish_args["image"] = image_rel
+
     elif col == "series":
         publish_args["title"] = meta.get("title", fm.get("title", rid))
         if meta.get("year"):
@@ -3814,6 +3907,8 @@ def _promote_fiche_without_meta(
         result = _create_movie_entry_sync(base_args)
     elif col == "games":
         result = _create_game_entry_sync(base_args)
+    elif col == "music":
+        result = _create_album_entry_sync(base_args)
     elif col == "series":
         result = _create_series_entry_sync(base_args)
     elif col == "podcasts":
@@ -3864,7 +3959,7 @@ def _download_resource_poster(poster_path: str, collection: str, locale: str, sl
 # Resource publishing helpers
 # ---------------------------------------------------------------------------
 
-_RESOURCE_COLLECTIONS = {"books", "articles", "movies", "games", "series", "podcasts", "people"}
+_RESOURCE_COLLECTIONS = {"books", "articles", "movies", "games", "music", "series", "podcasts", "people"}
 
 # Images dir is inside content repo, stage it with auto-commit
 # (image dir is per-member: member_root() / "images")
@@ -4117,6 +4212,25 @@ def _fm_people(args: dict[str, Any], _today: str) -> tuple[list[str], list[str]]
     return lines, []
 
 
+def _fm_music(args: dict[str, Any], today: str) -> tuple[list[str], list[str]]:
+    if not args.get("title"):
+        return [], ["title"]
+    lines = [
+        f"title: {_yaml_str(args['title'])}",
+        f"date_listened: {args.get('date_listened', today)}",
+        f"flags: [{', '.join(_yaml_str(f) for f in args.get('flags', []))}]",
+    ]
+    if args.get("artist"):
+        lines.append(f"artist: {_yaml_str(args['artist'])}")
+    if args.get("year"):
+        lines.append(f"year: {args['year']}")
+    if args.get("rating"):
+        lines.append(f"rating: {args['rating']}")
+    if args.get("image"):
+        lines.append(f"image: {_yaml_str(args['image'])}")
+    return lines, []
+
+
 _FM_BUILDERS: dict[str, Any] = {
     "blog": _fm_blog,
     "essays": _fm_essays,
@@ -4124,6 +4238,7 @@ _FM_BUILDERS: dict[str, Any] = {
     "articles": _fm_articles,
     "movies": _fm_movies,
     "games": _fm_games,
+    "music": _fm_music,
     "series": _fm_series,
     "podcasts": _fm_podcasts,
     "people": _fm_people,
@@ -4221,7 +4336,7 @@ def _handle_publish_content(args: dict[str, Any]) -> dict[str, Any]:
         return {"error": f"Missing required fields for {collection}: {', '.join(missing)}"}
 
     # Auto-set translationKey for resource collections
-    if not args.get("translationKey") and not args.get("show") and collection in ("books", "articles", "movies", "games", "series", "podcasts", "people"):
+    if not args.get("translationKey") and not args.get("show") and collection in ("books", "articles", "movies", "games", "music", "series", "podcasts", "people"):
         args["translationKey"] = slug
 
     tags = args.get("tags", [])
@@ -4313,6 +4428,7 @@ def _handle_update_resource(args: dict[str, Any]) -> dict[str, Any]:
         "platform", "seasons_watched",
         "host", "date_listened",
         "developer", "date_played",
+        "artist",
         "name", "role",
     )
     for key in scalar_keys:
@@ -4427,6 +4543,27 @@ def _search_game_sync(args: dict[str, Any]) -> dict[str, Any]:
             "cover_url": _igdb_cover_url(game),
         })
     return _candidates_card("games", args["title"], candidates)
+
+
+async def _handle_search_album(args: dict[str, Any]) -> dict[str, Any]:
+    return await asyncio.to_thread(_search_album_sync, args)
+
+
+def _search_album_sync(args: dict[str, Any]) -> dict[str, Any]:
+    limit = args.get("limit", 5)
+    results = _musicbrainz_search(args["title"], args.get("artist"), args.get("year"), limit)
+    candidates = []
+    for group in results[:limit]:
+        mbid = group.get("id")
+        candidates.append({
+            "musicbrainz_id": mbid,
+            "title": group.get("title", ""),
+            "year": _musicbrainz_year(group),
+            "artist": _musicbrainz_artist(group),
+            "album_type": group.get("primary-type") or "",
+            "cover_url": _coverart_url(mbid, 250) if mbid else "",
+        })
+    return _candidates_card("music", args["title"], candidates)
 
 
 async def _handle_search_book(args: dict[str, Any]) -> dict[str, Any]:
@@ -4724,6 +4861,13 @@ def _normalise_candidates(collection: str, candidates: list[dict[str, Any]]) -> 
             c["subtitle"] = c.get("developer", "")
             c["image"] = c.get("cover_url") or ""
             c["summary"] = c.get("summary", "")
+        elif collection == "music":
+            c["id"] = c.get("musicbrainz_id")
+            c["subtitle"] = c.get("artist", "")
+            c["image"] = c.get("cover_url") or ""
+            # MusicBrainz carries no synopsis; the release type tells an album
+            # from the single of the same name, which is what a pick turns on.
+            c["summary"] = c.get("album_type", "")
         elif collection == "people":
             c["id"] = c.get("wikidata_id")
             # Wikidata calls it `name`; every other provider calls it `title`.
@@ -5034,6 +5178,183 @@ def _create_movie_entry_sync(args: dict[str, Any]) -> dict[str, Any]:
         "director": director,
         "overview": overview,
         "poster_path": poster_path,
+    }
+    return result
+
+
+# ---------------------------------------------------------------------------
+# MusicBrainz helpers (music)
+# ---------------------------------------------------------------------------
+#
+# MusicBrainz needs no key, but asks two things of anonymous callers: a
+# User-Agent naming the application, and no more than one request a second per
+# IP — beyond that it answers 503. The unit looked up is the release group (the
+# album as a work), not one of its pressings; the Cover Art Archive serves a
+# front cover per release group at a stable URL, so no second lookup is needed.
+
+_MUSICBRAINZ_UA = os.environ.get("MUSICBRAINZ_USER_AGENT") or "Maurice/1.0 ( https://chezmaurice.eu )"
+_MUSICBRAINZ_MIN_INTERVAL = 1.1
+_musicbrainz_lock = threading.Lock()
+_musicbrainz_last_call = 0.0
+
+
+def _musicbrainz_get(path: str, params: dict[str, Any]) -> dict[str, Any]:
+    import urllib.parse
+    import urllib.request
+
+    global _musicbrainz_last_call
+    url = f"https://musicbrainz.org/ws/2/{path}?{urllib.parse.urlencode({**params, 'fmt': 'json'})}"
+    req = urllib.request.Request(url, headers={"User-Agent": _MUSICBRAINZ_UA, "Accept": "application/json"})
+    # Held across the request so two concurrent tool calls queue rather than
+    # both landing inside the same second.
+    with _musicbrainz_lock:
+        wait = _MUSICBRAINZ_MIN_INTERVAL - (time.monotonic() - _musicbrainz_last_call)
+        if wait > 0:
+            time.sleep(wait)
+        try:
+            with urllib.request.urlopen(req, timeout=15) as resp:
+                return json.loads(resp.read())
+        finally:
+            _musicbrainz_last_call = time.monotonic()
+
+
+def _musicbrainz_quote(term: str) -> str:
+    """A Lucene phrase: quotes and backslashes are the only characters that end it."""
+    escaped = term.replace("\\", " ").replace('"', " ").strip()
+    return f'"{escaped}"'
+
+
+def _musicbrainz_search(
+    title: str, artist: str | None, year: int | None, limit: int = 5
+) -> list[dict[str, Any]]:
+    query = f"releasegroup:{_musicbrainz_quote(title)}"
+    if artist:
+        query += f" AND artist:{_musicbrainz_quote(artist)}"
+    if year:
+        query += f" AND firstreleasedate:{int(year)}"
+    data = _musicbrainz_get("release-group", {"query": query, "limit": max(1, int(limit))})
+    return data.get("release-groups") or []
+
+
+def _musicbrainz_best(title: str, artist: str | None, year: int | None) -> dict[str, Any]:
+    """The release group to take when nobody is choosing.
+
+    The top hit by score is often a reissue or a compilation that merely
+    contains the title: "Blue Train" answers with a 2008 release group ahead of
+    the 1957 album. Among the exact-title matches, a plain album beats a
+    compilation or a live set, and the earliest release beats a later one.
+    """
+    results = _musicbrainz_search(title, artist, year, 10)
+    if not results:
+        return {}
+    wanted = title.casefold().strip()
+    exact = [g for g in results if (g.get("title") or "").casefold().strip() == wanted]
+    if not exact:
+        return results[0]
+
+    def rank(group: dict[str, Any]) -> tuple[int, int, str]:
+        plain_album = group.get("primary-type") == "Album" and not group.get("secondary-types")
+        is_album = group.get("primary-type") == "Album"
+        return (0 if plain_album else 1 if is_album else 2, 0 if group.get("first-release-date") else 1,
+                group.get("first-release-date") or "")
+
+    return min(exact, key=rank)
+
+
+def _musicbrainz_by_id(mbid: str) -> dict[str, Any]:
+    import re
+    import urllib.error
+
+    # The id goes into the URL path; anything that is not a UUID is not an id.
+    if not re.fullmatch(r"[0-9a-fA-F-]{36}", mbid):
+        return {}
+    try:
+        return _musicbrainz_get(f"release-group/{mbid}", {"inc": "artists"})
+    except urllib.error.HTTPError as exc:
+        if exc.code == 404:
+            return {}
+        raise
+
+
+def _musicbrainz_artist(group: dict[str, Any]) -> str:
+    """The credit as printed on the sleeve: names joined by their own join phrases."""
+    return "".join(
+        f"{credit.get('name') or ''}{credit.get('joinphrase') or ''}"
+        for credit in group.get("artist-credit") or []
+        if isinstance(credit, dict)
+    ).strip()
+
+
+def _musicbrainz_year(group: dict[str, Any]) -> int | None:
+    date = group.get("first-release-date") or ""
+    return int(date[:4]) if len(date) >= 4 and date[:4].isdigit() else None
+
+
+def _coverart_url(mbid: str, size: int = 500) -> str:
+    return f"https://coverartarchive.org/release-group/{mbid}/front-{size}"
+
+
+# ---------------------------------------------------------------------------
+# Album entry creation handler
+# ---------------------------------------------------------------------------
+
+async def _handle_create_album_entry(args: dict[str, Any]) -> dict[str, Any]:
+    return await asyncio.to_thread(_create_album_entry_sync, args)
+
+
+def _create_album_entry_sync(args: dict[str, Any]) -> dict[str, Any]:
+    title = args["title"]
+    year = args.get("year")
+
+    mbid = args.get("musicbrainz_id")
+    if mbid:
+        group = _musicbrainz_by_id(str(mbid))
+        if not group:
+            return {"error": f"No MusicBrainz release group with id {mbid}"}
+    else:
+        group = _musicbrainz_best(title, args.get("artist"), year)
+        if not group:
+            return {"error": f"No MusicBrainz results found for '{title}'" + (f" ({year})" if year else "")}
+
+    meta = _album_meta_from_release_group(group)
+    album_title = meta.get("title") or title
+    album_year = meta.get("year") or year
+    artist = meta.get("artist", "")
+
+    locale = args.get("locale", "fr")
+    slug = _slugify(album_title)
+
+    # Not every release group has a cover in the archive; a 404 leaves the
+    # entry without an image rather than failing it.
+    image_rel = _download_resource_image(meta["cover_url"], "music", locale, slug)
+
+    publish_args: dict[str, Any] = {
+        "collection": "music",
+        "title": album_title,
+        "artist": artist,
+        "year": album_year,
+        "locale": locale,
+        "slug": slug,
+        "flags": args.get("flags", []),
+        "content": args.get("content") or "",
+        "translationKey": slug,
+    }
+    if image_rel:
+        publish_args["image"] = image_rel
+    if args.get("rating"):
+        publish_args["rating"] = args["rating"]
+    if args.get("tags"):
+        publish_args["tags"] = args["tags"]
+
+    result = _handle_publish_content(publish_args)
+    result["musicbrainz"] = {
+        "id": meta["musicbrainz_id"],
+        "title": album_title,
+        "year": album_year,
+        "artist": artist,
+        "type": meta.get("album_type", ""),
+        "cover_url": meta["cover_url"],
+        "url": f"https://musicbrainz.org/release-group/{meta['musicbrainz_id']}",
     }
     return result
 

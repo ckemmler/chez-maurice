@@ -1,0 +1,29 @@
+---
+import MusicDetail from "../../../../components/MusicDetail.astro";
+import { getCollection } from "@app/lib/content-fs";
+import { isPublic } from "../../../../lib/flags";
+import { stripLocalePrefix } from "../../../../i18n/utils";
+
+export const prerender = process.env.WEB_SSR !== "1";
+
+export async function getStaticPaths() {
+  const albums = await getCollection("music", ({ data }) => data.locale === "fr" && isPublic(data));
+  return albums.map((album) => ({
+    params: { id: stripLocalePrefix(album.id) },
+    props: { album },
+  }));
+}
+
+let __props = Astro.props;
+if (!__props.album) {
+  // SSR: look the entry up here rather than through getStaticPaths,
+  // which describes the public static build — the owner sees their
+  // drafts in their own garden.
+  const found = (await getCollection("music", ({ data }) => data.locale === "fr" && (Astro.locals.owner || isPublic(data))))
+    .find((e) => stripLocalePrefix(e.id) === Astro.params.id);
+  __props = found ? { album: found } : {};
+}
+const { album } = __props;
+if (!album) return new Response("Not found", { status: 404 });
+---
+<MusicDetail album={album} locale="fr" />

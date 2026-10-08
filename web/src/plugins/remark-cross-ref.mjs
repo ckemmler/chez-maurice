@@ -7,6 +7,8 @@ const ROUTE_MAP = {
     film: "/resources/movies",
     movie: "/resources/movies",
     game: "/resources/games",
+    album: "/resources/music",
+    music: "/resources/music",
     series: "/resources/series",
     book: "/resources/books",
     article: "/resources/articles",
@@ -20,6 +22,8 @@ const ROUTE_MAP = {
     film: "/trouvailles/films",
     movie: "/trouvailles/films",
     game: "/trouvailles/jeux",
+    album: "/trouvailles/musique",
+    music: "/trouvailles/musique",
     series: "/trouvailles/series",
     book: "/trouvailles/livres",
     article: "/trouvailles/articles",
@@ -49,12 +53,12 @@ const WIKI_LINK_RE = /\[\[([^\]|]+?)(?:\|([^\]]+?))?\]\]/g;
 const COLLECTION_PATH = {
   en: {
     books: "/resources/books", articles: "/resources/articles", movies: "/resources/movies",
-    games: "/resources/games", series: "/resources/series", podcasts: "/resources/podcasts",
+    games: "/resources/games", music: "/resources/music", series: "/resources/series", podcasts: "/resources/podcasts",
     people: "/resources/people", essays: "/essays", blog: "/blog", notes: "/notes",
   },
   fr: {
     books: "/trouvailles/livres", articles: "/trouvailles/articles", movies: "/trouvailles/films",
-    games: "/trouvailles/jeux", series: "/trouvailles/series", podcasts: "/trouvailles/podcasts",
+    games: "/trouvailles/jeux", music: "/trouvailles/musique", series: "/trouvailles/series", podcasts: "/trouvailles/podcasts",
     people: "/trouvailles/personnes", essays: "/essais", blog: "/blog", notes: "/notes",
   },
 };

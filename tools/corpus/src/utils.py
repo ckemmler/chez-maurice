@@ -85,6 +85,7 @@ _COLLECTION_WORDS = {
     "articles": "article",
     "movies": "film",
     "games": "game",
+    "music": "album",
     "series": "TV series",
     "podcasts": "podcast",
     "people": "person",

@@ -1,0 +1,109 @@
+---
+import Base from "@app/layouts/Base.astro";
+import Breadcrumb from "@app/components/Breadcrumb.astro";
+import type { Locale } from "@app/i18n/config";
+import { t, resourcePath, formatDate } from "@app/i18n/utils";
+import { getAlternateContentPath } from "@app/i18n/translations";
+import { renderEntry } from "@app/lib/content-fs";
+
+interface Props {
+  album: any;
+  locale?: Locale;
+}
+
+const { album, locale = "en" } = Astro.props;
+const contentHtml = await renderEntry(album);
+const alternatePath = await getAlternateContentPath("music", album.data.translationKey, locale);
+---
+
+<Base title={album.data.title} locale={locale} alternatePath={alternatePath}>
+  <article>
+    {album.data.image && (
+      <div class="hero-image">
+        <img src={album.data.image} alt={album.data.title} />
+      </div>
+    )}
+    <header>
+      <Breadcrumb locale={locale} resourceKey="music" />
+      <h1 class="title">{album.data.title}</h1>
+      {album.data.artist && (
+        <h2 class="intro">{t(locale, "music.by")} {album.data.artist}</h2>
+      )}
+      <div class="post-date">
+        {album.data.year && <span>{album.data.year}</span>}
+        {album.data.year && <> · </>}
+        {formatDate(album.data.date_listened, locale, { year: "numeric", month: "long" })}
+        {album.data.rating && (
+          <> · <span class="rating">{"★".repeat(album.data.rating)}{"☆".repeat(5 - album.data.rating)}</span></>
+        )}
+      </div>
+    </header>
+
+    <div class="body-text">
+      <Fragment set:html={contentHtml} />
+    </div>
+
+    <footer>
+      <p><a href={resourcePath(locale, "music")}>{t(locale, "music.backToMusic")}</a></p>
+    </footer>
+  </article>
+</Base>
+
+<style>
+  article {
+    max-width: 65ch;
+  }
+
+  .hero-image {
+    margin-bottom: var(--spacing-xl);
+  }
+
+  .hero-image img {
+    width: 100%;
+    max-height: 400px;
+    object-fit: cover;
+    border-radius: 8px;
+  }
+
+  @media (max-width: 480px) {
+    .hero-image img {
+      max-height: 320px;
+    }
+  }
+
+  header {
+    margin-bottom: var(--spacing-xl);
+  }
+
+  .title {
+    font-size: 3rem;
+    font-weight: 600;
+    margin-bottom: 0;
+    line-height: 1.1;
+  }
+
+  .intro {
+    color: var(--color-text-quiet);
+    font-family: var(--font-sans);
+    font-size: 1.25rem;
+    font-weight: 400;
+    font-style: italic;
+    margin-top: 0.5rem;
+    margin-bottom: 0.25rem;
+  }
+
+  .rating {
+    color: #d4a017;
+    letter-spacing: 1px;
+  }
+
+  .body-text {
+    margin-top: var(--spacing-lg);
+  }
+
+  footer {
+    margin-top: var(--spacing-xl);
+    padding-top: var(--spacing-lg);
+    border-top: 1px solid var(--color-border);
+  }
+</style>

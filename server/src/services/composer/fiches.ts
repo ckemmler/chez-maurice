@@ -25,7 +25,7 @@ const GARDENS = gardensRoot();
 
 /** Mirrors data-api's RESOURCE_COLLECTIONS: every collection that has fiches. */
 const COLLECTIONS = [
-  "books", "articles", "movies", "games", "series", "podcasts", "people",
+  "books", "articles", "movies", "games", "music", "series", "podcasts", "people",
 ] as const;
 
 export interface FicheMeta {

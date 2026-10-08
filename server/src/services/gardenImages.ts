@@ -18,7 +18,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { atomicWrite, autoCommit, downloadImage, type GardenRef } from "../../data-api/services/gardenFiche";
 
-const COLLECTIONS = ["books", "movies", "games", "series", "podcasts", "articles", "people"];
+const COLLECTIONS = ["books", "movies", "games", "music", "series", "podcasts", "articles", "people"];
 const REMOTE_IMAGE = /^image:\s+["']?(https?:\/\/[^\s"']+)["']?\s*$/m;
 
 /**

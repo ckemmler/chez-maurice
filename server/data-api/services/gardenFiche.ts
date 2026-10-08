@@ -20,7 +20,7 @@ import { safeFetch, BROWSER_UA } from "./articleExtract";
 
 /** Mirrors _RESOURCE_COLLECTIONS in the garden MCP tool. */
 export const RESOURCE_COLLECTIONS = [
-  "books", "articles", "movies", "games", "series", "podcasts", "people",
+  "books", "articles", "movies", "games", "music", "series", "podcasts", "people",
 ] as const;
 export type ResourceCollection = (typeof RESOURCE_COLLECTIONS)[number];
 
@@ -322,7 +322,7 @@ export function autoCommit(garden: GardenRef, paths: string[], message: string):
 /** French URL segment per collection, mirroring web/src/i18n/config.ts. */
 const FR_SEGMENT: Record<string, string> = {
   books: "livres", articles: "articles", podcasts: "podcasts",
-  movies: "films", games: "jeux", series: "series", people: "personnes",
+  movies: "films", games: "jeux", music: "musique", series: "series", people: "personnes",
 };
 
 /** Browser path of the fiche — /fiches is not locale-renamed, unlike resources. */

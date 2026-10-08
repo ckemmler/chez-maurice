@@ -35,12 +35,13 @@ const URL_PREFIX_MAP: Record<string, string> = {
 
 const RESOURCE_PREFIX_MAP: Record<string, string> = {
   movies: "movies", films: "movies", games: "games", jeux: "games",
+  music: "music", musique: "music",
   books: "books", livres: "books", articles: "articles",
   podcasts: "podcasts", series: "series", people: "people",
 };
 
 export const SHAREABLE_COLLECTIONS = new Set([
-  "blog", "essays", "books", "movies", "games", "series", "podcasts", "articles",
+  "blog", "essays", "books", "movies", "games", "music", "series", "podcasts", "articles",
 ]);
 
 export interface ContentFile {

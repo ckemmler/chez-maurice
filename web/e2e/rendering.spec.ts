@@ -31,6 +31,7 @@ const pages: Array<[string, string, string]> = [
   ["/resources/movies/tampopo", "Tampopo", "MOVIE-MARKER"],
   ["/resources/series/midnight-diner", "Midnight Diner", "SERIES-MARKER"],
   ["/resources/games/animal-crossing", "Animal Crossing", "GAME-MARKER"],
+  ["/resources/music/kind-of-blue", "Kind of Blue", "ALBUM-MARKER"],
   ["/fr/trouvailles/livres/", "Les sœurs Makioka", ""],
   ["/fr/trouvailles/livres/les-soeurs-makioka", "Les sœurs Makioka", "LIVRE-MARKER"],
 ];

@@ -78,7 +78,7 @@ class CorpusMCPServer:
                         "number or boolean matches exactly.\n\n"
                         "Useful keys: source_type (note | fiche | card | fragment | "
                         "conversation | book | thought | dossier), collection (books | "
-                        "articles | movies | games | series | podcasts | people), author, "
+                        "articles | movies | games | music | series | podcasts | people), author, "
                         "publication, title, tags, year, published_at, status, locale. A "
                         "conversation chunk also carries conversation_id, conversation_title, "
                         "message_id, role and date.\n\n"

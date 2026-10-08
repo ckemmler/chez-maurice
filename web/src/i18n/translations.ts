@@ -10,6 +10,7 @@ type ContentCollection =
   | "podcasts"
   | "movies"
   | "games"
+  | "music"
   | "series"
   | "people"
   | "pages";
@@ -20,6 +21,7 @@ const resourceCollections = new Set([
   "podcasts",
   "movies",
   "games",
+  "music",
   "series",
   "people",
 ]);

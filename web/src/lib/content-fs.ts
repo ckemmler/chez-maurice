@@ -50,13 +50,14 @@ export interface Entry {
 
 /** The resource collections, which also hold the fiches. */
 export const RESOURCE_COLLECTIONS = [
-  "books", "articles", "movies", "games", "series", "podcasts", "people",
+  "books", "articles", "movies", "games", "music", "series", "podcasts", "people",
 ] as const;
 
 /** Every collection and the directory under the garden that holds it. */
 const DIRS: Record<string, string> = {
   blog: "blog", essays: "essays", notes: "notes", pages: "pages",
   books: "books", articles: "articles", movies: "movies", games: "games",
+  music: "music",
   series: "series", podcasts: "podcasts", people: "people",
 };
 

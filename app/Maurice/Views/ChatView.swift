@@ -1626,6 +1626,7 @@ private struct CandidatePickerCard: View {
         case "books": return "google books \(id)"
         case "podcasts": return "podcast index \(id)"
         case "games": return "igdb \(id)"
+        case "music": return "musicbrainz \(id)"
         case "people": return "wikidata \(id)"
         default: return id
         }
@@ -1731,6 +1732,7 @@ private struct MediaFicheCard: View {
             }
         case "books": out.append(data.string("author"))
         case "podcasts": out.append(data.string("host"))
+        case "music": out.append(data.string("artist"))
         case "games":
             out.append(data.string("developer"))
             out.append(data.strings("platforms").joined(separator: ", "))
