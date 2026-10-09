@@ -61,5 +61,14 @@ echo "→ building $GARDEN (theme: $THEME) into web/$OUT"
 NODE_ENV=production GARDEN="$GARDEN" THEME="$THEME" npm run build -- --outDir "$OUT"
 [[ -f "$OUT/index.html" ]] || { echo "✗ the build left no site in web/$OUT"; exit 1; }
 
+# The site is plain files. The adapter also leaves a Worker beside them
+# (_worker.js, 13 MB, and the _routes.json that sends requests to it) for the
+# few pages rendered on request — the private overlay's library, which has no
+# server to talk to out there and answered 500. Deployed, it was compiled,
+# uploaded and brought up on every publish: two thirds of the deploy, for
+# nothing a visitor could read. Without it Pages serves the files and nothing
+# else.
+rm -rf "$OUT/_worker.js" "$OUT/_routes.json"
+
 echo "→ deploying to Cloudflare Pages project '$GARDEN_PAGES_PROJECT' (branch: $DEPLOY_BRANCH)"
 npx wrangler pages deploy "$OUT" --project-name="$GARDEN_PAGES_PROJECT" --branch="$DEPLOY_BRANCH"
