@@ -83,7 +83,7 @@ The Astro site renders a member's Markdown garden as a website.
 cd web
 npm install
 npm run dev               # http://localhost:4321  (serves the bundled `demo` garden)
-# or: npm run build       # static build into web/dist
+# or: npm run build       # static build into web/dist-site/<garden>
 ```
 
 Select which garden to serve with the `GARDEN` env var (a folder under

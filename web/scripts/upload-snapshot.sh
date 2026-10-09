@@ -30,7 +30,7 @@ echo "Building site..."
 npm run build
 
 echo "Uploading snapshot to R2..."
-aws s3 sync dist/ "s3://${BUCKET}/snapshots/${TAG_NAME}/" \
+aws s3 sync "dist-site/${GARDEN:-demo}/" "s3://${BUCKET}/snapshots/${TAG_NAME}/" \
   --endpoint-url "$R2_ENDPOINT"
 
 echo "Updating manifest..."

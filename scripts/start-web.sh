@@ -23,6 +23,8 @@ cd "$REPO/web"
 # Build if there is nothing to run, or if a source file is newer than the
 # build. Deploys should build ahead of time (scripts/deploy.sh, the image);
 # this is the safety net that keeps a fresh checkout from serving nothing.
+# dist/ is the engine's alone — a publication builds into dist-site/<garden>
+# (astro.config.mjs), so nothing replaces these files under a running engine.
 needs_build=0
 if [[ ! -f dist/server/entry.mjs ]]; then
   needs_build=1

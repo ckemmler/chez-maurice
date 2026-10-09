@@ -1,5 +1,6 @@
-# build output
+# build output: dist/ is the engine, dist-site/<garden>/ a publication
 dist/
+dist-site/
 # generated types
 .astro/
 

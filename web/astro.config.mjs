@@ -34,8 +34,19 @@ const certFile = process.env.MAURICE_TLS_CERT || resolve(certsDir, "server.crt")
 const keyFile = process.env.MAURICE_TLS_KEY || resolve(certsDir, "server.key");
 const hasTls = existsSync(certFile) && existsSync(keyFile);
 
+// Where a build lands. `dist` belongs to the engine alone: the household's
+// node server runs from dist/server/entry.mjs and imports its route modules
+// lazily, so a static build written over it leaves the running engine
+// answering 500 on every page it had not served yet. A publication build
+// therefore gets a folder of its own, one per garden. (`--outDir` on the
+// command line still wins: scripts/publish-web.sh and the public pages build
+// name theirs.)
+const ssr = process.env.WEB_SSR === "1";
+const outDir = ssr ? "./dist" : `./dist-site/${process.env.GARDEN || "demo"}`;
+
 // https://astro.build/config
 export default defineConfig({
+  outDir,
   devToolbar: { enabled: false },
   // publicPages first: it finishes the URLs of a member's public pages, and
   // gardenImageLinks then keeps the images those pages point at.

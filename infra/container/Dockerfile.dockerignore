@@ -33,6 +33,7 @@ server/test
 !web
 web/node_modules
 web/dist
+web/dist-site
 web/.astro
 # Only the bundled demo garden ships; real gardens are personal content.
 web/gardens/*

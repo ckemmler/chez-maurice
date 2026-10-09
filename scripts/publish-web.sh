@@ -48,9 +48,18 @@ fi
 cd "$REPO/web"
 [[ -d node_modules ]] || { echo "→ installing web deps"; npm install; }
 
+# The site is built into a folder of its own, never into web/dist: that one is
+# the running garden engine (scripts/start-web.sh), and a static build written
+# over it took every garden page down until the engine was rebuilt. WEB_SSR is
+# unset for the same reason the folder is named here: this script is started by
+# the API server, and must build the static site whatever its caller exports.
+OUT="dist-site/$GARDEN"
+unset WEB_SSR
+
 # NODE_ENV=production is what excludes drafts and fiches from the build.
-echo "→ building $GARDEN (theme: $THEME)"
-NODE_ENV=production GARDEN="$GARDEN" THEME="$THEME" npm run build
+echo "→ building $GARDEN (theme: $THEME) into web/$OUT"
+NODE_ENV=production GARDEN="$GARDEN" THEME="$THEME" npm run build -- --outDir "$OUT"
+[[ -f "$OUT/index.html" ]] || { echo "✗ the build left no site in web/$OUT"; exit 1; }
 
 echo "→ deploying to Cloudflare Pages project '$GARDEN_PAGES_PROJECT' (branch: $DEPLOY_BRANCH)"
-npx wrangler pages deploy dist --project-name="$GARDEN_PAGES_PROJECT" --branch="$DEPLOY_BRANCH"
+npx wrangler pages deploy "$OUT" --project-name="$GARDEN_PAGES_PROJECT" --branch="$DEPLOY_BRANCH"

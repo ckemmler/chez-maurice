@@ -1,6 +1,6 @@
 ---
 title: The web garden
-date: '2026-10-08'
+date: '2026-10-09'
 flags: []
 locale: en
 description: 'The Astro renderer: per-request theme engine, content collections, wiki-links,
@@ -64,6 +64,8 @@ MOC notes render their wiki-link children as cards.
 `WEB_SSR=1` → `output: "server"` (each note route does `prerender = false` and reads the `.md` straight from disk via `web/src/lib/notes-fs.ts`, bypassing Astro's content layer to survive rapid edits). Unset → a fully static build. Either way the adapter is **Cloudflare**.
 
 At home the private gardens are served by the `com.maurice.web` engine, reached through the server at `/g/<member>/` (the server gates each garden to its member; the engine accepts any host). Each engine **binds to the loopback only** — the proxy is the sole way in, and that is load-bearing: these are `astro dev` servers, and the `/_dev/*` editing routes they carry (delete a note, flip it public, write a file) have no auth of their own. The proxy refuses `/_dev/*` for a garden that isn't yours, whatever the request shape, and the engine confines every path it resolves to the garden it serves. The public site is published to **Cloudflare Pages** production from `scripts/publish-web.sh`, whatever branch is checked out.
+
+**Two builds, two folders** (since 2026-10-09). `web/dist` is the engine's alone: `WEB_SSR=1 npm run build` writes it, `scripts/start-web.sh` runs `dist/server/entry.mjs` from it, and the image is built the same way. Every other build lands elsewhere — `astro.config.mjs` sets `outDir` to `dist-site/<garden>` whenever `WEB_SSR` is not `1`, `scripts/publish-web.sh` names that folder itself (`--outDir dist-site/$GARDEN`, after unsetting `WEB_SSR`), refuses to deploy when the build left no `index.html` there, and hands the same folder to `wrangler pages deploy`. A member's public pages on the household's host were already built beside their live folder (`buildPublicPages`, `--outDir <pages>.building`). `dist-site/` is ignored by git and by the image's build context.
 
 A Cloudflare Pages function (`web/functions/_middleware.ts`) adds **time-travel**: `?t=YYYY-MM-DD` serves a historical snapshot from an **R2** bucket (`SNAPSHOTS`), choosing the most recent milestone ≤ the date and injecting a banner. Falls back to the live site when absent.
 
@@ -132,6 +134,7 @@ Since 2026-09-14 the garden has an end-to-end battery, `web/e2e/` (Playwright, c
 
 ## Gaps & notes
 
+- **A publish used to take the gardens down** (seen 8 October 2026, closed 9 October). The static build of `publish-web.sh` — the script itself, or a "Publish" from the phone for a member with a domain of their own — wrote into `web/dist`, replacing the engine's files under the running process. The node server imports a route's module the first time that route is asked for, so every page not yet served answered 500 (`ERR_MODULE_NOT_FOUND` for `dist/server/pages/…`) until `service.sh restart web` rebuilt it. The publication now builds into `dist-site/<garden>`; `server/test/publish-outdir.test.ts` holds the line. Still true: a rebuild of the engine itself (`start-web.sh` finding sources newer than the build) happens only at start, never under a running engine.
 - **The private overlay is a second place to look.** `maurice-web/` is symlinked into `web/src/pages` and `web/src/components`, so a sweep over `web/` with `grep -r` does not see it (it does not follow symlinked directories) — which is how four of its pages kept importing `astro:content` after the engine stopped loading a content config, and answered 404. Use `grep -R`, and remember the overlay is its own repo with its own commit.
 - **The e2e battery found four bugs and all four are fixed** (September 2026): `reorder-children` wrote nothing, the toolbar reached the default garden's engine, note images 404'd under `/g/<member>/`, and the MOC-card script dropped the text before a wiki-link. Nothing is pinned; 73 tests run green against both the dev server and the build.
 - **The chantier is finished** (phases 0–5, `docs/garden-server-mode.md` keeps the record): the e2e battery, owner mode, the toolbar API, disk readers, one built engine per household, and the cleanup. Nothing starts an `astro dev` per member any more; `start-garden.sh` and the `.garden-roots` shells are gone, and `gardens.json` no longer carries a port.
