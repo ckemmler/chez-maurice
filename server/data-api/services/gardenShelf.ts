@@ -32,6 +32,7 @@ import { countHighlights, listHighlights } from "./highlights";
 import { fragmentsDir, isOpened, parseFiche, publicUrl, type GardenRef } from "./gardenFiche";
 import { listGardenEntries, type GardenEntry } from "./gardenEntries";
 import { NEEDS_CAPTURE } from "./gardenArticles";
+import { archivedIds } from "./shelfArchive";
 
 // ── Kinds ──
 
@@ -88,6 +89,8 @@ export interface ShelfEntry {
   source: BookSource | ArticleSource | null;
   mine: { notes: number; opened: boolean } | null;
   shared: { state: "draft" | "published" } | null;
+  /** Put away from the member's list (shelfArchive.ts); the entry itself is untouched. */
+  archived: boolean;
   /** The same subject in the member's other locales — one row per subject. */
   translations: { id: string; locale: string; shared: { state: "draft" | "published" } | null }[];
 }
@@ -460,6 +463,7 @@ async function describe(
       status: typeof card?.fm.status === "string" ? card.fm.status : null,
       source, mine,
       shared: written ? { state: flags.includes("public") ? "published" : "draft" } : null,
+      archived: false,
       translations: [],
     },
   };
@@ -472,7 +476,7 @@ async function describe(
 // of-z"); `translationKey` in the frontmatter is what says they are one
 // subject. Without a key, the same slug in the same collection is.
 
-function subjectKey(e: GardenEntry, card: Face | null, fiche: Face | null): string {
+export function subjectKey(e: GardenEntry, card: Face | null, fiche: Face | null): string {
   const key = card?.fm.translationKey ?? fiche?.fm.translationKey;
   return `${e.collection}/${typeof key === "string" && key ? key : e.slug}`;
 }
@@ -519,6 +523,8 @@ export async function listShelf(
   memberId: string, garden: GardenRef,
   /** The household library; read from Calibre unless a caller supplies it. */
   books?: BookMetadata[],
+  /** The other half of the list: what the member put away, and only that. */
+  archived = false,
 ): Promise<{
   kinds: { kind: ShelfKind; count: number }[];
   entries: ShelfEntry[];
@@ -534,7 +540,7 @@ export async function listShelf(
     if (book) claimed.add(book.id);
     rows.push({ row, subject });
   }
-  const entries = foldTranslations(rows, preferredLocale(memberId));
+  let entries = foldTranslations(rows, preferredLocale(memberId));
 
   // The books nothing is written on yet: readable all the same.
   for (const book of lib.books) {
@@ -550,9 +556,15 @@ export async function listShelf(
       source,
       mine: marked ? { notes: marked, opened: true } : null,
       shared: null,
+      archived: false,
       translations: [],
     });
   }
+
+  // A row is one subject: put away under any of its locales, it is put away.
+  const away = archivedIds(memberId);
+  for (const e of entries) e.archived = away.has(e.id) || e.translations.some((t) => away.has(t.id));
+  entries = entries.filter((e) => e.archived === archived);
 
   entries.sort((a, b) => (a.updated_at < b.updated_at ? 1 : a.updated_at > b.updated_at ? -1 : 0));
   const kinds = SHELF_KINDS
@@ -660,5 +672,7 @@ export async function getShelfEntry(
     };
   }
 
-  return { ...row, mine, shared };
+  const away = archivedIds(memberId);
+  const archived = away.has(row.id) || row.translations.some((t) => away.has(t.id));
+  return { ...row, archived, mine, shared };
 }

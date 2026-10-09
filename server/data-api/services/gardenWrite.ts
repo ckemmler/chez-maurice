@@ -9,6 +9,9 @@
  *     written — the card's identity was put there by other hands (the garden
  *     tool, the member in Obsidian) and is not this file's to restyle.
  *   - **published**: the card's `public` flag, then a site deploy.
+ *   - **deleted**: the card, the fiche and what hangs under the fiche, in
+ *     every locale of the subject; a deploy when something was online.
+ *   - **archived**: nothing in the garden at all (shelfArchive.ts).
  *
  * Every write commits (and pushes) the member's garden, like every other
  * garden write. Nothing is stored beside the markdown.
@@ -24,10 +27,11 @@ import {
   assertLocale, assertSlug, atomicWrite, autoCommit, markOpened, parseFiche, writeFiche, type GardenRef,
 } from "./gardenFiche";
 import { listGardenEntries, type GardenEntry } from "./gardenEntries";
-import { indexGardenPaths } from "./gardenIndex";
+import { indexGardenPaths, unindexGardenPath } from "./gardenIndex";
 import {
-  bookFor, isShelfCollection, isWritten, loadLibrary, ownSiteFor, preferredLocale, readFace, siteFor,
+  bookFor, isShelfCollection, isWritten, loadLibrary, ownSiteFor, preferredLocale, readFace, siteFor, subjectKey,
 } from "./gardenShelf";
+import { setArchived } from "./shelfArchive";
 import { buildPublicPages } from "./publicPages";
 
 export class EntryWriteError extends Error {
@@ -236,6 +240,90 @@ export function setPublished(memberId: string, garden: GardenRef, ref: EntryRef,
     autoCommit(garden, [file], `Set public ${on ? "on" : "off"}: ${path.basename(file)}`);
   }
   return requestDeploy(garden, deployKind(memberId));
+}
+
+// ── Deleting, putting away ──
+
+/** Every locale of the subject `entry` is one of: the row the list shows. */
+function subjectOf(garden: GardenRef, entry: GardenEntry): GardenEntry[] {
+  const key = (e: GardenEntry) => subjectKey(e, readFace(garden, e.card?.file), readFace(garden, e.fiche?.file));
+  const subject = key(entry);
+  return listGardenEntries(garden).filter((e) => e.collection === entry.collection && key(e) === subject);
+}
+
+const idOf = (e: GardenEntry) => `${e.collection}/${e.locale}/${e.slug}`;
+
+function filesUnder(dir: string): string[] {
+  let names: fs.Dirent[];
+  try {
+    names = fs.readdirSync(dir, { withFileTypes: true });
+  } catch {
+    return [];
+  }
+  return names.flatMap((n) => (n.isDirectory() ? filesUnder(path.join(dir, n.name)) : [path.join(dir, n.name)]));
+}
+
+/**
+ * Delete an entry: the card, the fiche, and what hangs under the fiche (the
+ * fragments Maurice filed, an article's captured text, the flashcards), in
+ * every locale of the subject — a row of the list is one subject, and a
+ * translation left behind would stay published with nothing to show it. One
+ * commit, so the garden's history gives it back. What is not the entry's
+ * stays: the book in the library, the passages highlighted in it. A deploy
+ * follows when something that was online is gone.
+ */
+export function deleteEntry(memberId: string, garden: GardenRef, ref: EntryRef): { deleted: string[]; deploy: DeployState | null } {
+  const group = subjectOf(garden, findEntry(garden, ref));
+  const root = path.resolve(garden.root) + path.sep;
+  const removed: string[] = [];
+  let wasOnline = false;
+
+  for (const e of group) {
+    const flags = readFace(garden, e.card?.file)?.fm.flags;
+    if (Array.isArray(flags) && flags.map(String).includes("public")) wasOnline = true;
+
+    const files = [e.card?.file, e.fiche?.file].filter((f): f is string => !!f).map((f) => path.join(garden.root, f));
+    const under = e.fiche ? path.join(garden.root, e.fiche.file).replace(/\.md$/, "") : null;
+    if (under) files.push(...filesUnder(under));
+    for (const file of files) {
+      if (!path.resolve(file).startsWith(root)) throw new EntryWriteError("path escapes the garden", 400);
+    }
+    for (const file of files) {
+      // Its real path, taken while it exists: autoCommit resolves symlinks to
+      // match git's own view of the tree, and cannot for a file that is gone.
+      try { removed.push(fs.realpathSync(file)); } catch { removed.push(file); }
+      fs.rmSync(file, { force: true });
+      // The flashcards are git-ignored and were never in the corpus.
+      if (!file.includes(`${path.sep}_cards${path.sep}`)) unindexGardenPath(memberId, file);
+    }
+    if (under) fs.rmSync(under, { recursive: true, force: true });
+  }
+
+  autoCommit(garden, removed, `Delete ${ref.collection}/${ref.slug}`);
+  setArchived(memberId, group.map(idOf), false);
+  return {
+    deleted: group.map(idOf),
+    deploy: wasOnline && canDeploy(memberId, garden) ? requestDeploy(garden, deployKind(memberId)) : null,
+  };
+}
+
+/**
+ * Put an entry away from the member's list, or bring it back. `id` is a shelf
+ * id: an entry of the garden, recorded under every locale of its subject so
+ * the row stays away whichever locale leads it, or a book of the library
+ * nobody wrote on (`calibre/<id>`), which can be put away and nothing else.
+ */
+export function archiveEntry(memberId: string, garden: GardenRef, id: string, on: boolean): string[] {
+  let ids: string[];
+  if (/^calibre\/\d+$/.test(id)) {
+    ids = [id];
+  } else {
+    const [collection, locale, slug, ...rest] = id.split("/");
+    if (!collection || !locale || !slug || rest.length) throw new EntryWriteError(`Not an entry: ${id}`, 400);
+    ids = subjectOf(garden, findEntry(garden, { collection, locale, slug })).map(idOf);
+  }
+  setArchived(memberId, ids, on);
+  return ids;
 }
 
 // ── The deploy ──

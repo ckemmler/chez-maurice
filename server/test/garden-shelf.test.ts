@@ -239,3 +239,47 @@ test("isWritten: empty, synopsis and scraped article are not the member's words"
   expect(isWritten("articles", face({ url: "https://x" }, "The article."), null)).toBe(false);
   expect(isWritten("movies", face({}, "Mon avis."), face({ meta: { overview: SYNOPSIS } }, ""))).toBe(true);
 });
+
+describe("putting away", () => {
+  test("an archived row leaves the list for its other half, under every locale, and comes back", async () => {
+    const { archiveEntry } = await import("../data-api/services/gardenWrite");
+    const { updateUserPreferences } = await import("../src/services/users");
+    updateUserPreferences(MEMBER.id, { locale: "fr" });
+    const before = (await listShelf(MEMBER.id, garden, BOOKS as any)).entries;
+
+    // A subject in two locales, put away by the one that does not lead the row.
+    expect(archiveEntry(MEMBER.id, garden, "movies/en/the-lost-city-of-z", true).sort())
+      .toEqual(["movies/en/the-lost-city-of-z", "movies/fr/la-cite-perdue-de-z"]);
+    // A book of the library nobody wrote on.
+    expect(archiveEntry(MEMBER.id, garden, "calibre/9", true)).toEqual(["calibre/9"]);
+
+    const { kinds, entries } = await listShelf(MEMBER.id, garden, BOOKS as any);
+    expect(entries.map((e) => e.id)).not.toContain("movies/fr/la-cite-perdue-de-z");
+    expect(entries.map((e) => e.id)).not.toContain("calibre/9");
+    expect(entries).toHaveLength(before.length - 2);
+    expect(entries.every((e) => e.archived === false)).toBe(true);
+    expect(kinds.find((k) => k.kind === "movies")!.count).toBe(1);
+
+    const away = await listShelf(MEMBER.id, garden, BOOKS as any, true);
+    expect(away.entries.map((e) => e.id).sort()).toEqual(["calibre/9", "movies/fr/la-cite-perdue-de-z"]);
+    expect(away.entries.every((e) => e.archived)).toBe(true);
+    // The page says so too, in whichever locale it is opened.
+    expect((await getShelfEntry(MEMBER.id, garden, "movies", "en", "the-lost-city-of-z", BOOKS as any))!.archived).toBe(true);
+    // Nothing in the garden moved.
+    expect(fs.existsSync(path.join(garden.root, "movies/fr/la-cite-perdue-de-z.md"))).toBe(true);
+
+    archiveEntry(MEMBER.id, garden, "movies/fr/la-cite-perdue-de-z", false);
+    archiveEntry(MEMBER.id, garden, "calibre/9", false);
+    expect((await listShelf(MEMBER.id, garden, BOOKS as any)).entries).toHaveLength(before.length);
+    expect((await listShelf(MEMBER.id, garden, BOOKS as any, true)).entries).toEqual([]);
+    // The member is shared with every other suite: left as it was found.
+    updateUserPreferences(MEMBER.id, { locale: "en" });
+  });
+
+  test("only what the list shows can be put away", async () => {
+    const { archiveEntry } = await import("../data-api/services/gardenWrite");
+    expect(() => archiveEntry(MEMBER.id, garden, "books/fr/nope", true)).toThrow("No such entry");
+    expect(() => archiveEntry(MEMBER.id, garden, "notes/fr/une-note", true)).toThrow("Not an entry");
+    expect(() => archiveEntry(MEMBER.id, garden, "calibre/../x", true)).toThrow("Not an entry");
+  });
+});

@@ -177,7 +177,7 @@ Under `~/.maurice/data/` (`MAURICE_DATA_DIR`):
 
 | File | Holds |
 |---|---|
-| `life.db` | Book **highlights** and article **highlights** (with the view their offsets belong to — full text or summary), **reading positions** and bookmarks per member, health, tasks, signals, dossiers and research, coaching, layouts, places. It was `akita.db` — the prototype's name — until 2026-09-13: the server renames the file on its first start after the change (`getLifeDbPath()`), and Python tools look for the new name and fall back to the old, never renaming. Until that day it was **not in the nightly backup**, which only snapshotted `maurice.db`; `scripts/backup-db.sh` now takes both. |
+| `life.db` | Book **highlights** and article **highlights** (with the view their offsets belong to — full text or summary), **reading positions** and bookmarks per member, what each member **put away from their list** (`shelf_archive`, one row per member and shelf id, since 9 October 2026), health, tasks, signals, dossiers and research, coaching, layouts, places. It was `akita.db` — the prototype's name — until 2026-09-13: the server renames the file on its first start after the change (`getLifeDbPath()`), and Python tools look for the new name and fall back to the old, never renaming. Until that day it was **not in the nightly backup**, which only snapshotted `maurice.db`; `scripts/backup-db.sh` now takes both. |
 | `compte.db` | Bank transactions and budgets (`compte`). |
 | `recommendations.db` | Reading recommendations. |
 

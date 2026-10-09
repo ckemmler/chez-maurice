@@ -14,9 +14,9 @@ import { spawnSync } from "node:child_process";
 const TMP = fs.mkdtempSync(path.join(os.tmpdir(), "maurice-write-"));
 process.env.MAURICE_GARDENS_DIR = path.join(TMP, "gardens");
 
-const { addNote, noteBlock, withNote, writeShared, setPublished, setDeployRunner, deployState, requestDeploy, EntryWriteError } =
+const { addNote, noteBlock, withNote, writeShared, setPublished, setDeployRunner, deployState, requestDeploy, deleteEntry, archiveEntry, EntryWriteError } =
   await import("../data-api/services/gardenWrite");
-const { getShelfEntry } = await import("../data-api/services/gardenShelf");
+const { getShelfEntry, listShelf } = await import("../data-api/services/gardenShelf");
 const { searchLinkTargets } = await import("../data-api/services/gardenLinks");
 const { MEMBER } = await import("./_member");
 const { default: db } = await import("../src/db");
@@ -211,5 +211,57 @@ describe("publishing", () => {
     expect(() => setPublished(MEMBER.id, garden, { collection: "movies", locale: "fr", slug: "while-were-young" }, true))
       .toThrow("No site");
     db.run(`UPDATE users SET notes_domain = 'candide.me' WHERE id = ?`, [MEMBER.id]);
+  });
+});
+
+describe("deleting", () => {
+  const tracked = () => spawnSync("git", ["ls-files"], { cwd: garden.root, encoding: "utf-8" }).stdout.trim().split("\n");
+
+  test("both faces go, with what hangs under the fiche, in one commit; nothing online, no deploy", async () => {
+    const runs: string[] = [];
+    setDeployRunner((g) => { runs.push(g.username); return Promise.resolve(); });
+    // An article as the capture leaves it: its text is the fiche's first fragment.
+    write("articles/fr/soil-fiche/_fragments/001.frag", `---\nsummary: Soil\n---\nThe captured text.\n`);
+    write("articles/fr/soil-fiche/_cards/unit.md", `a flashcard, git-ignored in a real garden`);
+    spawnSync("git", ["add", "-A"], { cwd: garden.root });
+    spawnSync("git", ["commit", "-qm", "fixtures"], { cwd: garden.root });
+    archiveEntry(MEMBER.id, garden, "articles/fr/soil", true);
+
+    const out = deleteEntry(MEMBER.id, garden, { collection: "articles", locale: "fr", slug: "soil" });
+    expect(out).toEqual({ deleted: ["articles/fr/soil"], deploy: null });
+    expect(fs.existsSync(path.join(garden.root, "articles/fr/soil-fiche.md"))).toBe(false);
+    expect(fs.existsSync(path.join(garden.root, "articles/fr/soil-fiche"))).toBe(false);
+    expect(await entry("articles", "fr", "soil")).toBeNull();
+    expect(tracked().filter((f) => f.includes("soil"))).toEqual([]);
+    expect(log()[0]).toBe("Delete articles/soil");
+    // Its place among what was put away goes with it.
+    expect((await listShelf(MEMBER.id, garden, [], true)).entries).toEqual([]);
+    expect(runs).toEqual([]);
+    // The garden's history gives it back.
+    expect(spawnSync("git", ["show", "HEAD~1:articles/fr/soil-fiche/_fragments/001.frag"], { cwd: garden.root, encoding: "utf-8" }).stdout)
+      .toContain("The captured text.");
+  });
+
+  test("a subject goes in every locale, and what was online is taken off the site", async () => {
+    const runs: string[] = [];
+    setDeployRunner((g) => { runs.push(g.username); return Promise.resolve(); });
+    write("movies/en/while-were-young.md",
+      `---\ntitle: "While We're Young"\nflags: [public]\nlocale: "en"\ntranslationKey: "while-were-young"\n---\n\nVery deft.\n`);
+    write("movies/en/unrelated.md", `---\ntitle: Unrelated\nflags: []\nlocale: en\n---\n\nStays.\n`);
+
+    const out = deleteEntry(MEMBER.id, garden, { collection: "movies", locale: "fr", slug: "while-were-young" });
+    expect(out.deleted.sort()).toEqual(["movies/en/while-were-young", "movies/fr/while-were-young"]);
+    expect(out.deploy).toMatchObject({ status: "running" });
+    expect(fs.existsSync(path.join(garden.root, "movies/en/while-were-young.md"))).toBe(false);
+    expect(fs.existsSync(path.join(garden.root, "movies/fr/while-were-young.md"))).toBe(false);
+    expect(fs.existsSync(path.join(garden.root, "movies/en/unrelated.md"))).toBe(true);
+    await new Promise((r) => setTimeout(r, 5));
+    expect(runs).toEqual([MEMBER.username]);
+  });
+
+  test("what is not an entry of the list is refused", () => {
+    expect(() => deleteEntry(MEMBER.id, garden, { collection: "books", locale: "fr", slug: "nope" })).toThrow("No such entry");
+    expect(() => deleteEntry(MEMBER.id, garden, { collection: "notes", locale: "fr", slug: "une-note" })).toThrow("Not an entry");
+    expect(fs.existsSync(path.join(garden.root, "notes/fr/une-note.md"))).toBe(true);
   });
 });

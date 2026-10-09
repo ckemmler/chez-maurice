@@ -12,7 +12,7 @@ import { GARDEN_COLLECTIONS, listGardenEntries } from "../services/gardenEntries
 import { cardsFace } from "../services/flashcards";
 import { getShelfEntry, listShelf, siteFor } from "../services/gardenShelf";
 import {
-  addNote, deployState, entryForBook, EntryWriteError, setPublished, writeShared, type EntryRef,
+  addNote, archiveEntry, deleteEntry, deployState, entryForBook, EntryWriteError, setPublished, writeShared, type EntryRef,
 } from "../services/gardenWrite";
 
 const app = new Hono();
@@ -26,7 +26,8 @@ app.get("/entries", async (c) => {
   // books that have no entry yet, and what a row says about each (its source,
   // the member's side, the shared side). See services/gardenShelf.ts.
   if (c.req.query("view") === "shelf") {
-    const { kinds, entries } = await listShelf(memberId, garden);
+    // `archived=1` is the other half: what the member put away, and only that.
+    const { kinds, entries } = await listShelf(memberId, garden, undefined, c.req.query("archived") === "1");
     return c.json({ garden: { username: garden.username, site: siteFor(memberId) }, kinds, entries });
   }
 
@@ -134,6 +135,47 @@ app.post("/entries/:collection/:locale/:slug/shared/publish", (c) =>
 
 app.delete("/entries/:collection/:locale/:slug/shared/publish", (c) =>
   written(c, null, (memberId, garden, ref) => setPublished(memberId, garden, ref, false)));
+
+/**
+ * Delete an entry: both faces, in every locale of the subject. Answers with
+ * the shelf ids that are gone, and a deploy when one of them was online.
+ */
+app.delete("/entries/:collection/:locale/:slug", (c) => {
+  const memberId = c.get("userId") as string;
+  const garden = gardenFor(memberId);
+  if (!garden) return c.json({ error: "No garden for this member" }, 404);
+  try {
+    const { deleted, deploy } = deleteEntry(memberId, garden, c.req.param() as EntryRef);
+    return c.json({ deleted, ...(deploy ? { deploy } : {}) }, deploy ? 202 : 200);
+  } catch (e) {
+    if (e instanceof EntryWriteError) return c.json({ error: e.message }, e.status);
+    if (e instanceof Error && /^invalid (slug|locale)/.test(e.message)) return c.json({ error: e.message }, 400);
+    console.error("[garden-entries] delete failed:", e);
+    return c.json({ error: "Failed to delete" }, 500);
+  }
+});
+
+/**
+ * Put an entry away from the list, or bring it back: `{ id, archived }`, the
+ * id as the list gives it (it holds slashes, hence the body). Nothing in the
+ * garden changes.
+ */
+app.post("/entries/archive", async (c) => {
+  const memberId = c.get("userId") as string;
+  const garden = gardenFor(memberId);
+  if (!garden) return c.json({ error: "No garden for this member" }, 404);
+  const body = await jsonBody(c);
+  if (!body || typeof body.id !== "string" || typeof body.archived !== "boolean") {
+    return c.json({ error: "id and archived required" }, 400);
+  }
+  try {
+    return c.json({ ids: archiveEntry(memberId, garden, body.id, body.archived), archived: body.archived });
+  } catch (e) {
+    if (e instanceof EntryWriteError) return c.json({ error: e.message }, e.status);
+    if (e instanceof Error && /^invalid (slug|locale)/.test(e.message)) return c.json({ error: e.message }, 400);
+    throw e;
+  }
+});
 
 /** Where the site deploy stands — what the phone shows after "Publish". */
 app.get("/site/deploy", (c) => {
