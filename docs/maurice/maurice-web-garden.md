@@ -67,11 +67,11 @@ At home the private gardens are served by the `com.maurice.web` engine, reached 
 
 **Two builds, two folders** (since 2026-10-09). `web/dist` is the engine's alone: `WEB_SSR=1 npm run build` writes it, `scripts/start-web.sh` runs `dist/server/entry.mjs` from it, and the image is built the same way. Every other build lands elsewhere — `astro.config.mjs` sets `outDir` to `dist-site/<garden>` whenever `WEB_SSR` is not `1`, `scripts/publish-web.sh` names that folder itself (`--outDir dist-site/$GARDEN`, after unsetting `WEB_SSR`), refuses to deploy when the build left no `index.html` there, and hands the same folder to `wrangler pages deploy`. A member's public pages on the household's host were already built beside their live folder (`buildPublicPages`, `--outDir <pages>.building`). `dist-site/` is ignored by git and by the image's build context.
 
-A Cloudflare Pages function (`web/functions/_middleware.ts`) adds **time-travel**: `?t=YYYY-MM-DD` serves a historical snapshot from an **R2** bucket (`SNAPSHOTS`), choosing the most recent milestone ≤ the date and injecting a banner. Falls back to the live site when absent.
+**Time-travel is gone** (dropped 9 October 2026). A Pages function read `?t=YYYY-MM-DD` and served a snapshot of the site from an R2 bucket; no milestone was ever recorded. The function, the snapshot upload, its workflow, the *Site History* page (`/milestones`, `/fr/jalons`) and its footer link in every theme were removed together.
 
 ## Ships vs. exists
 
-The renderer, the garden themes, wiki-links, and build-time encryption are **core** to the shipping garden. The time-travel snapshots and the `candide` *site*-kind theme are tied to the public `candide.me` deployment — real, but deployment-specific rather than part of the household product.
+The renderer, the garden themes, wiki-links, and build-time encryption are **core** to the shipping garden. The `candide` *site*-kind theme is tied to the public `candide.me` deployment — real, but deployment-specific rather than part of the household product. That site, a household at home publishing on a domain of its own, is the one thing still built for and hosted on Cloudflare Pages; a hosted member's public pages are served by their household's machine ([[maurice-server]]).
 
 ## One engine, every member
 

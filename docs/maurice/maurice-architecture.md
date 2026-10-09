@@ -1,6 +1,6 @@
 ---
 title: Maurice — architecture overview
-date: '2026-10-07'
+date: '2026-10-09'
 flags: []
 locale: en
 description: The five cooperating parts of Maurice, how a message flows end-to-end,
@@ -86,7 +86,7 @@ There is also a small **browser clipper** (`clients/web-clipper`) that saves the
 | Tool capabilities | `tools/<server>` via `tools/mcp_gateway` |
 | Auth (sessions, PINs, invites, devices) | `server/src/services/auth.ts` |
 | Persistent state | SQLite (`maurice.db` for the engine, `~/.maurice/data/*.db` for the data-api), the Markdown gardens (git, `~/.maurice/gardens/<member>`), the corpus vectors, files on disk, the Calibre library |
-| Public/garden rendering | `web/` (Astro → `/g/<member>` via the server, Cloudflare Pages for the public site) |
+| Public/garden rendering | `web/` (Astro → `/g/<member>` via the server; a member's public pages at `/@<member>` on the household's host; Cloudflare Pages only for a home household's site on its own domain) |
 
 ## Running it
 
@@ -241,6 +241,24 @@ point at the host, grey and unproxied, and the Mac's tunnel no longer lists
 them; Caddy had both certificates within a minute of the DNS change. The
 Mac-side instances are stopped, not deleted. Not yet: backups of the host's
 volumes. See [[maurice-server]] for the operator side.
+
+**Static sites on the same host, 9 October 2026.** The landing
+(`www.chezmaurice.eu`, with `chezmaurice.eu` redirecting to it) left Cloudflare
+Pages for `maurice-fleet`: plain files under `/opt/maurice/www/<domain>/`,
+mounted read-only into the shared Caddy, one site file per domain
+(`sites/static.<domain>.caddy`). `ops/static-site.sh publish <host> <domain>
+<dir> [--alias <domain>]` copies the folder, turns its `_redirects` (exact
+paths and a trailing `/*`) into Caddy redirects, serves `/docs` from
+`docs.html`, and reloads Caddy, putting the previous file back if the new one
+does not validate. It writes no site file for a name that does not point at
+the host yet, because Caddy would ask for a certificate at once and failed
+challenges are rationed; `list` and `remove` are the other two verbs.
+`scripts/deploy-landing.sh` is that command for `design/landing/`. The two
+records are plain A records, unproxied, like the households'. Cloudflare is
+still the zone's DNS, and still what a household at home goes through (the
+tunnel, and Pages for a site on its own domain). Not done: the DNS itself
+(the tunnel needs the zone there), and a hosted member's own domain, which
+nothing serves yet.
 
 **Still open:** TLS on the Mac, off by default because `server/certs/` holds a Tailscale certificate for the Mac's tailnet name. `astro dev` in production — five Vite dev servers are 87 % of the container's memory, and the way out is half-built already (`web/src/lib/notes-fs.ts` reads notes off disk at request time, so a *built* SSR server stays live). Repo-tree state — `tools/corpus/data`, `data/uploads`, `logs/` are repo-relative paths that volumes hide here and that a shipped install, having no repo, cannot have. The `.pkg`'s future is undecided. `infra/container/README.md` is the operating manual.
 
