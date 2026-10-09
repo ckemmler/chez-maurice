@@ -175,6 +175,11 @@ final class ChatService {
     private var userSocket: UserSocket?
     /// Conversations with unread activity since last viewed — sidebar dots.
     var unread: Set<String> = []
+    /// Per conversation, what it offers to keep in the garden — set by the
+    /// `suggestions` event and by the drawer; the list row answers until then.
+    var suggestionCounts: [String: SuggestionCount] = [:]
+    /// Bumped when a turn adds an offer: the header's mark pulses once on it.
+    var suggestionPulse: [String: Int] = [:]
     /// Whether the app is frontmost/active (set from scenePhase); when false we
     /// notify even for the conversation you "have open". Coming back to the
     /// front is also the moment to pick up what the suspension broke.
@@ -426,9 +431,26 @@ final class ChatService {
                 body: "\(event.author ?? "Maurice"): \(event.preview ?? "")",
                 conversationId: id
             )
+        case "suggestions":
+            // The pass that runs after a reply found something worth an entry
+            // in your garden (or you decided on one, on another device).
+            guard let id = event.conversationId else { return }
+            let before = suggestionCount(for: id)
+            let now = SuggestionCount(pending: event.count ?? 0, kept: event.kept ?? 0)
+            suggestionCounts[id] = now
+            // Only a new offer makes the mark move; a decision does not.
+            if now.pending > before.pending { suggestionPulse[id, default: 0] += 1 }
         default:
             break
         }
+    }
+
+    /// What this conversation offers to keep: the live count when one came
+    /// over the socket or from the drawer, the list row's otherwise.
+    func suggestionCount(for conversationId: String) -> SuggestionCount {
+        if let live = suggestionCounts[conversationId] { return live }
+        let row = conversations.first { $0.id == conversationId }
+        return SuggestionCount(pending: row?.suggestions ?? 0, kept: row?.suggestions_kept ?? 0)
     }
 
     /// Move a conversation to the top of the list (most-recent-activity order).
@@ -1680,6 +1702,15 @@ struct UserEvent: Decodable {
     let author: String?       // activity: who spoke ("Maurice" for replies)
     let preview: String?      // activity: short message preview
     let by: String?           // conversation_added: who added you
+    let count: Int?           // suggestions: how many wait on your word
+    let kept: Int?            // suggestions: how many you kept
+}
+
+/// What a conversation offers you to keep in your garden, as two numbers.
+struct SuggestionCount: Equatable {
+    var pending = 0
+    var kept = 0
+    var isEmpty: Bool { pending == 0 && kept == 0 }
 }
 
 // MARK: - Safety models

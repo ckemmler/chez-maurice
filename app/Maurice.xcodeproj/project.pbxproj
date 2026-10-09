@@ -18,6 +18,7 @@
 		2B268BBE8FAF1C5EE355B1D4 /* Localizable.strings in Resources */ = {isa = PBXBuildFile; fileRef = 64254BB6519693E70459014E /* Localizable.strings */; };
 		32D68A2ACC7ECFB3E37DE97F /* ScopePickerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 68242686E76201D100B8C3A9 /* ScopePickerView.swift */; };
 		3B8F2AC09DACB08C880BF36D /* MyDataView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20D9492CD169800719A16C6D /* MyDataView.swift */; };
+		3E96FF24D227953BEB5EA28F /* CarnetSuggestions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 128CD9E8B27DD3AD93E49524 /* CarnetSuggestions.swift */; };
 		40A5F2A1C32240D14842B8D2 /* DictateIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = CEB5E21AE21611A0C6FC115B /* DictateIntent.swift */; };
 		48A8B2E348C99992B23AA7DF /* SessionStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 405F9AA69C83E58A86FDD625 /* SessionStore.swift */; };
 		523860360F61C3CB54C38030 /* DomainsViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = F2BCD320C3B31E341073ED84 /* DomainsViews.swift */; };
@@ -58,6 +59,7 @@
 		B124B0C5C8B1A67C94E9A4FE /* BoaterHat.swift in Sources */ = {isa = PBXBuildFile; fileRef = EE3170FDE5751A81E295CF2E /* BoaterHat.swift */; };
 		B1ED9211E2F19D6C411ADE78 /* APIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 815355ED837E18AB9BEFDC83 /* APIClient.swift */; };
 		B5655384F94390632B3335BB /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E0D0DF979284275260F31D2 /* SettingsView.swift */; };
+		B732DCB9E5F61EAEC2D7F191 /* CarnetSuggestions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 128CD9E8B27DD3AD93E49524 /* CarnetSuggestions.swift */; };
 		B80161B44335BB6CEC01F7DA /* YoungSerif-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 723F14E6AB7B2EAB08CC94EF /* YoungSerif-Regular.ttf */; };
 		BA51E568256E682B32B4FD40 /* ThinkingPulse.swift in Sources */ = {isa = PBXBuildFile; fileRef = 60C505B6E7E7122F0D8C38C4 /* ThinkingPulse.swift */; };
 		C75DA94A1212FB984F5CDC62 /* DomainEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0D1A322B73BEA06F034F1718 /* DomainEditorView.swift */; };
@@ -84,6 +86,7 @@
 		0CD335EB3BF542EDF13DA17D /* Maurice_iOS.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Maurice_iOS.entitlements; sourceTree = "<group>"; };
 		0D1A322B73BEA06F034F1718 /* DomainEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DomainEditorView.swift; sourceTree = "<group>"; };
 		1033DD525DBD3D990DEF6484 /* es */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = es; path = es.lproj/Localizable.strings; sourceTree = "<group>"; };
+		128CD9E8B27DD3AD93E49524 /* CarnetSuggestions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CarnetSuggestions.swift; sourceTree = "<group>"; };
 		1A0683126686701347E9871B /* MauriceApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MauriceApp.swift; sourceTree = "<group>"; };
 		1E096709042498D4C525711C /* Maurice-iOS-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = "Maurice-iOS-Info.plist"; sourceTree = "<group>"; };
 		20D9492CD169800719A16C6D /* MyDataView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MyDataView.swift; sourceTree = "<group>"; };
@@ -192,6 +195,7 @@
 			isa = PBXGroup;
 			children = (
 				EE3170FDE5751A81E295CF2E /* BoaterHat.swift */,
+				128CD9E8B27DD3AD93E49524 /* CarnetSuggestions.swift */,
 				4E01BB325D88F4E74B3571BC /* ChatView.swift */,
 				7A157516CA9C98CE6FB4E293 /* ComposerViews.swift */,
 				462A7ECD4C83B5ADC43A81CB /* ContentView.swift */,
@@ -374,6 +378,7 @@
 			files = (
 				79A6D1DBFB049245E3D239D6 /* APIClient.swift in Sources */,
 				52B02D3D7EF2D7154BDB5FD8 /* BoaterHat.swift in Sources */,
+				B732DCB9E5F61EAEC2D7F191 /* CarnetSuggestions.swift in Sources */,
 				CCEF2532174820F615C4C61F /* ChatService.swift in Sources */,
 				8D85F19C2F440203BAFC484F /* ChatView.swift in Sources */,
 				7D41CDDFD359570A173D9D72 /* ComposerStore.swift in Sources */,
@@ -410,6 +415,7 @@
 			files = (
 				B1ED9211E2F19D6C411ADE78 /* APIClient.swift in Sources */,
 				B124B0C5C8B1A67C94E9A4FE /* BoaterHat.swift in Sources */,
+				3E96FF24D227953BEB5EA28F /* CarnetSuggestions.swift in Sources */,
 				D050F6CF74E2684FAF9E78A2 /* ChatService.swift in Sources */,
 				CB71AD2912D05739932A2EB1 /* ChatView.swift in Sources */,
 				7CB12254AF16A2499EAEA7D7 /* ComposerStore.swift in Sources */,

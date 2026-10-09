@@ -27,6 +27,12 @@ export interface Conversation {
   /** list rows only: a conversation Maurice opened that the member has not
    *  opened yet — the unread dot on a cold start, before any socket event */
   unread?: boolean;
+  /** list rows only: how many entries this conversation offers the member to
+   *  keep and they have not decided on (services/entrySuggestions.ts) */
+  suggestions?: number;
+  /** list rows only: how many of them they kept — the mark stays as the way
+   *  back to those */
+  suggestions_kept?: number;
 }
 
 export interface Message {
@@ -105,7 +111,11 @@ export function listConversations(userId: string, opts: ListConversationsOptions
       `SELECT c.id, c.user_id, c.title, c.maurice_id, c.origin, c.opened_by, c.created_at, c.updated_at,
               COUNT(m.id) as message_count,
               MAX(m.created_at) as last_message_at,
-              CASE WHEN c.opened_by = 'maurice' AND p.last_read_at IS NULL THEN 1 ELSE 0 END AS unread
+              CASE WHEN c.opened_by = 'maurice' AND p.last_read_at IS NULL THEN 1 ELSE 0 END AS unread,
+              (SELECT COUNT(*) FROM entry_suggestions s
+                WHERE s.conversation_id = c.id AND s.member_id = p.member_id AND s.state = 'proposed') AS suggestions,
+              (SELECT COUNT(*) FROM entry_suggestions s
+                WHERE s.conversation_id = c.id AND s.member_id = p.member_id AND s.state = 'kept') AS suggestions_kept
        FROM conversations c
        JOIN conversation_participants p
          ON p.conversation_id = c.id AND p.member_id = ?
@@ -313,6 +323,9 @@ export function deleteConversation(id: string, userId: string): boolean {
     `DELETE FROM conversations WHERE id = ? AND user_id = ?`,
     [id, userId]
   );
+  // What it still offered goes with it; what the member decided stays — a
+  // refusal holds for every conversation to come.
+  if (result.changes > 0) db.run(`DELETE FROM entry_suggestions WHERE conversation_id = ? AND state = 'proposed'`, [id]);
   return result.changes > 0;
 }
 

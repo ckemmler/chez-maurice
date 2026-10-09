@@ -33,6 +33,7 @@ import { pushToUser } from "../services/push";
 import { indexConversationInBackground } from "../services/mcpClient";
 import { searchConversations } from "../services/conversationSearch";
 import { takeReview } from "../services/reviewFooter";
+import { suggestInBackground } from "../services/entrySuggestions";
 import { memberLocale } from "../services/domainBriefs";
 import {
   beginTurn,
@@ -387,6 +388,12 @@ conversations.post("/:id/messages", async (c) => {
   // summons him; in a multi-human room he answers only when @-mentioned.
   // Regenerate is always a fresh-answer request.
   const isRoom = countParticipants(convoId) > 1;
+  // What the member asked, as text: this message, or on a regenerate the one
+  // the thread ends on. Read by the suggestions pass once the reply is in.
+  const questionText =
+    typeof content === "string" && content.trim()
+      ? content
+      : String([...getMessages(convoId)].reverse().find((m) => m.role === "user")?.content ?? "");
   const summoned =
     regenerate ||
     (summonFlag !== undefined
@@ -475,6 +482,9 @@ conversations.post("/:id/messages", async (c) => {
           // Refresh the semantic index (fire-and-forget) and fan the reply out to
           // the other participants' sockets + activity notifications.
           indexConversationInBackground(userId, convoId);
+          // What this exchange named that is worth an entry in their garden
+          // (services/entrySuggestions.ts) — after the reply, never before it.
+          if (!isRoom) suggestInBackground(userId, convoId, msg.id, questionText, fullResponse);
           publishToRoom(convoId, { type: "message", message: msg });
           const convo = getConversation(convoId, userId);
           notifyActivity(convoId, userId, { title: convo?.title ?? "", author: "Maurice", preview: preview(fullResponse) });

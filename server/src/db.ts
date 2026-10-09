@@ -909,6 +909,39 @@ db.run(`
 `);
 try { db.run(`CREATE INDEX IF NOT EXISTS idx_life_facts_member ON life_facts(member_id, state)`); } catch {}
 
+// What a conversation is worth keeping in the member's garden (9 October 2026,
+// services/entrySuggestions.ts, specs/carnet-suggestions.md): the works and
+// people a turn named, found after the reply by a pass of its own and offered
+// behind the Carnet mark in the conversation's header. One row per subject per
+// conversation — a second mention updates the note — and the member's memory
+// of refusals at once: a subject dismissed anywhere is not offered again.
+// Nothing here is in the garden until the member keeps it.
+db.run(`
+  CREATE TABLE IF NOT EXISTS entry_suggestions (
+    id              TEXT PRIMARY KEY,
+    member_id       TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    conversation_id TEXT NOT NULL,
+    message_id      TEXT,
+    kind            TEXT NOT NULL,
+    key             TEXT NOT NULL,
+    title           TEXT NOT NULL,
+    year            INTEGER,
+    subtitle        TEXT,
+    image           TEXT,
+    public          INTEGER NOT NULL DEFAULT 1,
+    candidates      TEXT,
+    existing        TEXT,
+    note            TEXT NOT NULL,
+    state           TEXT NOT NULL DEFAULT 'proposed' CHECK (state IN ('proposed', 'kept', 'dismissed')),
+    kept_path       TEXT,
+    created_at      TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at      TEXT NOT NULL DEFAULT (datetime('now')),
+    decided_at      TEXT,
+    UNIQUE (conversation_id, kind, key)
+  )
+`);
+try { db.run(`CREATE INDEX IF NOT EXISTS idx_entry_suggestions_member ON entry_suggestions(member_id, kind, key, state)`); } catch {}
+
 // A member's mail accounts (25 September 2026, services/mailAccounts.ts), read
 // by the `email` tool through a loopback route. Only the member sees or edits
 // their own; `secret` is the password encrypted with the household's key

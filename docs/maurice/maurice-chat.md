@@ -1,6 +1,6 @@
 ---
 title: The chat experience
-date: '2026-10-07'
+date: '2026-10-09'
 flags: []
 locale: en
 description: Streaming render, tool-result data cards, math, markdown, images, dictation,
@@ -42,6 +42,18 @@ plus the metadata the old bar showed (Maurice, model, created, last message,
 message count, the room's people) and the room actions (edit Maurice, review
 reports for the operator, leave the room). When the cost meter is on, the sheet
 also carries the conversation's totals (see below).
+
+## Worth keeping — what a conversation offers the garden *(9 October 2026)*
+
+Ask who plays Moira in *Schitt's Creek* and, until now, nothing of the exchange reached the garden unless the member thought to ask. Since 9 October 2026 the conversation offers it. After each reply of a conversation a member has **alone with Maurice**, a pass of its own on the [[maurice-server|server]] (`services/entrySuggestions.ts`, the ancillary invocation `entry_suggest`, a light model without reasoning) reads the question and the reply and names **at most three works or people** — film, series, book, album, podcast, game, person — each with a note of one to three sentences: what this exchange established about it, nothing the reply did not say. Most turns name nothing. It runs after the reply is stored, never on its path, and is charged to the member like the fact check. Never in a room, never for a guest or a child, never in a conversation Maurice opened.
+
+Each subject is then **resolved without a model**: the member's own garden first (by title, a year settling two entries under one title; a person by full name, two words at least, either order), and for what the garden does not hold, the provider through the garden tool's own `search_*` ([[maurice-knowledge]]). A first candidate whose title and year agree is taken; otherwise the row keeps its candidates. Someone the pass says is from the member's own life is **never looked up** — a homonym on Wikidata is worse than a fiche with a name and nothing else.
+
+**The mark.** A closed book in the conversation header's trailing group (the capsule on iPhone, the toolbar on iPad and macOS), absent while the conversation offers nothing. It carries the number of undecided offers, bounces once when a turn adds one (not under Reduce Motion), and stays, quiet, once everything is decided, as the way back to what was kept. The list is the **conversation's**, not a reply's: one row per subject however many turns mentioned it, a second mention updating the row's note. The conversation list rows carry the two counts, so the mark is right on a cold start; a `suggestions` event on the member's channel moves it live.
+
+**The drawer** (`app/Maurice/Views/CarnetSuggestions.swift`). *To keep*: per row the cover, the title, kind, year and author, whether it is *In your notebook* or *New* (or *3 possibilities*, which unfold into a pick), and **the note that would be filed, in full** — the member reads what is written before it is. One button, *Keep* or *Add the note*, and a cross to dismiss. *Kept*: the entries kept from this conversation, each opening its fiche in the garden, signed in.
+
+**Keeping** (`POST /api/suggestions/:id/keep`) opens the fiche when the garden has none — `open_fiche`, pinned to the provider's id when there is one — and files the note as one dated line under `## Commentaire`, followed by *(Conversation with Maurice: « title »)*; one commit. The tap is the deliberate gesture the garden's rule asks for, so the fiche is opened, not a weak signal; the card is never touched. A person fiche made this way is `confirmed`; a note added to a fiche the mail made does **not** confirm it. **Dismissing** holds for every conversation to come: the subject is not offered again. A subject kept and mentioned again comes back only as a new note to add.
 
 ## What Maurice knows before you type
 
@@ -122,6 +134,7 @@ The chat surface — streaming, data cards, math, markdown, images, dictation, m
 
 ## Gaps & notes
 
+- **The suggestions were never measured.** The pass shipped on 9 October 2026 without a bench: what it names on real conversations, and how often it names something not worth an entry, is being found out in use. The mark is a closed book where Carnet's pipe is meant (no vector of it yet); someone named by what they are ("my accountant") is not resolved, only a full name; the note carries no link back to the conversation; a kept entry opens in the garden's web page, not in Carnet, which has no URL scheme; the note cannot be edited in the drawer. Design and as-built in `specs/carnet-suggestions.md`.
 - **Image generation has no progress** — a spinner and label, not a percentage.
 - **Files reach a chat only through the composer's omnibox**, not a drag onto the transcript (see [[maurice-files]]).
 - **Regenerate is single-step** — it re-runs the last turn; there's no branch/alternatives history.

@@ -128,6 +128,13 @@ export const ANCILLARY_INVOCATIONS: AncillaryInvocation[] = [
   { id: "life_fact", side: "server", tier: "standard", label: "Fact check",
     blurb: "A fact Maurice wants to write down about a member, judged once more before it is proposed to them.",
     prefer: NIGHT_MODELS },
+  // What a conversation is worth keeping (services/entrySuggestions.ts): after
+  // a reply, the works and people the exchange named, as JSON, most often
+  // none. A sorting job on a short text, run on every private turn — the
+  // small Qwen, without reasoning. Charged to the member whose turn it was.
+  { id: "entry_suggest", side: "server", tier: "light", label: "Carnet suggestions",
+    blurb: "After a reply, the works and people the exchange named, offered to the member as entries to keep in their garden.",
+    prefer: ["qwen3.6-35b-a3b", "mistral-small-latest"] },
   // Seeding the garden (services/domainSeeding.ts): on the member's yes, in
   // their own turn, charged to them — the night's model, not the night's purse.
   { id: "domain_seed", side: "server", tier: "standard", label: "Domain notes",

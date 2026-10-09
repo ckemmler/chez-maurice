@@ -852,3 +852,25 @@
 "mydata.error.last_admin" = "É o único administrador desta casa e outras pessoas vivem nele: nomeie primeiro outro administrador.";
 "mydata.error.too_many_attempts" = "Demasiadas tentativas. Tente de novo dentro de um quarto de hora.";
 "mydata.error.session_required" = "Esta ação requer uma sessão aberta na app.";
+
+/* Carnet suggestions: what a conversation is worth keeping in the garden. */
+"suggest.title" = "Para o teu caderno";
+"suggest.help" = "O que vale a pena guardar desta conversa";
+"suggest.a11y_pending" = "%d para guardar no teu caderno";
+"suggest.section_pending" = "Para guardar";
+"suggest.section_kept" = "Guardado";
+"suggest.empty" = "Nada para guardar desta conversa.";
+"suggest.failed" = "Não foi possível.";
+"suggest.state_existing" = "No teu caderno";
+"suggest.state_new" = "Novo";
+"suggest.state_pick" = "%d possibilidades";
+"suggest.keep" = "Guardar";
+"suggest.add_note" = "Adicionar a nota";
+"suggest.dismiss" = "Esta não";
+"suggest.kind.movies" = "Filme";
+"suggest.kind.series" = "Série";
+"suggest.kind.books" = "Livro";
+"suggest.kind.music" = "Álbum";
+"suggest.kind.podcasts" = "Podcast";
+"suggest.kind.games" = "Jogo";
+"suggest.kind.people" = "Pessoa";

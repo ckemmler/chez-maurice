@@ -852,3 +852,25 @@
 "mydata.error.last_admin" = "Je bent de enige beheerder van dit huishouden en er wonen anderen: wijs eerst een andere beheerder aan.";
 "mydata.error.too_many_attempts" = "Te veel pogingen. Probeer het over een kwartier opnieuw.";
 "mydata.error.session_required" = "Hiervoor is een in de app geopende sessie nodig.";
+
+/* Carnet suggestions: what a conversation is worth keeping in the garden. */
+"suggest.title" = "Voor je notitieboek";
+"suggest.help" = "Wat uit dit gesprek het bewaren waard is";
+"suggest.a11y_pending" = "%d om te bewaren in je notitieboek";
+"suggest.section_pending" = "Te bewaren";
+"suggest.section_kept" = "Bewaard";
+"suggest.empty" = "Niets te bewaren uit dit gesprek.";
+"suggest.failed" = "Dat is niet gelukt.";
+"suggest.state_existing" = "In je notitieboek";
+"suggest.state_new" = "Nieuw";
+"suggest.state_pick" = "%d mogelijkheden";
+"suggest.keep" = "Bewaren";
+"suggest.add_note" = "Notitie toevoegen";
+"suggest.dismiss" = "Deze niet";
+"suggest.kind.movies" = "Film";
+"suggest.kind.series" = "Serie";
+"suggest.kind.books" = "Boek";
+"suggest.kind.music" = "Album";
+"suggest.kind.podcasts" = "Podcast";
+"suggest.kind.games" = "Spel";
+"suggest.kind.people" = "Persoon";

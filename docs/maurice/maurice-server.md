@@ -1,6 +1,6 @@
 ---
 title: The server
-date: '2026-10-08'
+date: '2026-10-09'
 flags: []
 locale: en
 description: 'The Hono/Bun engine: API surface, the streaming agentic loop, prompt
@@ -69,6 +69,8 @@ The **data-api** mounts under `/api/v1/*`:
 | `articles/scrape` | Legacy alias of `garden/articles`, kept for older Carnet builds |
 
 The garden-media routes are documented from the feature side in [[maurice-knowledge]].
+
+**`/api/suggestions`** (9 October 2026, `routes/suggestions.ts`): what a conversation offers the member to keep in their garden — `GET ?conversation=<id>` (the rows, `pending`, `kept`), `POST /:id/keep {candidate?}`, `POST /:id/dismiss`; all the caller's own, another member's suggestion is not found. The rows are written after each private reply by `suggestInBackground`, started beside the corpus reconcile in `routes/conversations.ts`: one call of the ancillary invocation `entry_suggest` (light tier, the small Qwen without reasoning, charged to the member), then a lookup per subject — the garden's entries, else the garden tool's `search_*` through the gateway. `GET /api/conversations` rows carry `suggestions` and `suggestions_kept`, and the member's channel a `suggestions` event (`conversationId`, `count`, `kept`). See [[maurice-chat]].
 
 ## The streaming chat protocol
 

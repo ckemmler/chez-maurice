@@ -1,6 +1,6 @@
 ---
 title: Knowledge capabilities
-date: '2026-10-08'
+date: '2026-10-09'
 flags: []
 locale: en
 description: 'What Maurice can do with knowledge: the garden (notes, media, journal),
@@ -49,6 +49,8 @@ Since August 2026 a garden entry for a book, a film, an article, a person is one
 Two rules keep this honest. **A fiche is *opened* by a deliberate gesture** — `open_fiche` for a book or a film, writing on it for an article. **An article share is a weak signal**, so the fiche it writes automatically carries `meta.opened: false` until the reader writes on it: a comment at share time or later, a résonance filed on it or sent from it, a highlight with a note. Unopened fiches stay out of the Garden section and out of the résonance target search; the articles shelf still lists them. The absence of the marker means opened, so every fiche written before the rule existed is one.
 
 **The same mark on a note Maurice wrote.** Since 19 September 2026 (P2-C of the domains roadmap) a note can be *written by Maurice, not reviewed yet*: when a member adopts a [[maurice-domains|domain]] and then says yes to notes on it, Maurice writes a hub note and a few topic notes in their garden, each with `meta.opened: false`, `meta.author: maurice`, the domain, the model, the conversations it read (`meta.sources`) and a *Where it comes from* section in the body — the one exception to "Maurice writes only when asked", and it is asked, twice. The mark goes when the member **keeps** the note (the banner's *Keep* in the web garden — `POST /api/v1/garden-tools/review-note` drops the line and commits), **corrects** it (`update_note` with a new body clears it; an edit in Obsidian is theirs to mark), or **throws it away** (delete). The garden tool's `list_notes` says `unreviewed: true` on such a note; the app's garden list shows *to review*. Details in [[maurice-domains]].
+
+**A fiche offered by a conversation** (9 October 2026). The third way a fiche is opened, beside asking Maurice and writing on an article: a conversation names a work or a person, the app offers it behind a mark in the conversation's header, and the member's *Keep* opens the fiche and files what was said as a dated note under `## Commentaire` (`services/entrySuggestions.ts`; the experience is described in [[maurice-chat]]). The tap is the deliberate gesture, so nothing is written before it and the fiche carries no `meta.opened: false`; the writer is the server, through the same note block Carnet's note sheet writes (`data-api/services/gardenNote.ts`), on any collection, people included.
 
 ## The articles pipeline *(ships)*
 

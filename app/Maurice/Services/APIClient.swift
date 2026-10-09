@@ -735,6 +735,11 @@ struct ServerConversation: Decodable, Identifiable {
     let last_message_at: String?
     /// The room's members — drives the sidebar avatar stack (multi-user only).
     let participants: [ServerParticipant]?
+    /// List rows only: how many entries this conversation offers you to keep
+    /// in your garden, undecided, and how many you kept — the Carnet mark in
+    /// the header on a cold start, before any socket event.
+    let suggestions: Int?
+    let suggestions_kept: Int?
 
     var openedByMaurice: Bool { opened_by == "maurice" }
 }

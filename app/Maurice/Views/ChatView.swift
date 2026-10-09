@@ -177,6 +177,8 @@ struct ChatView: View {
                     AvatarStack(participants: chat.participants, serverBase: session.serverURL,
                                 size: 22, ring: theme.bg, max: 4)
                 }
+                // What this conversation offers to keep in the garden.
+                CarnetSuggestionsButton(conversation: convo, inToolbar: true)
                 Button { showAddParticipant = true } label: {
                     Image(systemName: "person.badge.plus")
                 }
@@ -224,6 +226,9 @@ struct ChatView: View {
                 if isMulti {
                     AvatarStack(participants: chat.participants, serverBase: session.serverURL,
                                 size: 24, ring: theme.bg, max: 4)
+                }
+                if let convo = chat.activeConversation {
+                    CarnetSuggestionsButton(conversation: convo, inToolbar: true)
                 }
                 Button { showAddParticipant = true } label: {
                     Image(systemName: "person.badge.plus")
@@ -663,6 +668,9 @@ private struct ConversationHeaderView: View {
                                     size: 24, ring: theme.bg, max: 3)
                             .padding(.leading, 10)
                     }
+                    // What this conversation offers to keep in the garden:
+                    // absent until a turn names something.
+                    CarnetSuggestionsButton(conversation: conversation)
                     Button { showAdd = true } label: {
                         Image(systemName: "person.badge.plus")
                             .font(.system(size: 16, weight: .medium))

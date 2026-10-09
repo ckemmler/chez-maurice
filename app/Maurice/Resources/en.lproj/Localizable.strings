@@ -852,3 +852,25 @@
 "mydata.error.last_admin" = "You are this household’s only administrator and other people live here: name another administrator first.";
 "mydata.error.too_many_attempts" = "Too many attempts. Try again in a quarter of an hour.";
 "mydata.error.session_required" = "This needs a session opened in the app.";
+
+/* Carnet suggestions: what a conversation is worth keeping in the garden. */
+"suggest.title" = "Worth keeping";
+"suggest.help" = "What this conversation is worth keeping";
+"suggest.a11y_pending" = "%d to keep in your notebook";
+"suggest.section_pending" = "To keep";
+"suggest.section_kept" = "Kept";
+"suggest.empty" = "Nothing to keep from this conversation.";
+"suggest.failed" = "That did not go through.";
+"suggest.state_existing" = "In your notebook";
+"suggest.state_new" = "New";
+"suggest.state_pick" = "%d possibilities";
+"suggest.keep" = "Keep";
+"suggest.add_note" = "Add the note";
+"suggest.dismiss" = "Not this one";
+"suggest.kind.movies" = "Film";
+"suggest.kind.series" = "Series";
+"suggest.kind.books" = "Book";
+"suggest.kind.music" = "Album";
+"suggest.kind.podcasts" = "Podcast";
+"suggest.kind.games" = "Game";
+"suggest.kind.people" = "Person";
