@@ -132,7 +132,7 @@ Each subject: {"kind": "movies|series|books|music|podcasts|games|people", "title
 - "year": the work's first release, when you are sure. Omit otherwise.
 - "creator": the author, the artist, the director — when the exchange or common knowledge gives it. Omit for people.
 - "public": for people only. true for a public figure, false for someone from the person's own life.
-- "note": one to three sentences, in the language of the exchange, saying what THIS exchange established about the subject. Only what the reply said; add nothing of your own. Written as a note to oneself, not addressed to anyone.
+- "note": one to three sentences, in the language of the exchange, stating what the person now knows about the subject from THIS exchange. Only what the reply said; add nothing of your own. Written as a note to oneself: the facts themselves, with the names and dates that make them worth rereading in a year. Never "the exchange confirms", "the reply says", "the conversation" — the note is read without them.
 
 What deserves an entry: what the exchange is ABOUT, and a person or work it gives a real fact on. Not every name passing through a list, not a company, a place, a product, a concept, a piece of software, a news event, a politician cited in passing.
 The person asking about their own code, health, mail, money, schedule or plans: nothing.
@@ -182,8 +182,10 @@ async function nameSubjects(
   // it is the first thing worth keeping — the result that goes back on it.
   const about = bound
     ? `This exchange is held from the person's notebook entry "${bound.title}" (kind: ${bound.collection}). ` +
-      `When it establishes something about that entry, name it FIRST, under exactly that title and kind, ` +
-      `even if a note on it was already suggested and this one adds to it.\n\n`
+      `Name it FIRST, under exactly that title and kind, even if a note on it was already suggested. ` +
+      `Its note is the result of the exchange for that entry: the answer to what the person asked, in substance, ` +
+      `as they would want to find it on that entry later — not a restatement of what the entry already is. ` +
+      `Leave it out only when the exchange taught nothing about it.\n\n`
     : "";
   const prompt =
     about +

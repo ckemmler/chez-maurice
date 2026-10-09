@@ -60,7 +60,10 @@ suggestions.get("/", async (c) => {
   const bound = boundRef(uid, conversationId);
   return c.json({
     entry: bound,
-    suggestions: suggestionsFor(uid, conversationId).map((s) => view(uid, s, bound)),
+    // The note for the entry the conversation is held from is its result: first.
+    suggestions: suggestionsFor(uid, conversationId)
+      .map((s) => view(uid, s, bound))
+      .sort((a, b) => Number(b.bound && b.state === "proposed") - Number(a.bound && a.state === "proposed")),
     pending: pendingCount(uid, conversationId),
     kept: keptCount(uid, conversationId),
   });
