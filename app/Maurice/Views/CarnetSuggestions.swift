@@ -110,8 +110,10 @@ struct CarnetSuggestionsButton: View {
         .foregroundStyle(count.pending > 0 ? theme.ink : theme.inkSoft)
         // In the iPhone capsule the mark is its first item: the pipe and its
         // count are wider than a 44pt glyph, so the air is asked for outright.
-        .padding(.leading, inToolbar ? 0 : 16)
-        .padding(.trailing, inToolbar ? 0 : 6)
+        // The toolbar's group (macOS, iPad) gives a plain button no inset of
+        // its own either, so the pipe sat against the capsule's edge there too.
+        .padding(.leading, inToolbar ? 10 : 16)
+        .padding(.trailing, inToolbar ? 4 : 6)
         .frame(minWidth: inToolbar ? nil : 44, minHeight: inToolbar ? nil : 44)
         .contentShape(Rectangle())
         .animation(.default, value: count)
