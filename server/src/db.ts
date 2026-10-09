@@ -1058,6 +1058,11 @@ try { db.run(`ALTER TABLE domain_briefs ADD COLUMN summary TEXT`); } catch {}
 // conversation the night creates to propose domains (the design's 4b). Read by
 // nothing yet; the column exists so the proposal path has a place to land.
 try { db.run(`ALTER TABLE conversations ADD COLUMN opened_by TEXT NOT NULL DEFAULT 'member'`); } catch {}
+// A conversation held from a garden entry (9 October 2026): Carnet opens one
+// from an entry's page, the fiche loaded as its context, and what the member
+// keeps of it lands back on that entry — and links the other things kept to
+// it (services/entrySuggestions.ts). `<collection>/<locale>/<slug>`, or null.
+try { db.run(`ALTER TABLE conversations ADD COLUMN entry_ref TEXT`); } catch {}
 // The night's own daily cap: what Maurice may spend on nobody's turn — briefs,
 // and later the mapping — counted under the ledger's "system" spender
 // (services/budget.ts). Null = no cap of its own; the household's still applies.

@@ -233,14 +233,23 @@ describe("one list per conversation", () => {
     expect(await turn()).toBe(0);
   });
 
-  test("a refusal holds in every conversation to come", async () => {
-    modelSays = { subjects: [{ kind: "series", title: "Sugar", note: "n" }] };
+  test("a refusal of a subject holds in every conversation to come", async () => {
+    modelSays = { subjects: [{ kind: "movies", title: "Paris, Texas", note: "n" }] };
     await turn();
     const id = sug.suggestionsFor(ANNA, convo)[0]!.id;
     expect((await req(annaAuth, `/${id}/dismiss`, { method: "POST" })).status).toBe(200);
     expect(sug.pendingCount(ANNA, convo)).toBe(0);
     convo = createConversation(ANNA).id;
     expect(await turn()).toBe(0);
+  });
+
+  test("a note turned down on an entry of theirs does not silence the next one", async () => {
+    modelSays = { subjects: [{ kind: "series", title: "Sugar", note: "Une note." }] };
+    await turn();
+    await req(annaAuth, `/${sug.suggestionsFor(ANNA, convo)[0]!.id}/dismiss`, { method: "POST" });
+    convo = createConversation(ANNA).id;
+    modelSays = { subjects: [{ kind: "series", title: "Sugar", note: "Une autre." }] };
+    expect(await turn()).toBe(1);
   });
 
   test("the list row counts what waits; deleting the conversation drops it", async () => {
@@ -269,7 +278,8 @@ describe("keeping", () => {
     expect(toolCalls).toEqual([]);
 
     const after = fs.readFileSync(path.join(root, "series/fr/sugar-fiche.md"), "utf-8");
-    expect(after).toContain("Colin Farrell joue John Sugar. *(Conversation avec Maurice");
+    // What was said, then where: a link to the conversation it came from.
+    expect(after).toContain(`Colin Farrell joue John Sugar. *([Conversation avec Maurice](maurice://conversations/${convo}))*`);
     expect(after.indexOf("Colin Farrell")).toBeLessThan(after.indexOf("## Résonances"));
     expect(after).toContain("Vu le pilote.");
   });
@@ -334,5 +344,84 @@ describe("keeping", () => {
     expect((await req(benAuth, `/${id}/dismiss`, { method: "POST" })).status).toBe(404);
     expect((await req(benAuth, `/?conversation=${convo}`)).status).toBe(404);
     expect(((await (await req(annaAuth, `/?conversation=${convo}`)).json()) as any).pending).toBe(1);
+  });
+});
+
+describe("a conversation held from an entry", () => {
+  const held = () => { convo = createConversation(ANNA, null, { entryRef: "series/fr/sugar" }).id; };
+
+  test("only the caller's own entry can be held from", () => {
+    expect(sug.ownEntryRef(ANNA, "series/fr/sugar")).toBe("series/fr/sugar");
+    expect(sug.ownEntryRef(ANNA, "series/fr/nope")).toBeNull();
+    expect(sug.ownEntryRef(ANNA, "series/fr/../../etc")).toBeNull();
+    expect(sug.ownEntryRef(BEN, "series/fr/sugar")).toBeNull();
+  });
+
+  test("the pass is told which entry; its note is the result, the rest will be linked", async () => {
+    held();
+    searchResults.search_movie = [{ id: 7, title: "The Lobster", year: 2015, subtitle: "", image: "" }];
+    modelSays = { subjects: [
+      { kind: "series", title: "Sugar", note: "La série rend hommage au film noir." },
+      { kind: "movies", title: "The Lobster", year: 2015, note: "Colin Farrell y joue David." },
+    ] };
+    expect(await turn()).toBe(2);
+    expect(lastPrompt).toContain('held from the person\'s notebook entry "Sugar" (kind: series)');
+
+    const body = (await (await req(annaAuth, `/?conversation=${convo}&settle=1`)).json()) as any;
+    expect(body.entry).toBe("series/fr/sugar");
+    const sugar = body.suggestions.find((r: any) => r.title === "Sugar");
+    const lobster = body.suggestions.find((r: any) => r.title === "The Lobster");
+    expect([sugar.bound, sugar.links]).toEqual([true, false]);
+    expect([lobster.bound, lobster.links]).toEqual([false, true]);
+  });
+
+  test("keeping another entry links it to the one the conversation is held from", async () => {
+    held();
+    searchResults.search_movie = [{ id: 7, title: "The Lobster", year: 2015, subtitle: "", image: "" }];
+    modelSays = { subjects: [{ kind: "movies", title: "The Lobster", year: 2015, note: "Colin Farrell y joue David." }] };
+    await turn();
+    await sug.keepSuggestion(ANNA, sug.suggestionsFor(ANNA, convo)[0]!.id);
+
+    const lobster = fs.readFileSync(path.join(root, "movies/fr/the-lobster-fiche.md"), "utf-8");
+    expect(lobster).toContain("Colin Farrell y joue David.");
+    const sugar = fs.readFileSync(path.join(root, "series/fr/sugar-fiche.md"), "utf-8");
+    const res = sugar.slice(sugar.indexOf("## Résonances"));
+    expect(res).toContain("de [[the-lobster-fiche|The Lobster]] :");
+    expect(res).toContain(`(maurice://conversations/${convo})`);
+  });
+
+  test("keeping the entry's own note links nothing", async () => {
+    held();
+    modelSays = { subjects: [{ kind: "series", title: "Sugar", note: "Huit épisodes." }] };
+    await turn();
+    const before = fs.readFileSync(path.join(root, "series/fr/sugar-fiche.md"), "utf-8");
+    await sug.keepSuggestion(ANNA, sug.suggestionsFor(ANNA, convo)[0]!.id);
+    const after = fs.readFileSync(path.join(root, "series/fr/sugar-fiche.md"), "utf-8");
+    expect(after).toContain("Huit épisodes.");
+    expect(after.split("[[").length).toBe(before.split("[[").length);
+  });
+
+  test("an entry of a kind the pass does not name on its own can still get its result", () => {
+    const one = { kind: "articles", title: "Un article", note: "Ce qu'il en reste." };
+    expect(sug.parseNamed(JSON.stringify({ subjects: [one] }))).toEqual([]);
+    expect(sug.parseNamed(JSON.stringify({ subjects: [one] }), "articles")).toHaveLength(1);
+  });
+});
+
+describe("opening a conversation from an entry", () => {
+  test("the entry is bound and its fiche is the context from the first turn", async () => {
+    const conversations = (await import("../src/routes/conversations")).default;
+    const { getSpec } = await import("../src/services/composer/specs");
+    const post = (body: unknown) => conversations.request("/", {
+      method: "POST", body: JSON.stringify(body),
+      headers: { Authorization: annaAuth, "Content-Type": "application/json" },
+    });
+    const made = await post({ entry: "series/fr/sugar" });
+    expect(made.status).toBe(201);
+    const convo = (await made.json()) as any;
+    expect(convo.entry_ref).toBe("series/fr/sugar");
+    expect(getSpec(ANNA, convo.id).items.map((i: any) => [i.type, i.id])).toEqual([["fiche", "series/fr/sugar"]]);
+    // Not theirs, or not there: no conversation is made.
+    expect((await post({ entry: "series/fr/nope" })).status).toBe(404);
   });
 });

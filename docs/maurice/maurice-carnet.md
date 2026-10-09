@@ -49,6 +49,14 @@ Since 8 October 2026 the home is **one list of entries of every kind** — books
 
 **Writing.** The panel at the bottom follows the face that is up. *My side*: a dotted field opens the note sheet — text, and optionally the passage it is about and a page — and the note lands as a dated block on the fiche; a book of the library with no entry yet gets one from its first note. *Shared side*: *Write* when it is blank; otherwise a pencil, the page's address, and *Publish* for a draft, with a confirmation, after which the panel follows the site being rebuilt; *Unpublish* is in the ⋯ menu, with the links to the files (garden site, Working Copy, Obsidian). *Publish* only shows to a member who has somewhere to publish to — a domain of their own, or the household's public pages. In the reader, *Note* writes on the book's entry, with the chapter's name.
 
+## Maurice, from an entry *(9 October 2026)*
+
+Carnet had no chat; it has one where it is useful — on an entry. On the member's side the panel carries, beside *Add a note…*, a **Maurice** button (`Views/Maurice/AskMauriceView.swift`). It opens a full screen with the entry's title, a field (typed or dictated), and Maurice's reply as it is written; the conversation is **new each time** and is held *from* the entry, its fiche loaded as context by the server ([[maurice-chat]]). It is made at the first question, not at the tap.
+
+A conversation is rarely worth keeping; its result is. So under each reply Carnet shows what the server found worth keeping, on the dotted paper it will land on: **a note for this entry** (*For this entry* · *Keep*), and the other works and people the exchange touched (*Keep and link*, *Add and link* when the member already has them; a pick first when the identity is unsure). Keeping files the note; for another entry it also links the two, by a résonance on this one. The note ends on a link to the conversation, and a tap on it in the entry's page opens that conversation in the same screen, with what was kept of it. Carnet keeps no socket: once the reply is in it asks `GET /api/suggestions?conversation=…&settle=1`, which answers when the pass the reply started is done. Closing the screen re-reads the entry if anything was kept. A book of the library nothing is written on has no Maurice button: it is not an entry until a first note.
+
+**Dictation** (the same day). A microphone sits beside every field Carnet writes in — the note sheet, the shared side's editor, the question to Maurice (`Views/DictationMic.swift`). The engine is the Maurice app's, copied as is (`Services/Dictation.swift`): on the device whenever the language has a local model, through Apple's servers only after the member said yes, once. It listens in **the entry's language**, not the phone's. What is heard is appended to the field and stays editable; nothing is kept or sent on the member's behalf.
+
 ## Reading
 
 *Since 8 October 2026 the shelves below are no longer the home: a book or an article is reached from the list of entries, and its own page (chapters, summaries, offline copy) from its entry's source band. What follows describes those pages and the readers, which are unchanged in what they do.*
@@ -109,7 +117,7 @@ Carnet is in daily use at home; the minimal scope is on its way to TestFlight (f
 
 ## Gaps & notes
 
-- **No chat.** Carnet reads the conversations Maurice opens and marks them read, but answering is the Maurice app's — and the Maurice app has no URL scheme yet, so *Reply in Maurice* stays a line of text until it does (`maurice://conversations/<id>` is what Carnet will open).
+- **Chat only from an entry.** A conversation Maurice opened is still read here and answered in the Maurice app (*Reply in Maurice*, which the app answers since 9 October 2026); the thread opened from an entry shows text only — no source cards, no images, no tool trail, no stop button — and was never run against a real turn before it shipped. `Dictation.swift` is a copy of the Maurice app's file, not a shared package: a fix in one must be made in the other.
 - **The real push is not yet seen on a phone.** The server picks the APNs topic by platform since the evening of 19 September 2026 (`carnet-ios` → `eu.chezmaurice.carnet`, `APNS_CARNET_TOPIC` in `apns.ts`; before that APNs refused the token with `DeviceTokenNotForTopic`); the tap handling was checked with a simulated push, the end-to-end delivery waits for a TestFlight build on a device.
 - **A companion's conversation is not opened from here**; the book page shows and creates the companion, the conversation itself is the Maurice app's.
 - **English only.** Carnet has no localisation; the briefs are in the member's language, the chrome around them is not.

@@ -34,8 +34,16 @@ struct MauriceApp: App {
                 .environment(\.locale, session.resolvedLocale)
                 // maurice://join?server=…&code=… — from an invitation page's
                 // "Open" button, or the camera app reading one.
+                // maurice://conversations/<id> — the link a note kept from a
+                // conversation carries in the garden, and Carnet's "Reply in
+                // Maurice": opened the way a tapped notification is.
                 .onOpenURL { url in
-                    if let invitation = Invitation(url.absoluteString) { session.receive(invitation) }
+                    if url.scheme == "maurice", url.host == "conversations",
+                       let id = url.pathComponents.last, id != "/" {
+                        NotificationManager.shared.onTap?(id, nil)
+                    } else if let invitation = Invitation(url.absoluteString) {
+                        session.receive(invitation)
+                    }
                 }
                 #if os(macOS)
                 // Kill the macOS keyboard focus rings app-wide — they clash with

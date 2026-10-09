@@ -31,6 +31,7 @@ import {
 import { listGardenEntries, type GardenEntry } from "../../data-api/services/gardenEntries";
 import { indexGardenPaths } from "../../data-api/services/gardenIndex";
 import { noteBlock, withNote } from "../../data-api/services/gardenNote";
+import { appendResonance } from "../../data-api/services/gardenLinks";
 import { userLocale } from "./i18n";
 
 // ── Shapes ───────────────────────────────────────────────────────────────────
@@ -56,7 +57,8 @@ export interface EntrySuggestion {
   member_id: string;
   conversation_id: string;
   message_id: string | null;
-  kind: SuggestionKind;
+  /** A garden collection: one of SUGGESTION_KINDS, or the bound entry's own. */
+  kind: string;
   key: string;
   title: string;
   year: number | null;
@@ -77,7 +79,7 @@ export interface EntrySuggestion {
 
 /** What the pass says of one subject, before anything is resolved. */
 export interface Named {
-  kind: SuggestionKind;
+  kind: string;
   title: string;
   year?: number | null;
   creator?: string;
@@ -90,6 +92,30 @@ function hydrate(row: any): EntrySuggestion {
   try { candidates = row.candidates ? JSON.parse(row.candidates) : []; } catch {}
   return { ...row, public: !!row.public, candidates };
 }
+
+// ── A conversation held from an entry ───────────────────────────────────────
+
+/** The caller's own entry under this ref, as `<collection>/<locale>/<slug>` —
+ *  or null: malformed, not a kind that is kept here, or not in their garden. */
+export function ownEntryRef(memberId: string, ref: string): string | null {
+  const [collection, locale, slug, ...rest] = ref.split("/");
+  if (rest.length || !collection || !locale || !slug) return null;
+  const garden = gardenFor(memberId);
+  if (!garden) return null;
+  const entry = listGardenEntries(garden).find((e) => e.collection === collection && e.locale === locale && e.slug === slug);
+  return entry ? `${entry.collection}/${entry.locale}/${entry.slug}` : null;
+}
+
+/** The entry a conversation is held from, when it is and the entry is still there. */
+function boundEntry(memberId: string, conversationId: string): GardenEntry | null {
+  const ref = getConversation(conversationId, memberId)?.entry_ref;
+  const garden = ref ? gardenFor(memberId) : null;
+  if (!ref || !garden) return null;
+  const [collection, locale, slug] = ref.split("/");
+  return listGardenEntries(garden).find((e) => e.collection === collection && e.locale === locale && e.slug === slug) ?? null;
+}
+
+const refOf = (e: GardenEntry) => `${e.collection}/${e.locale}/${e.slug}`;
 
 // ── The pass ─────────────────────────────────────────────────────────────────
 
@@ -120,7 +146,7 @@ export function setSuggestionModel(fn: ((req: AncillaryRequest) => Promise<Ancil
 }
 
 /** The first JSON object in a model's answer — fenced, prefixed, or bare. */
-export function parseNamed(text: string): Named[] {
+export function parseNamed(text: string, alsoKind: string | null = null): Named[] {
   const start = text.indexOf("{");
   const end = text.lastIndexOf("}");
   if (start < 0 || end <= start) return [];
@@ -129,10 +155,10 @@ export function parseNamed(text: string): Named[] {
   const list = Array.isArray(parsed?.subjects) ? parsed.subjects : [];
   const out: Named[] = [];
   for (const s of list) {
-    const kind = String(s?.kind ?? "") as SuggestionKind;
+    const kind = String(s?.kind ?? "");
     const title = String(s?.title ?? "").replace(/\s+/g, " ").trim();
     const note = String(s?.note ?? "").trim().slice(0, NOTE_MAX_CHARS);
-    if (!SUGGESTION_KINDS.includes(kind) || !title || !note) continue;
+    if (!((SUGGESTION_KINDS as readonly string[]).includes(kind) || kind === alsoKind) || !title || !note) continue;
     // A first name alone is nobody in particular.
     if (kind === "people" && title.split(" ").length < 2) continue;
     const year = Number.isInteger(s?.year) && s.year > 1000 && s.year < 2200 ? (s.year as number) : null;
@@ -146,11 +172,21 @@ export function parseNamed(text: string): Named[] {
   return out;
 }
 
-async function nameSubjects(memberId: string, conversationId: string, question: string, reply: string): Promise<Named[]> {
+async function nameSubjects(
+  memberId: string, conversationId: string, question: string, reply: string, bound: GardenEntry | null,
+): Promise<Named[]> {
   const already = (db
     .query(`SELECT title FROM entry_suggestions WHERE conversation_id = ? ORDER BY created_at`)
     .all(conversationId) as Array<{ title: string }>).map((r) => r.title);
+  // Held from an entry of their notebook: what the exchange establishes about
+  // it is the first thing worth keeping — the result that goes back on it.
+  const about = bound
+    ? `This exchange is held from the person's notebook entry "${bound.title}" (kind: ${bound.collection}). ` +
+      `When it establishes something about that entry, name it FIRST, under exactly that title and kind, ` +
+      `even if a note on it was already suggested and this one adds to it.\n\n`
+    : "";
   const prompt =
+    about +
     (already.length ? `Already suggested: ${already.join("; ")}\n\n` : "") +
     `THE PERSON:\n${question.slice(0, 2000)}\n\nTHE ASSISTANT:\n${reply.slice(0, 6000)}`;
   const result = await completeWith({
@@ -162,7 +198,7 @@ async function nameSubjects(memberId: string, conversationId: string, question: 
     reasoning: "none",
   });
   recordSpend(result.usage, memberId);
-  return parseNamed(result.text);
+  return parseNamed(result.text, bound?.collection ?? null);
 }
 
 // ── Resolution ───────────────────────────────────────────────────────────────
@@ -216,13 +252,13 @@ function openImage(garden: GardenRef, image: string | null): string | null {
   return `/api/garden-images/${garden.username}/${rest}`;
 }
 
-const SEARCH_TOOL: Record<SuggestionKind, string> = {
+const SEARCH_TOOL: Record<string, string> = {
   movies: "search_movie", series: "search_series", books: "search_book", music: "search_album",
   podcasts: "search_podcast", games: "search_game", people: "search_person",
 };
 
 /** The argument `open_fiche` pins the exact work with, per collection. */
-const ID_ARG: Partial<Record<SuggestionKind, { name: string; integer: boolean }>> = {
+const ID_ARG: Record<string, { name: string; integer: boolean } | undefined> = {
   movies: { name: "tmdb_id", integer: true },
   series: { name: "tmdb_id", integer: true },
   books: { name: "google_books_id", integer: false },
@@ -255,7 +291,9 @@ async function searchProvider(memberId: string, named: Named, locale: string): P
   if (named.year && ["movies", "series", "games", "music"].includes(named.kind)) args.year = named.year;
   if (named.creator && named.kind === "books") { args.author = named.creator; args.locale = locale; }
   if (named.creator && named.kind === "music") args.artist = named.creator;
-  const card = await gardenCall(memberId, SEARCH_TOOL[named.kind], args);
+  const tool = SEARCH_TOOL[named.kind];
+  if (!tool) return [];
+  const card = await gardenCall(memberId, tool, args);
   const rows = Array.isArray(card?.results) ? card.results : [];
   return rows.slice(0, MAX_CANDIDATES).map((r: any) => ({
     id: String(r?.id ?? ""),
@@ -290,9 +328,14 @@ interface Resolved {
   candidates: Candidate[];
 }
 
-async function resolve(memberId: string, garden: GardenRef, named: Named, locale: string): Promise<Resolved> {
+async function resolve(
+  memberId: string, garden: GardenRef, named: Named, locale: string, bound: GardenEntry | null,
+): Promise<Resolved> {
+  // 0. The entry the conversation is held from, named by its own title.
+  const isBound = bound && bound.collection === named.kind &&
+    (named.kind === "people" ? sameName(bound.title, named.title) : normalise(bound.title) === normalise(named.title));
   // 1. The member's garden. A hit asks no provider anything.
-  const entry = findInGarden(garden, named);
+  const entry = isBound ? bound : findInGarden(garden, named);
   if (entry) {
     const ref = `${entry.collection}/${entry.locale}/${entry.slug}`;
     return {
@@ -342,7 +385,9 @@ function decidedElsewhere(memberId: string, kind: string, key: string, state: "d
  *   as a note to add, since the pass only names it again for something new.
  */
 function record(memberId: string, conversationId: string, messageId: string | null, named: Named, r: Resolved): boolean {
-  if (decidedElsewhere(memberId, named.kind, r.key, "dismissed")) return false;
+  // A refusal is of a subject. A note turned down on an entry they already
+  // have says nothing about the next note on it.
+  if (!r.existing && decidedElsewhere(memberId, named.kind, r.key, "dismissed")) return false;
   const here = db
     .query(`SELECT id, state, note FROM entry_suggestions WHERE conversation_id = ? AND kind = ? AND key = ?`)
     .get(conversationId, named.kind, r.key) as { id: string; state: string; note: string } | null;
@@ -432,13 +477,14 @@ export async function suggestForTurn(
   memberId: string, conversationId: string, messageId: string | null, question: string, reply: string,
 ): Promise<number> {
   if (!question.trim() || !reply.trim() || !eligible(memberId, conversationId)) return 0;
-  const named = await nameSubjects(memberId, conversationId, question, reply);
+  const bound = boundEntry(memberId, conversationId);
+  const named = await nameSubjects(memberId, conversationId, question, reply, bound);
   if (!named.length) return 0;
   const garden = gardenFor(memberId)!;
   const locale = gardenLocale(memberId);
   let changed = 0;
   for (const n of named) {
-    const r = await resolve(memberId, garden, n, locale);
+    const r = await resolve(memberId, garden, n, locale, bound);
     if (record(memberId, conversationId, messageId, n, r)) changed++;
   }
   if (changed) announce(memberId, conversationId);
@@ -449,9 +495,23 @@ export async function suggestForTurn(
 export function suggestInBackground(
   memberId: string, conversationId: string, messageId: string | null, question: string, reply: string,
 ): void {
-  suggestForTurn(memberId, conversationId, messageId, question, reply)
+  const pass = suggestForTurn(memberId, conversationId, messageId, question, reply)
     .then((n) => { if (n) console.log(`[suggest] ${n} for conversation ${conversationId}`); })
-    .catch((err) => console.warn(`[suggest] pass failed (${(err as Error).message})`));
+    .catch((err) => console.warn(`[suggest] pass failed (${(err as Error).message})`))
+    .finally(() => { if (inFlight.get(conversationId) === pass) inFlight.delete(conversationId); });
+  inFlight.set(conversationId, pass);
+}
+
+/** The pass running for a conversation, if one is. Carnet keeps no socket: it
+ *  asks for the list once the reply is in, and waits here for the pass that
+ *  reply started rather than polling. */
+const inFlight = new Map<string, Promise<void>>();
+
+/** Resolve when the conversation's pass is done, or after `ms` at most. */
+export async function settled(conversationId: string, ms = 20_000): Promise<void> {
+  const pass = inFlight.get(conversationId);
+  if (!pass) return;
+  await Promise.race([pass, new Promise<void>((r) => setTimeout(r, ms))]);
 }
 
 // ── The member's decision ────────────────────────────────────────────────────
@@ -488,9 +548,20 @@ function noteOnFiche(memberId: string, garden: GardenRef, ref: string, text: str
 
 /** The note as it lands on the fiche: what was said, and where it was said. */
 export function noteText(s: EntrySuggestion, conversationTitle: string | null, locale: string): string {
+  return `${s.note.trim()} ${provenance(s.conversation_id, conversationTitle, locale)}`;
+}
+
+/**
+ * Where a kept note came from: a link to the conversation, so the result on
+ * the fiche can be traced back to how it was arrived at. The conversation is
+ * rarely worth keeping; this is what is kept of it. `maurice://conversations/
+ * <id>` is what both apps open.
+ */
+export function provenance(conversationId: string, conversationTitle: string | null, locale: string): string {
   const from = locale === "fr" ? "Conversation avec Maurice" : "Conversation with Maurice";
-  const title = (conversationTitle ?? "").replace(/\s+/g, " ").trim();
-  return `${s.note.trim()} *(${from}${title ? ` : « ${title} »` : ""})*`;
+  // Brackets in a title would close the link's label.
+  const title = (conversationTitle ?? "").replace(/[\[\]]/g, "").replace(/\s+/g, " ").trim();
+  return `*([${from}${title ? ` : « ${title} »` : ""}](maurice://conversations/${conversationId}))*`;
 }
 
 /**
@@ -532,6 +603,23 @@ export async function keepSuggestion(memberId: string, id: string, candidateId?:
   const convo = getConversation(s.conversation_id, memberId);
   noteOnFiche(memberId, garden, ref, noteText(s, convo?.title ?? null, locale));
 
+  // Kept from a conversation held on another entry: the two are linked, by a
+  // résonance on that entry — a [[wiki-link]] to this one, under what was said.
+  const bound = boundEntry(memberId, s.conversation_id);
+  if (bound && refOf(bound) !== ref) {
+    const [, , slug] = ref.split("/") as [string, string, string];
+    try {
+      appendResonance(memberId, garden, {
+        to: { collection: bound.collection, locale: bound.locale, slug: bound.slug },
+        comment: `${s.note.trim()} ${provenance(s.conversation_id, convo?.title ?? null, locale)}`,
+        source: { label: picked?.title ?? s.title, basename: `${slug}-fiche` },
+      });
+    } catch (err) {
+      // The entry is kept; a link that could not be written is not worth losing it.
+      console.warn(`[suggest] résonance on ${refOf(bound)} failed (${(err as Error).message})`);
+    }
+  }
+
   db.run(
     `UPDATE entry_suggestions SET state = 'kept', kept_path = ?, existing = ?, title = ?, year = ?, image = COALESCE(?, image),
             candidates = NULL, decided_at = datetime('now'), updated_at = datetime('now') WHERE id = ?`,
@@ -553,6 +641,13 @@ export function dismissSuggestion(memberId: string, id: string): EntrySuggestion
     announce(memberId, s.conversation_id);
   }
   return own(memberId, id);
+}
+
+/** The entry the conversation is held from, as a ref — what a row is compared
+ *  with to say "this is the entry you are on" or "this will be linked to it". */
+export function boundRef(memberId: string, conversationId: string): string | null {
+  const bound = boundEntry(memberId, conversationId);
+  return bound ? refOf(bound) : null;
 }
 
 /** Where the kept entry reads in the member's garden, for a client to open. */

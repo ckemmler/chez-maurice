@@ -214,3 +214,29 @@ What the first tranche does differently from the sections above, or leaves out:
   fallback: Carnet absent, the Mac, a person. The link names no household.
 - **Not built**: the bench (§7.1, set aside on the owner's decision to try it
   on new conversations instead), editing the note in the drawer.
+
+## 10. The second tranche: Maurice in Carnet (9 October 2026, afternoon)
+
+Decided the same day, after the first tranche was tried:
+
+1. **Maurice's field is in Carnet**, on an entry, rather than a jump to the
+   Maurice app with the entry as context.
+2. **A new conversation each time.** Nothing is pinned to the entry: a
+   conversation is rarely worth keeping in itself, its result is.
+3. **The result is a proposed note, kept by one gesture**, and it carries a
+   link to the conversation — `maurice://conversations/<id>` — so its genesis
+   can be traced. The link is written only when something is kept. The first
+   tranche's notes carry it too from now on.
+4. **Other works and people are kept and linked** to the entry the
+   conversation is held from: a résonance on that entry.
+5. **Dictation** on every field Carnet writes in: note, shared side, question.
+
+Built: `conversations.entry_ref`, `POST /api/conversations {entry}` (the fiche
+saved as composer context), the pass told which entry it is held from, `bound`
+/ `links` on the rows, `settle=1`, the résonance on keep, the provenance link;
+in Carnet `AskMauriceView`, `MauriceAPI`, `DictationMic`, `Dictation.swift`
+(a copy of the Maurice app's); in the Maurice app, `maurice://conversations/`.
+
+Left: the Carnet thread is text only (no sources, images, tool trail, stop);
+the Maurice app's drawer does not say which rows are bound or will be linked;
+a refusal of a subject still holds everywhere while a refused note does not.

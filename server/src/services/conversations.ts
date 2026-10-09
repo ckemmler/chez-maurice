@@ -14,6 +14,9 @@ export interface Conversation {
    *  a conversation he opened on his own, with a first message of his
    *  (services/openedConversations.ts) */
   opened_by: "member" | "maurice";
+  /** the garden entry this conversation is held from, `<collection>/<locale>/
+   *  <slug>` — Carnet opens one from an entry's page; null otherwise */
+  entry_ref?: string | null;
   created_at: string;
   updated_at: string;
   message_count?: number;
@@ -108,7 +111,7 @@ export function listConversations(userId: string, opts: ListConversationsOptions
   }
   const rows = db
     .query(
-      `SELECT c.id, c.user_id, c.title, c.maurice_id, c.origin, c.opened_by, c.created_at, c.updated_at,
+      `SELECT c.id, c.user_id, c.title, c.maurice_id, c.origin, c.opened_by, c.entry_ref, c.created_at, c.updated_at,
               COUNT(m.id) as message_count,
               MAX(m.created_at) as last_message_at,
               CASE WHEN c.opened_by = 'maurice' AND p.last_read_at IS NULL THEN 1 ELSE 0 END AS unread,
@@ -159,7 +162,7 @@ export function getConversation(
 ): Conversation | null {
   return db
     .query(
-      `SELECT c.id, c.user_id, c.title, c.maurice_id, c.origin, c.opened_by, c.created_at, c.updated_at
+      `SELECT c.id, c.user_id, c.title, c.maurice_id, c.origin, c.opened_by, c.entry_ref, c.created_at, c.updated_at
        FROM conversations c
        JOIN conversation_participants p
          ON p.conversation_id = c.id AND p.member_id = ?
@@ -171,14 +174,15 @@ export function getConversation(
 export function createConversation(
   userId: string,
   mauriceId?: string | null,
-  opts: { openedBy?: "member" | "maurice" } = {},
+  opts: { openedBy?: "member" | "maurice"; entryRef?: string | null } = {},
 ): Conversation {
   const id = crypto.randomUUID();
-  db.run(`INSERT INTO conversations (id, user_id, maurice_id, opened_by) VALUES (?, ?, ?, ?)`, [
+  db.run(`INSERT INTO conversations (id, user_id, maurice_id, opened_by, entry_ref) VALUES (?, ?, ?, ?, ?)`, [
     id,
     userId,
     mauriceId ?? null,
     opts.openedBy ?? "member",
+    opts.entryRef ?? null,
   ]);
   db.run(
     `INSERT OR IGNORE INTO conversation_participants (conversation_id, member_id, role)

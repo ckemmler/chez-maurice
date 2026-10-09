@@ -2,11 +2,13 @@ import { Hono } from "hono";
 import { requireAuth } from "../middleware/auth";
 import { isParticipant } from "../services/conversations";
 import {
+  boundRef,
   dismissSuggestion,
   keepSuggestion,
   keptCount,
   keptWebPath,
   pendingCount,
+  settled,
   SuggestionError,
   suggestionsFor,
   type EntrySuggestion,
@@ -21,7 +23,7 @@ const suggestions = new Hono();
 
 suggestions.use("/*", requireAuth);
 
-const view = (memberId: string, s: EntrySuggestion) => ({
+const view = (memberId: string, s: EntrySuggestion, bound: string | null = boundRef(memberId, s.conversation_id)) => ({
   id: s.id,
   conversation_id: s.conversation_id,
   message_id: s.message_id,
@@ -34,6 +36,10 @@ const view = (memberId: string, s: EntrySuggestion) => ({
   state: s.state,
   /** Already an entry of theirs: keeping it adds the note and nothing else. */
   existing: !!s.existing,
+  /** The entry the conversation is held from: the note is its result. */
+  bound: !!bound && (s.kept_path ?? s.existing) === bound,
+  /** Kept from a conversation held on another entry: keeping links the two. */
+  links: !!bound && (s.kept_path ?? s.existing) !== bound,
   /** Several possible identities: one must be picked to keep it. */
   candidates: s.candidates.length > 1 ? s.candidates : [],
   /** The garden entry this is, `<collection>/<locale>/<slug>`, once there is
@@ -44,12 +50,17 @@ const view = (memberId: string, s: EntrySuggestion) => ({
 });
 
 /** The conversation's list: what waits first, then what was kept. */
-suggestions.get("/", (c) => {
+suggestions.get("/", async (c) => {
   const uid = c.get("userId");
   const conversationId = c.req.query("conversation") ?? "";
   if (!conversationId || !isParticipant(conversationId, uid)) return c.json({ error: "not found" }, 404);
+  // `settle=1`: answer once the pass the last reply started is done — for a
+  // client with no socket to hear about it (Carnet).
+  if (c.req.query("settle")) await settled(conversationId);
+  const bound = boundRef(uid, conversationId);
   return c.json({
-    suggestions: suggestionsFor(uid, conversationId).map((s) => view(uid, s)),
+    entry: bound,
+    suggestions: suggestionsFor(uid, conversationId).map((s) => view(uid, s, bound)),
     pending: pendingCount(uid, conversationId),
     kept: keptCount(uid, conversationId),
   });

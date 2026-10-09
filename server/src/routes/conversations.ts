@@ -33,7 +33,8 @@ import { pushToUser } from "../services/push";
 import { indexConversationInBackground } from "../services/mcpClient";
 import { searchConversations } from "../services/conversationSearch";
 import { takeReview } from "../services/reviewFooter";
-import { suggestInBackground } from "../services/entrySuggestions";
+import { ownEntryRef, suggestInBackground } from "../services/entrySuggestions";
+import { saveSpec } from "../services/composer/specs";
 import { memberLocale } from "../services/domainBriefs";
 import {
   beginTurn,
@@ -100,11 +101,20 @@ conversations.get("/", (c) => {
 // ── POST /api/conversations ─────────────────────────────────────
 
 conversations.post("/", async (c) => {
-  const { maurice_id } = await c.req.json().catch(() => ({}));
+  const { maurice_id, entry } = await c.req.json().catch(() => ({}));
   const uid = c.get("userId");
   // A Maurice is private to its creator — can't bind a thread to someone else's.
   if (!canUseMaurice(maurice_id ?? null, uid)) return c.json({ error: "Not found" }, 404);
-  const convo = createConversation(uid, maurice_id ?? null);
+  // Held from a garden entry (Carnet, on an entry's page): the entry must be
+  // the caller's own, and its fiche is the conversation's context from the
+  // first turn — loaded through the composer, like one the member picked.
+  let entryRef: string | null = null;
+  if (entry != null) {
+    entryRef = ownEntryRef(uid, String(entry));
+    if (!entryRef) return c.json({ error: "No such entry" }, 404);
+  }
+  const convo = createConversation(uid, maurice_id ?? null, { entryRef });
+  if (entryRef) saveSpec(uid, convo.id, [{ type: "fiche", id: entryRef }]);
   return c.json(convo, 201);
 });
 
