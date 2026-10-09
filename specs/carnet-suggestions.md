@@ -189,8 +189,9 @@ What the first tranche does differently from the sections above, or leaves out:
   The conversation list rows carry `suggestions` and `suggestions_kept`.
 - **The event** is `{type: "suggestions", conversationId, count, kept}` on the
   member's channel.
-- **The mark is a closed book**, not Carnet's pipe: the pipe exists only as the
-  app icon's PNG, and a header glyph needs a vector. To draw.
+- **The mark is Carnet's pipe**, cut from its app icon into a template image
+  (`app/Maurice/Assets.xcassets/CarnetPipe.imageset`): a bitmap at three
+  scales, not yet a vector.
 - **The note is one dated line under `## Commentaire`**, followed by
   *(Conversation avec Maurice : « title »)* — no link back to the conversation,
   since the app answers no `maurice://conversations/…` yet.
@@ -206,7 +207,7 @@ What the first tranche does differently from the sections above, or leaves out:
   a confirmation.
 - **Deleting a conversation** drops what it still offered; decisions stay, a
   refusal holding for every conversation to come.
-- **Pulse**: the symbol bounces once when the pending count grows; nothing
+- **Pulse**: the mark swells once when the pending count grows; nothing
   under Reduce Motion.
 - **Not built**: the bench (§7.1, set aside on the owner's decision to try it
   on new conversations instead), Carnet's URL scheme (§6), editing the note in

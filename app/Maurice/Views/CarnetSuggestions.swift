@@ -60,6 +60,7 @@ struct CarnetSuggestionsButton: View {
     let conversation: ServerConversation
     var inToolbar = false
     @State private var showDrawer = false
+    @State private var bumped = false
 
     private var count: SuggestionCount { chat.suggestionCount(for: conversation.id) }
     private var pulse: Int { reduceMotion ? 0 : (chat.suggestionPulse[conversation.id] ?? 0) }
@@ -84,9 +85,19 @@ struct CarnetSuggestionsButton: View {
 
     private var label: some View {
         HStack(spacing: 3) {
-            Image(systemName: count.pending > 0 ? "book.closed.fill" : "book.closed")
-                .font(.system(size: inToolbar ? 14 : 16, weight: .medium))
-                .symbolEffect(.bounce, value: pulse)
+            // Carnet's pipe, cut from its app icon (Assets: CarnetPipe, a
+            // template image): the two apps go together, and this is where
+            // one hands over to the other.
+            Image("CarnetPipe")
+                .resizable()
+                .aspectRatio(contentMode: .fit)
+                .frame(width: inToolbar ? 22 : 26)
+                .scaleEffect(bumped ? 1.3 : 1)
+                .onChange(of: pulse) { _, _ in
+                    // One pulse, out and back.
+                    withAnimation(.spring(duration: 0.25, bounce: 0.5)) { bumped = true }
+                    withAnimation(.spring(duration: 0.4, bounce: 0.4).delay(0.25)) { bumped = false }
+                }
             if count.pending > 0 {
                 Text("\(count.pending)")
                     .font(.system(size: 12, weight: .semibold).monospacedDigit())
