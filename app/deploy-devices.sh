@@ -110,17 +110,18 @@ import json, sys
 st = json.load(sys.stdin)
 for p in st["Peer"].values():
     if p.get("OS") == "macOS" and p.get("Online"):
-        print(p["HostName"], p["TailscaleIPs"][0])
-' | while read -r host ip; do
+        print(p["HostName"], p["TailscaleIPs"][0], sep="\t")
+' | while IFS=$'\t' read -r host ip; do  # a host name may hold spaces
     [ "$host" = "$self" ] && continue
     say "→ $host ($ip)"
-    if ! ssh -o BatchMode=yes -o ConnectTimeout=5 "$ip" true 2>/dev/null; then
+    # ssh -n throughout: it would otherwise swallow the rest of the peer list.
+    if ! ssh -n -o BatchMode=yes -o ConnectTimeout=5 "$ip" true 2>/dev/null; then
       skip "no ssh (enable Remote Login there, or Tailscale SSH); skipped"; continue
     fi
     # The remote shell splits its command line again, hence the quoting.
-    dest="$(ssh "$ip" "bash -c $(q "$MAC_DEST") _ $(q "$name")")"
+    dest="$(ssh -n "$ip" "bash -c $(q "$MAC_DEST") _ $(q "$name")")"
     rsync -a --delete "$app/" "$ip:$(q "$dest")/"
-    ssh "$ip" "pkill -f $(q "^$dest/Contents/MacOS/"); sleep 1; open -n $(q "$dest")" \
+    ssh -n "$ip" "pkill -f $(q "^$dest/Contents/MacOS/"); sleep 1; open -n $(q "$dest")" \
       && skip "installed in $(dirname "$dest") and relaunched" || skip "copied to $dest; relaunch failed"
   done
 }
