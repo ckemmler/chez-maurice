@@ -519,6 +519,23 @@ export function preferredLocale(memberId: string): string | null {
   }
 }
 
+/** A book of the library with no entry in the garden: the row is all there is. */
+async function libraryRow(memberId: string, book: BookMetadata, marked: number): Promise<ShelfEntry> {
+  const source = await bookSource(memberId, book);
+  return {
+    id: `calibre/${book.id}`, kind: "books", collection: null, locale: null, slug: null,
+    title: book.title, byline: book.authors.join(", ") || null,
+    date: (book.added ?? "").slice(0, 10),
+    updated_at: source.progress?.updated_at ?? book.added ?? "",
+    image: null, tags: book.tags, rating: null, status: null,
+    source,
+    mine: marked ? { notes: marked, opened: true } : null,
+    shared: null,
+    archived: false,
+    translations: [],
+  };
+}
+
 export async function listShelf(
   memberId: string, garden: GardenRef,
   /** The household library; read from Calibre unless a caller supplies it. */
@@ -545,20 +562,7 @@ export async function listShelf(
   // The books nothing is written on yet: readable all the same.
   for (const book of lib.books) {
     if (claimed.has(book.id)) continue;
-    const source = await bookSource(memberId, book);
-    const marked = counts.books.get(book.id) ?? 0;
-    entries.push({
-      id: `calibre/${book.id}`, kind: "books", collection: null, locale: null, slug: null,
-      title: book.title, byline: book.authors.join(", ") || null,
-      date: (book.added ?? "").slice(0, 10),
-      updated_at: source.progress?.updated_at ?? book.added ?? "",
-      image: null, tags: book.tags, rating: null, status: null,
-      source,
-      mine: marked ? { notes: marked, opened: true } : null,
-      shared: null,
-      archived: false,
-      translations: [],
-    });
+    entries.push(await libraryRow(memberId, book, counts.books.get(book.id) ?? 0));
   }
 
   // A row is one subject: put away under any of its locales, it is put away.
@@ -571,6 +575,90 @@ export async function listShelf(
     .map((kind) => ({ kind, count: entries.filter((e) => e.kind === kind).length }))
     .filter((k) => k.count > 0);
   return { kinds, entries };
+}
+
+// ── Every note ──
+//
+// The list answers "what did I write on this?". This answers the other
+// question: a note remembered for itself — roughly when, roughly what — with
+// no idea any more of what it was written on. So every note the member wrote,
+// whatever the entry, newest first, each naming its entry.
+//
+// A note here is something of the member's own words: a dated note, a quote
+// they copied, a résonance, a highlight they wrote under. A bare highlight is
+// a passage of someone else's and stays on its entry's page; so do the prose
+// of a fiche and what Maurice filed. Archived entries are not left out: the
+// row was put away, not what was written on it.
+
+/** One thing the member wrote, with the entry it is on. */
+export type NoteItem = Exclude<MineItem, { kind: "fragment" }> & { entry_id: string };
+
+export async function listNotes(
+  memberId: string, garden: GardenRef, books?: BookMetadata[],
+): Promise<{ entries: ShelfEntry[]; notes: NoteItem[] }> {
+  const lib = loadLibrary(books);
+  const counts: Counts = { books: countHighlights(memberId), articles: countArticleHighlights(memberId) };
+  const found: { row: ShelfEntry; items: NoteItem[] }[] = [];
+
+  /** The highlights of a book the member wrote under, newest first. */
+  const noted = async (bookId: number, entryId: string): Promise<NoteItem[]> => {
+    if (!counts.books.get(bookId)) return [];
+    const hs = listHighlights(memberId, bookId).filter((h) => (h.note ?? "").trim());
+    if (!hs.length) return [];
+    const titles = new Map((await chaptersOf(bookId)).map((c) => [c.slug, c.title]));
+    return hs.map((h) => ({
+      entry_id: entryId, kind: "highlight" as const, id: `h:${h.id}`,
+      date: isoFromSqlite(h.created_at).slice(0, 10), quote: h.quote, text: h.note!,
+      where: { chapter_slug: h.chapter_slug, chapter_title: titles.get(h.chapter_slug) ?? null, view: h.view },
+    }));
+  };
+
+  const claimed = new Set<number>();
+  for (const e of listGardenEntries(garden)) {
+    if (!KIND_OF[e.collection]) continue;
+    const { row, fiche, book } = await describe(memberId, garden, e, lib, counts);
+    if (book) claimed.add(book.id);
+    const items: NoteItem[] = [];
+    if (fiche && row.mine?.opened) {
+      // The comment an article was saved with carries no date: the save's.
+      const saved = /^\d{4}-\d{2}-\d{2}/.test(String(fiche.fm.date ?? "")) ? String(fiche.fm.date).slice(0, 10) : null;
+      // Sections are append-only: the last block of the file is the newest.
+      for (const item of parseMine(fiche, e.collection).items.reverse()) {
+        if (item.kind === "fragment" || item.kind === "highlight") continue;
+        items.push(item.kind === "resonance"
+          // The link is a basename, resolved on the entry's page; the label is enough here.
+          ? { ...item, entry_id: row.id, date: item.date ?? saved, from: item.from && { ...item.from, entry_id: null } }
+          : { ...item, entry_id: row.id, date: item.date ?? saved });
+      }
+    }
+    if (book) items.push(...await noted(book.id, row.id));
+    else if (e.collection === "articles" && counts.articles.get(`${e.locale}/${e.slug}`)) {
+      for (const h of listArticleHighlights(memberId, e.locale, e.slug)) {
+        if (!(h.note ?? "").trim()) continue;
+        items.push({
+          entry_id: row.id, kind: "highlight", id: `h:${h.id}`,
+          date: isoFromSqlite(h.created_at).slice(0, 10), quote: h.quote, text: h.note!,
+          where: { chapter_slug: null, chapter_title: null, view: h.view },
+        });
+      }
+    }
+    if (items.length) found.push({ row, items });
+  }
+  for (const book of lib.books) {
+    if (claimed.has(book.id)) continue;
+    const items = await noted(book.id, `calibre/${book.id}`);
+    if (items.length) found.push({ row: await libraryRow(memberId, book, counts.books.get(book.id) ?? 0), items });
+  }
+
+  const away = archivedIds(memberId);
+  for (const f of found) f.row.archived = away.has(f.row.id);
+
+  // A note's date is a day. Within a day: the entry last touched first, and
+  // on one entry the order above. The sort is stable, so that order holds.
+  found.sort((a, b) => (a.row.updated_at < b.row.updated_at ? 1 : a.row.updated_at > b.row.updated_at ? -1 : 0));
+  const notes = found.flatMap((f) => f.items)
+    .sort((a, b) => ((a.date ?? "") < (b.date ?? "") ? 1 : (a.date ?? "") > (b.date ?? "") ? -1 : 0));
+  return { entries: found.map((f) => f.row), notes };
 }
 
 // ── One entry ──

@@ -16,11 +16,11 @@ process.env.MAURICE_GARDENS_DIR = path.join(TMP, "gardens");
 // data dir. Not a dir of this suite's own: the modules are singletons shared
 // with garden-articles-read.test.ts, and whichever suite bound them first
 // would take the other's database away when it cleaned up.
-const { createHighlight } = await import("../data-api/services/highlights");
+const { createHighlight, deleteHighlight } = await import("../data-api/services/highlights");
 const { createArticleHighlight } = await import("../data-api/services/articleHighlights");
 const { updateReadingProgress } = await import("../data-api/services/bookmarks");
 
-const { listShelf, getShelfEntry, isWritten } = await import("../data-api/services/gardenShelf");
+const { listShelf, listNotes, getShelfEntry, isWritten } = await import("../data-api/services/gardenShelf");
 const { MEMBER } = await import("./_member");
 const { default: db } = await import("../src/db");
 
@@ -149,6 +149,54 @@ describe("the list", () => {
     const soil = entries.find((e) => e.id === "articles/fr/soil")!;
     expect((soil.source as any).captured).toBe(false);
     expect(soil.mine).toEqual({ notes: 1, opened: true });               // the note; the excerpt is not the member's
+  });
+});
+
+describe("every note", () => {
+  test("what the member wrote, whatever the entry, newest first, each naming its entry", async () => {
+    const { entries, notes } = await listNotes(MEMBER.id, garden, BOOKS as any);
+    const humus = notes.filter((n) => n.entry_id === "books/fr/humus");
+    // The quote, the note and the résonance of the fiche, and the highlight written under.
+    expect(humus.map((n) => n.kind).sort()).toEqual(["highlight", "note", "quote", "resonance"]);
+    expect(humus.find((n) => n.kind === "quote")).toMatchObject({
+      date: "2026-10-02", quote: "Le ver de terre est le seul révolutionnaire.", text: "Vraiment ?", where: { page: "112" },
+    });
+    expect(humus.find((n) => n.kind === "resonance")).toMatchObject({
+      date: "2026-09-04", from: { label: "Being You", entry_id: null },
+    });
+    expect(humus.find((n) => n.kind === "highlight")).toMatchObject({ quote: "en cessant d'enlever", text: "C'est tout le livre." });
+
+    const dated = notes.map((n) => n.date ?? "");
+    expect(dated).toEqual([...dated].sort().reverse());
+    // Every note's entry comes with its row, once.
+    const ids = entries.map((e) => e.id);
+    expect(new Set(ids).size).toBe(ids.length);
+    expect(notes.every((n) => ids.includes(n.entry_id))).toBe(true);
+    expect(entries.find((e) => e.id === "books/fr/humus")!.title).toBe("Humus");
+  });
+
+  test("the comment an article was saved with is dated by the save", async () => {
+    const { notes } = await listNotes(MEMBER.id, garden, BOOKS as any);
+    expect(notes.find((n) => n.entry_id === "articles/fr/soil")).toMatchObject({ kind: "note", date: "2026-09-30", text: "Lu chez L." });
+  });
+
+  test("a bare highlight, a fiche's prose and what Maurice filed are not notes", async () => {
+    const { entries, notes } = await listNotes(MEMBER.id, garden, BOOKS as any);
+    expect(notes.some((n) => n.entry_id === "articles/fr/microrobots")).toBe(false); // highlighted, nothing written
+    expect(notes.some((n) => n.entry_id === "series/fr/sugar")).toBe(false);         // prose only
+    expect(notes.some((n) => (n as any).kind === "fragment")).toBe(false);
+    expect(entries.some((e) => e.id === "calibre/9")).toBe(false);                   // nothing written on it
+  });
+
+  test("a highlight written under, in a book with no entry yet, is one", async () => {
+    const h = createHighlight(MEMBER.id, 9, { chapterSlug: "0001-one", quote: "downstream", note: "Fuling.", startOffset: 1, endOffset: 9 });
+    try {
+      const { entries, notes } = await listNotes(MEMBER.id, garden, BOOKS as any);
+      expect(notes.find((n) => n.entry_id === "calibre/9")).toMatchObject({ kind: "highlight", text: "Fuling." });
+      expect(entries.find((e) => e.id === "calibre/9")!.title).toBe("River Town");
+    } finally {
+      deleteHighlight(MEMBER.id, h.id);
+    }
   });
 });
 

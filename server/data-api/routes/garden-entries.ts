@@ -10,7 +10,7 @@ import { Hono } from "hono";
 import { gardenFor } from "../services/gardenFiche";
 import { GARDEN_COLLECTIONS, listGardenEntries } from "../services/gardenEntries";
 import { cardsFace } from "../services/flashcards";
-import { getShelfEntry, listShelf, siteFor } from "../services/gardenShelf";
+import { getShelfEntry, listNotes, listShelf, siteFor } from "../services/gardenShelf";
 import {
   addNote, archiveEntry, deleteEntry, deployState, entryForBook, EntryWriteError, setPublished, writeShared, type EntryRef,
 } from "../services/gardenWrite";
@@ -29,6 +29,12 @@ app.get("/entries", async (c) => {
     // `archived=1` is the other half: what the member put away, and only that.
     const { kinds, entries } = await listShelf(memberId, garden, undefined, c.req.query("archived") === "1");
     return c.json({ garden: { username: garden.username, site: siteFor(memberId) }, kinds, entries });
+  }
+
+  // `view=notes` — every note the member wrote, whatever the entry, newest
+  // first, with the rows of the entries they are on.
+  if (c.req.query("view") === "notes") {
+    return c.json(await listNotes(memberId, garden));
   }
 
   // Each entry with its flashcard face — counts read off the card files, no
