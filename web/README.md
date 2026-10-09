@@ -30,35 +30,7 @@ npm run preview
 
 ## Deployment
 
-The site deploys to **Cloudflare Pages** via Git integration. Every push to `main` triggers a build.
-
-## Time-Travel Feature
-
-Milestone snapshots are stored in **Cloudflare R2**. A Pages Function intercepts requests with `?t=YYYY-MM-DD` and serves the appropriate snapshot.
-
-### Creating a Milestone
-
-1. Tag the commit with a descriptive annotation:
-   ```bash
-   git tag -a milestone-2026-02-launch -m "Initial launch"
-   git push origin milestone-2026-02-launch
-   ```
-
-2. The GitHub Actions workflow will:
-   - Build the site
-   - Upload to R2 under `snapshots/<tag>/`
-   - Update the manifest
-   - Commit the updated `milestones.json`
-
-### Manual Snapshot Upload
-
-```bash
-export CLOUDFLARE_ACCOUNT_ID=...
-export CLOUDFLARE_R2_ACCESS_KEY_ID=...
-export CLOUDFLARE_R2_SECRET_ACCESS_KEY=...
-
-./scripts/upload-snapshot.sh milestone-name "Label for this milestone"
-```
+A garden's public site is published to **Cloudflare Pages** by `scripts/publish-web.sh` (build, then `wrangler pages deploy`). Nothing is deployed on a push.
 
 ## Content Structure
 
@@ -115,20 +87,3 @@ description: string (optional)
 ## Akita Integration
 
 The site is a downstream artifact of the Akita knowledge system. The `scripts/import-from-akita.ts` stub shows how content can be auto-generated from Akita sources.
-
-## Required Secrets (GitHub Actions)
-
-- `CLOUDFLARE_ACCOUNT_ID`
-- `CLOUDFLARE_R2_ACCESS_KEY_ID`
-- `CLOUDFLARE_R2_SECRET_ACCESS_KEY`
-
-## Local Development with Time-Travel
-
-To test the time-travel feature locally:
-
-```bash
-npm run build
-npm run pages:dev
-```
-
-This requires an R2 bucket with snapshots. For pure local development without R2, use `npm run preview`.

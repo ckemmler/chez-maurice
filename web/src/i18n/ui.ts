@@ -8,7 +8,6 @@ export const ui: Record<Locale, Record<string, string>> = {
     "nav.resources": "Resources",
     "nav.about": "About",
     "nav.research": "Research",
-    "nav.history": "History",
 
     // Site
     "site.title": "Candide's Notebook",
@@ -154,10 +153,6 @@ export const ui: Record<Locale, Record<string, string>> = {
     "about.title": "About",
     "about.description": "About this site and its author",
 
-    // Milestones
-    "milestones.title": "Site History",
-    "milestones.description": "Navigate to previous versions of this site",
-
     // Content
     "content.notTranslated": "This content has not been translated yet.",
 
@@ -176,7 +171,6 @@ export const ui: Record<Locale, Record<string, string>> = {
     "nav.resources": "Trouvailles",
     "nav.about": "À propos",
     "nav.research": "Recherche",
-    "nav.history": "Historique",
 
     // Site
     "site.title": "Carnet de Candide",
@@ -320,10 +314,6 @@ export const ui: Record<Locale, Record<string, string>> = {
     // About
     "about.title": "À propos",
     "about.description": "À propos de ce site et de son auteur",
-
-    // Milestones
-    "milestones.title": "Historique du site",
-    "milestones.description": "Naviguer vers les versions précédentes de ce site",
 
     // Content
     "content.notTranslated": "Ce contenu n'a pas encore été traduit.",

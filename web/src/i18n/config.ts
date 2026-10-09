@@ -17,7 +17,6 @@ export const routeMap: Record<string, string> = {
   notes: "notes",
   fiches: "fiches",
   about: "a-propos",
-  milestones: "jalons",
   blog: "blog",
 };
 
