@@ -32,6 +32,9 @@ struct EntrySuggestion: Decodable, Identifiable, Equatable {
     let existing: Bool
     /// Several possible identities: one must be picked to keep it.
     let candidates: [Candidate]
+    /// The garden entry this is, `<collection>/<locale>/<slug>`, once there
+    /// is one — what Carnet opens.
+    let entry: String?
     /// Where the entry reads in your garden, once there is one.
     let web_path: String?
 
@@ -417,8 +420,7 @@ private struct KeptRow: View {
 
     var body: some View {
         Button {
-            guard let path = row.web_path else { return }
-            Task { await openInGarden(path, session: session) }
+            Task { await open() }
         } label: {
             HStack(spacing: 12) {
                 SuggestionCover(image: row.image, kind: row.kind, width: 32)
@@ -438,5 +440,21 @@ private struct KeptRow: View {
         }
         .buttonStyle(.plain)
         .disabled(row.web_path == nil)
+    }
+
+    /// In Carnet, where the entry lives on the phone — `carnet://entry/…`.
+    /// The garden's page is the fallback: when Carnet is not installed, on
+    /// the Mac (Carnet is iOS-only), and for a person, whom Carnet's list
+    /// does not hold.
+    @MainActor
+    private func open() async {
+        #if os(iOS)
+        if row.kind != "people", let entry = row.entry, let url = URL(string: "carnet://entry/\(entry)"),
+           await UIApplication.shared.open(url) {
+            return
+        }
+        #endif
+        guard let path = row.web_path else { return }
+        await openInGarden(path, session: session)
     }
 }

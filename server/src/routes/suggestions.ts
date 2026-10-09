@@ -36,6 +36,9 @@ const view = (memberId: string, s: EntrySuggestion) => ({
   existing: !!s.existing,
   /** Several possible identities: one must be picked to keep it. */
   candidates: s.candidates.length > 1 ? s.candidates : [],
+  /** The garden entry this is, `<collection>/<locale>/<slug>`, once there is
+   *  one — what Carnet opens (`carnet://entry/…`). */
+  entry: s.kept_path ?? s.existing,
   /** Where the entry reads in their garden, once there is one. */
   web_path: s.existing || s.kept_path ? keptWebPath(memberId, s) : null,
 });

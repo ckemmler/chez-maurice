@@ -209,6 +209,8 @@ What the first tranche does differently from the sections above, or leaves out:
   refusal holding for every conversation to come.
 - **Pulse**: the mark swells once when the pending count grows; nothing
   under Reduce Motion.
+- **A kept row opens in Carnet** (`carnet://entry/<collection>/<locale>/<slug>`,
+  Carnet's `CarnetApp.swift` and `ShelfView.swift`), the garden's page being the
+  fallback: Carnet absent, the Mac, a person. The link names no household.
 - **Not built**: the bench (§7.1, set aside on the owner's decision to try it
-  on new conversations instead), Carnet's URL scheme (§6), editing the note in
-  the drawer.
+  on new conversations instead), editing the note in the drawer.

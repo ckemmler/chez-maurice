@@ -1,6 +1,6 @@
 ---
 title: Carnet — the pocket companion
-date: '2026-10-08'
+date: '2026-10-09'
 flags: []
 locale: en
 description: 'The iOS/iPadOS companion to Maurice: log what happened, read books and
@@ -40,6 +40,8 @@ Since 8 October 2026 the home is **one list of entries of every kind** — books
 "Fiche" and "card" are the names in the code and in the garden; the app shows neither word.
 
 **The list** (`Views/Shelf/ShelfView.swift`). A row says, under the title, what the member has on it — *3 notes*, a hollow ring for *Draft*, a solid disc for *Published*, or *Not opened* — and, at the right, only when there is something to read, where they are in it (a percentage and a bar for a book, minutes for an article, *Link only* for a bookmark the site refused). The kinds are ticked in the floating panel at the bottom, several at once, each with its count; the same panel offers to resume the book being read, which opens the reader straight at the member's position. Search and sort are in the capsule top-right. A kind the build has never heard of is left out rather than failing the list. The last list seen is kept for offline.
+
+**Opened from outside** (9 October 2026). Carnet answers `carnet://entry/<collection>/<locale>/<slug>`: the list reads itself again if it has not heard of the entry, and pushes it. The Maurice app sends its member here from what a conversation offered them to keep ([[maurice-chat]]). The link names no household: it opens in the one on screen, and does nothing when the entry is not in it. Minimal scope only — the full scope's drawer does not route it.
 
 **What is not an entry** is under the member's button, top-left: a short menu with *Entries* and *Maurice* (the domains and the conversations he opened, described below), and member and household switching at its head.
 
