@@ -562,6 +562,6 @@ export function keptWebPath(memberId: string, s: EntrySuggestion): string | null
   if (!ref || !garden) return null;
   const [collection, locale, slug] = ref.split("/");
   const entry = listGardenEntries(garden).find((e) => e.collection === collection && e.locale === locale && e.slug === slug);
-  const web = entry?.fiche?.web_path ?? entry?.card?.web_path ?? null;
-  return web ? `/g/${garden.username}${web}` : null;
+  // Already the full path, `/g/<member>/…` included.
+  return entry?.fiche?.web_path ?? entry?.card?.web_path ?? null;
 }

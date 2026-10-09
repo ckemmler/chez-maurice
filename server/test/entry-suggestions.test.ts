@@ -264,6 +264,8 @@ describe("keeping", () => {
     expect(res.status).toBe(200);
     const body = await res.json() as any;
     expect(body.state).toBe("kept");
+    // The garden's own path for the fiche, its `/g/<member>` mount once.
+    expect(body.web_path).toBe(`/g/${ANNA}/fr/fiches/series/sugar-fiche`);
     expect(toolCalls).toEqual([]);
 
     const after = fs.readFileSync(path.join(root, "series/fr/sugar-fiche.md"), "utf-8");
