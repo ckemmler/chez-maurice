@@ -48,7 +48,7 @@ edge)
   remote "grep -qs '^MAURICE_ACME_EMAIL=.' $REMOTE_DIR/defaults.env" || {
     echo "✗ $REMOTE_DIR/defaults.env must set MAURICE_ACME_EMAIL (see infra/container/MULTI-HOUSEHOLD.md)"; exit 1; }
   remote "docker network inspect maurice-edge >/dev/null 2>&1 || docker network create maurice-edge"
-  remote "cd $REMOTE_DIR && mkdir -p sites households"
+  remote "cd $REMOTE_DIR && mkdir -p sites households www"
   remote "cd $REMOTE_DIR && docker compose -p maurice-edge --env-file defaults.env -f compose.caddy.yml up -d"
   echo "✓ the edge is up on $HOST (:80, :443)"
   ;;

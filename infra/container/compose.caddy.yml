@@ -34,6 +34,9 @@ services:
       # `maurice` container that does not exist here.
       - ./Caddyfile.multi:/etc/caddy/Caddyfile:ro
       - ./sites:/etc/caddy/sites:ro
+      # Static sites (the landing, a member's site on their own domain): plain
+      # files, one folder per domain, put there by `ops/static-site.sh`.
+      - ./www:/srv/www:ro
       - caddy-data:/data      # the certificates — losing this re-issues them
       - caddy-config:/config
     networks:

@@ -1,26 +1,23 @@
 #!/usr/bin/env bash
-# Deploy the chezmaurice.eu landing site (design/landing/) to Cloudflare Pages.
+# Put the chezmaurice.eu landing site (design/landing/) on the host that serves it.
 #
 # It bundles nothing: Maurice ships as a container image since 14 September 2026
 # and the notarized .pkg this script used to copy in is retired. A deploy is the
 # contents of design/landing/ and nothing else — which also means the old
 # /ChezMaurice.pkg URL stops answering, deliberately.
 #
-# Prereqs (one-time): a Cloudflare Pages project (default name "chezmaurice")
-# with the custom domain www.chezmaurice.eu attached (see RELEASING.md), and
-# wrangler authenticated (`npx wrangler login`).
+# The site is plain files behind the fleet's Caddy (ops/static-site.sh), which
+# also reads design/landing/_redirects. It was a Cloudflare Pages project until
+# 9 October 2026.
 #
-# Usage:  scripts/deploy-landing.sh
+# Usage:  scripts/deploy-landing.sh [ssh-host]
 set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 SITE="$REPO_ROOT/design/landing"
-PROJECT="${CF_PAGES_PROJECT:-chezmaurice}"
+HOST="${1:-${LANDING_HOST:-maurice-fleet}}"
+DOMAIN="${LANDING_DOMAIN:-www.chezmaurice.eu}"
+ALIAS="${LANDING_ALIAS:-chezmaurice.eu}"
 
 [[ -d "$SITE" ]] || { echo "ERROR: site dir missing: $SITE"; exit 1; }
 
-echo "==> Deploying $SITE to Cloudflare Pages project '$PROJECT'..."
-# --branch=main: wrangler otherwise names the deploy after the current git
-# branch, and from any other branch (a worktree's) it lands as a preview that
-# www.chezmaurice.eu never serves.
-npx wrangler pages deploy "$SITE" --project-name="$PROJECT" --branch=main
-echo "==> Done. Live at your Pages URL / www.chezmaurice.eu once the custom domain is attached."
+"$REPO_ROOT/ops/static-site.sh" publish "$HOST" "$DOMAIN" "$SITE" --alias "$ALIAS"

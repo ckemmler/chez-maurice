@@ -50,7 +50,7 @@ fi
 
 # 3. Ship the configuration ─────────────────────────────────────────────────
 echo "  sync  compose files, Caddyfile"
-ssh "$HOST" "mkdir -p $REMOTE_DIR $REMOTE_DIR/sites $REMOTE_DIR/households"
+ssh "$HOST" "mkdir -p $REMOTE_DIR $REMOTE_DIR/sites $REMOTE_DIR/households $REMOTE_DIR/www"
 rsync -q "$COMPOSE" "$REPO/infra/container/Caddyfile" "$HOST:$REMOTE_DIR/"
 # The multi-household pair travels too: a host that carries several (Aline,
 # the App Review instance, friends, the demo fleet) uses these instead, one

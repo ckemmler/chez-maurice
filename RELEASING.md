@@ -54,16 +54,12 @@ longer produced and no longer offered: the site points at the container guide in
 
 ### Publish the site
 ```
-scripts/deploy-landing.sh          # wrangler pages deploy design/landing/
+scripts/deploy-landing.sh          # ops/static-site.sh publish maurice-fleet www.chezmaurice.eu design/landing/
 ```
-Needs a Cloudflare API token with **`Account → Cloudflare Pages → Edit`** (the
-zone-scoped `server/.secrets/cloudflare-token` used for tunnels will NOT work — it
-has no account-level access), plus the account id:
-```
-CLOUDFLARE_API_TOKEN=… CLOUDFLARE_ACCOUNT_ID=… scripts/deploy-landing.sh
-```
-The edge may serve the previous object for a few seconds after the deploy; re-check
-before concluding anything went wrong.
+The landing is plain files on the fleet's host, behind the Caddy that is already
+its door (`ops/static-site.sh`; a Cloudflare Pages project until 9 October 2026).
+It needs ssh access to that host and nothing else: no token, no account.
+`design/landing/_redirects` is read at each publish and becomes Caddy redirects.
 
 ## 2 & 3. macOS + iOS apps → TestFlight
 
@@ -132,5 +128,5 @@ Enable Public Link**, then paste that URL into both the `mac` and `ios` cards.
 `release-server.yml` / `release-*.yml` aren't set up. The repo is now public at
 `github.com/ckemmler/chez-maurice`, so nothing blocks it: export the certs above
 into a single `.p12`, add the `.p12` + the App Manager `.p8` + key-id/issuer +
-`CLOUDFLARE_API_TOKEN`/`CLOUDFLARE_ACCOUNT_ID` as Actions secrets, and the workflow
+an ssh key for the fleet's host as Actions secrets, and the workflow
 runs these same scripts on a tag.
