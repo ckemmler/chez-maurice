@@ -12,7 +12,7 @@ import { GARDEN_COLLECTIONS, listGardenEntries } from "../services/gardenEntries
 import { cardsFace } from "../services/flashcards";
 import { getShelfEntry, listNotes, listShelf, siteFor } from "../services/gardenShelf";
 import {
-  addNote, archiveEntry, deleteEntry, deployState, entryForBook, EntryWriteError, setPublished, writeShared, type EntryRef,
+  addNote, archiveEntry, completeCard, deleteEntry, deployState, entryForBook, EntryWriteError, setPublished, writeShared, type EntryRef,
 } from "../services/gardenWrite";
 
 const app = new Hono();
@@ -130,10 +130,23 @@ app.post("/entries/from-book", async (c) => {
 app.put("/entries/:collection/:locale/:slug/shared", async (c) => {
   const body = await jsonBody(c);
   if (!body || typeof body.body !== "string") return c.json({ error: "body required" }, 400);
-  return written(c, null, (memberId, garden, ref) => {
+  return written(c, null, async (memberId, garden, ref) => {
+    const before = await getShelfEntry(memberId, garden, ref.collection, ref.locale, ref.slug);
     writeShared(memberId, garden, ref, { body: body.body, title: body.title });
+    // A card that was just made gets its cover too, which is a fetch and so
+    // not writeShared's to do. A failure there leaves a card without a cover.
+    if (!before?.shared) await completeCard(memberId, garden, ref).catch(() => {});
   });
 });
+
+/**
+ * Complete the card from the fiche's metadata: the fields of its kind it
+ * lacks, and its cover. What is asked for when an entry shows without them.
+ */
+app.post("/entries/:collection/:locale/:slug/details", (c) =>
+  written(c, null, async (memberId, garden, ref) => {
+    await completeCard(memberId, garden, ref);
+  }));
 
 /** Publish: the `public` flag, then a deploy of the member's site. */
 app.post("/entries/:collection/:locale/:slug/shared/publish", (c) =>

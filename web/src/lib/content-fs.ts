@@ -82,6 +82,12 @@ function coerce(raw: Record<string, unknown>, id: string): Record<string, any> {
   data.flags ??= [];
   // A sort on a missing date must not produce NaN and scramble a list.
   data.date ??= data.date_read ?? data.date_watched ?? data.date_listened ?? data.date_played ?? new Date(0);
+  // Nor may a page fall over for it. Each kind of card has a date of its own
+  // (read, watched, listened, played) that its views format without asking;
+  // a card that only says `date` — one written from Carnet before 10 October
+  // 2026, or by hand — took the whole site's build down with it. The card's
+  // one date stands in for whichever is asked.
+  for (const key of ["date_read", "date_watched", "date_listened", "date_played"]) data[key] ??= data.date;
   data.locale ??= id.split("/")[0] || "en";
   return data;
 }

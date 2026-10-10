@@ -1,6 +1,6 @@
 ---
 title: The web garden
-date: '2026-10-09'
+date: '2026-10-10'
 flags: []
 locale: en
 description: 'The Astro renderer: per-request theme engine, content collections, wiki-links,
@@ -110,7 +110,7 @@ Every collection is read **off disk, per request** — `web/src/lib/content-fs.t
 
 The content layer was a *build-time store*: a glob loader scanned the garden once and served what it captured. A garden is not a build artefact — Maurice writes to it all day — and under rapid edits the store intermittently collapsed a collection to "empty" until the dev server restarted, which is why notes were moved off it long before the rest. Reading files has no store to corrupt: an entry exists iff its file exists.
 
-A call walks the collection's directory (fresh, so a write shows at once) over a parse cache keyed by mtime and size, and a render cache likewise. On Candide's garden — 266 files — the walk costs 2.4 ms and the whole search index 3–5 ms. The zod schemas went with the config: YAML already types dates, numbers and arrays; `content-fs` coerces the few fields views depend on and passes the rest through as authored, skipping a malformed file with a warning rather than taking its collection down. **Notes** keep `notes-fs` as their reader and `content-fs` delegates to it. **Fiches** are present in the garden engine and absent from a static publish — the rule the old `NODE_ENV=production` test was reaching for.
+A call walks the collection's directory (fresh, so a write shows at once) over a parse cache keyed by mtime and size, and a render cache likewise. On Candide's garden — 266 files — the walk costs 2.4 ms and the whole search index 3–5 ms. **A card without its kind's own date renders** (10 October 2026): each kind's views format `date_read`, `date_watched`, `date_listened` or `date_played` without asking, and one published series card that only said `date` — written from Carnet — failed the whole static build, so nothing was published at all until it was found. `content-fs` now lets the card's one `date` stand in for whichever is asked; the leak test's garden carries such a card. The zod schemas went with the config: YAML already types dates, numbers and arrays; `content-fs` coerces the few fields views depend on and passes the rest through as authored, skipping a malformed file with a warning rather than taking its collection down. **Notes** keep `notes-fs` as their reader and `content-fs` delegates to it. **Fiches** are present in the garden engine and absent from a static publish — the rule the old `NODE_ENV=production` test was reaching for.
 
 ## A person fiche, reviewed
 

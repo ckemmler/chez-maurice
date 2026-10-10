@@ -14,7 +14,7 @@ import { spawnSync } from "node:child_process";
 const TMP = fs.mkdtempSync(path.join(os.tmpdir(), "maurice-write-"));
 process.env.MAURICE_GARDENS_DIR = path.join(TMP, "gardens");
 
-const { addNote, noteBlock, withNote, writeShared, setPublished, setDeployRunner, deployState, requestDeploy, deleteEntry, archiveEntry, EntryWriteError } =
+const { addNote, noteBlock, withNote, writeShared, setPublished, setDeployRunner, deployState, requestDeploy, deleteEntry, archiveEntry, completeCard, EntryWriteError } =
   await import("../data-api/services/gardenWrite");
 const { getShelfEntry, listShelf } = await import("../data-api/services/gardenShelf");
 const { searchLinkTargets } = await import("../data-api/services/gardenLinks");
@@ -143,7 +143,41 @@ describe("the shared side", () => {
     expect(raw).toContain("title: Humus");
     expect(raw).toContain("flags: []");
     expect(raw).toContain("author: Gaspard Kœnig");
+    // Filed as a book is: read on a day, with a status — what its page formats.
+    expect(raw).toMatch(/^date_read: ["']?\d{4}-\d{2}-\d{2}["']?$/m);
+    expect(raw).toContain("status: read");
     expect((await entry("books", "fr", "humus"))!.shared).toMatchObject({ state: "draft", body: "Une satire tendre." });
+  });
+
+  test("a card is completed from its fiche: what it lacks is added, what it says is kept", async () => {
+    // A series kept from a conversation: the fiche has the provider's word,
+    // the cover is already in the garden, and the card was written bare.
+    write("series/fr/creek-fiche.md",
+      `---\ntitle: "Creek"\nresource_collection: series\nresource_id: creek\ndate: "2026-10-09"\ntags: []\nlocale: fr\nmeta:\n  tmdb_id: 1\n  poster_path: /x.jpg\n  platform: CBC Television\n  year: 2015\n---\n`);
+    write("series/fr/creek.md", `---\ntitle: "Creek"\ndate: "2026-10-10"\nflags: [public]\ntags: []\nlocale: fr\n---\n\nMagnifique.\n`);
+    write("images/resources/series/fr-creek.jpg", "jpg");
+    const ref = { collection: "series", locale: "fr", slug: "creek" };
+
+    const added = await completeCard(MEMBER.id, garden, ref);
+    expect(added.sort()).toEqual(["date_watched", "image", "platform", "status", "translationKey"]);
+    const raw = read("series/fr/creek.md");
+    // The lines it had, where they were; the new ones after them; the body untouched.
+    expect(raw.startsWith(`---\ntitle: "Creek"\ndate: "2026-10-10"\nflags: [public]\ntags: []\nlocale: fr\n`)).toBe(true);
+    expect(raw.endsWith(`---\n\nMagnifique.\n`)).toBe(true);
+    expect(raw).toMatch(/^date_watched: ["']?2026-10-10["']?$/m);   // the day it already said
+    expect(raw).toContain("platform: CBC Television");
+    expect(raw).toContain("status: watched");
+    expect(raw).toContain("image: /images/" + MEMBER.username + "/resources/series/fr-creek.jpg");
+    expect(log()[0]).toStartWith("Complete series/creek:");
+    // The cover is committed with it, and the shelf shows it.
+    expect(spawnSync("git", ["ls-files", "images"], { cwd: garden.root, encoding: "utf-8" }).stdout).toContain("fr-creek.jpg");
+    expect((await entry("series", "fr", "creek"))!.image).toContain("fr-creek.jpg");
+
+    // Whole now: asking again changes nothing.
+    expect(await completeCard(MEMBER.id, garden, ref)).toEqual([]);
+    expect(read("series/fr/creek.md")).toBe(raw);
+    // No card, nothing to complete.
+    await expect(completeCard(MEMBER.id, garden, { collection: "articles", locale: "fr", slug: "soil" })).rejects.toThrow("no card");
   });
 
   test("an emptied body is a blank shared side again, the card and its identity kept", async () => {

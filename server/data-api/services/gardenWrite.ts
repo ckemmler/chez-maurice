@@ -8,6 +8,9 @@
  *   - **shared**: the body of the card. The frontmatter is left exactly as
  *     written — the card's identity was put there by other hands (the garden
  *     tool, the member in Obsidian) and is not this file's to restyle.
+ *   - **completed**: what a card of its kind says about its subject (when
+ *     it was read or watched, by whom it is, where it showed, its cover),
+ *     taken from the fiche's metadata and added where the card lacks it.
  *   - **published**: the card's `public` flag, then a site deploy.
  *   - **deleted**: the card, the fiche and what hangs under the fiche, in
  *     every locale of the subject; a deploy when something was online.
@@ -24,7 +27,8 @@ import { setFlag } from "../../src/services/gardenTools";
 import { getBookMetadata } from "./calibre";
 import { slugify } from "./articleExtract";
 import {
-  assertLocale, assertSlug, atomicWrite, autoCommit, markOpened, parseFiche, writeFiche, type GardenRef,
+  assertLocale, assertSlug, atomicWrite, autoCommit, downloadImage, dumpFrontmatter, markOpened, parseFiche,
+  resourceImagePaths, writeFiche, type GardenRef, type ResourceCollection,
 } from "./gardenFiche";
 import { listGardenEntries, type GardenEntry } from "./gardenEntries";
 import { indexGardenPaths, unindexGardenPath } from "./gardenIndex";
@@ -207,12 +211,11 @@ export function writeShared(
     const fiche = readFace(garden, entry.fiche?.file);
     writeFiche(file, {
       title: entry.title,
-      date: today(),
+      ...cardIdentity(entry.collection, fiche?.meta ?? {}),
       flags: [],
       image: entry.image ?? undefined,
       tags: entry.tags,
       locale: entry.locale,
-      author: typeof fiche?.meta.author === "string" ? fiche.meta.author : undefined,
     }, body);
   }
   autoCommit(garden, [file], `Write ${entry.collection}/${entry.slug}`);
@@ -240,6 +243,108 @@ export function setPublished(memberId: string, garden: GardenRef, ref: EntryRef,
     autoCommit(garden, [file], `Set public ${on ? "on" : "off"}: ${path.basename(file)}`);
   }
   return requestDeploy(garden, deployKind(memberId));
+}
+
+// ── What a card says about its subject ──
+//
+// A card made by the garden tool carries its kind's own fields: `date_watched`
+// and `platform` for a series, `author` and `date_read` for a book. One made
+// here, the first time a member writes the shared side of an entry that only
+// had a fiche, used to carry a title and a date and nothing else — no cover,
+// no author — and the site's pages, which format the kind's own date without
+// asking, could not render it. The fiche has all of it under `meta`, put
+// there by the provider when the fiche was opened: this reads it back.
+
+/** The date each kind of card is filed under. */
+const DATE_FIELD: Record<string, string> = {
+  books: "date_read", articles: "date_read", movies: "date_watched", series: "date_watched",
+  music: "date_listened", podcasts: "date_listened", games: "date_played",
+};
+
+/** Card field ← the fiche's `meta` key, per kind (the garden tool's own mapping, promote_fiche). */
+const FROM_META: Record<string, [string, string][]> = {
+  books: [["author", "author"], ["year", "year"]],
+  articles: [["source", "site_name"], ["url", "url"], ["author", "author"]],
+  movies: [["director", "director"], ["year", "year"]],
+  series: [["platform", "platform"]],
+  music: [["artist", "artist"], ["year", "year"]],
+  podcasts: [["host", "host"], ["url", "url"]],
+  games: [["developer", "developer"], ["year", "year"], ["platforms", "platforms"]],
+};
+
+const STATUS: Record<string, string> = { books: "read", series: "watched" };
+
+function cardIdentity(collection: string, meta: Record<string, any>): Record<string, any> {
+  const out: Record<string, any> = {};
+  if (DATE_FIELD[collection]) out[DATE_FIELD[collection]!] = today();
+  else out.date = today();
+  if (STATUS[collection]) out.status = STATUS[collection];
+  for (const [field, key] of FROM_META[collection] ?? []) {
+    const v = meta[key];
+    const empty = v == null || v === "" || (Array.isArray(v) && !v.length);
+    // An article's `author` is often the byline's address rather than a name.
+    if (!empty && !(typeof v === "string" && /^https?:\/\//.test(v) && field !== "url")) out[field] = v;
+  }
+  return out;
+}
+
+/** Where the provider keeps the cover, when the fiche recorded one. */
+function coverSource(meta: Record<string, any>): string | null {
+  if (typeof meta.poster_path === "string" && meta.poster_path.startsWith("/")) {
+    return `https://image.tmdb.org/t/p/w500${meta.poster_path}`;
+  }
+  for (const key of ["thumbnail", "cover_url", "artwork", "image"]) {
+    const v = meta[key];
+    if (typeof v === "string" && /^https?:\/\//.test(v)) return v;
+  }
+  return null;
+}
+
+/**
+ * Complete a card from its fiche: every field of its kind the card lacks, and
+ * its cover — the file already in the garden under the entry's name, or the
+ * provider's, fetched. What the card says is never replaced: the lines are
+ * added at the end of its frontmatter, the rest left byte for byte. Answers
+ * with the fields added; none when the card was whole, or has no fiche to
+ * complete it from.
+ */
+export async function completeCard(memberId: string, garden: GardenRef, ref: EntryRef): Promise<string[]> {
+  const entry = findEntry(garden, ref);
+  if (!entry.card) throw new EntryWriteError("Nothing is written yet: there is no card to complete", 409);
+  const file = path.join(garden.root, entry.card.file);
+  const raw = fs.readFileSync(file, "utf-8");
+  const card = parseFiche(raw);
+  if (!card || !FRONTMATTER.test(raw)) throw new EntryWriteError(`Could not parse: ${entry.card.file}`, 422);
+  const meta = readFace(garden, entry.fiche?.file)?.meta ?? {};
+
+  const want = cardIdentity(entry.collection, meta);
+  // A card filed under one date is not given a second: `date` already says when.
+  const dateField = DATE_FIELD[entry.collection];
+  if (dateField && card.frontmatter.date != null) {
+    const d = card.frontmatter.date as unknown;
+    want[dateField] = d instanceof Date ? d.toISOString().slice(0, 10) : String(d);
+  }
+  if (card.frontmatter.translationKey == null) want.translationKey = entry.slug;
+
+  const touched = [file];
+  if (card.frontmatter.image == null) {
+    const cover = resourceImagePaths(garden, entry.collection as ResourceCollection, entry.locale, entry.slug);
+    const source = coverSource(meta);
+    if (fs.existsSync(cover.file) || (source && (await downloadImage(source, cover.file)))) {
+      want.image = cover.url;
+      touched.push(cover.file);
+    }
+  }
+
+  const missing = Object.keys(want).filter((k) => card.frontmatter[k] == null);
+  if (!missing.length) return [];
+  const lines = dumpFrontmatter(Object.fromEntries(missing.map((k) => [k, want[k]])));
+  // Before the closing fence of the frontmatter, which is the first `\n---`
+  // after the opening one.
+  atomicWrite(file, raw.replace(/\n---(\n|$)/, `\n${lines}\n---$1`));
+  autoCommit(garden, touched, `Complete ${entry.collection}/${entry.slug}: ${missing.join(", ")}`);
+  indexGardenPaths(memberId, [file]);
+  return missing;
 }
 
 // ── Deleting, putting away ──

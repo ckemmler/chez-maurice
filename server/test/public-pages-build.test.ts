@@ -44,7 +44,7 @@ const PRIVATE = {
 /** File names that must not be in the output. */
 const PRIVATE_FILES = ["zq-note-art.jpg", "fr-zq-draft.jpg", "zq-bob-cover.jpg", "bob-sq.png"];
 /** What was published, and must be there. */
-const PUBLIC = ["ZQPUBNOTE", "ZQPUBCARD"];
+const PUBLIC = ["ZQPUBNOTE", "ZQPUBCARD", "ZQBARECARD"];
 
 function write(member: string, rel: string, content: string | Buffer) {
   const full = path.join(GARDENS, member, rel);
@@ -63,6 +63,11 @@ beforeAll(() => {
     `---\ntitle: Note chiffrée\ndate: 2026-10-03\nflags:\n  - public\n  - encrypted\nlocale: fr\n---\nZQENCRYPTED\n`);
   write("anna", "movies/fr/film-publie.md",
     `---\ntitle: Film publié\ndate_watched: 2026-09-03\ndirector: X\nflags:\n  - public\nimage: /images/anna/resources/movies/fr-film-publie.jpg\nlocale: fr\n---\nZQPUBCARD\n`);
+  // A card as Carnet wrote them before 10 October 2026: one `date`, none of
+  // its kind's own. Its page formats `date_watched` without asking, and the
+  // whole build fell over for it.
+  write("anna", "series/fr/serie-nue.md",
+    `---\ntitle: Série nue\ndate: "2026-10-10"\nflags: [public]\ntags: []\nlocale: fr\n---\nZQBARECARD\n`);
   write("anna", "movies/fr/film-publie-fiche.md",
     `---\ntitle: Film publié\nresource_collection: movies\nresource_id: film-publie\ndate: '2026-09-03'\ntags: []\nlocale: fr\n---\nZQFICHEOFPUBLIC\n`);
   write("anna", "books/fr/brouillon.md",
