@@ -12,7 +12,7 @@ import { GARDEN_COLLECTIONS, listGardenEntries } from "../services/gardenEntries
 import { cardsFace } from "../services/flashcards";
 import { getShelfEntry, listNotes, listShelf, siteFor } from "../services/gardenShelf";
 import {
-  addNote, archiveEntry, completeCard, deleteEntry, deployState, entryForBook, EntryWriteError, setPublished, writeShared, type EntryRef,
+  addNote, archiveEntry, completeCard, deleteEntry, setCover, deployState, entryForBook, EntryWriteError, setPublished, writeShared, type EntryRef,
 } from "../services/gardenWrite";
 
 const app = new Hono();
@@ -154,6 +154,17 @@ app.post("/entries/:collection/:locale/:slug/shared/publish", (c) =>
 
 app.delete("/entries/:collection/:locale/:slug/shared/publish", (c) =>
   written(c, null, (memberId, garden, ref) => setPublished(memberId, garden, ref, false)));
+
+/**
+ * The entry's cover, brought by the member's device: the body is the picture
+ * (JPEG or PNG). For what the server could not fetch one for — a site that
+ * refuses anything but a browser, read on the phone by the system's link
+ * preview.
+ */
+app.put("/entries/:collection/:locale/:slug/cover", (c) =>
+  written(c, null, async (memberId, garden, ref) => {
+    setCover(memberId, garden, ref, new Uint8Array(await c.req.arrayBuffer()));
+  }));
 
 /**
  * Delete an entry: both faces, in every locale of the subject. Answers with

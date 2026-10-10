@@ -14,7 +14,7 @@ import { spawnSync } from "node:child_process";
 const TMP = fs.mkdtempSync(path.join(os.tmpdir(), "maurice-write-"));
 process.env.MAURICE_GARDENS_DIR = path.join(TMP, "gardens");
 
-const { addNote, noteBlock, withNote, writeShared, setPublished, setDeployRunner, deployState, requestDeploy, deleteEntry, archiveEntry, completeCard, EntryWriteError } =
+const { addNote, noteBlock, withNote, writeShared, setPublished, setDeployRunner, deployState, requestDeploy, deleteEntry, archiveEntry, completeCard, setCover, EntryWriteError } =
   await import("../data-api/services/gardenWrite");
 const { getShelfEntry, listShelf } = await import("../data-api/services/gardenShelf");
 const { searchLinkTargets } = await import("../data-api/services/gardenLinks");
@@ -297,5 +297,34 @@ describe("deleting", () => {
     expect(() => deleteEntry(MEMBER.id, garden, { collection: "books", locale: "fr", slug: "nope" })).toThrow("No such entry");
     expect(() => deleteEntry(MEMBER.id, garden, { collection: "notes", locale: "fr", slug: "une-note" })).toThrow("Not an entry");
     expect(fs.existsSync(path.join(garden.root, "notes/fr/une-note.md"))).toBe(true);
+  });
+});
+
+describe("a cover brought by the device", () => {
+  const JPEG = new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 1, 2, 3, 0xff, 0xd9]);
+
+  test("lands under the entry's name, is named by the fiche, and shows on the row", async () => {
+    write("articles/fr/bare-fiche.md",
+      `---\ntitle: Bare\nresource_collection: articles\nresource_id: bare\ndate: '2026-08-27'\ntags: []\nlocale: fr\nmeta:\n  url: https://example.org/bare\n  word_count: 228\n---\n\n> An excerpt.\n`);
+    const ref = { collection: "articles", locale: "fr", slug: "bare" };
+    expect((await entry("articles", "fr", "bare"))!.image).toBeNull();
+
+    setCover(MEMBER.id, garden, ref, JPEG);
+    expect(fs.readFileSync(path.join(garden.root, "images/resources/articles/fr-bare.jpg"))).toEqual(Buffer.from(JPEG));
+    expect(read("articles/fr/bare-fiche.md")).toContain(`image: /images/${MEMBER.username}/resources/articles/fr-bare.jpg`);
+    // The rest of the fiche is where it was.
+    expect(read("articles/fr/bare-fiche.md")).toContain("word_count: 228");
+    expect(read("articles/fr/bare-fiche.md")).toContain("> An excerpt.");
+    expect((await entry("articles", "fr", "bare"))!.image).toBe(`/images/${MEMBER.username}/resources/articles/fr-bare.jpg`);
+    expect(log()[0]).toBe("Cover for articles/bare");
+    expect(spawnSync("git", ["status", "--porcelain"], { cwd: garden.root, encoding: "utf-8" }).stdout).not.toContain("bare");
+  });
+
+  test("what is not a picture is refused, and nothing is written", () => {
+    const ref = { collection: "books", locale: "fr", slug: "humus" };
+    expect(() => setCover(MEMBER.id, garden, ref, new TextEncoder().encode("<html>not a picture</html>"))).toThrow("JPEG or a PNG");
+    expect(() => setCover(MEMBER.id, garden, ref, new Uint8Array())).toThrow("No picture");
+    expect(fs.existsSync(path.join(garden.root, "images/resources/books/fr-humus.jpg"))).toBe(false);
+    expect(() => setCover(MEMBER.id, garden, { collection: "notes", locale: "fr", slug: "une-note" }, JPEG)).toThrow("Not an entry");
   });
 });

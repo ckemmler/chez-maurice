@@ -11,6 +11,8 @@
  *   - **completed**: what a card of its kind says about its subject (when
  *     it was read or watched, by whom it is, where it showed, its cover),
  *     taken from the fiche's metadata and added where the card lacks it.
+ *   - **covered**: a picture the member's device brings, for an entry the
+ *     server could not fetch one for.
  *   - **published**: the card's `public` flag, then a site deploy.
  *   - **deleted**: the card, the fiche and what hangs under the fiche, in
  *     every locale of the subject; a deploy when something was online.
@@ -345,6 +347,63 @@ export async function completeCard(memberId: string, garden: GardenRef, ref: Ent
   autoCommit(garden, touched, `Complete ${entry.collection}/${entry.slug}: ${missing.join(", ")}`);
   indexGardenPaths(memberId, [file]);
   return missing;
+}
+
+// ── A cover the member's device brings ──
+//
+// The server fetches a cover when it can reach the page. Many sites refuse
+// anything that is not a browser (gatesnotes.com answers 403 to a server, and
+// to a link-preview bot too), and from any app but Safari a share carries only
+// an address: the article is saved bare. The phone can load the page in a real
+// web engine — the system's own link preview — and read the picture the page
+// names for sharing. This is where it brings it.
+
+const MAX_COVER_BYTES = 8 * 1024 * 1024;
+
+/** JPEG or PNG, by what the bytes say rather than by what the request claims. */
+function isPicture(bytes: Uint8Array): boolean {
+  const jpeg = bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff;
+  const png = bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47;
+  return jpeg || png;
+}
+
+/**
+ * Give an entry the cover the caller holds: the file under the entry's name
+ * among the garden's images, named in the fiche's `meta` (where an article's
+ * cover is read from) and on the card when it has none. A cover already there
+ * is replaced: asking is the member saying this one is the right one. One
+ * commit.
+ */
+export function setCover(memberId: string, garden: GardenRef, ref: EntryRef, bytes: Uint8Array): void {
+  const entry = findEntry(garden, ref);
+  if (!bytes.length) throw new EntryWriteError("No picture was sent", 400);
+  if (bytes.length > MAX_COVER_BYTES) throw new EntryWriteError("That picture is too large", 400);
+  if (!isPicture(bytes)) throw new EntryWriteError("A cover is a JPEG or a PNG", 400);
+
+  const cover = resourceImagePaths(garden, entry.collection as ResourceCollection, entry.locale, entry.slug);
+  fs.mkdirSync(path.dirname(cover.file), { recursive: true });
+  fs.writeFileSync(cover.file, bytes);
+  const touched = [cover.file];
+
+  if (entry.fiche) {
+    const file = path.join(garden.root, entry.fiche.file);
+    const parsed = parseFiche(fs.readFileSync(file, "utf-8"));
+    if (parsed && parsed.frontmatter.meta?.image !== cover.url) {
+      parsed.frontmatter.meta = { ...(parsed.frontmatter.meta ?? {}), image: cover.url };
+      writeFiche(file, parsed.frontmatter, parsed.body);
+      touched.push(file);
+    }
+  }
+  if (entry.card) {
+    const file = path.join(garden.root, entry.card.file);
+    const raw = fs.readFileSync(file, "utf-8");
+    if (parseFiche(raw)?.frontmatter.image == null && FRONTMATTER.test(raw)) {
+      atomicWrite(file, raw.replace(/\n---(\n|$)/, `\n${dumpFrontmatter({ image: cover.url })}\n---$1`));
+      touched.push(file);
+    }
+  }
+  autoCommit(garden, touched, `Cover for ${entry.collection}/${entry.slug}`);
+  indexGardenPaths(memberId, touched.filter((f) => f.endsWith(".md")));
 }
 
 // ── Deleting, putting away ──
