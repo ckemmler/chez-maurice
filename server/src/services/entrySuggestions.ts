@@ -41,7 +41,9 @@ export const SUGGESTION_KINDS = ["movies", "series", "books", "music", "podcasts
 export type SuggestionKind = (typeof SUGGESTION_KINDS)[number];
 
 const MAX_PER_TURN = 3;
-const NOTE_MAX_CHARS = 500;
+// Room for the three sentences asked for, in French, with their names and
+// dates: at 500 a note for the entry was cut in the middle of a word.
+const NOTE_MAX_CHARS = 900;
 const MAX_CANDIDATES = 5;
 
 export interface Candidate {
@@ -145,6 +147,18 @@ export function setSuggestionModel(fn: ((req: AncillaryRequest) => Promise<Ancil
   completeWith = fn ?? ancillaryComplete;
 }
 
+/** A note within its length, ending where a sentence does: one that runs
+ *  over loses its last sentence, never the end of a word. */
+export function clipNote(note: string, max = NOTE_MAX_CHARS): string {
+  const text = note.trim();
+  if (text.length <= max) return text;
+  const head = text.slice(0, max);
+  const stops = [...head.matchAll(/[.!?…](?=\s|$)/g)];
+  const last = stops.at(-1);
+  if (last && last.index! >= max / 2) return head.slice(0, last.index! + 1);
+  return `${head.slice(0, head.lastIndexOf(" ")).replace(/[\s,;:]+$/, "")}…`;
+}
+
 /** The first JSON object in a model's answer — fenced, prefixed, or bare. */
 export function parseNamed(text: string, alsoKind: string | null = null): Named[] {
   const start = text.indexOf("{");
@@ -157,7 +171,7 @@ export function parseNamed(text: string, alsoKind: string | null = null): Named[
   for (const s of list) {
     const kind = String(s?.kind ?? "");
     const title = String(s?.title ?? "").replace(/\s+/g, " ").trim();
-    const note = String(s?.note ?? "").trim().slice(0, NOTE_MAX_CHARS);
+    const note = clipNote(String(s?.note ?? ""));
     if (!((SUGGESTION_KINDS as readonly string[]).includes(kind) || kind === alsoKind) || !title || !note) continue;
     // A first name alone is nobody in particular.
     if (kind === "people" && title.split(" ").length < 2) continue;
@@ -195,7 +209,7 @@ async function nameSubjects(
     invocation: "entry_suggest",
     system: SYSTEM,
     prompt,
-    maxTokens: 700,
+    maxTokens: 1200,
     temperature: 0,
     reasoning: "none",
   });

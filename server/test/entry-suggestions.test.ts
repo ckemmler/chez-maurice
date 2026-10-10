@@ -115,6 +115,20 @@ describe("reading the pass", () => {
   });
 });
 
+describe("a note's length", () => {
+  test("a note that runs over ends on its last whole sentence, never inside a word", () => {
+    const short = "Créée par Eugene Levy et son fils Dan.";
+    expect(sug.clipNote(short)).toBe(short);
+    const long = "Première phrase assez longue pour compter. Deuxième phrase qui tient encore. Troisième phrase qui dépasse la limite et serait coupée au milieu d'un mot.";
+    expect(sug.clipNote(long, 100)).toBe("Première phrase assez longue pour compter. Deuxième phrase qui tient encore.");
+    // No sentence to stop at: the last whole word, and a mark that it goes on.
+    expect(sug.clipNote("un mot puis un autre et encore un autre sans jamais de point final ici", 30)).toBe("un mot puis un autre et…");
+    const [named] = sug.parseNamed(JSON.stringify({ subjects: [{ kind: "series", title: "Sugar", note: `${"Une phrase entière. ".repeat(60)}` }] }));
+    expect(named!.note.length).toBeLessThanOrEqual(900);
+    expect(named!.note.endsWith("entière.")).toBe(true);
+  });
+});
+
 describe("who is offered anything", () => {
   test("nothing named, nothing filed, no provider asked", async () => {
     expect(await turn()).toBe(0);
