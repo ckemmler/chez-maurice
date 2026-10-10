@@ -584,15 +584,7 @@
 "settings.import.night" = "Imported conversations appear in your list with their origin. The night after, Maurice reads them: your domains may be proposed the next morning.";
 
 /* The drawer "Define my domains" under the conversation Maurice opens (P2-D, 20 September 2026) */
-"proposals.cta" = "Define my domains";
-"proposals.cta.help" = "Adopt, correct or put away the domains Maurice proposes";
-"proposals.title" = "My domains";
-"proposals.explainer" = "Tick the domains you adopt, correct a name or its line as you would say it, put away what is not one. Nothing exists until you apply.";
-"proposals.empty" = "No proposal is open any more.";
-"proposals.failed" = "The server did not take it. Try again, or answer Maurice in the conversation.";
 "proposals.rule" = "An adopted domain gets its brief written by Maurice within a minute or two. Notes in your garden are written only where you ask for them, each marked as not reviewed yet.";
-"proposals.apply" = "Apply";
-"proposals.apply.count" = "Apply (%d)";
 "proposals.conversations.one" = "%d conversation";
 "proposals.conversations.other" = "%d conversations";
 "proposals.mail.one" = "%d mail thread";
@@ -605,9 +597,37 @@
 "proposals.split_hint" = "Might be several things: %@";
 "proposals.seed" = "Seed my garden with a few notes";
 "proposals.adopt" = "Adopt";
+"proposals.section" = "Proposals (%d)";
+"proposals.failed" = "The server did not take it. Try again.";
 "proposals.dismiss" = "Put away";
-"proposals.undo_dismiss" = "Keep it on the list";
-"proposals.dismissed" = "Put away: its conversations will not come up again.";
+"proposals.dismiss.hint" = "Put away: its conversations will not come up again, and it does not come back by itself. You can come back on it from the bottom of the list.";
+"proposals.show_all" = "Show all (%d)";
+"proposals.show_less" = "Show fewer";
+"proposals.put_away" = "Put away (%d)";
+"proposals.restore" = "Bring back";
+"proposals.new" = "New";
+"proposals.badge" = "%d new proposals";
+"proposals.page.title" = "Proposal";
+"proposals.merge" = "Merge";
+"proposals.merge.explainer" = "Choose the proposals to merge with “%@”.";
+"proposals.cut" = "Cut";
+"proposals.cut.explainer" = "Choose what leaves this proposal to become another one, and name it.";
+"proposals.cut.name" = "Name of the new proposal";
+"proposals.cut.confirm" = "Cut (%d)";
+"pastille.bound" = "%@ — this conversation belongs to it";
+"pastille.bound.auto" = "%@ — filed here by Maurice";
+"pastille.read" = "%@ — brief read";
+"pastille.recognised" = "%@ — recognised";
+"pastille.open" = "Open the domain";
+"pastille.attach" = "Attach this conversation";
+"pastille.detach" = "Detach";
+"chat.details.domain" = "Domain";
+"chat.details.domain.none" = "None";
+"chat.details.domain.auto" = "Maurice filed this conversation here on his own. You can take it out: he will not file it again.";
+"brief.conversations.auto" = "%d filed by Maurice";
+"brief.conversations.auto.hint" = "Maurice filed these conversations here on his own, because they resemble this domain. Detach the ones that do not belong: he will not file them again.";
+"brief.conversations.attach_current" = "Attach the current conversation";
+"brief.conversations.detach_current" = "Detach the current conversation";
 
 /* Invitations */
 "invite.scan" = "Scan an invitation";
@@ -699,7 +719,7 @@
 "mail.reading.approve" = "Let Maurice read";
 "mail.reading.withdraw" = "Withdraw the approval";
 "mail.reading.help" = "Maurice reads the real exchanges of the last years, at night, and tells you who matters to you and what is going on. Nothing is sent, nothing is changed in your mailbox.";
-"mail.reading.caption" = "Reading is a yes you give — here or in the conversation Maurice opened. You can withdraw it at any time.";
+"mail.reading.caption" = "Reading is a yes you give, here. You can withdraw it at any time. What Maurice writes from it is in your garden, under “My mail”.";
 "mail.box.messages" = "%d messages collected";
 "mail.box.reading" = "Reading: %1$d sorted · %2$d to read · %3$d read";
 "mail.box.left" = "Left: ~%1$@ to sort, ~%2$@ to read · %3$@";

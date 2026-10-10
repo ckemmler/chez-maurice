@@ -232,49 +232,124 @@ final class ChatService {
         conversations.first { $0.id == activeConversationId }
     }
 
-    // ── Domain proposals (the drawer "Define my domains", P2-D) ───
-    /// The member's open proposals, read from the server whenever a
-    /// conversation Maurice opened is selected — the app detects the state by
-    /// the route, not by the text of the message. Empty = no drawer button.
+    // ── Domain proposals (the list's section "Proposals") ─────────
+    /// The member's open proposals and the settled ones, read from the server
+    /// when the conversations load and when the list of domains opens. They
+    /// live in that list — no conversation carries them any more.
     var openProposals: [DomainProposal] = []
+    var settledProposals: [DomainProposal] = []
     var proposalsTotalConversations = 0
-    /// Whether the active conversation is the one carrying the proposals.
-    var activeConversationHasProposals: Bool {
-        guard let id = activeConversationId, !openProposals.isEmpty else { return false }
-        return openProposals.contains { $0.conversation_id == id }
-    }
+    /// Proposals made since the member last opened the list: the badge on
+    /// the button that opens it, and the only sign they get.
+    var proposalsUnseen = 0
 
-    /// Refresh the proposals; cheap, one GET. Called for a conversation
-    /// Maurice opened, and after the drawer is validated.
+    /// Refresh the proposals; cheap, one GET.
     func loadProposals() async {
         guard let api, let token else { return }
         do {
             let res: DomainProposalsResponse = try await api.get("/api/domains/proposals", token: token)
             if res.proposals != openProposals { openProposals = res.proposals }
+            let settled = res.settled ?? []
+            if settled != settledProposals { settledProposals = settled }
             proposalsTotalConversations = res.total_conversations
+            proposalsUnseen = res.unseen ?? 0
         } catch {
-            // A proposals list that fails to load hides the button; nothing more.
+            // A list that fails to load shows no proposals; nothing more.
         }
     }
 
-    /// The drawer's validation, in one request. Maurice's word on what was
-    /// done lands in the thread over the room socket; the domains list and the
-    /// proposals are refreshed here.
+    /// The member opened the list: the badge goes. The rows keep their "new"
+    /// mark until the list is read again.
+    func markProposalsSeen() async {
+        guard let api, let token, proposalsUnseen > 0 else { return }
+        let res: DomainProposalCounts? = try? await api.post("/api/domains/proposals/seen", body: ["": ""], token: token)
+        if let res { proposalsUnseen = res.unseen }
+    }
+
+    /// The member's word on one or several proposals, in one request.
     func applyProposals(_ items: [DomainProposalApplyItem]) async -> DomainProposalApplyResult? {
         guard let api, let token else { return nil }
         struct Body: Encodable { let items: [DomainProposalApplyItem] }
         do {
             let res: DomainProposalApplyResult = try await api.post("/api/domains/proposals/apply", body: Body(items: items), token: token)
             await loadProposals()
-            if let id = activeConversationId, !isStreaming, res.message_id != nil,
-               !messages.contains(where: { $0.id == res.message_id }) {
-                await reloadActiveMessages()
-            }
+            // An adoption binds conversations: the sidebar's rows moved.
+            if !res.adopted.isEmpty { await loadConversations() }
             return res
         } catch {
             report(error)
             return nil
         }
+    }
+
+    /// A proposal with everything it holds.
+    func proposalDetail(_ id: String) async -> DomainProposalDetail? {
+        guard let api, let token else { return nil }
+        let res: DomainProposalEnvelope? = try? await api.get("/api/domains/proposals/\(id)", token: token)
+        return res?.proposal
+    }
+
+    /// Come back on a proposal that was put away.
+    func restoreProposal(_ id: String) async -> Bool {
+        guard let api, let token else { return false }
+        let res: DomainProposalEnvelope? = try? await api.post("/api/domains/proposals/\(id)/restore", body: ["": ""], token: token)
+        await loadProposals()
+        return res != nil
+    }
+
+    /// Several open proposals into one.
+    func mergeProposals(_ ids: [String], name: String?) async -> Bool {
+        guard let api, let token else { return false }
+        struct Body: Encodable { let ids: [String]; let name: String? }
+        struct Res: Decodable { let from: [String] }
+        let res: Res? = try? await api.post("/api/domains/proposals/merge", body: Body(ids: ids, name: name), token: token)
+        await loadProposals()
+        return res != nil
+    }
+
+    /// Cut a part out of a proposal: the part becomes a proposal of its own.
+    func splitProposal(_ id: String, part: DomainProposalSplitPart) async -> Bool {
+        guard let api, let token else { return false }
+        struct Body: Encodable { let parts: [DomainProposalSplitPart] }
+        struct Res: Decodable { let left: Int }
+        let res: Res? = try? await api.post("/api/domains/proposals/\(id)/split", body: Body(parts: [part]), token: token)
+        await loadProposals()
+        return res != nil
+    }
+
+    // ── A conversation and its domain ─────────────────────────────
+    /// Bind a conversation to a domain of the member's, or take it out of
+    /// one (`nil`). A conversation the member takes out is never filed again
+    /// by the night.
+    @discardableResult
+    func setDomain(_ domainId: String?, forConversation id: String) async -> Bool {
+        guard let api, let token else { return false }
+        struct Body: Encodable {
+            let maurice_id: String?
+            func encode(to encoder: Encoder) throws {
+                var c = encoder.container(keyedBy: CodingKeys.self)
+                try c.encode(maurice_id, forKey: .maurice_id)   // an explicit null takes it out
+            }
+            enum CodingKeys: String, CodingKey { case maurice_id }
+        }
+        do {
+            let _: OkResponse = try await api.patch("/api/conversations/\(id)/maurice", body: Body(maurice_id: domainId), token: token)
+            if let i = conversations.firstIndex(where: { $0.id == id }) {
+                conversations[i].maurice_id = domainId
+                conversations[i].maurice_bound_by = nil
+            }
+            if id == activeConversationId { currentMauriceId = domainId }
+            return true
+        } catch {
+            report(error)
+            return false
+        }
+    }
+
+    /// What is bound to a domain; `autoOnly` for what the night filed.
+    func domainConversations(_ domainId: String, autoOnly: Bool = false) async -> DomainConversations? {
+        guard let api, let token else { return nil }
+        return try? await api.get("/api/domains/\(domainId)/conversations?limit=100\(autoOnly ? "&auto=1" : "")", token: token)
     }
 
     // ── Search ──────────────────────────────────────────────────
@@ -324,6 +399,8 @@ final class ChatService {
             // What the server says is unread (a conversation Maurice opened and
             // you have not opened yet) shows its dot from a cold start too.
             for c in page where c.unread == true { unread.insert(c.id) }
+            // What the night proposed since: the badge on the domains button.
+            await loadProposals()
         } catch {
             report(error)
         }
@@ -361,9 +438,6 @@ final class ChatService {
         await loadMessages(for: id)
         // The thread's armed Maurice = its current maurice_id (sticky in-thread).
         currentMauriceId = activeConversation?.maurice_id
-        // A conversation Maurice opened may carry domain proposals: ask the
-        // server, which decides whether the drawer has anything to show.
-        if activeConversation?.openedByMaurice == true { await loadProposals() }
         // Mark read on the server so the foyer unread roll-up reflects it.
         if let api, let token {
             let _: OkResponse? = try? await api.post("/api/conversations/\(id)/read", body: ["":""], token: token)
@@ -710,7 +784,7 @@ final class ChatService {
         guard a.count == b.count else { return false }
         for (x, y) in zip(a, b) {
             if x.id != y.id || x.title != y.title || x.updated_at != y.updated_at
-                || x.unread != y.unread || x.maurice_id != y.maurice_id
+                || x.unread != y.unread || x.maurice_id != y.maurice_id || x.maurice_bound_by != y.maurice_bound_by
                 || x.message_count != y.message_count || x.last_message_at != y.last_message_at
                 || (x.participants?.count ?? 0) != (y.participants?.count ?? 0) { return false }
         }
@@ -1353,6 +1427,8 @@ final class ChatService {
         knownIds = []
         unread = []
         openProposals = []
+        settledProposals = []
+        proposalsUnseen = 0
         pendingSummon = false
         activeConversationId = nil
         followedTurn = nil

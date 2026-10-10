@@ -10,8 +10,8 @@
  * on the source so what the member threw away is never written again and
  * what did not change is not rewritten; what the member corrected kept and
  * given back to the writer; the ledger as the member under the reading job;
- * the cap stopping the run before the call; Maurice's word in the mail
- * conversation; the erasing; and the admin routes.
+ * the cap stopping the run before the call; nothing said to the member in
+ * any conversation (10 October 2026); the erasing; and the admin routes.
  */
 import fs from "node:fs";
 import os from "node:os";
@@ -24,7 +24,6 @@ process.env.MAURICE_GARDENS_DIR = GARDENS;
 const db = (await import("../src/db")).default;
 const docs = await import("../src/services/mailDocuments");
 const people = await import("../src/services/mailPeople");
-const approval = await import("../src/services/mailApproval");
 const budget = await import("../src/services/budget");
 const { addModel } = await import("../src/services/models");
 const { pinNewInvocations } = await import("../src/services/ancillary");
@@ -166,7 +165,7 @@ beforeEach(() => {
   fs.rmSync(gardenRoot, { recursive: true, force: true });
   fs.mkdirSync(notesDir, { recursive: true });
   db.run(`DELETE FROM spend_ledger WHERE user_id = ?`, [ANNA]);
-  db.run(`DELETE FROM mail_conversations WHERE member_id = ?`, [ANNA]);
+  db.run(`DELETE FROM mail_reading_consent WHERE member_id = ?`, [ANNA]);
   db.run(`DELETE FROM contact_accounts WHERE member_id = ?`, [ANNA]);
   budget.setMemberDailyCap(ANNA, null);
 });
@@ -249,7 +248,7 @@ test("a fiche in people/ per person: the relation once, the interactions per add
   expect(ledger).toHaveLength(3);
   expect(ledger.every((l) => l.job_id === "job_r1")).toBe(true);
   expect(r.cost).toBeCloseTo(0.006, 6);
-  expect(r.said).toBeNull(); // no mail conversation yet
+  expect(r).not.toHaveProperty("said"); // nothing is said of it anywhere
 });
 
 test("the fiche lists the exchanges from the header store, between the relation and the provenance, and keeps them current without a model", async () => {
@@ -490,17 +489,26 @@ test("the member's cap stops the run before the call; a model answer with no sou
   expect(fs.existsSync(peopleDir)).toBe(false);
 });
 
-test("Maurice says in the mail conversation what he wrote, with the hub's path and the fiches' titles", async () => {
-  const c = createConversation(ANNA, null, { openedBy: "maurice" }).id;
-  approval.linkMailConversation(ANNA, c);
+test("the pass says nothing to the member: no conversation of Maurice's, no message in one they have, a run with no word to carry", async () => {
+  // A conversation Maurice once opened about the mail, kept as an ordinary one.
+  const old = createConversation(ANNA, null, { openedBy: "maurice" }).id;
+  const own = createConversation(ANNA, null).id;
+  db.run(`INSERT INTO mail_reading_consent (member_id, reading) VALUES (?, 'approved')`, [ANNA]);
+  const counts = () => ({
+    opened: (db.query(`SELECT COUNT(*) AS n FROM conversations WHERE user_id = ? AND opened_by = 'maurice'`).get(ANNA) as { n: number }).n,
+    said: (db.query(`SELECT COUNT(*) AS n FROM messages WHERE role = 'assistant' AND conversation_id IN (SELECT id FROM conversations WHERE user_id = ?)`).get(ANNA) as { n: number }).n,
+  });
+  const before = counts();
   const r = await docs.writeMailDocuments(ANNA);
-  expect(r.said).toBeTruthy();
-  const last = getMessages(c).at(-1)!;
-  expect(last.role).toBe("assistant");
-  expect(last.content).toContain("j'ai écrit 1 fiche(s) sur les personnes qui comptent et 1 digest(s) des fils");
-  expect(last.content).toContain(`/g/${ANNA}/fr/notes/mon-courrier`);
-  expect(last.content).toContain("- Jean Derély");
-  expect(last.content).not.toMatch(/€|euro/i);
+  expect(r.outcome).toBe("written");
+  expect(r.written.filter((n) => n.kind !== "hub").length).toBeGreaterThanOrEqual(2);
+  expect(r).not.toHaveProperty("said");
+  expect(counts()).toEqual(before);
+  expect(getMessages(old)).toHaveLength(0);
+  expect(getMessages(own)).toHaveLength(0);
+  // What was written is where the member finds it: the hub, in their garden.
+  expect(read("mon-courrier")).toContain("[[jean-derely-fiche|Jean Derély]]");
+  expect((docs as any).sayDocumentsWritten).toBeUndefined();
 });
 
 test("erasing removes what the pass wrote, keeps the member's own fiche without its mail fragments, and forgets all but the refusals", async () => {

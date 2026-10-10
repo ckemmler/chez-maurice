@@ -160,11 +160,28 @@ enum DomainIcons {
 
 // MARK: - The pastilles
 
-/// The domains a conversation has drawn on, as round marks beside the back
-/// button: the one it is bound to, then each one whose brief Maurice read on
-/// the way (the `domain_brief` tool's data, kept on the reply — so the mark
-/// appears while the turn is still running, and is there again on reopening).
-/// A tap opens the domain's page.
+/// One mark beside the back button, and why it is there.
+struct DomainPastille: Identifiable, Equatable {
+    enum Kind: Equatable {
+        /// The conversation is bound to the domain (`auto`: the night filed it).
+        case bound(auto: Bool)
+        /// Maurice read its brief on the way.
+        case read
+        /// The server recognised the domain in what the member said; nothing
+        /// was read, nothing is bound.
+        case recognised
+    }
+    let maurice: Maurice
+    let kind: Kind
+    var id: String { maurice.id }
+}
+
+/// The domains a conversation has to do with, as round marks beside the back
+/// button: the one it is bound to, each one whose brief Maurice read on the
+/// way (the `domain_brief` tool's data, kept on the reply), and the one the
+/// server recognised in the member's last turns (`domain_recognised`, drawn
+/// with a dashed ring: recognised is not read). A tap opens a short menu:
+/// the domain's page, and binding the conversation to it or taking it out.
 struct DomainPastilles: View {
     @Environment(ChatService.self) private var chat
     @Environment(MauriceStore.self) private var store
@@ -177,29 +194,31 @@ struct DomainPastilles: View {
     /// iPhone: the marks float over the stream, on their own glass.
     var glass = false
 
-    /// The member's own domains this conversation mobilised, in the order
-    /// they came in. Only their own: a brief is its creator's, and so is the
-    /// page a pastille opens.
+    /// The member's own domains this conversation has to do with, in the
+    /// order they came in. Only their own: a brief is its creator's, and so
+    /// is the page a pastille opens.
     @MainActor
-    static func mobilised(chat: ChatService, store: MauriceStore, session: SessionStore) -> [Maurice] {
+    static func mobilised(chat: ChatService, store: MauriceStore, session: SessionStore) -> [DomainPastille] {
         let own = store.domains.filter { $0.isDomain(of: session.activeUserId) }
         guard !own.isEmpty else { return [] }
-        var seen = Set<String>()
-        var out: [Maurice] = []
-        func add(_ m: Maurice?) {
-            guard let m, seen.insert(m.id).inserted else { return }
-            out.append(m)
+        var out: [DomainPastille] = []
+        func add(_ m: Maurice?, _ kind: DomainPastille.Kind) {
+            guard let m, !out.contains(where: { $0.maurice.id == m.id }) else { return }
+            out.append(DomainPastille(maurice: m, kind: kind))
         }
-        if let bound = chat.activeConversation?.maurice_id {
-            add(own.first { $0.rawId == bound })
-        }
-        let blocks = chat.messages.flatMap { $0.data ?? [] } + chat.streamingData
-        for block in blocks where block.tool == "domain_brief" {
+        func domain(of block: DataBlock) -> Maurice? {
             // Replies older than the id in the payload carry the name only.
             let id = block.data["domain_id"]?.stringValue
             let name = block.data["domain"]?.stringValue
-            add(own.first { $0.rawId == id } ?? own.first { $0.name == name })
+            return own.first { $0.rawId == id } ?? own.first { $0.name == name }
         }
+        if let convo = chat.activeConversation, let bound = convo.maurice_id {
+            add(own.first { $0.rawId == bound }, .bound(auto: convo.maurice_bound_by == "auto"))
+        }
+        let blocks = chat.messages.flatMap { $0.data ?? [] } + chat.streamingData
+        for block in blocks where block.tool == "domain_brief" { add(domain(of: block), .read) }
+        // Only the latest recognition: what the conversation is about now.
+        if let last = blocks.last(where: { $0.tool == "domain_recognised" }) { add(domain(of: last), .recognised) }
         return out
     }
 
@@ -209,19 +228,20 @@ struct DomainPastilles: View {
             let shown = Array(all.prefix(max))
             let rest = Array(all.dropFirst(max))
             let row = HStack(spacing: 5) {
-                ForEach(shown) { m in
-                    Button { domains.openBrief(m) } label: {
-                        DomainMark(maurice: m, size: size, radius: size / 2)
-                            .contentShape(Circle())
+                ForEach(shown) { p in
+                    Menu { actions(p) } label: {
+                        mark(p).contentShape(Circle())
                     }
                     .buttonStyle(.plain)
-                    .help(m.name)
-                    .accessibilityLabel(m.name)
+                    .menuIndicator(.hidden)
+                    .fixedSize()
+                    .help(label(p))
+                    .accessibilityLabel(label(p))
                 }
                 if !rest.isEmpty {
                     Menu {
-                        ForEach(rest) { m in
-                            Button { domains.openBrief(m) } label: { Label(m.name, systemImage: m.symbol) }
+                        ForEach(rest) { p in
+                            Menu { actions(p) } label: { Label(p.maurice.name, systemImage: p.maurice.symbol) }
                         }
                     } label: {
                         Text("+\(rest.count)")
@@ -235,12 +255,60 @@ struct DomainPastilles: View {
                     .fixedSize()
                 }
             }
-            .animation(.easeOut(duration: 0.2), value: all.map(\.id))
+            .animation(.easeOut(duration: 0.2), value: all)
             if glass {
                 row.padding(.horizontal, 7).frame(height: 44)
                     .glassControl(theme, in: Capsule())
             } else {
                 row
+            }
+        }
+    }
+
+    /// The mark: full for a bound domain and a brief read, a dashed ring and
+    /// a paler glyph for one only recognised.
+    @ViewBuilder
+    private func mark(_ p: DomainPastille) -> some View {
+        if p.kind == .recognised {
+            let accent = session.activeDeviceUser?.color ?? .blue
+            Circle()
+                .strokeBorder(accent.legible(onDark: theme.isDark).opacity(0.7), style: StrokeStyle(lineWidth: 1, dash: [3, 2.5]))
+                .frame(width: size, height: size)
+                .overlay {
+                    Image(systemName: p.maurice.symbol)
+                        .font(.system(size: size * 0.42, weight: .medium))
+                        .foregroundStyle(accent.legible(onDark: theme.isDark).opacity(0.75))
+                }
+        } else {
+            DomainMark(maurice: p.maurice, size: size, radius: size / 2)
+        }
+    }
+
+    private func label(_ p: DomainPastille) -> String {
+        switch p.kind {
+        case .bound(let auto): return String(format: session.localized(auto ? "pastille.bound.auto" : "pastille.bound"), p.maurice.name)
+        case .read: return String(format: session.localized("pastille.read"), p.maurice.name)
+        case .recognised: return String(format: session.localized("pastille.recognised"), p.maurice.name)
+        }
+    }
+
+    @ViewBuilder
+    private func actions(_ p: DomainPastille) -> some View {
+        Section(label(p)) {
+            Button { domains.openBrief(p.maurice) } label: {
+                Label(session.localized("pastille.open"), systemImage: "book.closed")
+            }
+            // Binding is the member's own conversation's business, not a room's.
+            if chat.participants.count <= 1, let id = chat.activeConversationId {
+                if case .bound = p.kind {
+                    Button(role: .destructive) { Task { await chat.setDomain(nil, forConversation: id) } } label: {
+                        Label(session.localized("pastille.detach"), systemImage: "link.badge.minus")
+                    }
+                } else {
+                    Button { Task { await chat.setDomain(p.maurice.rawId, forConversation: id) } } label: {
+                        Label(session.localized("pastille.attach"), systemImage: "link.badge.plus")
+                    }
+                }
             }
         }
     }
@@ -264,17 +332,57 @@ struct DomainsListSheet: View {
     /// from the sidebar to the chat.
     var onOpen: () -> Void = {}
 
+    /// The open proposals beyond the first few, and the ones put away, stay
+    /// folded until asked for.
+    @State private var showAllProposals = false
+    @State private var showSettled = false
+    private let proposalsShown = 5
+
     private var accent: Color { session.activeDeviceUser?.color ?? .blue }
+    /// What was put away — by the member, or by the old six-week rule — and
+    /// can come back. An adopted proposal is a domain above.
+    private var putAway: [DomainProposal] { chat.settledProposals.filter(\.canRestore) }
 
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 8) {
-                    if store.domains.isEmpty && store.companions.isEmpty {
+                    if store.domains.isEmpty && store.companions.isEmpty && chat.openProposals.isEmpty {
                         Text(session.localized("domains.empty"))
                             .font(.system(size: 13)).foregroundStyle(theme.inkSoft)
                             .fixedSize(horizontal: false, vertical: true)
                             .padding(.bottom, 6)
+                    }
+
+                    // What the night proposed and the member has not settled:
+                    // here, and nowhere else.
+                    if !chat.openProposals.isEmpty {
+                        sectionHead(String(format: session.localized("proposals.section"), chat.openProposals.count))
+                        Text(session.localized("proposals.rule"))
+                            .font(.system(size: 12)).foregroundStyle(theme.inkMute)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .padding(.horizontal, 4).padding(.bottom, 2)
+                        let rows = showAllProposals ? chat.openProposals : Array(chat.openProposals.prefix(proposalsShown))
+                        ForEach(rows) { p in
+                            NavigationLink(value: p) {
+                                ProposalListRow(proposal: p, accent: accent)
+                            }
+                            .buttonStyle(.plain)
+                            .contextMenu {
+                                Button { Task { await quick(p, "adopt") } } label: {
+                                    Label(session.localized("proposals.adopt"), systemImage: "checkmark")
+                                }
+                                Button(role: .destructive) { Task { await quick(p, "dismiss") } } label: {
+                                    Label(session.localized("proposals.dismiss"), systemImage: "xmark")
+                                }
+                            }
+                        }
+                        if chat.openProposals.count > proposalsShown {
+                            foldButton(showAllProposals ? session.localized("proposals.show_less")
+                                       : String(format: session.localized("proposals.show_all"), chat.openProposals.count),
+                                       open: showAllProposals) { showAllProposals.toggle() }
+                        }
+                        Color.clear.frame(height: 6)
                     }
 
                     if !store.domains.isEmpty {
@@ -312,10 +420,36 @@ struct DomainsListSheet: View {
                         .font(.system(size: 12)).foregroundStyle(theme.inkMute)
                         .fixedSize(horizontal: false, vertical: true)
                         .padding(.top, 10)
+
+                    // What was put away does not come back by itself; the
+                    // member can come back on it.
+                    if !putAway.isEmpty {
+                        foldButton(String(format: session.localized("proposals.put_away"), putAway.count), open: showSettled) { showSettled.toggle() }
+                            .padding(.top, 10)
+                        if showSettled {
+                            ForEach(putAway) { p in
+                                HStack(spacing: 10) {
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(p.name).font(.system(size: 14)).foregroundStyle(theme.inkSoft).lineLimit(1)
+                                        Text(proposalNumbers(p, session: session))
+                                            .font(.system(size: 10.5, design: .monospaced)).foregroundStyle(theme.inkMute).lineLimit(1)
+                                    }
+                                    Spacer(minLength: 6)
+                                    Button(session.localized("proposals.restore")) { Task { _ = await chat.restoreProposal(p.id) } }
+                                        .font(.system(size: 12)).tint(accent)
+                                }
+                                .padding(.horizontal, 12).padding(.vertical, 8)
+                                .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(theme.ruleHard, lineWidth: 0.5))
+                            }
+                        }
+                    }
                 }
                 .padding(18)
             }
             .background(theme.surface)
+            .navigationDestination(for: DomainProposal.self) { p in
+                ProposalPage(proposal: p)
+            }
             .navigationTitle(session.localized("domains.title"))
             #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
@@ -329,7 +463,36 @@ struct DomainsListSheet: View {
         #if os(macOS)
         .frame(minWidth: 460, idealWidth: 520, minHeight: 420, idealHeight: 600)
         #endif
-        .task { await store.loadOverview() }
+        .task {
+            await store.loadOverview()
+            // Read the list, then say it was seen: the rows keep their "new"
+            // mark for this visit, the badge on the button goes.
+            await chat.loadProposals()
+            await chat.markProposalsSeen()
+        }
+    }
+
+    /// Adopt or put away from the row's menu, without opening the page.
+    private func quick(_ p: DomainProposal, _ action: String) async {
+        let r = await chat.applyProposals([DomainProposalApplyItem(id: p.id, action: action, name: nil, summary: nil, seed: false)])
+        if r?.adopted.isEmpty == false {
+            await store.loadMaurices()
+            await store.loadOverview()
+        }
+    }
+
+    private func foldButton(_ label: String, open: Bool, action: @escaping () -> Void) -> some View {
+        Button { withAnimation(.easeInOut(duration: 0.18)) { action() } } label: {
+            HStack(spacing: 6) {
+                Image(systemName: open ? "chevron.down" : "chevron.right").font(.system(size: 9, weight: .semibold))
+                Text(label).font(.system(size: 12))
+                Spacer()
+            }
+            .foregroundStyle(theme.inkSoft)
+            .padding(.horizontal, 4).padding(.vertical, 4)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
     }
 
     private func sectionHead(_ label: String) -> some View {
@@ -479,306 +642,337 @@ struct DomainGreeting: View {
     }
 }
 
-// MARK: - The drawer "Define my domains" (P2-D, 20 September 2026)
+// MARK: - Proposals (10 October 2026)
 //
-// Under the message Maurice opened the conversation with, while the server
-// lists open proposals (GET /api/domains/proposals), a button opens this
-// drawer — a sheet from the bottom on the phone, a sheet on the Mac. Each
-// proposal is a row: its weight on five dots, its numbers, a box to adopt
-// it, the name and the one-line summary editable in place, "put away" to
-// dismiss it, and — only once the row is ticked — a second box, off by
-// default, to have Maurice seed the garden with a few notes on it: a yes to
-// the domain is not a yes to the notes, and the notes carry what the
-// conversations say, so the decision is taken domain by domain. "Apply"
-// sends the lot in one request; what was done comes back into the thread
-// as a message of Maurice's.
+// What the night proposes lives in the list above, as a section of its own —
+// until then it lived in a conversation Maurice opened, and a proposal made
+// three weeks later was a line in a thread nobody read. A row says what the
+// proposal is and what it weighs; its page is where the member decides, once
+// per proposal, conversations and mail together: adopt it (with or without
+// notes in the garden — a yes to the domain is not a yes to the notes),
+// correct its name or its paragraph, merge it with others, cut a part out of
+// it, or put it away. Nothing is said in any conversation; the list is the
+// record.
 
-/// The way into the drawer, drawn under the opening message.
-struct DefineDomainsButton: View {
-    @Environment(SessionStore.self) private var session
-    @Environment(\.mauriceTheme) private var theme
-    let count: Int
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            HStack(spacing: 8) {
-                Image(systemName: "checklist").font(.system(size: 13, weight: .medium))
-                Text(session.localized("proposals.cta"))
-                    .font(.system(size: 14, weight: .medium))
-                Text("\(count)")
-                    .font(.system(size: 11, design: .monospaced))
-                    .padding(.horizontal, 6).padding(.vertical, 2)
-                    .background(Capsule().fill(theme.ink.opacity(0.12)))
-            }
-            .padding(.horizontal, 16).padding(.vertical, 10)
-        }
-        .glassProminentButton()
-        .tint(session.activeDeviceUser?.color ?? .blue)
-        .help(session.localized("proposals.cta.help"))
-        .padding(.top, 2)
+/// "12 conversations · 30 mail threads · 3 % · 4 recent", in the member's language.
+@MainActor
+func proposalNumbers(_ p: DomainProposal, session: SessionStore) -> String {
+    var bits: [String] = []
+    let mail = p.mail_threads ?? 0
+    if p.conversations > 0 || mail == 0 {
+        bits.append(String(format: session.localized(p.conversations == 1 ? "proposals.conversations.one" : "proposals.conversations.other"), p.conversations))
     }
+    if mail > 0 { bits.append(String(format: session.localized(mail == 1 ? "proposals.mail.one" : "proposals.mail.other"), mail)) }
+    if let r = p.recent_90_days, r > 0 { bits.append(String(format: session.localized("proposals.recent"), r)) }
+    if !p.isAlive, let to = p.to { bits.append(String(format: session.localized("proposals.quiet_since"), String(to.prefix(7)))) }
+    if let at = p.created_at, let day = parseServerDate(at) { bits.append(day.formatted(date: .abbreviated, time: .omitted)) }
+    return bits.joined(separator: " · ")
 }
 
-/// One row's draft: what the member decided and wrote.
-private struct ProposalDraft: Identifiable, Equatable {
-    let id: String
-    var name: String
-    var summary: String
-    var adopt = false
-    var dismiss = false
-    var seed = false
-}
-
-struct DomainProposalsSheet: View {
-    @Environment(ChatService.self) private var chat
-    @Environment(MauriceStore.self) private var store
-    @Environment(SessionStore.self) private var session
-    @Environment(\.mauriceTheme) private var theme
-    @Environment(\.dismiss) private var dismiss
-
-    @State private var drafts: [ProposalDraft] = []
-    @State private var applying = false
-    @State private var failed = false
-
-    private var accent: Color { session.activeDeviceUser?.color ?? .blue }
-    private var byId: [String: DomainProposal] { Dictionary(chat.openProposals.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a }) }
-    private var decided: Int { drafts.filter { $0.adopt || $0.dismiss }.count }
-    private var changed: Bool {
-        drafts.contains { d in
-            guard let p = byId[d.id] else { return false }
-            return d.adopt || d.dismiss || d.name.trimmingCharacters(in: .whitespaces) != p.name || d.summary.trimmingCharacters(in: .whitespaces) != (p.one_line ?? p.summary)
-        }
-    }
-
-    var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 10) {
-                    Text(session.localized("proposals.explainer"))
-                        .font(.system(size: 13)).foregroundStyle(theme.inkSoft)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .padding(.bottom, 4)
-
-                    if drafts.isEmpty {
-                        Text(session.localized("proposals.empty"))
-                            .font(.system(size: 13)).foregroundStyle(theme.inkMute)
-                    }
-
-                    // Rows are bound by id, never by position: the list can
-                    // shrink under an open drawer (Apply, a tool call in the
-                    // thread, another device) and a positional binding then
-                    // read past the end — that was a crash on the first Apply.
-                    ForEach(drafts) { d in
-                        if let p = byId[d.id] {
-                            ProposalRow(proposal: p, draft: draftBinding(d.id), total: chat.proposalsTotalConversations, accent: accent)
-                        }
-                    }
-
-                    if failed {
-                        Text(session.localized("proposals.failed"))
-                            .font(.system(size: 12)).foregroundStyle(Color(hex: "a6452e"))
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-
-                    Text(session.localized("proposals.rule"))
-                        .font(.system(size: 12)).foregroundStyle(theme.inkMute)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .padding(.top, 6)
-                }
-                .padding(18)
-            }
-            .background(theme.surface)
-            .navigationTitle(session.localized("proposals.title"))
-            #if os(iOS)
-            .navigationBarTitleDisplayMode(.inline)
-            #endif
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button(session.localized("common.cancel")) { dismiss() }.tint(theme.ink).disabled(applying)
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button { Task { await apply() } } label: {
-                        if applying { ProgressView().controlSize(.small) }
-                        else { Text(decided > 0 ? String(format: session.localized("proposals.apply.count"), decided) : session.localized("proposals.apply")) }
-                    }
-                    .disabled(!changed || applying)
-                    .tint(accent)
-                }
-            }
-        }
-        #if os(macOS)
-        .frame(minWidth: 520, idealWidth: 580, minHeight: 520, idealHeight: 680)
-        #endif
-        .task {
-            await chat.loadProposals()
-            reset()
-        }
-        .onChange(of: chat.openProposals) { _, _ in
-            // The server's list moved (a tool call in the thread, another
-            // device): keep what the member typed, drop the rows that went.
-            // Not while we are the ones moving it: Apply dismisses on its own.
-            if applying { return }
-            let kept = Dictionary(drafts.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
-            drafts = chat.openProposals.map { p in kept[p.id] ?? ProposalDraft(id: p.id, name: p.name, summary: p.one_line ?? p.summary) }
-        }
-        .interactiveDismissDisabled(applying)
-    }
-
-    private func reset() {
-        drafts = chat.openProposals.map { ProposalDraft(id: $0.id, name: $0.name, summary: $0.one_line ?? $0.summary) }
-    }
-
-    /// A binding to one draft found by id. Reading a row that has gone gives
-    /// its last value back (an inert placeholder), writing to it does nothing.
-    private func draftBinding(_ id: String) -> Binding<ProposalDraft> {
-        Binding(
-            get: { drafts.first { $0.id == id } ?? ProposalDraft(id: id, name: "", summary: "") },
-            set: { new in if let i = drafts.firstIndex(where: { $0.id == id }) { drafts[i] = new } }
-        )
-    }
-
-    private func apply() async {
-        applying = true
-        failed = false
-        defer { applying = false }
-        var items: [DomainProposalApplyItem] = []
-        for d in drafts {
-            guard let p = byId[d.id] else { continue }
-            let name = d.name.trimmingCharacters(in: .whitespacesAndNewlines)
-            let summary = d.summary.trimmingCharacters(in: .whitespacesAndNewlines)
-            let renamed = name != p.name && !name.isEmpty
-            let resummarised = summary != (p.one_line ?? p.summary) && !summary.isEmpty
-            let action = d.adopt ? "adopt" : d.dismiss ? "dismiss" : "keep"
-            if action == "keep" && !renamed && !resummarised { continue }
-            items.append(DomainProposalApplyItem(id: d.id, action: action,
-                                                 name: renamed ? name : nil,
-                                                 summary: resummarised ? summary : nil,
-                                                 seed: d.adopt && d.seed))
-        }
-        guard !items.isEmpty else { return }
-        guard let result = await chat.applyProposals(items) else { failed = true; return }
-        if !result.adopted.isEmpty {
-            // The new domains join the list and the sidebar's overview.
-            await store.loadMaurices()
-        }
-        if !result.errors.isEmpty && result.adopted.isEmpty && result.dismissed.isEmpty && result.renamed.isEmpty {
-            failed = true
-            return
-        }
-        dismiss()
-    }
-}
-
-/// One proposal in the drawer.
-private struct ProposalRow: View {
+/// One open proposal in the list.
+private struct ProposalListRow: View {
     @Environment(SessionStore.self) private var session
     @Environment(\.mauriceTheme) private var theme
     let proposal: DomainProposal
-    @Binding var draft: ProposalDraft
-    let total: Int
     let accent: Color
 
-    private var numbers: String {
-        var bits: [String] = []
-        let mail = proposal.mail_threads ?? 0
-        if proposal.conversations > 0 || mail == 0 {
-            bits.append(String(format: session.localized(proposal.conversations == 1 ? "proposals.conversations.one" : "proposals.conversations.other"), proposal.conversations))
-        }
-        if mail > 0 { bits.append(String(format: session.localized(mail == 1 ? "proposals.mail.one" : "proposals.mail.other"), mail)) }
-        if proposal.share > 0 { bits.append("\(proposal.share) %") }
-        if let r = proposal.recent_90_days, r > 0 { bits.append(String(format: session.localized("proposals.recent"), r)) }
-        if !proposal.isAlive, let to = proposal.to { bits.append(String(format: session.localized("proposals.quiet_since"), String(to.prefix(7)))) }
-        return bits.joined(separator: " · ")
-    }
-
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(alignment: .top, spacing: 12) {
-                // Adopt: the box.
-                Button {
-                    draft.adopt.toggle()
-                    if draft.adopt { draft.dismiss = false } else { draft.seed = false }
-                } label: {
-                    Image(systemName: draft.adopt ? "checkmark.square.fill" : "square")
-                        .font(.system(size: 22, weight: .regular))
-                        .foregroundStyle(draft.adopt ? accent : theme.inkMute)
-                }
-                .buttonStyle(.plain)
-                .disabled(draft.dismiss)
-                .help(session.localized("proposals.adopt"))
-                .padding(.top, 2)
-
-                VStack(alignment: .leading, spacing: 5) {
-                    HStack(spacing: 8) {
-                        Text(dots(proposal.weight))
-                            .font(.system(size: 11, design: .monospaced))
-                            .foregroundStyle(proposal.isAlive ? accent.legible(onDark: theme.isDark) : theme.inkMute)
-                            .accessibilityLabel(String(format: session.localized("proposals.weight"), proposal.weight, 5))
-                        Text(numbers)
-                            .font(.system(size: 11, design: .monospaced))
-                            .foregroundStyle(theme.inkMute)
-                            .lineLimit(2)
-                    }
-                    TextField(session.localized("proposals.name"), text: $draft.name)
-                        .textFieldStyle(.plain)
-                        .font(.system(size: 16, weight: .medium))
-                        .foregroundStyle(theme.ink)
-                        .disabled(draft.dismiss)
-                    TextField(session.localized("proposals.summary"), text: $draft.summary, axis: .vertical)
-                        .textFieldStyle(.plain)
-                        .lineLimit(1...4)
-                        .font(.system(size: 13))
-                        .foregroundStyle(theme.inkSoft)
-                        .disabled(draft.dismiss)
-                    if let hint = proposal.split_hint, !hint.isEmpty {
-                        Text(String(format: session.localized("proposals.split_hint"), hint))
-                            .font(.system(size: 11)).italic().foregroundStyle(theme.inkMute)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                    if draft.adopt {
-                        Toggle(isOn: $draft.seed) {
-                            Text(session.localized("proposals.seed"))
-                                .font(.system(size: 12)).foregroundStyle(theme.inkSoft)
-                        }
-                        .toggleStyle(.switch)
-                        .tint(accent)
-                        #if os(macOS)
-                        .controlSize(.small)
-                        #endif
-                        .padding(.top, 2)
+        HStack(alignment: .top, spacing: 12) {
+            Text(dots(proposal.weight))
+                .font(.system(size: 9, design: .monospaced))
+                .foregroundStyle(proposal.isAlive ? accent.legible(onDark: theme.isDark) : theme.inkMute)
+                .frame(width: 36, height: 36)
+                .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(theme.ruleHard, style: StrokeStyle(lineWidth: 0.5, dash: [3, 2.5])))
+                .accessibilityLabel(String(format: session.localized("proposals.weight"), proposal.weight, 5))
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: 6) {
+                    Text(proposal.name)
+                        .font(.system(size: 15, weight: .medium)).foregroundStyle(theme.ink).lineLimit(1)
+                    if proposal.is_new == true {
+                        Circle().fill(accent).frame(width: 6, height: 6)
+                            .accessibilityLabel(session.localized("proposals.new"))
                     }
                 }
-
-                Spacer(minLength: 0)
-
-                // Put away: the proposal is not a domain.
-                Button {
-                    draft.dismiss.toggle()
-                    if draft.dismiss { draft.adopt = false; draft.seed = false }
-                } label: {
-                    Image(systemName: draft.dismiss ? "arrow.uturn.backward.circle" : "xmark.circle")
-                        .font(.system(size: 18))
-                        .foregroundStyle(draft.dismiss ? accent : theme.inkMute)
+                if let line = proposal.one_line, !line.isEmpty {
+                    Text(line).font(.system(size: 11.5)).foregroundStyle(theme.inkSoft).lineLimit(2)
                 }
-                .buttonStyle(.plain)
-                .help(session.localized(draft.dismiss ? "proposals.undo_dismiss" : "proposals.dismiss"))
-                .padding(.top, 2)
+                Text(proposalNumbers(proposal, session: session))
+                    .font(.system(size: 10.5, design: .monospaced)).foregroundStyle(theme.inkMute).lineLimit(1)
             }
-            if draft.dismiss {
-                Text(session.localized("proposals.dismissed"))
-                    .font(.system(size: 11)).foregroundStyle(theme.inkMute)
-                    .padding(.leading, 34)
-            }
+            Spacer(minLength: 6)
+            Image(systemName: "chevron.right").font(.system(size: 11, weight: .semibold)).foregroundStyle(theme.inkMute)
+                .padding(.top, 12)
         }
         .padding(.horizontal, 12).padding(.vertical, 10)
         .background(RoundedRectangle(cornerRadius: 12).fill(theme.bg))
-        .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(draft.adopt ? accent.opacity(0.6) : theme.ruleHard, lineWidth: draft.adopt ? 1 : 0.5))
-        .opacity(draft.dismiss ? 0.55 : 1)
+        .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(theme.ruleHard, lineWidth: 0.5))
+        .contentShape(Rectangle())
     }
 
     private func dots(_ w: Int) -> String {
         let n = max(0, min(5, w))
         return String(repeating: "●", count: n) + String(repeating: "○", count: 5 - n)
+    }
+}
+
+/// A proposal's page: what it is, what it holds, and the member's decision.
+private struct ProposalPage: View {
+    @Environment(ChatService.self) private var chat
+    @Environment(MauriceStore.self) private var store
+    @Environment(SessionStore.self) private var session
+    @Environment(\.mauriceTheme) private var theme
+    @Environment(\.dismiss) private var dismiss
+    let proposal: DomainProposal
+
+    @State private var name = ""
+    @State private var summary = ""
+    @State private var seed = false
+    @State private var detail: DomainProposalDetail?
+    @State private var working = false
+    @State private var failed = false
+    @State private var mode: Mode = .view
+    /// Merge: the other proposals that join this one. Cut: what leaves it.
+    @State private var picked = Set<String>()
+    @State private var partName = ""
+
+    enum Mode { case view, merge, cut }
+
+    private var accent: Color { session.activeDeviceUser?.color ?? .blue }
+    private var trimmedName: String { name.trimmingCharacters(in: .whitespacesAndNewlines) }
+    private var trimmedSummary: String { summary.trimmingCharacters(in: .whitespacesAndNewlines) }
+    private var renamed: Bool { !trimmedName.isEmpty && trimmedName != proposal.name }
+    private var resummarised: Bool { !trimmedSummary.isEmpty && trimmedSummary != proposal.summary }
+    private var others: [DomainProposal] { chat.openProposals.filter { $0.id != proposal.id } }
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 14) {
+                switch mode {
+                case .view: decide
+                case .merge: merge
+                case .cut: cut
+                }
+                if failed {
+                    Text(session.localized("proposals.failed"))
+                        .font(.system(size: 12)).foregroundStyle(Color(hex: "a6452e"))
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            .padding(18)
+        }
+        .background(theme.surface)
+        .navigationTitle(session.localized("proposals.page.title"))
+        #if os(iOS)
+        .navigationBarTitleDisplayMode(.inline)
+        #endif
+        .disabled(working)
+        .task {
+            name = proposal.name
+            summary = proposal.summary
+            detail = await chat.proposalDetail(proposal.id)
+        }
+    }
+
+    // MARK: the decision
+
+    @ViewBuilder
+    private var decide: some View {
+        Text(proposalNumbers(proposal, session: session))
+            .font(.system(size: 11, design: .monospaced)).foregroundStyle(theme.inkMute)
+        TextField(session.localized("proposals.name"), text: $name)
+            .textFieldStyle(.plain)
+            .font(.system(size: 22, design: .serif)).foregroundStyle(theme.ink)
+        TextField(session.localized("proposals.summary"), text: $summary, axis: .vertical)
+            .textFieldStyle(.plain).lineLimit(2...10)
+            .font(.system(size: 14)).foregroundStyle(theme.inkSoft)
+        if let hint = proposal.split_hint, !hint.isEmpty {
+            Text(String(format: session.localized("proposals.split_hint"), hint))
+                .font(.system(size: 12)).italic().foregroundStyle(theme.inkMute)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+
+        Toggle(isOn: $seed) {
+            Text(session.localized("proposals.seed")).font(.system(size: 13)).foregroundStyle(theme.inkSoft)
+        }
+        .toggleStyle(.switch).tint(accent)
+
+        Button { Task { await apply("adopt") } } label: {
+            Text(session.localized("proposals.adopt")).font(.system(size: 15, weight: .medium))
+                .frame(maxWidth: .infinity).padding(.vertical, 8)
+        }
+        .glassProminentButton().tint(accent)
+
+        HStack(spacing: 8) {
+            if renamed || resummarised {
+                chip("checkmark", session.localized("common.save")) { Task { await apply("keep") } }
+            }
+            if !others.isEmpty {
+                chip("arrow.triangle.merge", session.localized("proposals.merge")) { picked = []; mode = .merge }
+            }
+            if (detail?.conversations_list?.count ?? 0) + (detail?.mail_list?.count ?? 0) > 1 {
+                chip("scissors", session.localized("proposals.cut")) { picked = []; partName = ""; mode = .cut }
+            }
+            chip("xmark", session.localized("proposals.dismiss"), tint: Color(hex: "a6452e")) { Task { await apply("dismiss") } }
+        }
+        Text(session.localized("proposals.dismiss.hint"))
+            .font(.system(size: 11)).foregroundStyle(theme.inkMute)
+            .fixedSize(horizontal: false, vertical: true)
+
+        holdings(selectable: false)
+    }
+
+    // MARK: merge
+
+    @ViewBuilder
+    private var merge: some View {
+        Text(String(format: session.localized("proposals.merge.explainer"), proposal.name))
+            .font(.system(size: 13)).foregroundStyle(theme.inkSoft).fixedSize(horizontal: false, vertical: true)
+        ForEach(others) { o in
+            pickRow(id: o.id, title: o.name, sub: proposalNumbers(o, session: session))
+        }
+        HStack(spacing: 8) {
+            chip("chevron.left", session.localized("common.cancel")) { mode = .view }
+            Spacer()
+            Button(session.localized("proposals.merge")) {
+                Task {
+                    await run { await chat.mergeProposals([proposal.id] + Array(picked), name: renamed ? trimmedName : proposal.name) }
+                }
+            }
+            .glassProminentButton().tint(accent).disabled(picked.isEmpty)
+        }
+    }
+
+    // MARK: cut
+
+    @ViewBuilder
+    private var cut: some View {
+        Text(session.localized("proposals.cut.explainer"))
+            .font(.system(size: 13)).foregroundStyle(theme.inkSoft).fixedSize(horizontal: false, vertical: true)
+        TextField(session.localized("proposals.cut.name"), text: $partName)
+            .textFieldStyle(.plain)
+            .font(.system(size: 16, weight: .medium)).foregroundStyle(theme.ink)
+            .padding(.horizontal, 12).padding(.vertical, 9)
+            .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(theme.ruleHard, lineWidth: 0.5))
+        holdings(selectable: true)
+        HStack(spacing: 8) {
+            chip("chevron.left", session.localized("common.cancel")) { mode = .view }
+            Spacer()
+            Button(String(format: session.localized("proposals.cut.confirm"), picked.count)) {
+                Task {
+                    let convs = (detail?.conversations_list ?? []).map(\.id).filter(picked.contains)
+                    let mail = (detail?.mail_list ?? []).map(\.path).filter(picked.contains)
+                    let part = DomainProposalSplitPart(name: partName.trimmingCharacters(in: .whitespacesAndNewlines), conversation_ids: convs, mail: mail)
+                    await run { await chat.splitProposal(proposal.id, part: part) }
+                }
+            }
+            .glassProminentButton().tint(accent)
+            .disabled(picked.isEmpty || partName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+        }
+    }
+
+    // MARK: what it holds
+
+    @ViewBuilder
+    private func holdings(selectable: Bool) -> some View {
+        if let detail {
+            let convs = detail.conversations_list ?? []
+            let mail = detail.mail_list ?? []
+            if !convs.isEmpty {
+                head(String(format: session.localized(convs.count == 1 ? "proposals.conversations.one" : "proposals.conversations.other"), proposal.conversations))
+                ForEach(selectable ? convs : Array(convs.prefix(12))) { c in
+                    line(id: c.id, title: c.title ?? "", date: c.date, selectable: selectable)
+                }
+            }
+            if !mail.isEmpty {
+                head(String(format: session.localized(mail.count == 1 ? "proposals.mail.one" : "proposals.mail.other"), proposal.mail_threads ?? mail.count))
+                ForEach(selectable ? mail : Array(mail.prefix(12))) { t in
+                    line(id: t.path, title: t.title ?? "", date: t.from, selectable: selectable)
+                }
+            }
+        } else {
+            ProgressView().frame(maxWidth: .infinity).padding(.top, 8)
+        }
+    }
+
+    private func head(_ label: String) -> some View {
+        Text(label)
+            .font(.system(size: 10, design: .monospaced)).tracking(1.1).textCase(.uppercase)
+            .foregroundStyle(theme.inkMute).padding(.top, 8)
+    }
+
+    @ViewBuilder
+    private func line(id: String, title: String, date: String?, selectable: Bool) -> some View {
+        if selectable {
+            pickRow(id: id, title: title.isEmpty ? "—" : title, sub: date ?? "")
+        } else {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text(String((date ?? "").prefix(7))).font(.system(size: 10.5, design: .monospaced)).foregroundStyle(theme.inkMute)
+                Text(title.isEmpty ? "—" : title).font(.system(size: 13)).foregroundStyle(theme.inkSoft).lineLimit(1)
+                Spacer(minLength: 0)
+            }
+        }
+    }
+
+    private func pickRow(id: String, title: String, sub: String) -> some View {
+        Button {
+            if picked.contains(id) { picked.remove(id) } else { picked.insert(id) }
+        } label: {
+            HStack(spacing: 10) {
+                Image(systemName: picked.contains(id) ? "checkmark.circle.fill" : "circle")
+                    .font(.system(size: 18)).foregroundStyle(picked.contains(id) ? accent : theme.inkMute)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(title).font(.system(size: 13.5)).foregroundStyle(theme.ink).lineLimit(1)
+                    if !sub.isEmpty {
+                        Text(sub).font(.system(size: 10.5, design: .monospaced)).foregroundStyle(theme.inkMute).lineLimit(1)
+                    }
+                }
+                Spacer(minLength: 0)
+            }
+            .padding(.vertical, 4)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func chip(_ icon: String, _ label: String, tint: Color? = nil, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 5) {
+                Image(systemName: icon).font(.system(size: 10))
+                Text(label).font(.system(size: 12))
+            }
+            .foregroundStyle(tint ?? theme.inkSoft)
+            .padding(.horizontal, 11).padding(.vertical, 6)
+            .overlay(Capsule().strokeBorder(theme.ruleHard, lineWidth: 0.5))
+            .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+    }
+
+    // MARK: server
+
+    private func apply(_ action: String) async {
+        await run {
+            let r = await chat.applyProposals([DomainProposalApplyItem(
+                id: proposal.id, action: action,
+                name: renamed ? trimmedName : nil,
+                summary: resummarised ? trimmedSummary : nil,
+                seed: action == "adopt" && seed)])
+            guard let r, r.errors.isEmpty else { return false }
+            if !r.adopted.isEmpty {
+                // The new domain joins the list above.
+                await store.loadMaurices()
+                await store.loadOverview()
+            }
+            return true
+        }
+    }
+
+    /// Run one act; back to the list when it took.
+    private func run(_ act: () async -> Bool) async {
+        working = true
+        failed = false
+        let ok = await act()
+        working = false
+        if ok { dismiss() } else { failed = true }
     }
 }

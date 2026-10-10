@@ -2,16 +2,11 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { getAppDir } from "../../lib/appDir";
 import { isDue } from "./corpusNightly";
-import { memberLocale } from "./domainBriefs";
-import { describeCost, mailOpenerStrings, mailOpeningTitle, readingCost, renderMailOpening, type ReadingEstimate } from "./mailOpener";
+import { describeCost, readingCost, type ReadingEstimate } from "./mailReadingCost";
 import { corpusCall } from "./mcpClient";
-import { openConversation, type OpenRequest, type OpenResult } from "./openedConversations";
 import { listUsers } from "./users";
-import { backfillMailConversations, carryReadingApproval, ensureMailConversationTitle, linkMailConversation, mailConversationOf } from "./mailApproval";
 import { readingWanted, startMailReading } from "./mailReading";
-import { mailboxViews, newMailboxNotice, type MailboxView } from "./mailboxEstimate";
-import { addMessage } from "./conversations";
-import { publishToRoom } from "./roomBus";
+import { mailboxViews, type MailboxView } from "./mailboxEstimate";
 import { listSenderRules, senderRulesForTriage } from "./mailSenderRules";
 import { startMailDocuments } from "./mailDocuments";
 import { contactAddresses, listContactAccounts, syncContacts } from "./contactAccounts";
@@ -39,20 +34,17 @@ import { approvedMailboxAddresses, getMailAccount, listMailAccounts } from "./ma
 // lot 2, through the same tool: a reconciliation once a week (the store
 // trimmed to what the mailbox still holds, by relisting UIDs), the triage
 // (bulk or correspondence, from the headers), the calibration (a hundred
-// bodies sampled and counted, nothing kept) and the estimate. And then,
-// once per member, Maurice opens a conversation with the numbers and the
-// question — settled 26 September 2026: opened late, only when the walk
-// is done; numbers and nothing else; past the opening guard, this once.
-// Since 5 October 2026 the same free work and the same opening follow the
-// walk of a mailbox just added (`analyseMailboxInBackground`): a member's
-// first mailbox gets its conversation the same day, and the night is left
-// with the daily increments and whoever was missed.
-// The "yes" is lot 3 (services/mailApproval.ts): the conversation opened
-// here is linked to its member in `mail_conversations`, which is what
-// grants the tool that takes the yes.
+// bodies sampled and counted, nothing kept) and the estimate. The numbers
+// are what the card under Settings → Mail shows, and where the member says
+// yes or no to the reading (services/mailApproval.ts). From 26 September to
+// 10 October 2026 Maurice also opened a conversation with them, once per
+// member; he no longer does, and what a reading would cost goes to the log
+// once instead, for the operator. Since 5 October 2026 the same free work
+// follows the walk of a mailbox just added (`analyseMailboxInBackground`),
+// and the night is left with the daily increments and whoever was missed.
 //
 // The nightly keeps its last run, and per member the last reconciliation
-// and the conversation opened, in a small file on the app dir, like the
+// and when the estimate was first logged, in a small file on the app dir, like the
 // corpus's, so a restart at 03:30 does not redo a run from 03:05.
 
 const HOUR = 3;
@@ -93,8 +85,6 @@ export interface MailScanDeps {
   /** Call an `email` tool as the member; the tool's JSON, parsed. */
   call: (memberId: string, tool: string, args: any) => Promise<any>;
   members: () => { id: string }[];
-  open: (req: OpenRequest) => Promise<OpenResult>;
-  locale: (memberId: string) => string;
   now?: () => Date;
   pollMs?: number;
   maxWaitMs?: number;
@@ -129,7 +119,7 @@ export function mailToolCall(memberId: string, tool: string, args: any): Promise
 }
 
 const defaultDeps: MailScanDeps = {
-  call: emailCall, members: () => listUsers(), open: openConversation, locale: memberLocale,
+  call: emailCall, members: () => listUsers(),
   // Through the shared launcher: a reading the member started in the day is
   // joined, not run twice.
   read: (memberId) => startMailReading(memberId), wantsReading: readingWanted,
@@ -258,33 +248,19 @@ export function analyseMailboxInBackground(memberId: string, accountId: string |
       console.log(`[mail] ${missing.map((a) => a.address).join(", ")} added during the walk for ${memberId}: walking again`);
     }
     const est = await measure(memberId, deps);
-    // The member's first mailbox: the conversation with the numbers opens
-    // now, not at the night's rendezvous (5 October 2026) — the night is
-    // for the daily increments. Once per member, as at night.
-    if (await announce(memberId, est, deps, new Date())) saveState(loadState());
+    if (logEstimateOnce(memberId, est, new Date())) saveState(loadState());
     const boxes = (await mailScanStatus(memberId)).mailboxes;
     console.log(
       `[mail] analysed after adding a mailbox for ${memberId}: ` +
         boxes.map((b) => `${b.address} ${b.messages} messages${b.estimate ? `, ${b.estimate.to_read} to read, ~${b.estimate.hours} h, ${b.estimate.euros ?? "?"} €` : ", nothing left"}`).join("; "),
     );
-    // Added after the member's yes: it is not read without its own. Maurice
-    // says so in the mail conversation, with what reading it would take.
+    // Added after the member's yes: it is not read without its own, which
+    // its card under Settings → Mail asks for.
     const added = accountId ? getMailAccount(memberId, accountId) : null;
-    const box = added ? boxes.find((b) => b.address.toLowerCase() === added.address.toLowerCase()) : null;
-    if (added && box && !added.reading_approved_at && readingWanted(memberId) && box.estimate) {
-      sayNewMailbox(memberId, added.address, box);
+    if (added && !added.reading_approved_at && readingWanted(memberId)) {
+      console.log(`[mail] ${added.address} added after the yes for ${memberId}: waiting for its own, on its card`);
     }
   })().catch((err) => console.warn(`[mail] analysis after adding a mailbox for ${memberId}: ${(err as Error).message}`));
-}
-
-/** Maurice, in the mail conversation, about a mailbox added after the yes. */
-function sayNewMailbox(memberId: string, address: string, box: MailboxView): void {
-  const mc = mailConversationOf(memberId);
-  if (!mc) return;
-  ensureMailConversationTitle(memberId);
-  const msg = addMessage(mc.conversation_id, "assistant", newMailboxNotice(memberLocale(memberId), address, box), { mauriceId: null });
-  publishToRoom(mc.conversation_id, { type: "message", message: msg });
-  console.log(`[mail] ${address} added after the yes for ${memberId}: said in the mail conversation, waiting for its own yes`);
 }
 
 /** Sort the member's mail again with their contacts as they stand — after
@@ -321,8 +297,6 @@ export interface MailNightlyStats {
   messages: number;
   /** Stores reconciled tonight (weekly). */
   reconciled: number;
-  /** Conversations opened tonight with the numbers. */
-  opened: number;
   /** Members whose reading ran tonight (lot 4), and what it got through. */
   reading?: { members: number; judged: number; read: number; cost: number };
   /** Notes written tonight from the readings (lot 5). */
@@ -332,8 +306,10 @@ export interface MailNightlyStats {
 /** What the night remembers of one member. */
 export interface MemberMailState {
   reconciled_at: string | null;
-  /** The conversation with the numbers, opened once; null until then. */
+  /** When the estimate was first logged for the operator (and, until
+   *  10 October 2026, a conversation opened with the numbers). */
   announced_at: string | null;
+  /** That conversation, for the members who had one. */
   conversation_id: string | null;
 }
 
@@ -477,23 +453,13 @@ async function measure(memberId: string, d: MailScanDeps): Promise<ReadingEstima
   return { ...e, all: t.counts } as ReadingEstimate;
 }
 
-/** Open the conversation with the numbers — once per member, and only
- *  when the walk is done. Returns whether one was opened tonight. */
-async function announce(memberId: string, est: ReadingEstimate, d: MailScanDeps, now: Date): Promise<boolean> {
+/** What reading this member's mail would cost, said once in the log: the
+ *  operator's to know, not the member's. Returns whether it was said now. */
+function logEstimateOnce(memberId: string, est: ReadingEstimate, now: Date): boolean {
   const ms = memberState(memberId);
   if (ms.announced_at) return false;
-  const locale = d.locale(memberId);
-  const text = renderMailOpening({ locale, estimate: est });
-  const opened = await d.open({ memberId, text, title: listMailAccounts(memberId).length > 1 ? mailOpenerStrings(locale).title_all : mailOpeningTitle(locale), force: true });
-  if (!opened.ok) throw new Error(`the conversation could not be opened: ${opened.reason}`);
   ms.announced_at = now.toISOString();
-  ms.conversation_id = opened.conversation.id;
-  // The link that grants the tool taking the yes (services/mailApproval.ts).
-  linkMailConversation(memberId, opened.conversation.id);
-  // A word already given from the card, before there was a conversation.
-  if (carryReadingApproval(memberId)) console.log(`[mail] the reading was already approved for ${memberId}: said in the conversation just opened`);
-  // What it would cost is the operator's to know, not the member's.
-  console.log(`[mail] conversation ${opened.conversation.id} opened for ${memberId} with the numbers; ${est.to_read} to read, ${describeCost(readingCost(est))}`);
+  console.log(`[mail] ${memberId}: ${est.to_read} message(s) to read, ${describeCost(readingCost(est))}`);
   return true;
 }
 
@@ -516,7 +482,7 @@ async function doRun(d: MailScanDeps): Promise<MailNightlyOutcome> {
     console.log("[mail] nightly: no members, nothing to walk");
     return finish("no_members", null, null);
   }
-  const stats: MailNightlyStats = { members: members.length, walked: 0, skipped: 0, failed: 0, messages: 0, reconciled: 0, opened: 0 };
+  const stats: MailNightlyStats = { members: members.length, walked: 0, skipped: 0, failed: 0, messages: 0, reconciled: 0 };
   let lastError: string | null = null;
   for (const m of members) {
     try {
@@ -528,10 +494,10 @@ async function doRun(d: MailScanDeps): Promise<MailNightlyOutcome> {
       stats.messages += view.messages;
       if (view.state === "done") {
         stats.walked++;
-        // The walk is done: the free work, then the numbers, once.
+        // The walk is done: the free work, then the numbers.
         if (await reconcileIfDue(m.id, d, now())) stats.reconciled++;
         const est = await measure(m.id, d);
-        if (await announce(m.id, est, d, now())) stats.opened++;
+        logEstimateOnce(m.id, est, now());
         // The member said yes (lot 3): the reading passes, as far as the
         // night allows (lot 4). Its own failures are its own; the job says.
         if (d.wantsReading?.(m.id) && d.read) {
@@ -575,7 +541,7 @@ async function doRun(d: MailScanDeps): Promise<MailNightlyOutcome> {
   const ms = now().getTime() - started.getTime();
   console.log(
     `[mail] nightly: ${stats.walked} mailbox(es) walked, ${stats.skipped} member(s) without mail, ${stats.failed} failed, ` +
-      `${stats.messages} message(s) in the stores, ${stats.reconciled} reconciled, ${stats.opened} conversation(s) opened` +
+      `${stats.messages} message(s) in the stores, ${stats.reconciled} reconciled` +
       (stats.reading ? `, ${stats.reading.members} reading(s): ${stats.reading.judged} judged, ${stats.reading.read} read, ${stats.reading.cost.toFixed(3)} €` : "") +
       (stats.documents ? `, ${stats.documents.notes} note(s) written for ${stats.documents.members} member(s), ${stats.documents.cost.toFixed(3)} €` : "") +
       `, in ${Math.round(ms / 1000)}s`,
@@ -596,14 +562,6 @@ export function runMailNightly(d: MailScanDeps = deps): Promise<MailNightlyOutco
 
 /** Tick every ten minutes; run once per local day from HOUR on. */
 export function scheduleMailNightly(): void {
-  // The conversations opened before `mail_conversations` existed are linked
-  // from the night's own record, once; nothing to do afterwards.
-  try {
-    const added = backfillMailConversations(loadState().members);
-    if (added) console.log(`[mail] ${added} mail conversation(s) linked from the nightly record`);
-  } catch (err) {
-    console.warn(`[mail] could not link the mail conversations: ${(err as Error).message}`);
-  }
   if (!mailNightlyOn()) {
     console.log("[mail] nightly header walk off");
     return;

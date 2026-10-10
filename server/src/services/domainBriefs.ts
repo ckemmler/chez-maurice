@@ -475,15 +475,21 @@ export async function findMaterial(
   for (const [id, c] of cands) {
     const convo = db
       .query(
-        `SELECT c.title, c.maurice_id, c.imported_at FROM conversations c
+        `SELECT c.title, c.maurice_id, c.imported_at, c.maurice_bound_at FROM conversations c
          JOIN conversation_participants p ON p.conversation_id = c.id AND p.member_id = ?
          WHERE c.id = ?`,
       )
-      .get(memberId, id) as { title: string | null; maurice_id: string | null; imported_at: string | null } | null;
+      .get(memberId, id) as { title: string | null; maurice_id: string | null; imported_at: string | null; maurice_bound_at: string | null } | null;
     if (!convo) continue; // not the member's: the corpus said so, the database decides
     if (convo.maurice_id && convo.maurice_id !== domain.id) continue; // another domain's
     // Imported since the last brief: its messages predate `since`, read it whole.
-    const fresh = !!(since && importedAfter && convo.imported_at && convo.imported_at > importedAfter);
+    // Or bound to this domain since (the night's filing, the member's hand):
+    // new to the brief whatever its dates.
+    const fresh = !!(
+      since && importedAfter &&
+      ((convo.imported_at && convo.imported_at > importedAfter) ||
+        (convo.maurice_id === domain.id && convo.maurice_bound_at && convo.maurice_bound_at > importedAfter))
+    );
     const turns = turnsOf(id, fresh ? null : since);
     // Nothing the member said since: Maurice's own reply is not new matter.
     if (!turns.some((t) => t.role === "user")) continue;

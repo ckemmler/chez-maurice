@@ -720,7 +720,11 @@ struct ServerConversation: Decodable, Identifiable {
     /// Mutable: a rename updates the cached row in place.
     var title: String?
     /// The specialized Maurice this conversation uses; nil = everyday Maurice.
-    let maurice_id: String?
+    /// Mutable: binding or unbinding updates the cached row in place.
+    var maurice_id: String?
+    /// How it came to that domain when not by your hand: "auto" — the night
+    /// filed it, and you can take it back.
+    var maurice_bound_by: String?
     /// Provenance; nil = native, "anthropic" = imported from a Claude.ai export.
     let origin: String?
     /// Who opened it: "member" (the default), or "maurice" — a conversation
@@ -765,13 +769,14 @@ struct ConversationSearchResponse: Decodable {
     let results: [ConversationSearchHit]
 }
 
-// MARK: - Domain proposals (the drawer "Define my domains", P2-D)
+// MARK: - Domain proposals (the list's section "Proposals")
 
 /// One proposal of the night, as GET /api/domains/proposals lists it: the
-/// name and paragraph the night wrote, its conversations, its weight on five
-/// dots relative to the biggest, its share of the member's conversations,
-/// how many were recent, one line of the summary, and its state.
-struct DomainProposal: Decodable, Identifiable, Equatable {
+/// name and paragraph the night wrote, its conversations and mail threads,
+/// its weight on five dots relative to the biggest, its share of the member's
+/// conversations, how many were recent, one line of the summary, when it was
+/// made, and its state — open, or settled (adopted, put away).
+struct DomainProposal: Decodable, Identifiable, Equatable, Hashable {
     let id: String
     let name: String
     let summary: String
@@ -779,8 +784,7 @@ struct DomainProposal: Decodable, Identifiable, Equatable {
     let state: String
     let verdict: String?
     let conversations: Int
-    /// Mail threads it carries (their digests), beside its conversations —
-    /// absent from a server older than 27 September 2026.
+    /// Mail threads it carries (their digests), beside its conversations.
     let mail_threads: Int?
     let weight: Int
     let share: Int
@@ -788,21 +792,48 @@ struct DomainProposal: Decodable, Identifiable, Equatable {
     let split_hint: String?
     let from: String?
     let to: String?
-    let conversation_id: String?
     let domain_id: String?
+    /// Made since the member last opened the list.
+    let is_new: Bool?
+    let created_at: String?
+    let updated_at: String?
+    /// A few titles, each prefixed by its day.
+    let sample: [String]?
 
     var isAlive: Bool { verdict != "lived" }
     var isOpen: Bool { state == "proposed" }
+    /// Put away by the member, or by the old six-week rule: can come back.
+    var canRestore: Bool { state == "dismissed" || state == "expired" }
 }
 
 struct DomainProposalsResponse: Decodable {
-    let conversation_id: String?
     let total_conversations: Int
     let proposals: [DomainProposal]
     let settled: [DomainProposal]?
+    /// How many were made since the member last looked: the badge.
+    let unseen: Int?
 }
 
-/// One line of the drawer's validation (POST /api/domains/proposals/apply).
+/// `GET /api/domains/proposals/:id`: the proposal with everything it holds,
+/// for the page that cuts it.
+struct DomainProposalDetail: Decodable {
+    struct Line: Decodable, Identifiable, Hashable { let id: String; let date: String?; let title: String? }
+    struct Thread: Decodable, Identifiable, Hashable {
+        let path: String; let from: String?; let to: String?; let title: String?
+        var id: String { path }
+    }
+    let id: String
+    let name: String
+    let summary: String
+    let state: String
+    let conversations_list: [Line]?
+    let mail_list: [Thread]?
+}
+
+struct DomainProposalEnvelope: Decodable { let proposal: DomainProposalDetail }
+struct DomainProposalCounts: Decodable { let open: Int; let unseen: Int }
+
+/// One line of a validation (POST /api/domains/proposals/apply).
 struct DomainProposalApplyItem: Encodable {
     let id: String
     /// "adopt", "dismiss" or "keep" (rename only).
@@ -820,8 +851,28 @@ struct DomainProposalApplyResult: Decodable {
     let dismissed: [Named]
     let renamed: [Named]
     let errors: [Failed]
-    let message_id: String?
-    let conversation_id: String?
+}
+
+/// One part of a cut (POST /api/domains/proposals/:id/split).
+struct DomainProposalSplitPart: Encodable {
+    let name: String
+    let conversation_ids: [String]
+    let mail: [String]
+}
+
+/// `GET /api/domains/:id/conversations`: what is bound to a domain, and how
+/// each came there — `bound_by == "auto"` when the night filed it.
+struct DomainConversations: Decodable {
+    struct Row: Decodable, Identifiable, Hashable {
+        let id: String
+        let title: String?
+        let bound_by: String?
+        let updated_at: String?
+        var isAuto: Bool { bound_by == "auto" }
+    }
+    let conversations: [Row]
+    let total: Int
+    let auto: Int
 }
 
 struct ServerConversationDetail: Decodable {

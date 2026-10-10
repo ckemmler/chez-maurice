@@ -22,7 +22,6 @@ const { addModel } = await import("../src/services/models");
 const { pinNewInvocations } = await import("../src/services/ancillary");
 const { isServerOnlyTool } = await import("../src/services/toolFamilies");
 const { createSession } = await import("../src/services/auth");
-const { createConversation } = await import("../src/services/conversations");
 const admin = (await import("../src/routes/admin")).default;
 
 const ANNA = "mr-anna";
@@ -127,7 +126,7 @@ beforeEach(() => {
   capacity = [];
   refuseNext = 0;
   db.run(`DELETE FROM spend_ledger WHERE user_id = ?`, [ANNA]);
-  db.run(`DELETE FROM mail_conversations WHERE member_id = ?`, [ANNA]);
+  db.run(`DELETE FROM mail_reading_consent WHERE member_id = ?`, [ANNA]);
   budget.setHouseholdDailyCap(null);
   budget.setMemberDailyCap(ANNA, null);
   delete process.env.MAURICE_SPEND_CAP_USD;
@@ -296,13 +295,51 @@ test("nothing to do without a yes, or with a declined job", async () => {
 });
 
 test("the night reads for a member whose word is yes, and for nobody else", async () => {
-  const c = createConversation(ANNA, null, { openedBy: "maurice" }).id;
-  approval.linkMailConversation(ANNA, c);
+  // No word yet, no mailbox approved: nothing is read.
+  expect(approval.readingState(ANNA)).toBe("pending");
   expect(reading.readingWanted(ANNA)).toBe(false);
-  db.run(`UPDATE mail_conversations SET reading = 'approved' WHERE member_id = ?`, [ANNA]);
+  // The word is the member's row, with no conversation anywhere near it.
+  db.run(`INSERT INTO mail_reading_consent (member_id, reading) VALUES (?, 'approved')`, [ANNA]);
   expect(reading.readingWanted(ANNA)).toBe(true);
-  db.run(`UPDATE mail_conversations SET reading = 'declined' WHERE member_id = ?`, [ANNA]);
+  db.run(`UPDATE mail_reading_consent SET reading = 'declined' WHERE member_id = ?`, [ANNA]);
   expect(reading.readingWanted(ANNA)).toBe(false);
+  expect(reading.readingWanted("mr-nobody")).toBe(false);
+});
+
+test("the night's run reads for the yes, skips the no, and opens or says nothing to the member", async () => {
+  const counts = () => ({
+    opened: (db.query(`SELECT COUNT(*) AS n FROM conversations WHERE user_id = ? AND opened_by = 'maurice'`).get(ANNA) as { n: number }).n,
+    said: (db.query(`SELECT COUNT(*) AS n FROM messages WHERE role = 'assistant' AND conversation_id IN (SELECT id FROM conversations WHERE user_id = ?)`).get(ANNA) as { n: number }).n,
+  });
+  const before = counts();
+  const read: string[] = [];
+  const walk = async (_m: string, name: string) => {
+    if (name === "scan_mailbox") return { status: "started", job: { id: "w", state: "running" } };
+    if (name === "scan_status") return { running: false, job: { id: "w", state: "done", counts: { seen: 6, written: 6 }, last_error: null }, totals: { messages: 6, locations: 6 } };
+    if (name === "reconcile_mailbox") return { status: "started", job: { id: "rec", kind: "reconcile", state: "running" } };
+    if (name === "triage_mailbox") return { messages: 6, counts: { bulk: 2, correspondence: 3, other: 1 } };
+    if (name === "calibrate_reading") return { sampled: 6 };
+    if (name === "estimate_reading") return { years: 3, messages: 6, window: { messages: 6, bulk: 2, correspondence: 3, other: 1 }, to_read: 4, tokens: { light: 400, full: 3000 }, nights: { low: 1, high: 1 } };
+    throw new Error(`unexpected tool ${name}`);
+  };
+  const night = {
+    call: walk, members: () => [{ id: ANNA }], pollMs: 1, wantsReading: reading.readingWanted,
+    read: async (m: string) => { read.push(m); return { outcome: "done", member_id: m, judged: 4, read: 4, cost: 0 } as any; },
+  } as Parameters<typeof scan.runMailNightly>[0];
+  scan._resetMailNightlyState();
+  try {
+    db.run(`INSERT INTO mail_reading_consent (member_id, reading) VALUES (?, 'declined')`, [ANNA]);
+    expect(await scan.runMailNightly(night)).toBe("walked");
+    expect(read).toEqual([]);
+    db.run(`UPDATE mail_reading_consent SET reading = 'approved' WHERE member_id = ?`, [ANNA]);
+    expect(await scan.runMailNightly(night)).toBe("walked");
+    expect(read).toEqual([ANNA]);
+    expect(scan.mailNightlyStatus().last_stats).toMatchObject({ walked: 1, reading: { members: 1, judged: 4, read: 4 } });
+    expect(scan.mailNightlyStatus().last_stats).not.toHaveProperty("opened");
+    expect(counts()).toEqual(before);
+  } finally {
+    scan._resetMailNightlyState();
+  }
 });
 
 test("the admin route starts a run by hand and reports it", async () => {

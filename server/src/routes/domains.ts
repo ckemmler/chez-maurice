@@ -13,10 +13,16 @@ import { deleteBrief, getBrief, refreshBrief, setBriefText, type BriefRow } from
 import {
   applyProposals,
   getProposal,
+  markProposalsSeen,
   memberConversationCount,
+  mergeProposals,
+  proposalCounts,
+  proposalDetail,
   proposalView,
   proposalsForMember,
   renameProposal,
+  restoreProposal,
+  splitProposal,
   type ApplyItem,
   type Proposal,
 } from "../services/domainProposals";
@@ -33,12 +39,18 @@ import { seededNotesOf } from "../services/domainSeeding";
 // A reading companion (kind `companion`) has no brief: the routes answer 404
 // for it, and the row it is stays reachable through /api/maurices.
 //
-// The proposal routes (P2-D, 20 September 2026) are the app's drawer "Define
-// my domains": what the night proposed to the member, with each proposal's
-// weight, and the member's word on it — rename, adopt, put away, one at a
-// time or the whole lot — on the same functions as the tools of the
-// conversation Maurice opened (services/domainProposals.ts). The member is
-// the caller; a proposal of someone else's is not found.
+// The proposal routes are the app's list of what the night proposed to the
+// member (P2-D, 20 September 2026; out of the conversation Maurice used to
+// open since 10 October 2026): every open proposal with its weight, what was
+// adopted or put away under it, and the member's word — rename, adopt, put
+// away, come back on it, merge, cut, one at a time or several at once — on
+// the same functions as the `domains__*` tools (services/domainProposals.ts).
+// The member is the caller; a proposal of someone else's is not found.
+// Nothing here posts a message anywhere.
+//
+// The conversations of a domain are listed here too, with how each came to
+// it, so the member can take back the ones the night filed
+// (`PATCH /api/conversations/:id/maurice` binds and unbinds).
 
 const domains = new Hono();
 
@@ -67,14 +79,61 @@ async function jsonBody(c: any): Promise<any | null> {
 
 const str = (v: unknown): string | undefined => (typeof v === "string" ? v : undefined);
 
-// GET /api/domains/proposals — the member's open proposals, alive first,
-// each with its weight (1–5, relative to the biggest), its share of the
-// member's conversations, how many were recent, one line of summary, and
-// the conversation that carries them; the settled ones of that conversation
-// ride along for the record. An empty `proposals` means the drawer has
-// nothing to show — the app hides its button on that.
+// GET /api/domains/proposals — the member's proposals: `proposals`, the
+// open ones, alive first, each with its weight (1–5, relative to the
+// biggest), its share of the member's conversations, how many were recent,
+// its conversations and mail threads, one line of summary, when it was made
+// and whether that was since the member last looked (`is_new`); `settled`,
+// what was adopted, put away or left to lapse, newest first; `unseen`, the
+// count behind the app's badge.
 domains.get("/proposals", (c) => {
   return c.json(proposalsForMember(c.get("userId")));
+});
+
+// POST /api/domains/proposals/seen — the member opened the list: the badge
+// goes, and what is there is no longer new.
+domains.post("/proposals/seen", (c) => {
+  markProposalsSeen(c.get("userId"));
+  return c.json(proposalCounts(c.get("userId")));
+});
+
+// POST /api/domains/proposals/merge — `{ ids, name?, summary? }`: two or
+// more open proposals into one new one, which is answered.
+domains.post("/proposals/merge", async (c) => {
+  const body = await jsonBody(c);
+  const ids = Array.isArray(body?.ids) ? body.ids.map(String) : null;
+  if (!ids) return c.json({ error: "Expected a JSON body with `ids`" }, 400);
+  const uid = c.get("userId");
+  const r = mergeProposals(uid, ids, { name: str(body.name), summary: str(body.summary) });
+  if ("error" in r) return c.json({ error: r.error }, 422);
+  return c.json({ proposal: proposalDetail(r.merged), from: r.from });
+});
+
+// POST /api/domains/proposals/apply — several at once:
+// `{ items: [{ id, action: adopt | dismiss | keep, name?, summary?, seed? }] }`.
+// `keep` only renames. Answers with what was adopted, dismissed and renamed,
+// and the errors per item.
+domains.post("/proposals/apply", async (c) => {
+  const body = await jsonBody(c);
+  const items = Array.isArray(body?.items) ? body.items : null;
+  if (!items) return c.json({ error: "Expected a JSON body with `items`" }, 400);
+  const clean: ApplyItem[] = [];
+  for (const it of items) {
+    const id = str(it?.id);
+    const action = str(it?.action);
+    if (!id || !action || !["adopt", "dismiss", "keep"].includes(action)) continue;
+    clean.push({ id, action: action as ApplyItem["action"], name: str(it.name), summary: str(it.summary), seed: it.seed === true });
+  }
+  const r = await applyProposals(c.get("userId"), clean);
+  return c.json(r);
+});
+
+// GET /api/domains/proposals/:id — one proposal in full, whatever its state:
+// every conversation and mail thread it holds, for the page that cuts it.
+domains.get("/proposals/:id", (c) => {
+  const p = ownProposal(c);
+  if (!p) return c.json({ error: "Not found" }, 404);
+  return c.json({ proposal: proposalDetail(p) });
 });
 
 // PATCH /api/domains/proposals/:id — `{ name?, summary? }`, the member's words.
@@ -91,42 +150,47 @@ domains.patch("/proposals/:id", async (c) => {
 // domain is created as the tool creates it (kind domain, conversations bound,
 // first brief in the background); `seed: true` also writes the garden notes,
 // in the background — the box is off by default, a yes to the domain is not
-// a yes to the notes. Maurice says what was done in the conversation.
+// a yes to the notes.
 domains.post("/proposals/:id/adopt", async (c) => {
   const p = proposalOrNotFound(c);
   if (p instanceof Response) return p;
   const body = (await jsonBody(c)) ?? {};
   const r = await applyProposals(p.member_id, [{ id: p.id, action: "adopt", name: str(body.name), summary: str(body.summary), seed: body.seed === true }]);
   if (r.errors.length) return c.json({ error: r.errors[0]!.error }, 422);
-  return c.json({ adopted: r.adopted[0], message_id: r.message_id });
+  return c.json({ adopted: r.adopted[0] });
 });
 
 // POST /api/domains/proposals/:id/dismiss — put away; its conversations
-// never come up again.
+// never come up again, and it does not come back by itself.
 domains.post("/proposals/:id/dismiss", async (c) => {
   const p = proposalOrNotFound(c);
   if (p instanceof Response) return p;
   const r = await applyProposals(p.member_id, [{ id: p.id, action: "dismiss" }]);
-  return c.json({ dismissed: r.dismissed[0], message_id: r.message_id });
+  return c.json({ dismissed: r.dismissed[0] });
 });
 
-// POST /api/domains/proposals/apply — the drawer's validation in one go:
-// `{ items: [{ id, action: adopt | dismiss | keep, name?, summary?, seed? }] }`.
-// `keep` only renames. Answers with what was adopted, dismissed and renamed,
-// the errors per item, and the id of the message Maurice left.
-domains.post("/proposals/apply", async (c) => {
+// POST /api/domains/proposals/:id/restore — the member comes back on a
+// proposal put away (by them, or by the old six-week rule): open again.
+domains.post("/proposals/:id/restore", (c) => {
+  const p = ownProposal(c);
+  if (!p) return c.json({ error: "Not found" }, 404);
+  const r = restoreProposal(p);
+  if ("error" in r) return c.json({ error: r.error, state: p.state }, 409);
+  return c.json({ proposal: proposalDetail(r) });
+});
+
+// POST /api/domains/proposals/:id/split — `{ parts: [{ name, summary?,
+// conversation_ids?, mail? }] }`: each part becomes a proposal of its own;
+// what is assigned to none stays in the original.
+domains.post("/proposals/:id/split", async (c) => {
+  const p = proposalOrNotFound(c);
+  if (p instanceof Response) return p;
   const body = await jsonBody(c);
-  const items = Array.isArray(body?.items) ? body.items : null;
-  if (!items) return c.json({ error: "Expected a JSON body with `items`" }, 400);
-  const clean: ApplyItem[] = [];
-  for (const it of items) {
-    const id = str(it?.id);
-    const action = str(it?.action);
-    if (!id || !action || !["adopt", "dismiss", "keep"].includes(action)) continue;
-    clean.push({ id, action: action as ApplyItem["action"], name: str(it.name), summary: str(it.summary), seed: it.seed === true });
-  }
-  const r = await applyProposals(c.get("userId"), clean);
-  return c.json(r);
+  if (!Array.isArray(body?.parts)) return c.json({ error: "Expected a JSON body with `parts`" }, 400);
+  const r = splitProposal(p, body.parts);
+  if ("error" in r) return c.json({ error: r.error }, 422);
+  const rest = getProposal(p.id);
+  return c.json({ parts: r.parts.map((part) => proposalDetail(part)), left: r.left, original: rest && rest.state === "proposed" ? proposalDetail(rest) : null });
 });
 
 /** The domain when it is the caller's, else null. */
@@ -202,7 +266,35 @@ domains.get("/", (c) => {
     book_id: companionBookId(m),
     conversation_id: pinnedConversation(m.id, uid),
   }));
-  return c.json({ domains: list, companions });
+  // What waits in the list of proposals, for the badge on the button that
+  // opens this list — the one sign the member gets that there is something new.
+  return c.json({ domains: list, companions, proposals: proposalCounts(uid) });
+});
+
+// GET /api/domains/:id/conversations — the conversations bound to a domain
+// of the caller's, the most recently touched first, each with how it came
+// there (`bound_by`: `auto` when the night filed it, else null) — the page
+// lists them and takes back the ones that do not belong
+// (`PATCH /api/conversations/:id/maurice { maurice_id: null }`). `?limit`
+// (50, at most 200), `?auto=1` for the night's only.
+domains.get("/:id/conversations", (c) => {
+  const domain = ownDomain(c);
+  if (!domain) return notFound(c);
+  const uid = c.get("userId");
+  const limit = Math.min(Math.max(Number(c.req.query("limit")) || 50, 1), 200);
+  const autoOnly = c.req.query("auto") === "1";
+  const rows = db
+    .query(
+      `SELECT c.id, COALESCE(c.title, '') AS title, c.maurice_bound_by AS bound_by, c.maurice_bound_at AS bound_at, c.origin, c.updated_at
+         FROM conversations c JOIN conversation_participants p ON p.conversation_id = c.id AND p.member_id = ?
+        WHERE c.maurice_id = ? ${autoOnly ? "AND c.maurice_bound_by = 'auto'" : ""}
+        ORDER BY (c.maurice_bound_by = 'auto') DESC, COALESCE(c.maurice_bound_at, c.updated_at) DESC LIMIT ?`,
+    )
+    .all(uid, domain.id, limit);
+  const counts = db
+    .query(`SELECT COUNT(*) AS total, COALESCE(SUM(c.maurice_bound_by = 'auto'), 0) AS auto FROM conversations c WHERE c.maurice_id = ? AND c.user_id = ?`)
+    .get(domain.id, uid) as { total: number; auto: number };
+  return c.json({ conversations: rows, total: Number(counts.total), auto: Number(counts.auto) });
 });
 
 // GET /api/domains/:id/brief — the brief as it stands, or `brief: null` when

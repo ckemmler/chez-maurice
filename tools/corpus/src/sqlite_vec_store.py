@@ -457,6 +457,17 @@ class SqliteVecStore:
 
         return _centroids(pairs())
 
+    def conversation_signature(self, *, member_id: Optional[str] = None) -> tuple:
+        """What changes when a conversation chunk is written or removed: the
+        key of anything cached from `conversation_centroids`, with the
+        member it was read for."""
+        key = self._resolve(member_id)
+        with self._lock:
+            row = self._conn_for_key(key).execute(
+                "SELECT COUNT(*), COALESCE(MAX(id), 0) FROM chunks WHERE source_type = 'conversation'"
+            ).fetchone()
+        return (key, int(row[0]), int(row[1]))
+
     def note_centroids(
         self,
         *,

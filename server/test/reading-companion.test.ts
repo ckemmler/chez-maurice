@@ -105,6 +105,15 @@ test("user turns and turns without tools leave no trail", () => {
   expect(toolTrail({ role: "assistant", data: [] })).toBe("");
 });
 
+test("a domain the server recognised is a mark for the app, not a tool result: it leaves no trail", () => {
+  const recognised = { tool: "domain_recognised", data: { domain: "The violin", domain_id: "dom-1", icon: null, votes: 9, k: 12, strong: true } };
+  expect(toolTrail({ role: "assistant", data: [recognised] })).toBe("");
+  const trail = toolTrail({ role: "assistant", data: [recognised, { tool: "calibre__list_books", data: { id: 190 } }] });
+  expect(trail).toContain('calibre__list_books → {"id":190}');
+  expect(trail).not.toContain("domain_recognised");
+  expect(trail).not.toContain("The violin");
+});
+
 // ── Chat Completions client ──────────────────────────────────────
 
 function sseResponse(lines: string[]): Response {

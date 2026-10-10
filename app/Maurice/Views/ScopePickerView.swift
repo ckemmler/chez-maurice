@@ -141,8 +141,22 @@ struct SidebarView: View {
                 }
                 .buttonStyle(.plain)
                 .glassControl(theme, in: RoundedRectangle(cornerRadius: 13, style: .continuous))
+                // Proposals made since the list was last opened: this dot is
+                // the one sign of them, and it goes when the list is read.
+                .overlay(alignment: .topTrailing) {
+                    if chat.proposalsUnseen > 0 {
+                        Text("\(chat.proposalsUnseen)")
+                            .font(.system(size: 10, weight: .semibold, design: .rounded))
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 5).frame(minWidth: 17, minHeight: 17)
+                            .background(accent, in: Capsule())
+                            .offset(x: 5, y: -5)
+                            .allowsHitTesting(false)
+                    }
+                }
                 .help(session.localized("domains.open.help"))
                 .accessibilityLabel(session.localized("domains.title"))
+                .accessibilityValue(chat.proposalsUnseen > 0 ? String(format: session.localized("proposals.badge"), chat.proposalsUnseen) : "")
             }
             .padding(.horizontal, 10)
             .padding(.bottom, 8)

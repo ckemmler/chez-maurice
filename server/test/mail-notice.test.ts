@@ -16,7 +16,7 @@ const TOOLS = ["email__search", "email__exchanges", "email__get_message", "garde
 function reset() {
   db.run(`DELETE FROM mail_accounts WHERE member_id = ?`, [ANNA]);
   db.run(`DELETE FROM contact_accounts WHERE member_id = ?`, [ANNA]);
-  db.run(`DELETE FROM mail_conversations WHERE member_id = ?`, [ANNA]);
+  db.run(`DELETE FROM mail_reading_consent WHERE member_id = ?`, [ANNA]);
 }
 
 beforeEach(() => {
@@ -50,7 +50,7 @@ test("mailboxes linked, no reading yet: the store first, then the live mailbox; 
 
 test("the reading approved and an address book linked: the fiche comes first, with its fragments", () => {
   linkMail();
-  db.run(`INSERT INTO mail_conversations (member_id, conversation_id, reading) VALUES (?, 'c-mn', 'approved')`, [ANNA]);
+  db.run(`INSERT INTO mail_reading_consent (member_id, reading) VALUES (?, 'approved')`, [ANNA]);
   db.run(`INSERT INTO contact_accounts (id, member_id, username, secret, state, cards) VALUES ('mn-c', ?, 'anna@icloud.com', 'v1:x', 'ok', 40)`, [ANNA]);
   const n = mailNotice(TOOLS, ANNA, "Anna");
   expect(n).toContain("and their address book");

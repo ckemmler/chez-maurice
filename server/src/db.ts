@@ -1083,16 +1083,16 @@ try { db.run(`ALTER TABLE conversations ADD COLUMN imported_at TEXT`); } catch {
 try { db.run(`ALTER TABLE households ADD COLUMN maurice_opens_min_days INTEGER`); } catch {}
 
 // The domain proposals (P2-B, 19 September 2026): what the night's mapping
-// found in a member's unattached conversations and offers them in a
-// conversation Maurice opens (services/domainMapping.ts, domainProposals.ts).
+// found in a member's unattached conversations and offers them — in a
+// conversation Maurice opened until 10 October 2026, in the app's list of
+// domains since (services/domainMapping.ts, domainProposals.ts).
 // One row per proposed domain: its name and paragraph as the night model
 // wrote them, the conversations that justify it, and its state — `proposed`
 // while the member has not said, `adopted` once a domain was created from it
 // (`maurice_id`), `dismissed` when refused (its conversations never come up
 // again), `expired` when a proposal waited too long unanswered. `presented`
-// marks the three the opening message shows; `conversation_id` is the
-// conversation carrying the proposal, and the only one where the
-// `domains__propose|adjust|adopt` tools exist. `stats_json` keeps the
+// marks the alive ones; `conversation_id` is the conversation that carried
+// the proposal when one did (none since 10 October 2026). `stats_json` keeps the
 // numbers behind the verdict (size, months, recency, cohesion, the model's
 // split hint).
 db.run(`
@@ -1157,6 +1157,41 @@ db.run(`
     seen_at   TEXT NOT NULL DEFAULT (datetime('now')),
     PRIMARY KEY (member_id, kind, item)
   )
+`);
+
+// The proposals out of the conversation (10 October 2026). They are listed
+// in the app, beside the member's domains, and no conversation is opened to
+// carry them any more — `domain_proposals.conversation_id` stays for the ones
+// a conversation once carried, and nothing reads it as a grant. What is new
+// since the member last opened that list is counted from this date.
+try { db.run(`ALTER TABLE users ADD COLUMN domain_proposals_seen_at TEXT`); } catch {}
+
+// How a conversation came to its domain, when it was not the member's hand
+// or an adoption: `auto` — the night recognised it (services/domainMapping.ts)
+// — or `detached`, on a conversation the member took back out of a domain,
+// which the night then never binds again. NULL everywhere else.
+try { db.run(`ALTER TABLE conversations ADD COLUMN maurice_bound_by TEXT`); } catch {}
+try { db.run(`ALTER TABLE conversations ADD COLUMN maurice_bound_at TEXT`); } catch {}
+
+// The member's word on the reading of their mail, on its own (10 October
+// 2026). It used to live on the row of the conversation Maurice opened to
+// ask (`mail_conversations.reading`); Maurice no longer opens one, and the
+// word is given on the card under Settings → Mail. One row per member who
+// answered. Filled from the conversations that carried an answer — at every
+// start, and only for a member with no row yet — so nobody's yes or no is
+// lost; `mail_conversations` is read by nothing after
+// that and stays as the record of which conversation it was.
+db.run(`
+  CREATE TABLE IF NOT EXISTS mail_reading_consent (
+    member_id  TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+    reading    TEXT NOT NULL CHECK (reading IN ('approved', 'declined')),
+    decided_at TEXT NOT NULL DEFAULT (datetime('now'))
+  )
+`);
+db.run(`
+  INSERT OR IGNORE INTO mail_reading_consent (member_id, reading, decided_at)
+  SELECT member_id, reading, COALESCE(decided_at, opened_at) FROM mail_conversations
+   WHERE reading IN ('approved', 'declined') AND member_id IN (SELECT id FROM users)
 `);
 
 // Migration: an earlier seed minted fabricated ids (opus/haiku at the sonnet

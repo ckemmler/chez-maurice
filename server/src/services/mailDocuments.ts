@@ -6,19 +6,15 @@ import { slugify } from "../../data-api/services/articleExtract";
 import { ancillaryComplete, ancillaryModel, type AncillaryRequest, type AncillaryResult } from "./ancillary";
 import { recordSpend, verdict as budgetVerdict } from "./budget";
 import { invalidateNotes } from "./composer/notes";
-import { addMessage } from "./conversations";
 import { LANGUAGE, memberLocale } from "./domainBriefs";
 import { parseJsonObject } from "./domainMapping";
 import { freeSlug } from "./domainSeeding";
 import { listMailAccounts } from "./mailAccounts";
-import { ensureMailConversationTitle, mailConversationOf } from "./mailApproval";
-import { mailOpenerStrings } from "./mailOpener";
 import { mailToolCall } from "./mailScan";
 import { contactCards, type ContactCard } from "./contactAccounts";
 import { EXCHANGES_SHOWN, consolidate, eraseMailFiles, indexPeopleFiches, resolvePeople, writePerson, type Exchanges } from "./mailPeople";
 import { indexGardenPaths, unindexGardenPath } from "../../data-api/services/gardenIndex";
 import { getModel } from "./models";
-import { publishToRoom } from "./roomBus";
 import { getUser } from "./users";
 
 // The documents — lot 5 of specs/mail-import.md, built 26 September 2026
@@ -109,7 +105,6 @@ export interface DocumentsRun {
   cost: number;
   model: string;
   error: string | null;
-  said: string | null;
   /** The mailboxes the notes written come from — their new messages. */
   mailboxes?: string[];
 }
@@ -613,7 +608,7 @@ export async function writeMailDocuments(memberId: string, d: MailDocumentsDeps 
 async function documentsPass(memberId: string, d: MailDocumentsDeps): Promise<DocumentsRun> {
   const now = d.now?.() ?? new Date();
   const model = ancillaryModel(WRITE_INVOCATION);
-  const run: DocumentsRun = { outcome: "nothing", member_id: memberId, written: [], skipped: { unchanged: 0, deleted: 0, too_few: 0, declined: 0 }, cost: 0, model, error: null, said: null };
+  const run: DocumentsRun = { outcome: "nothing", member_id: memberId, written: [], skipped: { unchanged: 0, deleted: 0, too_few: 0, declined: 0 }, cost: 0, model, error: null };
   /** Where the new messages behind the written notes were read. */
   const fromBoxes = new Set<string>();
   const noteBoxes = (msgs: MaterialMessage[], known: Iterable<string>) => {
@@ -853,37 +848,15 @@ async function documentsPass(memberId: string, d: MailDocumentsDeps): Promise<Do
   }
   run.mailboxes = [...fromBoxes].sort();
   if (run.written.length) {
+    // Nothing is said to the member: the notes are in their garden, under
+    // the hub « My mail », marked as not reviewed (10 October 2026).
     if (run.outcome === "nothing") run.outcome = "written";
-    // Maurice speaks of fiches and digests, not of the index alone.
-    if (run.written.some((n) => n.kind !== "hub")) run.said = sayDocumentsWritten(memberId, run, garden);
   }
   console.log(
     `[mail] documents for ${memberId}: ${run.written.length} note(s) written (${run.written.filter((n) => n.kind === "person").length} fiche(s), ${run.written.filter((n) => n.kind === "thread").length} digest(s)), ` +
       `${run.skipped.unchanged} unchanged, ${run.skipped.deleted} left deleted, ${run.skipped.declined} not a person, ${run.cost.toFixed(4)} € with ${model}${run.error ? `; ${run.outcome}: ${run.error}` : ""}`,
   );
   return run;
-}
-
-/** Maurice comes back in the mail conversation with what he wrote: the
- *  sentence in the member's language and the notes' links. Null when the
- *  member has no mail conversation. */
-export function sayDocumentsWritten(memberId: string, run: DocumentsRun, garden: GardenRef): string | null {
-  const mc = mailConversationOf(memberId);
-  if (!mc) return null;
-  const t = mailOpenerStrings(memberLocale(memberId));
-  const fiches = run.written.filter((n) => n.kind === "person").length;
-  const digests = run.written.filter((n) => n.kind === "thread").length;
-  const hub = run.written.find((n) => n.kind === "hub");
-  const lines = run.written.filter((n) => n.kind !== "hub").slice(0, 12).map((n) => `- ${n.title}`);
-  // Which mailboxes: the conversation speaks of all of them.
-  const labels = mailboxLabels(listMailAccounts(memberId));
-  const boxes = (run.mailboxes ?? []).map((b) => labels.get(b) ?? b);
-  const from = boxes.length ? " " + t.from_boxes.replace("%s", joinList(boxes, memberLocale(memberId))) : "";
-  const text = [t.written.replace("%1", String(fiches)).replace("%2", String(digests)) + from, hub ? hub.web_path : "", lines.join("\n")].filter(Boolean).join("\n\n");
-  ensureMailConversationTitle(memberId);
-  const msg = addMessage(mc.conversation_id, "assistant", text, { mauriceId: null });
-  publishToRoom(mc.conversation_id, { type: "message", message: msg });
-  return msg.id;
 }
 
 /** The member's own cards in their address book — those holding one of
@@ -1033,13 +1006,4 @@ export function startMailDocuments(memberId: string): Promise<DocumentsRun> {
 
 export function mailDocumentsStatus(memberId: string): { running: boolean; last: DocumentsRun | null } {
   return { running: inflight.has(memberId), last: lastRuns.get(memberId) ?? null };
-}
-
-/** "Proton, Gmail et candide@contactoffice.com", in the member's language. */
-function joinList(items: string[], locale: string): string {
-  try {
-    return new Intl.ListFormat(locale, { style: "long", type: "conjunction" }).format(items);
-  } catch {
-    return items.join(", ");
-  }
 }

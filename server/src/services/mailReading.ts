@@ -3,7 +3,7 @@ import { recordSpend, verdict as budgetVerdict } from "./budget";
 import { memberLanguage } from "./domainBriefs";
 import { parseJsonObject } from "./domainMapping";
 import { approvedMailboxAddresses } from "./mailAccounts";
-import { mailConversationOf } from "./mailApproval";
+import { readingApproved } from "./mailApproval";
 import { mailToolCall } from "./mailScan";
 import { getModel } from "./models";
 import type { TurnUsage } from "./pricing";
@@ -398,13 +398,9 @@ function memberDisplayName(memberId: string): string {
 }
 
 /** Whether the night should read for this member: their word is yes (the
- *  mirror, no gateway call); the job's own state decides the rest inside.
- *  A yes given from the card before Maurice opened the mail conversation
- *  has no mirror yet: the mailboxes it approved speak for it. */
+ *  server's mirror, no gateway call); the job's own state decides the rest. */
 export function readingWanted(memberId: string): boolean {
-  const mc = mailConversationOf(memberId);
-  if (!mc) return approvedMailboxAddresses(memberId).length > 0;
-  return mc.reading === "approved";
+  return readingApproved(memberId);
 }
 
 // ── Runs by hand, in the background ──────────────────────────────────────

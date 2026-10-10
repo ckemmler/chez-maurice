@@ -584,15 +584,7 @@
 "settings.import.night" = "Les conversations importées apparaissent dans votre liste avec leur origine. La nuit suivante, Maurice les lit : vos domaines peuvent vous être proposés au matin.";
 
 /* The drawer "Define my domains" under the conversation Maurice opens (P2-D, 20 September 2026) */
-"proposals.cta" = "Définir mes domaines";
-"proposals.cta.help" = "Adopter, corriger ou ranger les domaines que Maurice propose";
-"proposals.title" = "Mes domaines";
-"proposals.explainer" = "Coche les domaines que tu adoptes, corrige un nom ou sa ligne comme tu le dirais, range ce qui n’en est pas un. Rien n’existe tant que tu n’as pas appliqué.";
-"proposals.empty" = "Plus aucune proposition n’est ouverte.";
-"proposals.failed" = "Le serveur n’a pas pris. Réessaie, ou réponds à Maurice dans la conversation.";
 "proposals.rule" = "Un domaine adopté reçoit son cahier, écrit par Maurice d’ici une minute ou deux. Les notes dans ton jardin ne sont écrites que là où tu les demandes, chacune marquée comme pas encore relue.";
-"proposals.apply" = "Appliquer";
-"proposals.apply.count" = "Appliquer (%d)";
 "proposals.conversations.one" = "%d conversation";
 "proposals.conversations.other" = "%d conversations";
 "proposals.mail.one" = "%d fil de courrier";
@@ -605,9 +597,37 @@
 "proposals.split_hint" = "Peut-être plusieurs choses : %@";
 "proposals.seed" = "Ensemencer mon jardin de quelques notes";
 "proposals.adopt" = "Adopter";
-"proposals.dismiss" = "Ranger";
-"proposals.undo_dismiss" = "Le garder dans la liste";
-"proposals.dismissed" = "Rangé : ses conversations ne remonteront plus.";
+"proposals.section" = "Propositions (%d)";
+"proposals.failed" = "Le serveur n’a pas pris. Réessaie.";
+"proposals.dismiss" = "Écarter";
+"proposals.dismiss.hint" = "Écarter : ses conversations ne remonteront plus, et elle ne revient pas d’elle-même. Tu peux revenir dessus en bas de la liste.";
+"proposals.show_all" = "Tout afficher (%d)";
+"proposals.show_less" = "Réduire";
+"proposals.put_away" = "Écartées et rangées (%d)";
+"proposals.restore" = "Revenir dessus";
+"proposals.new" = "Nouveau";
+"proposals.badge" = "%d nouvelles propositions";
+"proposals.page.title" = "Proposition";
+"proposals.merge" = "Fusionner";
+"proposals.merge.explainer" = "Choisis les propositions à fusionner avec « %@ ».";
+"proposals.cut" = "Couper";
+"proposals.cut.explainer" = "Choisis ce qui sort de cette proposition pour en faire une autre, et nomme-la.";
+"proposals.cut.name" = "Nom de la nouvelle proposition";
+"proposals.cut.confirm" = "Couper (%d)";
+"pastille.bound" = "%@ — cette conversation y est rattachée";
+"pastille.bound.auto" = "%@ — rattachée par Maurice";
+"pastille.read" = "%@ — cahier lu";
+"pastille.recognised" = "%@ — reconnu";
+"pastille.open" = "Ouvrir le domaine";
+"pastille.attach" = "Rattacher cette conversation";
+"pastille.detach" = "Détacher";
+"chat.details.domain" = "Domaine";
+"chat.details.domain.none" = "Aucun";
+"chat.details.domain.auto" = "Maurice a rattaché cette conversation de lui-même. Vous pouvez la détacher : il ne la rattachera plus.";
+"brief.conversations.auto" = "%d rattachées par Maurice";
+"brief.conversations.auto.hint" = "Maurice a rattaché ces conversations de lui-même, parce qu’elles ressemblent à ce domaine. Détachez celles qui n’en sont pas : il ne les rattachera plus.";
+"brief.conversations.attach_current" = "Rattacher la conversation en cours";
+"brief.conversations.detach_current" = "Détacher la conversation en cours";
 
 /* Invitations */
 "invite.scan" = "Scanner une invitation";
@@ -699,7 +719,7 @@
 "mail.reading.approve" = "Laisser Maurice lire";
 "mail.reading.withdraw" = "Retirer l'approbation";
 "mail.reading.help" = "Maurice lit les vrais échanges des dernières années, la nuit, et vous dit qui compte pour vous et ce qui est en cours. Rien n'est envoyé, rien n'est modifié dans votre boîte.";
-"mail.reading.caption" = "La lecture est un oui que vous donnez — ici ou dans la conversation que Maurice a ouverte. Vous pouvez le retirer à tout moment.";
+"mail.reading.caption" = "La lecture est un oui que vous donnez, ici. Vous pouvez le retirer à tout moment. Ce que Maurice en écrit est dans votre jardin, sous « Mon courrier ».";
 "mail.box.messages" = "%d messages relevés";
 "mail.box.reading" = "Lecture : %1$d triés · %2$d à lire · %3$d lus";
 "mail.box.left" = "Reste : ~%1$@ à trier, ~%2$@ à lire · %3$@";

@@ -18,7 +18,7 @@ import { withoutMoney } from "../services/mailboxEstimate";
 import { mailReadingStatus, readingWanted, startMailReading } from "../services/mailReading";
 import { mailDocumentsProgress, startMailDocuments } from "../services/mailDocuments";
 import { getUser } from "../services/users";
-import { decideReading, deepenReading, mailConversationOf, sayReadingDecided, widenReading, type ReadingAction } from "../services/mailApproval";
+import { decideReading, deepenReading, widenReading, type ReadingAction } from "../services/mailApproval";
 import { forgetMailbox } from "../services/mailForget";
 import { memberLocale } from "../services/domainBriefs";
 
@@ -36,11 +36,12 @@ import { memberLocale } from "../services/domainBriefs";
 // mailScan.ts): free, no body read, the member's own file only. Settings →
 // Mail reads where it is at GET /scan and restarts it at POST /scan.
 //
-// The member's word on the reading (lot 3, services/mailApproval.ts) has
-// its second door here: POST /reading with `action` approves or declines
-// without the conversation, and Maurice says in that conversation what was
-// done. A consent, nothing about money; the household's cap is the only
-// ceiling and it is not this route's business.
+// The member's word on the reading (lot 3, services/mailApproval.ts) is
+// given here, from the card: POST /reading with `action` approves or
+// declines. Nothing is said in a conversation — Maurice no longer opens one
+// for the mail (10 October 2026); the card shows where things stand. A
+// consent, nothing about money; the household's cap is the only ceiling and
+// it is not this route's business.
 
 const accounts = new Hono();
 
@@ -215,8 +216,8 @@ accounts.post("/reading/depth", async (c) => {
 
 /** The member's word on the reading, from the card: `{ action: "approve" |
  *  "decline" }`. Records it in their store through the tool, mirrors it,
- *  says it in the mail conversation in Maurice's voice, and answers with
- *  the walk's view (its `reading` now current). 422 when the tool refuses. */
+ *  and answers with the walk's view (its `reading` now current). 422 when
+ *  the tool refuses. */
 accounts.post("/reading", async (c) => {
   const uid = c.get("userId");
   const body = await c.req.json().catch(() => ({}));
@@ -224,10 +225,8 @@ accounts.post("/reading", async (c) => {
   if (action !== "approve" && action !== "decline") return c.json({ error: "action must be approve or decline" }, 400);
   try {
     const d = await decideReading(uid, action as ReadingAction);
-    // Said once: a second identical word changes nothing and says nothing.
-    const said = d.already ? null : sayReadingDecided(uid, action as ReadingAction);
     const view = forViewer(uid, await mailScanStatus(uid));
-    return c.json({ ...view, decision: { ...d, said, conversation_id: mailConversationOf(uid)?.conversation_id ?? null } });
+    return c.json({ ...view, decision: d });
   } catch (err) {
     return c.json({ error: (err as Error).message }, 422);
   }

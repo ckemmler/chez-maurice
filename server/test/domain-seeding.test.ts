@@ -54,8 +54,7 @@ async function nightWrite(req: Req) {
     if (/violin/i.test(p)) return reply('{"name": "The violin", "summary": "You practise and ask about technique.", "is_domain": true, "split_hint": ""}');
     return reply('{"name": "Baking bread", "summary": "Sourdough and machines.", "is_domain": true, "split_hint": ""}');
   }
-  if (req.invocation === "domain_brief") return reply("You practise the violin. Your bow arm is the thread of the moment.");
-  return reply("Bonjour Anna. Two domains…\n\n- **The violin**\n- **Baking bread**\n");
+  return reply("You practise the violin. Your bow arm is the thread of the moment.");
 }
 
 /** The seeding model: four topics offered — one without a title, one drawn
@@ -127,7 +126,7 @@ beforeAll(() => {
   for (const inv of ["domain_mapping", "domain_brief", "domain_seed"]) setPinnedModel(inv, NIGHT);
   setRoomPublisher(() => {});
   setSubscriberCount(() => 1);
-  mapping.setMappingDeps({ write: nightWrite as any, map, now: () => TODAY });
+  mapping.setMappingDeps({ write: nightWrite as any, map, match: async () => [], now: () => TODAY });
   briefs.setBriefDeps({ write: nightWrite as any, search: async () => [] });
   seeding.setSeedDeps({ write: seedWrite as any, now: () => TODAY });
   // Anna's garden is a git repository with an existing note, as at home.
@@ -147,62 +146,67 @@ beforeEach(() => {
   db.run(`DELETE FROM spend_ledger WHERE user_id IN ('system', ?)`, [ANNA]);
   db.run(`DELETE FROM domain_proposals`);
   db.run(`DELETE FROM domain_briefs`);
+  db.run(`DELETE FROM domain_seen`);
   db.run(`DELETE FROM conversations WHERE user_id = ?`, [ANNA]);
   db.run(`DELETE FROM maurices WHERE created_by = ?`, [ANNA]);
   for (const f of fs.readdirSync(notesDir)) if (f !== "the-violin.md") fs.rmSync(path.join(notesDir, f), { recursive: true, force: true });
   invalidateNotes(ANNA);
 });
 
-/** The night opens the conversation; Anna adopts the violin. */
+/** The night proposes; Anna adopts the violin, by the tool, in whatever conversation she is in. */
 async function adopted() {
   annaCorpus();
   const r = await mapping.mapMember(ANNA);
-  expect(r.outcome).toBe("opened");
-  const conversationId = r.conversation_id!;
+  expect(r.outcome).toBe("proposed");
   const violin = proposals.listProposals(ANNA).find((p) => p.name === "The violin")!;
-  const a = await proposals.runDomainTool("domains__adopt", { id: violin.id }, conversationId);
+  const a = await proposals.runDomainTool("domains__adopt", { id: violin.id }, ANNA);
   expect(a.isError).toBe(false);
   await new Promise((r) => setTimeout(r, 30)); // the brief, in the background
   requests = [];
-  return { conversationId, violin: proposals.getProposal(violin.id)!, domainId: (a.data as any).domain_id as string };
+  return { violin: proposals.getProposal(violin.id)!, domainId: (a.data as any).domain_id as string };
 }
 
 test("adopting writes nothing in the garden; the seed tool is offered, and it stays until the notes are written or declined", async () => {
-  const { conversationId, violin } = await adopted();
+  const { violin } = await adopted();
   expect(fs.readdirSync(notesDir)).toEqual(["the-violin.md"]);
   expect(requests).toHaveLength(0);
   // The adoption's answer tells Maurice to offer, not to write.
-  const names = proposals.domainToolsFor(conversationId, ANNA).map((t) => t.name);
+  const names = proposals.domainToolsFor(ANNA).map((t) => t.name);
   expect(names).toContain("domains__seed");
-  const section = proposals.proposalPromptSection(conversationId, "Anna", "fr");
-  expect(section).toContain("A yes to the domain is not a yes to the notes");
-  expect(section).toContain("garden notes not offered yet");
+  const section = proposals.proposalPromptSection(ANNA, "Anna", "fr");
+  expect(section).toContain("a yes to the domain is not a yes to the notes");
+  expect(section).toContain("`domains__seed`");
   // Every other proposal settled: the tools stay for the adopted domain's notes.
   for (const p of proposals.openProposals(ANNA)) proposals.updateProposal(p.id, { state: "dismissed" });
-  expect(proposals.domainToolsFor(conversationId, ANNA)).toHaveLength(4);
+  expect(proposals.domainToolsFor(ANNA)).toHaveLength(4);
   // Declining is a word too: then they go.
-  const d = await proposals.runDomainTool("domains__seed", { id: violin.id, action: "decline" }, conversationId);
+  const d = await proposals.runDomainTool("domains__seed", { id: violin.id, action: "decline" }, ANNA);
   expect(d.isError).toBe(false);
   expect(proposals.getProposal(violin.id)!.stats.seed?.state).toBe("declined");
-  expect(proposals.domainToolsFor(conversationId, ANNA)).toEqual([]);
+  expect(proposals.domainToolsFor(ANNA)).toEqual([]);
   expect(fs.readdirSync(notesDir)).toEqual(["the-violin.md"]);
-  expect(proposals.proposalPromptSection(conversationId, "Anna")).toContain("garden notes declined");
+  // Nothing waits any more: nothing is said of it in the prompt.
+  expect(proposals.proposalPromptSection(ANNA, "Anna")).toBe("");
+  // Nothing was opened by any of it.
+  expect(db.query(`SELECT COUNT(*) AS n FROM conversations WHERE user_id = ? AND opened_by = 'maurice'`).get(ANNA)).toEqual({ n: 0 });
 });
 
-test("the seed tool refuses what is not an adopted domain of this conversation", async () => {
-  const { conversationId } = await adopted();
+test("the seed tool refuses what is not an adopted domain of this member", async () => {
+  const { violin } = await adopted();
   const bread = proposals.listProposals(ANNA).find((p) => p.name === "Baking bread")!;
-  expect((await proposals.runDomainTool("domains__seed", { id: bread.id }, conversationId)).isError).toBe(true);
-  expect((await proposals.runDomainTool("domains__seed", { id: "nope" }, conversationId)).isError).toBe(true);
-  const other = convo(ANNA, "Ordinary chat", "2026-09-18");
-  expect((await proposals.runDomainTool("domains__seed", { id: bread.id }, other)).isError).toBe(true);
+  expect((await proposals.runDomainTool("domains__seed", { id: bread.id }, ANNA)).isError).toBe(true);
+  expect((await proposals.runDomainTool("domains__seed", { id: "nope" }, ANNA)).isError).toBe(true);
+  // Someone else has nothing waiting, and no hand on Anna's domain.
+  expect((await proposals.runDomainTool("domains__seed", { id: violin.id }, "seed-nobody")).isError).toBe(true);
+  expect((await proposals.runDomainTool("domains__seed", { id: violin.id }, undefined)).isError).toBe(true);
+  expect(proposals.getProposal(violin.id)!.stats.seed).toBeUndefined();
   expect(fs.readdirSync(notesDir)).toEqual(["the-violin.md"]);
   expect(requests).toHaveLength(0);
 });
 
 test("on the yes: the hub and its topics, marked unreviewed, with their provenance, charged to the member, committed", async () => {
-  const { conversationId, violin, domainId } = await adopted();
-  const r = await proposals.runDomainTool("domains__seed", { id: violin.id }, conversationId);
+  const { violin, domainId } = await adopted();
+  const r = await proposals.runDomainTool("domains__seed", { id: violin.id }, ANNA);
   expect(r.isError).toBe(false);
   const data = r.data as any;
   expect(data.seeded).toBe("The violin");
@@ -224,7 +228,9 @@ test("on the yes: the hub and its topics, marked unreviewed, with their provenan
   // everyday prompt (services/domainBriefs.ts, writeSummary) — and, the first
   // time, a third that picks the domain's icon (ensureDomainIcon).
   expect(budget.spentTodayUsd(ANNA)).toBeCloseTo(0.004, 6);
-  expect(budget.spentTodayUsd(budget.SYSTEM_SPENDER)).toBeCloseTo(0.024, 6);
+  // Two namings and three calls for the first brief: the night opens no
+  // conversation any more, so no opener is paid for.
+  expect(budget.spentTodayUsd(budget.SYSTEM_SPENDER)).toBeCloseTo(0.02, 6);
 
   // The hub: a MOC, the three sections, the topics as wiki-links, the mark and the provenance.
   const hub = fs.readFileSync(path.join(notesDir, "the-violin-2.md"), "utf-8");
@@ -266,10 +272,10 @@ test("on the yes: the hub and its topics, marked unreviewed, with their provenan
 
   // The proposal remembers; a second seeding is refused; the tools go.
   expect(proposals.getProposal(violin.id)!.stats.seed).toEqual({ state: "written", at: expect.any(String), notes: ["the-violin-2", "the-bow-arm", "choosing-a-teacher"] });
-  expect((await proposals.runDomainTool("domains__seed", { id: violin.id }, conversationId)).isError).toBe(true);
+  expect((await proposals.runDomainTool("domains__seed", { id: violin.id }, ANNA)).isError).toBe(true);
   for (const p of proposals.openProposals(ANNA)) proposals.updateProposal(p.id, { state: "dismissed" });
-  expect(proposals.domainToolsFor(conversationId, ANNA)).toEqual([]);
-  expect(proposals.proposalPromptSection(conversationId, "Anna")).toContain("3 note(s) seeded in the garden");
+  expect(proposals.domainToolsFor(ANNA)).toEqual([]);
+  expect(proposals.proposalPromptSection(ANNA, "Anna")).toBe("");
 
   // What the app reads: the garden's list marks them, the domain counts them.
   invalidateNotes(ANNA);
@@ -283,8 +289,8 @@ test("on the yes: the hub and its topics, marked unreviewed, with their provenan
 });
 
 test("the review: keeping a note in the garden takes the mark away and leaves the file as it was", async () => {
-  const { conversationId, violin, domainId } = await adopted();
-  expect((await proposals.runDomainTool("domains__seed", { id: violin.id }, conversationId)).isError).toBe(false);
+  const { violin, domainId } = await adopted();
+  expect((await proposals.runDomainTool("domains__seed", { id: violin.id }, ANNA)).isError).toBe(false);
   const garden = { root: gardenRoot, username: ANNA };
   const before = fs.readFileSync(path.join(notesDir, "the-bow-arm.md"), "utf-8");
   expect(tools.reviewState(garden, `/g/${ANNA}/fr/notes/the-bow-arm`)).toEqual({ file: path.join(notesDir, "the-bow-arm.md"), unreviewed: true });
@@ -315,11 +321,11 @@ test("the review: keeping a note in the garden takes the mark away and leaves th
 });
 
 test("the member's fuse, and a model that returns nothing usable: no note, no mark", async () => {
-  const { conversationId, violin } = await adopted();
+  const { violin } = await adopted();
   // The fuse: Anna's own daily cap, spent.
   budget.setMemberDailyCap(ANNA, 0.001);
   budget.recordSpend(usage(0.002) as any, ANNA);
-  let r = await proposals.runDomainTool("domains__seed", { id: violin.id }, conversationId);
+  let r = await proposals.runDomainTool("domains__seed", { id: violin.id }, ANNA);
   expect(r.isError).toBe(true);
   expect(r.text).toContain("not written");
   expect(requests).toHaveLength(0);
@@ -327,17 +333,17 @@ test("the member's fuse, and a model that returns nothing usable: no note, no ma
   db.run(`DELETE FROM spend_ledger WHERE user_id = ?`, [ANNA]);
   // Nothing usable: paid, logged, no file, and the offer still stands.
   seedAnswer = "I would rather not.";
-  r = await proposals.runDomainTool("domains__seed", { id: violin.id }, conversationId);
+  r = await proposals.runDomainTool("domains__seed", { id: violin.id }, ANNA);
   expect(r.isError).toBe(true);
   expect(fs.readdirSync(notesDir)).toEqual(["the-violin.md"]);
   expect(proposals.getProposal(violin.id)!.stats.seed).toBeUndefined();
-  expect(proposals.domainToolsFor(conversationId, ANNA).map((t) => t.name)).toContain("domains__seed");
+  expect(proposals.domainToolsFor(ANNA).map((t) => t.name)).toContain("domains__seed");
 });
 
 test("a domain with no conversation of the member's: nothing to write from, nothing spent", async () => {
-  const { conversationId, violin, domainId } = await adopted();
+  const { violin, domainId } = await adopted();
   db.run(`UPDATE conversations SET maurice_id = NULL WHERE maurice_id = ?`, [domainId]);
-  const r = await proposals.runDomainTool("domains__seed", { id: violin.id }, conversationId);
+  const r = await proposals.runDomainTool("domains__seed", { id: violin.id }, ANNA);
   expect(r.isError).toBe(true);
   expect(r.text).toContain("nothing to write from");
   expect(requests).toHaveLength(0);

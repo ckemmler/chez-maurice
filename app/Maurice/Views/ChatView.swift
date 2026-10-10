@@ -16,9 +16,6 @@ struct ChatView: View {
     @State private var showAddContext = false
     @State private var showAddParticipant = false
     @State private var showTools = false
-    /// The drawer "Define my domains" (DomainsViews.swift), under the message
-    /// Maurice opened the conversation with, while proposals are open.
-    @State private var showProposals = false
     @State private var trayOpen = false
     /// Whether the thread follows its bottom as tokens arrive.
     ///
@@ -98,13 +95,6 @@ struct ChatView: View {
                 .presentationDragIndicator(.visible)
             #else
             AddContextSheet(accent: accent)
-            #endif
-        }
-        .sheet(isPresented: $showProposals) {
-            DomainProposalsSheet()
-            #if os(iOS)
-                .presentationDetents([.large])
-                .presentationDragIndicator(.visible)
             #endif
         }
         .sheet(isPresented: $showTools) {
@@ -256,14 +246,6 @@ struct ChatView: View {
                             ForEach(Array(chat.messages.enumerated()), id: \.element.id) { index, message in
                                 MessageRow(message: message, isLast: index == chat.messages.count - 1)
                                     .id(message.id)
-                                // Under the message Maurice opened the
-                                // conversation with, while the server says
-                                // proposals are open: the way into the drawer.
-                                if index == 0, message.role == "assistant",
-                                   chat.activeConversation?.openedByMaurice == true,
-                                   chat.activeConversationHasProposals {
-                                    DefineDomainsButton(count: chat.openProposals.count) { showProposals = true }
-                                }
                             }
 
                             // Streaming row — kept alive with a stable id so
@@ -782,6 +764,18 @@ private struct ConversationDetailsSheet: View {
 
     private var maurice: Maurice { maurices.maurice(for: conversation.maurice_id) }
     private var multi: Bool { chat.participants.count > 1 }
+    private var ownDomains: [Maurice] { maurices.domains.filter { $0.isDomain(of: session.activeUserId) } }
+    /// The sheet holds a copy of the row: read the live one, so the picker
+    /// follows what it just changed.
+    private var domainSelection: Binding<String?> {
+        Binding(
+            get: {
+                let bound = chat.conversations.first { $0.id == conversation.id }?.maurice_id ?? conversation.maurice_id
+                return ownDomains.contains { $0.rawId == bound } ? bound : nil
+            },
+            set: { next in Task { await chat.setDomain(next, forConversation: conversation.id) } }
+        )
+    }
     private var trimmedTitle: String { title.trimmingCharacters(in: .whitespacesAndNewlines) }
     private var titleChanged: Bool {
         !trimmedTitle.isEmpty && trimmedTitle != (conversation.title ?? "")
@@ -814,6 +808,24 @@ private struct ConversationDetailsSheet: View {
                         row(session.localized("chat.details.last_message"), s)
                     }
                     if let n = conversation.message_count { row(session.localized("chat.details.messages"), "\(n)") }
+                }
+
+                // The domain this conversation belongs to: bind it, move it,
+                // or take it out. Only alone with Maurice, and only among the
+                // member's own domains.
+                if !multi, !ownDomains.isEmpty {
+                    Section {
+                        Picker(session.localized("chat.details.domain"), selection: domainSelection) {
+                            Text(session.localized("chat.details.domain.none")).tag(String?.none)
+                            ForEach(ownDomains) { d in
+                                Label(d.name, systemImage: d.symbol).tag(d.rawId)
+                            }
+                        }
+                    } footer: {
+                        if conversation.maurice_bound_by == "auto" {
+                            Text(session.localized("chat.details.domain.auto"))
+                        }
+                    }
                 }
 
                 if showTurnCost {

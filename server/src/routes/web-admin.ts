@@ -801,11 +801,6 @@ web.get("/dashboard", async (c) => {
               <input type="number" name="spend_cap_system_daily_usd" min="0" step="0.01" value="${household.spend_cap_system_daily_usd ?? ""}" placeholder="—" />
               <span class="hint">${escape(t(lang, "settings.spend_cap_system_hint", spentTodayUsd(SYSTEM_SPENDER).toFixed(2), spentMonthUsd(SYSTEM_SPENDER).toFixed(2)))}</span></div>
           </div>
-          <div class="grid2" style="margin-top:16px">
-            <div class="field" style="max-width:200px"><label class="label">${escape(t(lang, "settings.opens_min_days"))}</label>
-              <input type="number" name="maurice_opens_min_days" min="0" step="1" value="${household.maurice_opens_min_days ?? ""}" placeholder="${DEFAULT_MIN_DAYS}" />
-              <span class="hint">${escape(t(lang, "settings.opens_min_days_hint", String(DEFAULT_MIN_DAYS)))}</span></div>
-          </div>
           <div class="grid-actions"><button type="submit" class="btn primary">${escape(t(lang, "settings.save"))}</button></div>
         </form>
       </section>
@@ -1040,7 +1035,7 @@ function briefsCard(lang: string): string {
 
 // ── The domain mapping ─────────────────────────────────────────
 // The night's third job (services/domainMapping.ts): when the members'
-// conversations were last mapped, what it proposed, opened and cost, and a
+// conversations were last mapped, what it proposed, filed and cost, and a
 // button to run it now (not awaited: a first night on years of conversations
 // makes a dozen model calls).
 function mappingCard(lang: string): string {
@@ -1050,7 +1045,7 @@ function mappingCard(lang: string): string {
     : t(lang, "mapping.never_run");
   const outcome = s.last_outcome ? t(lang, "mapping.outcome_" + s.last_outcome) : "";
   const stats = s.last_stats
-    ? t(lang, "mapping.stats", String(s.last_stats.opened), String(s.last_stats.proposals), String(s.last_stats.waiting), String(s.last_stats.skipped), String(s.last_stats.members), s.last_stats.cost_usd.toFixed(4))
+    ? t(lang, "mapping.stats", String(s.last_stats.proposals), String(s.last_stats.attached ?? 0), String(s.last_stats.skipped), String(s.last_stats.members), s.last_stats.cost_usd.toFixed(4))
     : "";
   const perMember = s.last_stats?.results?.length
     ? `<ul class="hint" style="margin:6px 0 0 16px">${s.last_stats.results.map((r) => `<li>${escape(r.member_id)}: ${escape(r.outcome)}${r.reason ? ` — ${escape(r.reason)}` : ""}${r.presented?.length ? ` — ${escape(r.presented.join(", "))}` : ""}</li>`).join("")}</ul>`

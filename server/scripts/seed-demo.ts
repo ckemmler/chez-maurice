@@ -14,8 +14,8 @@
 // conversation history — scripts/demo-conversations.ts, CC0, mostly marked as
 // imported from ChatGPT — so that the household shows "the morning of the
 // proposal": the night after the seed (corpus reconcile at 03:00, briefs at
-// 04:00, mapping at 05:00), Maurice opens a conversation for Théo proposing
-// three domains. To see it at once instead: in the console, "Reconcile now"
+// 04:00, mapping at 05:00), Théo's list of domains carries three proposals,
+// with a badge on the button that opens it. To see it at once instead: in the console, "Reconcile now"
 // on the corpus card, then "Map now" on the domains card — or
 // `POST /api/admin/corpus/reconcile` then `POST /api/admin/domains/map
 // { "username": "theo" }` — with a Scaleway (or other) key on the household,

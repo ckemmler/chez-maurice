@@ -5,10 +5,10 @@
  * digest is read for its title, what it is about and the dates of its
  * timeline (not the day it was written); a member with mail and no
  * conversations gets proposals made of mail threads; with proposals already
- * open, the night no longer only waits — what the model recognises is filed
- * under the domain or the proposal, the rest proposed in the same
- * conversation with a message that follows the opening; an adopted domain's
- * brief reads its threads.
+ * open, what the model recognises is filed under the domain or the proposal
+ * and the rest proposed beside them — for the app's list, with no
+ * conversation opened and no message left (10 October 2026); an adopted
+ * domain's brief reads its threads.
  */
 import { afterAll, beforeAll, beforeEach, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
@@ -40,7 +40,7 @@ function usage() {
   return { provider: "scaleway", model: NIGHT, rounds: 1, input: 1500, output: 200, cache_read: 0, cache_write: 0, cost: 0.002, cost_uncached: 0.002 };
 }
 
-/** The night model: naming by the group's titles; a brief; the opener. */
+/** The night model: naming by the group's titles; a brief. */
 async function write(req: Req) {
   requests.push(req);
   const p = req.prompt;
@@ -103,7 +103,7 @@ beforeAll(() => {
   setPinnedModel("domain_brief", NIGHT);
   setRoomPublisher(() => {});
   setSubscriberCount(() => 1);
-  mapping.setMappingDeps({ write, mapMail: mapMail as any, map: async () => ({ conversations: 0, groups: [] }), now: () => TODAY });
+  mapping.setMappingDeps({ write, mapMail: mapMail as any, map: async () => ({ conversations: 0, groups: [] }), match: async () => [], now: () => TODAY });
   briefs.setBriefDeps({ write: write as any, search: async () => [] });
 });
 
@@ -146,58 +146,80 @@ test("a digest is read for its title, what it is about, and the dates of its tim
   expect(ex).not.toContain("D'où ça vient"); // where it comes from is not matter
 });
 
-test("mail and no conversations: the proposals are made of threads, the opening counts them", async () => {
+/** What Maurice did on his own in the member's conversations: the ones he
+ *  opened, and every message of his. */
+function spoken(member: string): { opened: number; said: number } {
+  const opened = db.query(`SELECT COUNT(*) AS n FROM conversations WHERE user_id = ? AND opened_by = 'maurice'`).get(member) as { n: number };
+  const said = db
+    .query(`SELECT COUNT(*) AS n FROM messages m JOIN conversations c ON c.id = m.conversation_id WHERE c.user_id = ? AND m.role = 'assistant'`)
+    .get(member) as { n: number };
+  return { opened: opened.n, said: said.n };
+}
+
+test("mail and no conversations: the proposals are made of threads, written for the list and said nowhere", async () => {
   threads(MAILY, "Copro");
   threads(MAILY, "Stage");
   const r = await mapping.mapMember(MAILY);
-  expect(r.outcome).toBe("opened");
+  expect(r.outcome).toBe("proposed");
+  expect(r.proposals).toBe(2);
+  expect(r.attached).toBe(0);
   const open = proposals.openProposals(MAILY);
   expect(open.map((p) => p.name).sort()).toEqual(["La copropriété", "Les activités des enfants"]);
   for (const p of open) {
     expect(p.conversation_ids).toEqual([]);
+    expect(p.conversation_id).toBeNull();
     expect(p.mail).toHaveLength(5);
     expect(p.stats.mail).toBe(5);
   }
   const naming = requests.find((q) => q.prompt.includes("Copro sujet"))!;
   expect(naming.prompt).toContain("email threads");
-  const text = (db.query(`SELECT content FROM messages WHERE conversation_id = ? AND role = 'assistant'`).get(r.conversation_id!) as { content: string }).content;
-  expect(text).toMatch(/5 (fils de courrier|mail threads)/);
-  // The tools show the threads too.
-  const shown = await proposals.runDomainTool("domains__propose", { action: "show", id: open[0]!.id }, r.conversation_id!);
+  // Two namings, and no opener: nothing is opened, nothing is said.
+  expect(requests).toHaveLength(2);
+  expect(spoken(MAILY)).toEqual({ opened: 0, said: 0 });
+  // The list counts the threads.
+  const listed = proposals.proposalsForMember(MAILY);
+  expect(listed.unseen).toBe(2);
+  expect(listed.proposals.map((p) => [p.conversations, p.mail_threads, p.weight])).toEqual([[0, 5, 5], [0, 5, 5]]);
+  expect(listed.proposals[0]!.sample[0]).toMatch(/^2026-0\d-10 — (Copro|Stage) sujet \d \(mail\)$/);
+  // The tools show the threads too, in whatever conversation Maily is in.
+  const shown = await proposals.runDomainTool("domains__propose", { action: "show", id: open[0]!.id }, MAILY);
   expect((shown.data as any).mail_threads).toHaveLength(5);
+  const detail = proposals.proposalDetail(open[0]!);
+  expect(detail.mail_list).toHaveLength(5);
+  expect(detail.mail_list.map((t) => t.path)).toEqual(open[0]!.mail);
+  expect(detail.mail_list[0]!.from).toMatch(/^2026-0\d-10$/);
+  expect(detail.mail_list[0]!.to).toMatch(/^2026-0\d-02$/);
   // Mapped once: the next night finds them spoken for.
   expect(mapping.unattachedThreads(MAILY)).toHaveLength(0);
 });
 
-test("proposals open: the mail is filed under what it belongs to, the rest proposed in the same conversation", async () => {
-  // What Flo already has: a domain, and a proposal waiting in its conversation.
+test("proposals open: the mail is filed under what it belongs to, the rest proposed beside them, in silence", async () => {
+  // What Flo already has: a domain, and a proposal waiting in the list.
   const domain = createMaurice(FOLLOW, { name: "La copropriété", kind: "domain", tagline: "", prompt: "Le ROI.", context: [], users: [FOLLOW] });
   if ("errors" in domain) throw new Error("domain");
-  const carrier = crypto.randomUUID();
-  db.run(`INSERT INTO conversations (id, user_id, title, opened_by) VALUES (?, ?, 'Tes domaines', 'maurice')`, [carrier, FOLLOW]);
-  db.run(`INSERT INTO conversation_participants (conversation_id, member_id, role) VALUES (?, ?, 'owner')`, [carrier, FOLLOW]);
-  const waiting = proposals.insertProposal({ member_id: FOLLOW, name: "Les enfants", summary: "École.", conversation_ids: [], conversation_id: carrier, presented: true, stats: { verdict: "alive" } });
+  const waiting = proposals.insertProposal({ member_id: FOLLOW, name: "Les enfants", summary: "École.", conversation_ids: [], presented: true, stats: { verdict: "alive" } });
   threads(FOLLOW, "Copro");
   threads(FOLLOW, "Stage");
   threads(FOLLOW, "INASTI");
   threads(FOLLOW, "Banque");
 
   const r = await mapping.mapMember(FOLLOW);
-  expect(r.outcome).toBe("followed_up");
-  expect(r.conversation_id).toBe(carrier);
+  expect(r.outcome).toBe("proposed");
+  expect(r.proposals).toBe(1);
+  expect(r.presented).toEqual(["Cotisations sociales"]);
+  // Fifteen threads filed: five under the domain, ten under the open proposal.
+  expect(r.attached).toBe(15);
   // Recognised: under the domain, and under the open proposal.
   expect(mail.domainMail(domain.id, FOLLOW)).toHaveLength(5);
   expect(proposals.getProposal(waiting.id)!.mail).toHaveLength(10); // the Stage threads, and the Banque ones named like it
   expect(proposals.openProposals(FOLLOW).filter((p) => p.name.toLowerCase() === "les enfants")).toHaveLength(1);
-  // New: proposed in the same conversation.
+  // New: a proposal of its own, carried by no conversation.
   const fresh = proposals.openProposals(FOLLOW).find((p) => p.name === "Cotisations sociales")!;
-  expect(fresh.conversation_id).toBe(carrier);
+  expect(fresh.conversation_id).toBeNull();
   expect(fresh.mail).toHaveLength(5);
-  // Said there, after the opening.
-  const said = db.query(`SELECT content FROM messages WHERE conversation_id = ? AND role = 'assistant' ORDER BY created_at DESC, rowid DESC`).get(carrier) as { content: string };
-  expect(said.content).toContain("**Cotisations sociales**");
-  expect(said.content).toContain("**La copropriété**");
-  expect(said.content).toContain("**Les enfants**");
+  // Nothing opened, nothing said about any of it.
+  expect(spoken(FOLLOW)).toEqual({ opened: 0, said: 0 });
+  expect(db.query(`SELECT COUNT(*) AS n FROM conversations WHERE user_id = ?`).get(FOLLOW)).toEqual({ n: 0 });
   // The domain's brief is rewritten from its threads.
   const brief = await briefs.refreshBrief(domain, FOLLOW);
   expect(["written", "unchanged"]).toContain(brief.outcome);
@@ -206,23 +228,31 @@ test("proposals open: the mail is filed under what it belongs to, the rest propo
   expect(briefReq.prompt).toContain('Mail thread "Copro sujet');
   expect(briefs.getBrief(domain.id, FOLLOW)!.sources.filter((s: string) => s.startsWith("mail:"))).toHaveLength(5);
 
-  // The next night: nothing new in the mail, the member waits.
+  // The next night: nothing new in the mail, nothing named, nothing proposed.
   requests = [];
   const again = await mapping.mapMember(FOLLOW);
-  expect(again.outcome).toBe("waiting");
+  expect(again.proposals).toBe(0);
+  expect(again.attached).toBe(0);
   expect(requests).toHaveLength(0);
+  expect(proposals.openProposals(FOLLOW)).toHaveLength(2);
 });
 
 test("adopting a proposal of threads attaches them to the domain", async () => {
   threads(MAILY, "Copro");
   threads(MAILY, "Stage");
-  const r = await mapping.mapMember(MAILY);
+  await mapping.mapMember(MAILY);
   const p = proposals.openProposals(MAILY).find((x) => x.name === "La copropriété")!;
-  const out = await proposals.runDomainTool("domains__adopt", { id: p.id }, r.conversation_id!);
+  const out = await proposals.runDomainTool("domains__adopt", { id: p.id }, MAILY);
   expect(out.isError).toBe(false);
   const domainId = (out.data as any).domain_id;
   expect(mail.domainMail(domainId, FOLLOW)).toHaveLength(0);
   expect(mail.domainMail(domainId, MAILY)).toHaveLength(5);
+  // Another member cannot adopt it, nor see it.
+  const other = proposals.openProposals(MAILY).find((x) => x.name === "Les activités des enfants")!;
+  proposals.insertProposal({ member_id: FOLLOW, name: "Flo's own", summary: "", conversation_ids: [] });
+  expect((await proposals.runDomainTool("domains__adopt", { id: other.id }, FOLLOW)).text).toBe("Tool error: no such proposal");
+  expect(proposals.getProposal(other.id)!.state).toBe("proposed");
+  expect(spoken(MAILY)).toEqual({ opened: 0, said: 0 });
 });
 
 test("the night waits for the mail's night", () => {

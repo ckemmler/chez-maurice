@@ -20,7 +20,8 @@ import { factsForPrompt, isRememberFactTool, rememberFactTool, runRememberFactTo
 import { importHintSection } from "./chatImport";
 import { MAURICE_DOCS_TOOL_NAME, askMauriceDocs, mauriceDocsTool } from "./mauriceDocsTool";
 import { domainToolsFor, isDomainTool, proposalPromptSection, runDomainTool } from "./domainProposals";
-import { isMailTool, mailConversationOf, mailPromptSection, mailToolsFor, runMailTool } from "./mailApproval";
+import { readingApproved } from "./mailApproval";
+import { DOMAIN_RECOGNISED_TOOL, briefAlreadyRead, recogniseDomain, recognitionNote, type Recognition } from "./domainRecognition";
 import { listMailAccounts } from "./mailAccounts";
 import { listContactAccounts } from "./contactAccounts";
 import { mailboxLabels } from "./mailDocuments";
@@ -159,10 +160,10 @@ function currentTimeContext(): string {
  *  as something the user typed. Built once per turn and appended last, so the
  *  agentic rounds within a turn all share it (they cache against each other) and
  *  the next turn's copy lands after everything the previous one cached. */
-function timeReminder(): any {
+function timeReminder(note = ""): any {
   return {
     role: "user",
-    content: [{ type: "text", text: `<system-reminder>${currentTimeContext()}</system-reminder>` }],
+    content: [{ type: "text", text: `<system-reminder>${currentTimeContext()}${note ? `\n\n${note}` : ""}</system-reminder>` }],
   };
 }
 
@@ -274,7 +275,7 @@ export function mailNotice(toolNames: string[], memberId: string | null | undefi
   if (!accounts.length) return "";
   const boxes = [...new Set(mailboxLabels(accounts).values())].join(", ");
   const book = listContactAccounts(memberId).some((c) => c.cards > 0);
-  const read = mailConversationOf(memberId)?.reading === "approved";
+  const read = readingApproved(memberId);
   const fiches = read && toolNames.includes("garden__get_fiche");
   const when = mailNightlyOn() ? "Every night Maurice walks them" : "Maurice walks them";
   const steps = [
@@ -676,15 +677,10 @@ async function executeTool(
         return outcome;
       }
       // The domain proposal tools (services/domainProposals.ts) are native:
-      // they exist only in the conversation Maurice opened to propose, and
-      // that check is made again inside, on the conversation itself.
+      // they act on the proposals of the member taking the turn, while some
+      // wait; that check is made again inside.
       if (isDomainTool(name)) {
-        return await runDomainTool(name, input || {}, ctx.conversationId);
-      }
-      // The member's yes to reading their mail (services/mailApproval.ts):
-      // native, in the one conversation that asked; checked again inside.
-      if (isMailTool(name)) {
-        return await runMailTool(input || {}, ctx.conversationId);
+        return await runDomainTool(name, input || {}, ctx.memberId ?? undefined);
       }
       if (mcp) {
         // Same budget on the other side: three layers is three searches, and
@@ -1251,7 +1247,9 @@ function trailValue(v: unknown): string {
 export function toolTrail(m: { role: string; data?: { tool: string; data: unknown }[] | null }): string {
   if (m.role !== "assistant" || !Array.isArray(m.data) || m.data.length === 0) return "";
   const lines = m.data
-    .filter((d) => d && typeof d.tool === "string")
+    // The server's own mark of a recognised domain is for the app, not a
+    // result Maurice obtained (services/domainRecognition.ts).
+    .filter((d) => d && typeof d.tool === "string" && d.tool !== DOMAIN_RECOGNISED_TOOL)
     .slice(0, TRAIL_TOOLS)
     .map((d) => `${d.tool} → ${trailValue(d.data)}`);
   if (!lines.length) return "";
@@ -1518,6 +1516,11 @@ function trackedBooks(
   // also gets the tool that reads a brief behind one of those lines — the two
   // are one feature and must not drift apart (services/domainTools.ts).
   let carriesDomainIndex = false;
+  // Which domain the member's last turns fall into, asked of the corpus while
+  // the prompt is assembled (services/domainRecognition.ts). Only where the
+  // index is carried: alone with Maurice.
+  const recognising: Promise<Recognition | null> =
+    memberId && countParticipants(conversationId) === 1 ? recogniseDomain(memberId, conversationId) : Promise.resolve(null);
 
   // Specialized Maurice (persona): a named, hatted assistant with its own
   // behaviour, model preference, creativity, and baked-in context bundle.
@@ -1596,13 +1599,10 @@ function trackedBooks(
         // when it is relevant (design 4f; services/chatImport.ts). "" after.
         systemPrompt += importHintSection(memberId, userDisplayName);
       }
-      // The conversation Maurice opened to propose domains (P2-B): the
-      // proposals it carries and the rules of the three tools. Empty
-      // everywhere else.
-      systemPrompt += proposalPromptSection(conversationId, userDisplayName, memberLocale(memberId));
-      // The conversation Maurice opened with the mailbox numbers (lot 3):
-      // the question, where the answer stands, the one tool. Empty elsewhere.
-      systemPrompt += mailPromptSection(conversationId, memberId, userDisplayName);
+      // While domain proposals wait for the member (the app lists them): that
+      // they exist, the rule, the tools. Only alone with Maurice, like the
+      // index; empty when nothing waits.
+      if (carriesDomainIndex) systemPrompt += proposalPromptSection(memberId, userDisplayName, memberLocale(memberId));
 
       // Library binaries (img/pdf) → real content blocks on the latest user turn.
       const attSeen = new Set<string>();
@@ -1629,7 +1629,15 @@ function trackedBooks(
   // found the latest real user turn (appending it earlier would hang this turn's
   // images off the reminder instead). Everything before it stays byte-stable
   // from one turn to the next, which is what makes the prefix cacheable.
-  messages.push(timeReminder());
+  // A domain recognised in the member's turn: the app is told now, before a
+  // word is written, and wears it as a pastille of its own; when the
+  // neighbours are many and the brief was not read here, Maurice is told to
+  // read it — at the tail, where nothing cached moves.
+  const recognised = await recognising;
+  // `card` keeps a client from drawing it among the turn's tool results.
+  if (recognised && carriesDomainIndex) yield { type: "tool_data", tool: DOMAIN_RECOGNISED_TOOL, data: { card: DOMAIN_RECOGNISED_TOOL, ...recognised } };
+  const incite = recognised?.strong && carriesDomainIndex && !briefAlreadyRead(conversationId, recognised.domain_id);
+  messages.push(timeReminder(incite ? recognitionNote(recognised!, userDisplayName) : ""));
 
   // Resolve the model for this turn, honouring the member's access: the
   // persona's preference if allowed, else the household default if allowed,
@@ -1713,15 +1721,12 @@ function trackedBooks(
     }
   }
 
-  // The native tools of a proposal conversation (services/domainProposals.ts):
-  // three, in that one conversation, whoever's families say what; none
-  // anywhere else. Appended after the MCP roster so the cached prefix of an
-  // ordinary conversation does not move.
-  const domainTools: McpTool[] = memberId ? domainToolsFor(conversationId, memberId) : [];
+  // The native tools of the domain proposals (services/domainProposals.ts):
+  // four, while proposals of the member's wait, in a conversation they hold
+  // alone with Maurice; none in a room. Appended after the MCP roster so the
+  // cached prefix of a member with nothing waiting does not move.
+  const domainTools: McpTool[] = carriesDomainIndex ? domainToolsFor(memberId) : [];
   mcpTools = [...mcpTools, ...domainTools];
-  // And the one that takes the member's yes to reading their mail, in the
-  // conversation that asked (services/mailApproval.ts).
-  mcpTools = [...mcpTools, ...(memberId ? mailToolsFor(conversationId, memberId) : [])];
   // And the two that go with them: reading a brief, and writing down a fact.
   if (carriesDomainIndex) mcpTools = [...mcpTools, domainBriefTool(), rememberFactTool()];
 

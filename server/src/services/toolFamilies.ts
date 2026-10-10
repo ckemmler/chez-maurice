@@ -68,11 +68,10 @@ const CORPUS_ADMIN = [
 ];
 
 // The `email` tool's two words on the reading (lot 3 of specs/mail-import.md)
-// are the server's to call, never the model's: the member's yes is taken by
-// the native `mail__approve_reading`, which exists in exactly one conversation
-// (services/mailApproval.ts), or by the app's Settings → Mail. Handed to a
-// model, these two would let any conversation with the family approve a
-// reading on a hint. Never offered, whatever the selection says.
+// are the server's to call, never the model's: the member's yes is given on
+// the card under the app's Settings → Mail (services/mailApproval.ts).
+// Handed to a model, these two would let any conversation with the family
+// approve a reading on a hint. Never offered, whatever the selection says.
 const EMAIL_SERVER_ONLY = [
   "email__approve_reading", "email__decline_reading",
   // And the passes' material (lot 4, services/mailReading.ts): bodies for

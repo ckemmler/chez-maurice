@@ -1,6 +1,6 @@
 import db from "../db";
 import { ancillaryModel } from "./ancillary";
-import { eurosFor } from "./mailOpener";
+import { eurosFor } from "./mailReadingCost";
 import { passOverhead } from "./mailReading";
 import { WRITE_INVOCATION } from "./mailDocuments";
 
@@ -165,31 +165,4 @@ export function mailboxViews(payload: any, models: PassModels = passModels()): M
 /** A member is shown the volume and the time, never the money. */
 export function withoutMoney(boxes: MailboxView[]): MailboxView[] {
   return boxes.map((b) => (b.estimate ? { ...b, estimate: { ...b.estimate, euros: null } } : b));
-}
-
-// ── A mailbox added after the yes ────────────────────────────────────────────
-
-const NOTICE: Record<string, { text: string; hours: string; underHour: string }> = {
-  en: { text: "You added **%s**: %s messages collected, of which about %s exchanges to read (%s). I do not read it without your word: say yes here, or tap “Read this mailbox” under Settings → Mail.", hours: "about %s h", underHour: "under an hour" },
-  fr: { text: "Tu as ajouté **%s** : %s messages relevés, dont environ %s échanges à lire (%s). Je ne la lis pas sans ton accord : dis-moi oui ici, ou touche « Lire cette boîte » dans Réglages › Boîtes mail.", hours: "environ %s h", underHour: "moins d'une heure" },
-  it: { text: "Hai aggiunto **%s**: %s messaggi rilevati, di cui circa %s scambi da leggere (%s). Non la leggo senza il tuo accordo: dimmi di sì qui, o tocca «Leggi questa casella» in Impostazioni › Caselle di posta.", hours: "circa %s h", underHour: "meno di un'ora" },
-  de: { text: "Du hast **%s** hinzugefügt: %s Nachrichten erfasst, davon etwa %s Austausche zu lesen (%s). Ich lese es nicht ohne dein Einverständnis: Sag hier Ja oder tippe unter Einstellungen › Postfächer auf „Dieses Postfach lesen“.", hours: "etwa %s h", underHour: "unter einer Stunde" },
-  es: { text: "Has añadido **%s**: %s mensajes registrados, de ellos unos %s intercambios por leer (%s). No lo leo sin tu permiso: dime que sí aquí, o toca «Leer este buzón» en Ajustes › Buzones.", hours: "unas %s h", underHour: "menos de una hora" },
-  pt: { text: "Adicionaste **%s**: %s mensagens registadas, das quais cerca de %s trocas por ler (%s). Não a leio sem o teu acordo: diz-me que sim aqui, ou toca em «Ler esta caixa» em Definições › Caixas de correio.", hours: "cerca de %s h", underHour: "menos de uma hora" },
-  nl: { text: "Je hebt **%s** toegevoegd: %s berichten verzameld, waarvan ongeveer %s uitwisselingen te lezen (%s). Ik lees hem niet zonder je akkoord: zeg hier ja, of tik op „Deze mailbox lezen” onder Instellingen › Mailboxen.", hours: "ongeveer %s u", underHour: "minder dan een uur" },
-};
-
-function fill(s: string, ...args: string[]): string {
-  let i = 0;
-  return s.replace(/%s/g, () => args[i++] ?? "");
-}
-
-/** What Maurice says of a mailbox added after the yes: its numbers, the
- *  time, never the money, and that it waits for its own yes. */
-export function newMailboxNotice(locale: string, address: string, box: MailboxView): string {
-  const t = NOTICE[locale] ?? NOTICE.en!;
-  const n = (x: number) => x.toLocaleString(locale);
-  const e = box.estimate!;
-  const hours = e.hours < 1 ? t.underHour : fill(t.hours, String(Math.round(e.hours)));
-  return fill(t.text, address, n(box.messages), n(e.to_read), hours);
 }

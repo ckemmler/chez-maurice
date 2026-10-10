@@ -34,6 +34,9 @@ struct DomainBriefSheet: View {
     @State private var refreshing = false
     @State private var notice: String?
     @State private var confirmErase = false
+    /// What is bound to the domain: how many conversations, and the ones the
+    /// night filed there on its own, which the member can take back.
+    @State private var bound: DomainConversations?
     @FocusState private var editing: Bool
 
     private let eraseTint = Color(hex: "a6452e")
@@ -60,6 +63,7 @@ struct DomainBriefSheet: View {
                         }
                         actions
                         gardenNotes
+                        conversations
                         Text(session.localized("brief.explainer"))
                             .font(.system(size: 12)).foregroundStyle(theme.inkMute)
                             .fixedSize(horizontal: false, vertical: true)
@@ -172,6 +176,80 @@ struct DomainBriefSheet: View {
         }
     }
 
+    // MARK: the conversations (10 October 2026)
+
+    /// How many conversations belong to the domain; the one on screen, to
+    /// bind or take out; and those the night filed here on its own — each
+    /// one opens, each one can be taken back, and is then never filed again.
+    @ViewBuilder
+    private var conversations: some View {
+        if let bound, let id = maurice.rawId {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(spacing: 6) {
+                    Image(systemName: "bubble.left.and.bubble.right").font(.system(size: 11))
+                    Text(String(format: session.localized(bound.total == 1 ? "proposals.conversations.one" : "proposals.conversations.other"), bound.total))
+                    if bound.auto > 0 {
+                        Text("·")
+                        Text(String(format: session.localized("brief.conversations.auto"), bound.auto))
+                    }
+                }
+                .font(.system(size: 11, design: .monospaced))
+                .foregroundStyle(theme.inkMute)
+
+                if let active = chat.activeConversation, chat.participants.count <= 1 {
+                    let here = active.maurice_id == id
+                    pill(here ? "link.badge.minus" : "link.badge.plus",
+                         session.localized(here ? "brief.conversations.detach_current" : "brief.conversations.attach_current"),
+                         disabled: false) {
+                        Task {
+                            await chat.setDomain(here ? nil : id, forConversation: active.id)
+                            await loadBound()
+                        }
+                    }
+                }
+
+                let auto = bound.conversations.filter(\.isAuto)
+                if !auto.isEmpty {
+                    Text(session.localized("brief.conversations.auto.hint"))
+                        .font(.system(size: 12)).foregroundStyle(theme.inkMute)
+                        .fixedSize(horizontal: false, vertical: true)
+                    ForEach(auto) { row in
+                        HStack(spacing: 8) {
+                            Button {
+                                Task {
+                                    await chat.selectConversation(row.id)
+                                    dismiss()
+                                    onOpen()
+                                }
+                            } label: {
+                                Text((row.title ?? "").isEmpty ? session.localized("chat.new_conversation") : (row.title ?? ""))
+                                    .font(.system(size: 13)).foregroundStyle(theme.inkSoft).lineLimit(1)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
+                            Button(session.localized("pastille.detach")) {
+                                Task {
+                                    await chat.setDomain(nil, forConversation: row.id)
+                                    await loadBound()
+                                }
+                            }
+                            .font(.system(size: 11.5)).buttonStyle(.plain).foregroundStyle(theme.inkMute)
+                        }
+                        .padding(.horizontal, 10).padding(.vertical, 7)
+                        .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(theme.ruleHard, lineWidth: 0.5))
+                    }
+                }
+            }
+            .padding(.top, 4)
+        }
+    }
+
+    private func loadBound() async {
+        guard let id = maurice.rawId else { return }
+        bound = await chat.domainConversations(id, autoOnly: true)
+    }
+
     /// "today · 3d · 2w" beside the absolute date, so both readings are there.
     private func stamp(_ raw: String) -> String {
         let age = gardenAge(raw, session: session)
@@ -270,6 +348,7 @@ struct DomainBriefSheet: View {
         notes = r.notes
         text = r.brief?.text ?? ""
         loaded = true
+        await loadBound()
     }
 
     private func save() async {

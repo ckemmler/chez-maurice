@@ -584,15 +584,7 @@
 "settings.import.night" = "Geïmporteerde gesprekken verschijnen in je lijst met hun herkomst. De nacht erna leest Maurice ze: je domeinen kunnen je 's ochtends worden voorgesteld.";
 
 /* The drawer "Define my domains" under the conversation Maurice opens (P2-D, 20 September 2026) */
-"proposals.cta" = "Mijn domeinen bepalen";
-"proposals.cta.help" = "De domeinen die Maurice voorstelt overnemen, verbeteren of opbergen";
-"proposals.title" = "Mijn domeinen";
-"proposals.explainer" = "Vink de domeinen aan die je overneemt, verbeter een naam of zijn regel zoals jij het zou zeggen, berg op wat er geen is. Niets bestaat voordat je toepast.";
-"proposals.empty" = "Er is geen voorstel meer open.";
-"proposals.failed" = "De server nam het niet aan. Probeer opnieuw, of antwoord Maurice in het gesprek.";
 "proposals.rule" = "Een overgenomen domein krijgt zijn schrift, binnen een minuut of twee door Maurice geschreven. Notities in je tuin worden alleen geschreven waar je erom vraagt, elk gemarkeerd als nog niet nagekeken.";
-"proposals.apply" = "Toepassen";
-"proposals.apply.count" = "Toepassen (%d)";
 "proposals.conversations.one" = "%d gesprek";
 "proposals.conversations.other" = "%d gesprekken";
 "proposals.mail.one" = "%d mailgesprek";
@@ -605,9 +597,37 @@
 "proposals.split_hint" = "Misschien meerdere dingen: %@";
 "proposals.seed" = "Mijn tuin inzaaien met een paar notities";
 "proposals.adopt" = "Overnemen";
-"proposals.dismiss" = "Opbergen";
-"proposals.undo_dismiss" = "In de lijst houden";
-"proposals.dismissed" = "Opgeborgen: zijn gesprekken komen niet meer terug.";
+"proposals.section" = "Voorstellen (%d)";
+"proposals.failed" = "De server nam het niet aan. Probeer het opnieuw.";
+"proposals.dismiss" = "Afwijzen";
+"proposals.dismiss.hint" = "Afwijzen: de gesprekken ervan komen niet meer terug, en het voorstel komt niet vanzelf terug. Onderaan de lijst kun je erop terugkomen.";
+"proposals.show_all" = "Alles tonen (%d)";
+"proposals.show_less" = "Minder tonen";
+"proposals.put_away" = "Afgewezen en opgeborgen (%d)";
+"proposals.restore" = "Terughalen";
+"proposals.new" = "Nieuw";
+"proposals.badge" = "%d nieuwe voorstellen";
+"proposals.page.title" = "Voorstel";
+"proposals.merge" = "Samenvoegen";
+"proposals.merge.explainer" = "Kies de voorstellen die je met “%@” samenvoegt.";
+"proposals.cut" = "Splitsen";
+"proposals.cut.explainer" = "Kies wat dit voorstel verlaat om een ander te worden, en geef het een naam.";
+"proposals.cut.name" = "Naam van het nieuwe voorstel";
+"proposals.cut.confirm" = "Splitsen (%d)";
+"pastille.bound" = "%@ — dit gesprek hoort erbij";
+"pastille.bound.auto" = "%@ — door Maurice gekoppeld";
+"pastille.read" = "%@ — schrift gelezen";
+"pastille.recognised" = "%@ — herkend";
+"pastille.open" = "Domein openen";
+"pastille.attach" = "Dit gesprek koppelen";
+"pastille.detach" = "Loskoppelen";
+"chat.details.domain" = "Domein";
+"chat.details.domain.none" = "Geen";
+"chat.details.domain.auto" = "Maurice heeft dit gesprek uit zichzelf gekoppeld. Je kunt het loskoppelen: hij koppelt het niet opnieuw.";
+"brief.conversations.auto" = "%d door Maurice gekoppeld";
+"brief.conversations.auto.hint" = "Maurice heeft deze gesprekken uit zichzelf gekoppeld, omdat ze op dit domein lijken. Koppel los wat er niet bij hoort: hij koppelt ze niet opnieuw.";
+"brief.conversations.attach_current" = "Het huidige gesprek koppelen";
+"brief.conversations.detach_current" = "Het huidige gesprek loskoppelen";
 
 /* Invitations */
 "invite.scan" = "Uitnodiging scannen";
@@ -699,7 +719,7 @@
 "mail.reading.approve" = "Maurice laten lezen";
 "mail.reading.withdraw" = "Goedkeuring intrekken";
 "mail.reading.help" = "Maurice leest 's nachts de echte uitwisselingen van de laatste jaren en zegt je wie voor jou telt en wat er speelt. Er wordt niets verzonden, niets in je mailbox veranderd.";
-"mail.reading.caption" = "Het lezen is een ja dat jij geeft — hier of in het gesprek dat Maurice opende. Je kunt het altijd intrekken.";
+"mail.reading.caption" = "Het lezen is een ja dat jij geeft, hier. Je kunt het altijd intrekken. Wat Maurice eruit schrijft staat in je tuin, onder “Mijn mail”.";
 "mail.box.messages" = "%d berichten verzameld";
 "mail.box.reading" = "Lezen: %1$d gesorteerd · %2$d te lezen · %3$d gelezen";
 "mail.box.left" = "Nog: ~%1$@ te sorteren, ~%2$@ te lezen · %3$@";

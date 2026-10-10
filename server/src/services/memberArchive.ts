@@ -93,6 +93,7 @@ const TABLES: [table: string, column: string, secret?: string[]][] = [
   ["domain_seen", "member_id"],
   ["mail_accounts", "member_id", ["secret"]],
   ["mail_conversations", "member_id"],
+  ["mail_reading_consent", "member_id"],
   ["mail_sender_rules", "member_id"],
   ["contact_accounts", "member_id", ["secret"]],
   ["contact_cards", "member_id"],

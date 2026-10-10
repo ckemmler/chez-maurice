@@ -146,7 +146,7 @@ EOF
       -H 'Content-Type: application/json' -d '{"username":"theo"}' | head -c 600; echo
   echo
   echo "→ The morning of the proposal: log in as Théo (PIN 1234) at http://localhost:$PORT"
-  echo "   — a conversation opened by Maurice is waiting in his list. Ctrl-C stops the demo."
+  echo "   — the proposals wait in his list of domains (the button beside New conversation). Ctrl-C stops the demo."
   while sleep 3600; do :; done
   exit 0
 fi

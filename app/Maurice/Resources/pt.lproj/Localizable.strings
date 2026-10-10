@@ -584,15 +584,7 @@
 "settings.import.night" = "As conversas importadas aparecem na sua lista com a sua origem. Na noite seguinte o Maurice lê-as: os seus domínios podem ser-lhe propostos de manhã.";
 
 /* The drawer "Define my domains" under the conversation Maurice opens (P2-D, 20 September 2026) */
-"proposals.cta" = "Definir os meus domínios";
-"proposals.cta.help" = "Adotar, corrigir ou arrumar os domínios que o Maurice propõe";
-"proposals.title" = "Os meus domínios";
-"proposals.explainer" = "Assinala os domínios que adotas, corrige um nome ou a sua linha como o dirias, arruma o que não o é. Nada existe enquanto não aplicares.";
-"proposals.empty" = "Já não há nenhuma proposta aberta.";
-"proposals.failed" = "O servidor não aceitou. Tenta de novo, ou responde ao Maurice na conversa.";
 "proposals.rule" = "Um domínio adotado recebe o seu caderno, escrito pelo Maurice dentro de um ou dois minutos. As notas no teu jardim só são escritas onde as pedes, cada uma marcada como ainda não revista.";
-"proposals.apply" = "Aplicar";
-"proposals.apply.count" = "Aplicar (%d)";
 "proposals.conversations.one" = "%d conversa";
 "proposals.conversations.other" = "%d conversas";
 "proposals.mail.one" = "%d fio de correio";
@@ -605,9 +597,37 @@
 "proposals.split_hint" = "Talvez várias coisas: %@";
 "proposals.seed" = "Semear o meu jardim com algumas notas";
 "proposals.adopt" = "Adotar";
-"proposals.dismiss" = "Arrumar";
-"proposals.undo_dismiss" = "Mantê-lo na lista";
-"proposals.dismissed" = "Arrumado: as suas conversas não voltarão a aparecer.";
+"proposals.section" = "Propostas (%d)";
+"proposals.failed" = "O servidor não aceitou. Tenta de novo.";
+"proposals.dismiss" = "Descartar";
+"proposals.dismiss.hint" = "Descartar: as suas conversas não voltarão a aparecer, e não regressa por si. Podes voltar atrás no fim da lista.";
+"proposals.show_all" = "Mostrar todas (%d)";
+"proposals.show_less" = "Reduzir";
+"proposals.put_away" = "Descartadas e arrumadas (%d)";
+"proposals.restore" = "Voltar atrás";
+"proposals.new" = "Nova";
+"proposals.badge" = "%d novas propostas";
+"proposals.page.title" = "Proposta";
+"proposals.merge" = "Fundir";
+"proposals.merge.explainer" = "Escolhe as propostas a fundir com «%@».";
+"proposals.cut" = "Cortar";
+"proposals.cut.explainer" = "Escolhe o que sai desta proposta para formar outra, e dá-lhe um nome.";
+"proposals.cut.name" = "Nome da nova proposta";
+"proposals.cut.confirm" = "Cortar (%d)";
+"pastille.bound" = "%@ — esta conversa pertence-lhe";
+"pastille.bound.auto" = "%@ — ligada por Maurice";
+"pastille.read" = "%@ — caderno lido";
+"pastille.recognised" = "%@ — reconhecido";
+"pastille.open" = "Abrir o domínio";
+"pastille.attach" = "Ligar esta conversa";
+"pastille.detach" = "Desligar";
+"chat.details.domain" = "Domínio";
+"chat.details.domain.none" = "Nenhum";
+"chat.details.domain.auto" = "Maurice ligou esta conversa por iniciativa própria. Podes desligá-la: não voltará a ligá-la.";
+"brief.conversations.auto" = "%d ligadas por Maurice";
+"brief.conversations.auto.hint" = "Maurice ligou estas conversas por iniciativa própria, porque se parecem com este domínio. Desliga as que não lhe pertencem: não voltará a ligá-las.";
+"brief.conversations.attach_current" = "Ligar a conversa atual";
+"brief.conversations.detach_current" = "Desligar a conversa atual";
 
 /* Invitations */
 "invite.scan" = "Digitalizar um convite";
@@ -699,7 +719,7 @@
 "mail.reading.approve" = "Deixar o Maurice ler";
 "mail.reading.withdraw" = "Retirar a aprovação";
 "mail.reading.help" = "O Maurice lê as trocas reais dos últimos anos, de noite, e diz-te quem conta para ti e o que está em curso. Nada é enviado, nada muda na tua caixa.";
-"mail.reading.caption" = "A leitura é um sim que tu dás — aqui ou na conversa que o Maurice abriu. Podes retirá-lo a qualquer momento.";
+"mail.reading.caption" = "A leitura é um sim que tu dás, aqui. Podes retirá-lo a qualquer momento. O que o Maurice escreve a partir dela está no teu jardim, em «O meu correio».";
 "mail.box.messages" = "%d mensagens registadas";
 "mail.box.reading" = "Leitura: %1$d triadas · %2$d por ler · %3$d lidas";
 "mail.box.left" = "Falta: ~%1$@ por triar, ~%2$@ por ler · %3$@";

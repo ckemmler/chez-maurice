@@ -8,6 +8,10 @@ export interface Conversation {
   title: string | null;
   /** the specialized Maurice this conversation uses; null = everyday Maurice */
   maurice_id: string | null;
+  /** how it came to that domain when not by the member's hand or an
+   *  adoption: `auto` — the night filed it (services/domainMapping.ts), and
+   *  the member can take it back — or `detached`, once they did */
+  maurice_bound_by?: "auto" | "detached" | null;
   /** provenance; null = native, 'anthropic' = imported from a Claude.ai export */
   origin: string | null;
   /** who opened it: the member, as always until 19 September 2026, or Maurice —
@@ -111,7 +115,7 @@ export function listConversations(userId: string, opts: ListConversationsOptions
   }
   const rows = db
     .query(
-      `SELECT c.id, c.user_id, c.title, c.maurice_id, c.origin, c.opened_by, c.entry_ref, c.created_at, c.updated_at,
+      `SELECT c.id, c.user_id, c.title, c.maurice_id, c.maurice_bound_by, c.origin, c.opened_by, c.entry_ref, c.created_at, c.updated_at,
               COUNT(m.id) as message_count,
               MAX(m.created_at) as last_message_at,
               CASE WHEN c.opened_by = 'maurice' AND p.last_read_at IS NULL THEN 1 ELSE 0 END AS unread,
@@ -162,7 +166,7 @@ export function getConversation(
 ): Conversation | null {
   return db
     .query(
-      `SELECT c.id, c.user_id, c.title, c.maurice_id, c.origin, c.opened_by, c.entry_ref, c.created_at, c.updated_at
+      `SELECT c.id, c.user_id, c.title, c.maurice_id, c.maurice_bound_by, c.origin, c.opened_by, c.entry_ref, c.created_at, c.updated_at
        FROM conversations c
        JOIN conversation_participants p
          ON p.conversation_id = c.id AND p.member_id = ?
@@ -367,7 +371,16 @@ export function setConversationMaurice(
   mauriceId: string | null
 ): boolean {
   if (!isParticipant(conversationId, viewerId)) return false;
-  const r = db.run(`UPDATE conversations SET maurice_id = ? WHERE id = ?`, [mauriceId, conversationId]);
+  // The member's hand: a conversation they take out of a domain is marked
+  // `detached`, so the night's filing (services/domainMapping.ts) never puts
+  // it back; one they bind themselves is no longer the night's doing.
+  const r = db.run(
+    `UPDATE conversations SET maurice_id = ?,
+            maurice_bound_by = CASE WHEN ? IS NULL AND maurice_id IS NOT NULL THEN 'detached' WHEN ? IS NULL THEN maurice_bound_by ELSE NULL END,
+            maurice_bound_at = CASE WHEN ? IS NULL THEN maurice_bound_at ELSE datetime('now') END
+      WHERE id = ?`,
+    [mauriceId, mauriceId, mauriceId, mauriceId, conversationId],
+  );
   return r.changes > 0;
 }
 

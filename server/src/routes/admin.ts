@@ -259,8 +259,9 @@ admin.post("/mail/documents/reset", async (c) => {
 });
 
 // ── POST /api/admin/conversations/open ──────────────────────────
-// Open a conversation for a member, in Maurice's voice — the operator's hand
-// on the brick the night will use (services/openedConversations.ts). Body:
+// Open a conversation for a member, in Maurice's voice — the operator's
+// hand, and since 10 October 2026 the only one: the nights no longer open a
+// conversation for the domains or the mail (services/openedConversations.ts). Body:
 // { member_id | username, text, title?, maurice_id?, force?, dry_run? }.
 // `dry_run` only answers the guard. Refused by the guard → 409 with the
 // reason (child, guest, too_soon) and, when it is a matter of time, `next_at`.
@@ -295,9 +296,8 @@ admin.post("/conversations/open", async (c) => {
 
 // ── The domain mapping (P2-B) ───────────────────────────────────
 // POST /api/admin/domains/map — map one member now: { member_id | username,
-// dry_run?, force? }. `dry_run` groups and names (the model calls are made
-// and charged) but writes no proposal and opens nothing; `force` walks past
-// the opening guard the way the admin's hand may. Without a member, the
+// dry_run? }. `dry_run` groups and names (the model calls are made and
+// charged) but writes no proposal and files nothing. Without a member, the
 // whole night runs (every member), not awaited. GET /api/admin/domains/proposals
 // lists a member's proposals (`?username=…&state=proposed`).
 
@@ -323,7 +323,7 @@ admin.post("/domains/map", async (c) => {
     runDomainMapping().catch(() => {});
     return c.json({ started: !already, running: true }, 202);
   }
-  const r = await mapMember(member.id, { dryRun: body.dry_run === true, force: body.force === true });
+  const r = await mapMember(member.id, { dryRun: body.dry_run === true });
   return c.json(r, r.outcome === "failed" ? 500 : 200);
 });
 

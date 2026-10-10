@@ -584,15 +584,7 @@
 "settings.import.night" = "Importierte Gespräche erscheinen mit ihrer Herkunft in deiner Liste. In der Nacht danach liest Maurice sie: Am Morgen können dir deine Bereiche vorgeschlagen werden.";
 
 /* The drawer "Define my domains" under the conversation Maurice opens (P2-D, 20 September 2026) */
-"proposals.cta" = "Meine Bereiche festlegen";
-"proposals.cta.help" = "Die von Maurice vorgeschlagenen Bereiche übernehmen, korrigieren oder weglegen";
-"proposals.title" = "Meine Bereiche";
-"proposals.explainer" = "Hake die Bereiche ab, die du übernimmst, korrigiere einen Namen oder seine Zeile so, wie du es sagen würdest, lege weg, was keiner ist. Nichts existiert, bevor du anwendest.";
-"proposals.empty" = "Kein Vorschlag ist mehr offen.";
-"proposals.failed" = "Der Server hat es nicht angenommen. Versuch es noch einmal oder antworte Maurice im Gespräch.";
 "proposals.rule" = "Ein übernommener Bereich bekommt sein Heft, von Maurice in ein, zwei Minuten geschrieben. Notizen in deinem Garten werden nur dort geschrieben, wo du sie anforderst, jede als noch nicht durchgesehen markiert.";
-"proposals.apply" = "Anwenden";
-"proposals.apply.count" = "Anwenden (%d)";
 "proposals.conversations.one" = "%d Gespräch";
 "proposals.conversations.other" = "%d Gespräche";
 "proposals.mail.one" = "%d Mailverlauf";
@@ -605,9 +597,37 @@
 "proposals.split_hint" = "Vielleicht mehrere Dinge: %@";
 "proposals.seed" = "Meinen Garten mit ein paar Notizen bepflanzen";
 "proposals.adopt" = "Übernehmen";
-"proposals.dismiss" = "Weglegen";
-"proposals.undo_dismiss" = "In der Liste behalten";
-"proposals.dismissed" = "Weggelegt: seine Gespräche kommen nicht wieder hoch.";
+"proposals.section" = "Vorschläge (%d)";
+"proposals.failed" = "Der Server hat es nicht angenommen. Versuch es noch einmal.";
+"proposals.dismiss" = "Verwerfen";
+"proposals.dismiss.hint" = "Verwerfen: Seine Gespräche kommen nicht wieder hoch, und er kehrt nicht von selbst zurück. Unten in der Liste kannst du darauf zurückkommen.";
+"proposals.show_all" = "Alle anzeigen (%d)";
+"proposals.show_less" = "Weniger anzeigen";
+"proposals.put_away" = "Verworfen und weggelegt (%d)";
+"proposals.restore" = "Zurückholen";
+"proposals.new" = "Neu";
+"proposals.badge" = "%d neue Vorschläge";
+"proposals.page.title" = "Vorschlag";
+"proposals.merge" = "Zusammenführen";
+"proposals.merge.explainer" = "Wähle die Vorschläge, die mit „%@“ zusammengeführt werden.";
+"proposals.cut" = "Teilen";
+"proposals.cut.explainer" = "Wähle, was diesen Vorschlag verlässt und ein eigener wird, und gib ihm einen Namen.";
+"proposals.cut.name" = "Name des neuen Vorschlags";
+"proposals.cut.confirm" = "Teilen (%d)";
+"pastille.bound" = "%@ — dieses Gespräch gehört dazu";
+"pastille.bound.auto" = "%@ — von Maurice zugeordnet";
+"pastille.read" = "%@ — Heft gelesen";
+"pastille.recognised" = "%@ — erkannt";
+"pastille.open" = "Bereich öffnen";
+"pastille.attach" = "Dieses Gespräch zuordnen";
+"pastille.detach" = "Lösen";
+"chat.details.domain" = "Bereich";
+"chat.details.domain.none" = "Keiner";
+"chat.details.domain.auto" = "Maurice hat dieses Gespräch von sich aus zugeordnet. Du kannst es lösen: Er ordnet es nicht wieder zu.";
+"brief.conversations.auto" = "%d von Maurice zugeordnet";
+"brief.conversations.auto.hint" = "Maurice hat diese Gespräche von sich aus zugeordnet, weil sie diesem Bereich ähneln. Löse die, die nicht dazugehören: Er ordnet sie nicht wieder zu.";
+"brief.conversations.attach_current" = "Das aktuelle Gespräch zuordnen";
+"brief.conversations.detach_current" = "Das aktuelle Gespräch lösen";
 
 /* Invitations */
 "invite.scan" = "Einladung scannen";
@@ -699,7 +719,7 @@
 "mail.reading.approve" = "Maurice lesen lassen";
 "mail.reading.withdraw" = "Freigabe zurückziehen";
 "mail.reading.help" = "Maurice liest nachts die echten Wechsel der letzten Jahre und sagt dir, wer für dich zählt und was gerade läuft. Nichts wird gesendet, nichts in deinem Postfach verändert.";
-"mail.reading.caption" = "Das Lesen ist ein Ja, das du gibst — hier oder in dem Gespräch, das Maurice eröffnet hat. Du kannst es jederzeit zurückziehen.";
+"mail.reading.caption" = "Das Lesen ist ein Ja, das du gibst, hier. Du kannst es jederzeit zurückziehen. Was Maurice daraus schreibt, steht in deinem Garten unter „Meine Post“.";
 "mail.box.messages" = "%d Nachrichten erfasst";
 "mail.box.reading" = "Lesen: %1$d sortiert · %2$d zu lesen · %3$d gelesen";
 "mail.box.left" = "Übrig: ~%1$@ zu sortieren, ~%2$@ zu lesen · %3$@";

@@ -221,4 +221,111 @@ def groups_payload(groups: list[Group], key: str = "conversation_ids") -> list[d
     ]
 
 
-__all__ = ["Group", "centroids", "cluster", "default_k", "groups_payload", "merge_close", "spherical_kmeans"]
+# ── Which domain does this resemble? ─────────────────────────────────────────
+#
+# Measured on the owner's store on 10 October 2026, before anything was built
+# on it: a centroid per adopted domain does not work. A domain made of a
+# hundred everyday questions in French sits in the middle of everything said
+# in French — "how long is the flight to Beijing" scored 0.82 against a
+# health domain — and no threshold separates a conversation's own domain
+# (median cosine 0.73) from the best domain of a conversation that has none
+# (0.62). What does work is asking the neighbours: centre the vectors on the
+# member's mean (which removes what every conversation of theirs shares),
+# take the twelve nearest conversations among *all* of them, bound or not,
+# and count how many belong to one domain. The unbound ones are what makes
+# "none" a possible answer. Leaving each conversation out of its own vote:
+# seven of twelve finds 57 % of the bound conversations and is wrong on
+# 0.8 %; on a single turn's vector, six of twelve finds about half and is
+# wrong on 3.5 %, nine of twelve on 1 %.
+
+MATCH_K = 12
+#: Below this many conversations the neighbours say nothing worth hearing.
+MATCH_MIN_CONVERSATIONS = 30
+
+
+@dataclass
+class Neighbourhood:
+    """A member's conversations, centred and ready to be asked."""
+
+    ids: list[str]
+    mean: np.ndarray
+    X: np.ndarray  # centred, unit rows
+
+    @classmethod
+    def of(cls, vectors: Mapping[str, np.ndarray]) -> "Neighbourhood":
+        ids = list(vectors.keys())
+        if not ids:
+            return cls(ids=[], mean=np.zeros(0, dtype=np.float32), X=np.zeros((0, 0), dtype=np.float32))
+        raw = np.stack([np.asarray(vectors[i], dtype=np.float32) for i in ids])
+        mean = raw.mean(axis=0)
+        return cls(ids=ids, mean=mean, X=_centred(raw, mean))
+
+
+def _centred(M: np.ndarray, mean: np.ndarray) -> np.ndarray:
+    C = M - mean
+    norms = np.linalg.norm(C, axis=1, keepdims=True)
+    norms[norms == 0] = 1.0
+    return C / norms
+
+
+def match_domains(
+    hood: Neighbourhood,
+    domains: Mapping[str, Iterable[str]],
+    *,
+    candidates: Iterable[str] | None = None,
+    queries: Mapping[str, np.ndarray] | None = None,
+    exclude: Iterable[str] = (),
+    k: int = MATCH_K,
+) -> list[dict[str, Any]]:
+    """The domain each item's neighbours belong to, and how many of them.
+
+    `domains` maps a domain to the conversations bound to it. `candidates`
+    are conversations of the neighbourhood (each left out of its own vote);
+    `queries` are vectors from elsewhere — a turn just embedded — keyed by
+    whatever the caller wants back; `exclude` keeps conversations out of
+    every vote (the one a turn belongs to). An item comes back as
+    `{id, domain, votes, k}`, `domain` None when no neighbour is bound.
+    """
+    n = len(hood.ids)
+    if n < MATCH_MIN_CONVERSATIONS:
+        return []
+    index = {cid: i for i, cid in enumerate(hood.ids)}
+    names = list(domains.keys())
+    label = np.full(n, -1, dtype=int)
+    for d, cids in enumerate(domains.values()):
+        for cid in cids:
+            i = index.get(str(cid))
+            if i is not None:
+                label[i] = d
+    kk = max(1, min(k, n - 1))
+    out_of = np.array([index[c] for c in exclude if c in index], dtype=int)
+
+    def vote(key: str, sims: np.ndarray) -> dict[str, Any]:
+        if out_of.size:
+            sims[out_of] = -2.0
+        near = label[np.argpartition(-sims, kk - 1)[:kk]]
+        near = near[near >= 0]
+        if near.size == 0:
+            return {"id": key, "domain": None, "votes": 0, "k": kk}
+        counts = np.bincount(near, minlength=len(names))
+        best = int(counts.argmax())
+        return {"id": key, "domain": names[best], "votes": int(counts[best]), "k": kk}
+
+    out: list[dict[str, Any]] = []
+    for cid in candidates or ():
+        i = index.get(str(cid))
+        if i is None:
+            continue
+        sims = hood.X @ hood.X[i]
+        sims[i] = -2.0
+        out.append(vote(str(cid), sims))
+    for key, vec in (queries or {}).items():
+        q = _centred(np.asarray(vec, dtype=np.float32)[None, :], hood.mean)[0]
+        out.append(vote(str(key), hood.X @ q))
+    return out
+
+
+__all__ = [
+    "Group", "MATCH_K", "MATCH_MIN_CONVERSATIONS", "Neighbourhood", "centroids", "cluster", "default_k",
+    "groups_payload", "match_domains", "merge_close", "spherical_kmeans",
+]

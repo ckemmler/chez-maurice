@@ -584,15 +584,7 @@
 "settings.import.night" = "Le conversazioni importate compaiono nella tua lista con la loro origine. La notte seguente Maurice le legge: i tuoi domini possono esserti proposti al mattino.";
 
 /* The drawer "Define my domains" under the conversation Maurice opens (P2-D, 20 September 2026) */
-"proposals.cta" = "Definire i miei domini";
-"proposals.cta.help" = "Adottare, correggere o mettere via i domini che Maurice propone";
-"proposals.title" = "I miei domini";
-"proposals.explainer" = "Spunta i domini che adotti, correggi un nome o la sua riga come lo diresti tu, metti via ciò che non lo è. Nulla esiste finché non applichi.";
-"proposals.empty" = "Nessuna proposta è più aperta.";
-"proposals.failed" = "Il server non l’ha accettato. Riprova, oppure rispondi a Maurice nella conversazione.";
 "proposals.rule" = "Un dominio adottato riceve il suo quaderno, scritto da Maurice entro un minuto o due. Le note nel tuo giardino vengono scritte solo dove le chiedi, ciascuna segnata come non ancora riletta.";
-"proposals.apply" = "Applica";
-"proposals.apply.count" = "Applica (%d)";
 "proposals.conversations.one" = "%d conversazione";
 "proposals.conversations.other" = "%d conversazioni";
 "proposals.mail.one" = "%d filo di posta";
@@ -605,9 +597,37 @@
 "proposals.split_hint" = "Forse più cose: %@";
 "proposals.seed" = "Seminare il mio giardino con qualche nota";
 "proposals.adopt" = "Adotta";
-"proposals.dismiss" = "Metti via";
-"proposals.undo_dismiss" = "Tienilo in lista";
-"proposals.dismissed" = "Messo via: le sue conversazioni non torneranno più.";
+"proposals.section" = "Proposte (%d)";
+"proposals.failed" = "Il server non ha preso. Riprova.";
+"proposals.dismiss" = "Scartare";
+"proposals.dismiss.hint" = "Scartare: le sue conversazioni non torneranno più, e non ritorna da sola. Puoi ripensarci in fondo all’elenco.";
+"proposals.show_all" = "Mostra tutte (%d)";
+"proposals.show_less" = "Riduci";
+"proposals.put_away" = "Scartate e messe via (%d)";
+"proposals.restore" = "Ripensarci";
+"proposals.new" = "Nuova";
+"proposals.badge" = "%d nuove proposte";
+"proposals.page.title" = "Proposta";
+"proposals.merge" = "Unire";
+"proposals.merge.explainer" = "Scegli le proposte da unire a «%@».";
+"proposals.cut" = "Tagliare";
+"proposals.cut.explainer" = "Scegli ciò che esce da questa proposta per farne un’altra, e dalle un nome.";
+"proposals.cut.name" = "Nome della nuova proposta";
+"proposals.cut.confirm" = "Tagliare (%d)";
+"pastille.bound" = "%@ — questa conversazione vi è collegata";
+"pastille.bound.auto" = "%@ — collegata da Maurice";
+"pastille.read" = "%@ — quaderno letto";
+"pastille.recognised" = "%@ — riconosciuto";
+"pastille.open" = "Apri il dominio";
+"pastille.attach" = "Collega questa conversazione";
+"pastille.detach" = "Scollega";
+"chat.details.domain" = "Dominio";
+"chat.details.domain.none" = "Nessuno";
+"chat.details.domain.auto" = "Maurice ha collegato questa conversazione di sua iniziativa. Puoi scollegarla: non la collegherà più.";
+"brief.conversations.auto" = "%d collegate da Maurice";
+"brief.conversations.auto.hint" = "Maurice ha collegato queste conversazioni di sua iniziativa, perché somigliano a questo dominio. Scollega quelle che non c’entrano: non le collegherà più.";
+"brief.conversations.attach_current" = "Collega la conversazione in corso";
+"brief.conversations.detach_current" = "Scollega la conversazione in corso";
 
 /* Invitations */
 "invite.scan" = "Scansiona un invito";
@@ -699,7 +719,7 @@
 "mail.reading.approve" = "Lascia leggere Maurice";
 "mail.reading.withdraw" = "Ritira l'approvazione";
 "mail.reading.help" = "Maurice legge gli scambi veri degli ultimi anni, di notte, e ti dice chi conta per te e cosa è in corso. Nulla viene inviato, nulla cambia nella tua casella.";
-"mail.reading.caption" = "La lettura è un sì che dai tu — qui o nella conversazione che Maurice ha aperto. Puoi ritirarlo in ogni momento.";
+"mail.reading.caption" = "La lettura è un sì che dai tu, qui. Puoi ritirarlo in ogni momento. Ciò che Maurice ne scrive è nel tuo giardino, sotto «La mia posta».";
 "mail.box.messages" = "%d messaggi rilevati";
 "mail.box.reading" = "Lettura: %1$d smistati · %2$d da leggere · %3$d letti";
 "mail.box.left" = "Resta: ~%1$@ da smistare, ~%2$@ da leggere · %3$@";

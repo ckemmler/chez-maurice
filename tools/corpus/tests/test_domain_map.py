@@ -195,6 +195,44 @@ def test_store_note_centroids():
         store.close()
 
 
+def test_match_domains_asks_the_neighbours():
+    from src.domain_map import Neighbourhood, match_domains
+
+    local = np.random.default_rng(21)
+    centres = [unit(local.normal(size=DIM)) for _ in range(4)]
+    vectors = {f"m{g}-{i}": unit(c + 0.12 * local.normal(size=DIM)).astype(np.float32) for g, c in enumerate(centres) for i in range(20)}
+    hood = Neighbourhood.of(vectors)
+    # Two domains: most of group 0, most of group 1. Groups 2 and 3 belong to nothing.
+    domains = {"d0": [f"m0-{i}" for i in range(15)], "d1": [f"m1-{i}" for i in range(15)]}
+    out = {m["id"]: m for m in match_domains(hood, domains, candidates=["m0-17", "m1-18", "m2-3"])}
+    assert out["m0-17"]["domain"] == "d0" and out["m0-17"]["votes"] >= 7, out["m0-17"]
+    assert out["m1-18"]["domain"] == "d1" and out["m1-18"]["votes"] >= 7, out["m1-18"]
+    # Its neighbours are its own unbound group: nobody votes.
+    assert out["m2-3"]["votes"] <= 1, out["m2-3"]
+    # A vector from elsewhere, and the conversation it belongs to kept out.
+    q = match_domains(hood, domains, queries={"text": unit(centres[1] + 0.1 * local.normal(size=DIM))}, exclude=["m1-0"])
+    assert q[0]["id"] == "text" and q[0]["domain"] == "d1" and q[0]["votes"] >= 7, q
+    # Too few conversations: the neighbours are not asked.
+    small = Neighbourhood.of({k: v for k, v in list(vectors.items())[:10]})
+    assert match_domains(small, domains, candidates=["m0-1"]) == []
+
+
+def test_store_conversation_signature_moves_with_the_chunks():
+    import sqlite_vec  # noqa: F401
+    from src.sqlite_vec_store import SqliteVecStore
+
+    with tempfile.TemporaryDirectory() as tmp:
+        store = SqliteVecStore(vectors_dir=Path(tmp), vector_size=DIM, embedding_model="test-model")
+        before = store.conversation_signature(member_id="m1")
+        store.bulk_load([{
+            "chunk_id": "c1-0", "unit_key": "conv:c1", "unit_hash": "h", "source_type": "conversation",
+            "vector": [float(x) for x in unit(np.random.default_rng(5).normal(size=DIM))],
+            "payload": {"conversation_id": "c1", "role": "user"},
+        }], member_id="m1")
+        after = store.conversation_signature(member_id="m1")
+        assert before[0] == after[0] == "m1" and before != after, (before, after)
+
+
 def test_groups_payload_names_its_ids():
     from src.domain_map import groups_payload
 

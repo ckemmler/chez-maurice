@@ -4,9 +4,11 @@
 // the job is no longer running, skips a member with no mail, records a
 // failure by name; "due" is the corpus's rule at 03:00; the view the app
 // reads flattens the tool's answer, with `none` for a member without mail;
-// and once a walk is done the night reconciles weekly, triages, calibrates,
-// estimates, and opens the conversation with the numbers — once, and only
-// when the walk is done.
+// and once a walk is done the night reconciles weekly, triages, calibrates
+// and estimates, and says once in the log, for the operator, what a reading
+// would cost. Since 10 October 2026 that is all: no conversation is opened
+// with the numbers, at night or when a mailbox is added, and nothing is
+// said to the member anywhere — the card under Settings → Mail shows them.
 
 import { afterAll, beforeAll, beforeEach, expect, test } from "bun:test";
 
@@ -14,6 +16,8 @@ const db = (await import("../src/db")).default;
 const accountsSvc = await import("../src/services/mailAccounts");
 const routes = (await import("../src/routes/mailAccounts")).default;
 const scan = await import("../src/services/mailScan");
+const approval = await import("../src/services/mailApproval");
+const reading = await import("../src/services/mailReading");
 const { createSession } = await import("../src/services/auth");
 
 const ANNA = "ms-anna";
@@ -45,16 +49,22 @@ function gateway(answers: (member: string, tool: string) => any) {
   };
 }
 
-let opened: any[] = [];
 const night = (d: Partial<Parameters<typeof scan.runMailNightly>[0]>) => ({
-  open: async (req: any) => {
-    opened.push(req);
-    return { ok: true as const, conversation: { id: `conv_${opened.length}` } as any, message: {} as any };
-  },
-  locale: () => "fr",
   pollMs: 5,
   ...d,
 } as Parameters<typeof scan.runMailNightly>[0]);
+
+/** What Maurice has opened and said, in the whole household: the night
+ *  must leave both as it found them. */
+const spoken = () => ({
+  opened: (db.query(`SELECT COUNT(*) AS n FROM conversations WHERE opened_by = 'maurice'`).get() as { n: number }).n,
+  said: (db.query(`SELECT COUNT(*) AS n FROM messages WHERE role = 'assistant'`).get() as { n: number }).n,
+});
+let before = { opened: 0, said: 0 };
+
+/** The lines the night writes for the operator about what a reading would cost. */
+let costLines: string[] = [];
+const realLog = console.log;
 
 const running = (n: number) => ({ running: true, job: { id: "job_1", state: "running", counts: { seen: n, written: n } }, totals: { messages: n, locations: n } });
 const done = (n: number) => ({ running: false, job: { id: "job_1", state: "done", counts: { seen: n, written: n }, last_error: null }, totals: { messages: n, locations: n } });
@@ -67,15 +77,25 @@ beforeAll(() => {
 });
 
 afterAll(() => {
+  console.log = realLog;
   accountsSvc.setChecker(null);
   scan.setMailScanDeps(null);
+  db.run(`DELETE FROM mail_accounts WHERE member_id = ?`, [ANNA]);
+  db.run(`DELETE FROM mail_reading_consent WHERE member_id = ?`, [ANNA]);
 });
 
 beforeEach(() => {
   calls = [];
-  opened = [];
+  costLines = [];
+  console.log = (...args: any[]) => {
+    const line = args.join(" ");
+    if (/message\(s\) to read, cost: /.test(line)) costLines.push(line);
+    else realLog(...args);
+  };
   scan._resetMailNightlyState();
   db.run(`DELETE FROM mail_accounts WHERE member_id = ?`, [ANNA]);
+  db.run(`DELETE FROM mail_reading_consent WHERE member_id = ?`, [ANNA]);
+  before = spoken();
 });
 
 function req(path: string, init: RequestInit = {}) {
@@ -160,10 +180,13 @@ test("the night walks every member with mail, polls to the end, skips the others
   ]);
   const s = scan.mailNightlyStatus();
   expect(s.last_outcome).toBe("walked");
-  expect(s.last_stats).toEqual({ members: 3, walked: 2, skipped: 1, failed: 0, messages: 1020, reconciled: 2, opened: 2 });
-  expect(opened.map((o) => o.memberId)).toEqual(["m-anna", "m-ben"]);
-  expect(s.members["m-anna"]).toMatchObject({ conversation_id: "conv_1" });
+  expect(s.last_stats).toEqual({ members: 3, walked: 2, skipped: 1, failed: 0, messages: 1020, reconciled: 2 });
+  // The estimate went to the log, once per member walked; no conversation is kept for anyone.
+  expect(costLines.map((l) => l.match(/\[mail\] (\S+):/)?.[1])).toEqual(["m-anna", "m-ben"]);
+  expect(s.members["m-anna"]).toMatchObject({ conversation_id: null });
   expect(s.members["m-anna"]!.reconciled_at && s.members["m-anna"]!.announced_at).toBeTruthy();
+  expect(s.members["m-nomail"]).toBeUndefined();
+  expect(spoken()).toEqual(before);
   expect(s.last_error).toBeNull();
   expect(s.running).toBe(false);
 });
@@ -180,14 +203,16 @@ test("a member's walk that fails, or outlasts the wait, is named and does not st
   });
   expect(await scan.runMailNightly(deps)).toBe("failed");
   const s = scan.mailNightlyStatus();
-  expect(s.last_stats).toMatchObject({ walked: 0, failed: 2, messages: 5, opened: 0 });
+  expect(s.last_stats).toMatchObject({ walked: 0, failed: 2, messages: 5 });
   expect(s.last_error).toContain("m-ben");
   expect(s.last_error).toContain("still going");
   // Anna's failure was logged by name before Ben's; both were tried — and
-  // nothing was opened: the conversation waits for a walk that is done.
+  // nothing was measured: the numbers wait for a walk that is done.
   expect(calls.filter((c) => c.tool === "scan_mailbox").map((c) => c.member)).toEqual(["m-anna", "m-ben"]);
-  expect(opened).toHaveLength(0);
+  expect(costLines).toHaveLength(0);
+  expect(s.members["m-anna"]?.announced_at ?? null).toBeNull();
   expect(calls.some((c) => c.tool === "triage_mailbox")).toBe(false);
+  expect(spoken()).toEqual(before);
 });
 
 test("a run already going is shared, not doubled", async () => {
@@ -212,38 +237,57 @@ test("a household with no members does nothing and says so", async () => {
   expect(calls).toHaveLength(0);
 });
 
-test("the conversation opens once, when the walk is done, past the guard, with numbers only", async () => {
+test("the estimate is logged once for the operator, when the walk is done; no conversation is opened, that night or the next", async () => {
   const deps = night({
     members: () => [{ id: "m-anna" }],
     call: gateway((_m, tool) => (tool === "scan_mailbox" ? { status: "started", job: { id: "j", state: "running" } } : tool === "scan_status" ? done(100) : undefined)),
   });
   expect(await scan.runMailNightly(deps)).toBe("walked");
-  expect(opened).toHaveLength(1);
-  const req = opened[0];
-  expect(req).toMatchObject({ memberId: "m-anna", force: true, title: "Ta boîte mail, en chiffres" });
-  expect(req.text).toContain("100 messages en tout, dont 60 lettres d'information et notifications");
-  expect(req.text).toContain("Sur les 3 dernières années, j'y compte 20 vrais échanges");
-  expect(req.text).toContain("sur une ou deux nuits");
-  expect(req.text).toContain("Je lis ? Oui ou non.");
-  expect(req.text).not.toMatch(/@|€/); // nobody is named, no money
-  // The second night: the walk is done again, nothing is opened again, and
-  // the reconciliation waits for its week.
+  expect(costLines).toHaveLength(1);
+  expect(costLines[0]).toContain("[mail] m-anna: 20 message(s) to read, cost: ");
+  const first = scan.mailNightlyStatus();
+  const announced = first.members["m-anna"]!.announced_at;
+  expect(announced).toBeTruthy();
+  expect(first.members["m-anna"]!.conversation_id).toBeNull();
+  expect(first.last_stats).not.toHaveProperty("opened");
+  expect(spoken()).toEqual(before);
+  // The second night: the walk is done again, the estimate is measured but
+  // not logged again, and the reconciliation waits for its week.
   calls = [];
+  await new Promise((r) => setTimeout(r, 5));
   expect(await scan.runMailNightly(deps)).toBe("walked");
-  expect(opened).toHaveLength(1);
+  expect(costLines).toHaveLength(1);
   expect(calls.map((c) => c.tool)).toEqual(["scan_mailbox", "scan_status", "triage_mailbox", "calibrate_reading", "estimate_reading"]);
-  expect(scan.mailNightlyStatus().last_stats).toMatchObject({ reconciled: 0, opened: 0 });
+  expect(scan.mailNightlyStatus().last_stats).toMatchObject({ reconciled: 0 });
+  expect(scan.mailNightlyStatus().members["m-anna"]!.announced_at).toBe(announced);
+  expect(spoken()).toEqual(before);
 });
 
-test("a walk still running at the end of the wait opens nothing; a paused one neither", async () => {
+test("the night's deps have no way to open a conversation or to pick a language for one", () => {
+  // A stub that offers one is not called: the night holds nothing to say.
+  let asked = 0;
+  const deps = night({
+    members: () => [{ id: "m-anna" }],
+    call: gateway((_m, tool) => (tool === "scan_mailbox" ? { status: "started", job: { id: "j", state: "running" } } : tool === "scan_status" ? done(100) : undefined)),
+    ...({ open: async () => { asked++; return { ok: false, reason: "never" }; }, locale: () => { asked++; return "fr"; } } as any),
+  });
+  return scan.runMailNightly(deps).then((outcome) => {
+    expect(outcome).toBe("walked");
+    expect(asked).toBe(0);
+  });
+});
+
+test("a walk still running at the end of the wait measures nothing; a paused one neither", async () => {
   const paused = night({
     members: () => [{ id: "m-anna" }],
     call: gateway((_m, tool) => (tool === "scan_mailbox" ? { status: "started", job: { id: "j", state: "running" } }
       : tool === "scan_status" ? { running: false, job: { id: "j", state: "paused", counts: {} }, totals: { messages: 50, locations: 50 } } : undefined)),
   });
   expect(await scan.runMailNightly(paused)).toBe("failed");
-  expect(opened).toHaveLength(0);
+  expect(costLines).toHaveLength(0);
+  expect(calls.some((c) => c.tool === "estimate_reading")).toBe(false);
   expect(scan.mailNightlyStatus().last_error).toContain("paused");
+  expect(spoken()).toEqual(before);
 });
 
 test("a calibration with nothing to read does not stop the numbers", async () => {
@@ -258,68 +302,103 @@ test("a calibration with nothing to read does not stop the numbers", async () =>
     }),
   });
   expect(await scan.runMailNightly(deps)).toBe("walked");
-  expect(opened[0].text).toContain("je n'y trouve aucun vrai échange à lire");
+  expect(calls.map((c) => c.tool)).toContain("estimate_reading");
+  // Not calibrated: no price to give, and the line says so rather than zero.
+  expect(costLines).toEqual(["[mail] m-anna: 0 message(s) to read, cost: unpriced model"]);
+  expect(scan.mailNightlyStatus().members["m-anna"]!.announced_at).toBeTruthy();
 });
 
 // ── At once, when the mailbox is added (5 October 2026) ──────────────────
 
-const approval = await import("../src/services/mailApproval");
-const reading = await import("../src/services/mailReading");
-const { createConversation, getMessages } = await import("../src/services/conversations");
-const { MAIL_OPENER_STRINGS } = await import("../src/services/mailOpener");
-
-/** The deps of a day: a walk that is done at the first look, and an opening
- *  that makes a real conversation, as Maurice's. */
+/** The deps of a day: a walk that is done at the first look, and the
+ *  member's word taken by the tool. */
 const day = (answers: (member: string, tool: string) => any = () => undefined) => night({
-  call: gateway((m, tool) => answers(m, tool) ?? (tool === "scan_mailbox" ? { status: "started", job: { id: "job_1", state: "running" } } : tool === "scan_status" ? done(12) : undefined)),
-  open: async (r: any) => {
-    opened.push(r);
-    return { ok: true as const, conversation: createConversation(r.memberId, null, { openedBy: "maurice" }) as any, message: {} as any };
-  },
+  call: gateway((m, tool) => answers(m, tool) ?? (
+    tool === "scan_mailbox" ? { status: "started", job: { id: "job_1", state: "running" } }
+    : tool === "scan_status" ? done(12)
+    : tool === "approve_reading" ? { status: "approved", job: { id: "job_r", state: "approved", updated_at: "2026-10-10T08:00:00+00:00" }, already: false }
+    : tool === "reading_progress" ? { job: { id: "job_r", state: "approved" }, progress: { to_light: 0, to_read: 0 } }
+    : undefined)),
 });
 
 const add = (address: string) => req("/", { method: "POST", body: JSON.stringify({ address, password: "good" }) });
 const settle = () => new Promise((r) => setTimeout(r, 150));
 
-test("a member's first mailbox opens the conversation with the numbers at once; a second opens nothing more", async () => {
-  db.run(`DELETE FROM mail_conversations WHERE member_id = ?`, [ANNA]);
+test("a member's first mailbox is measured at once, for its card; no conversation opens, then or with a second mailbox", async () => {
   scan.setMailScanDeps(day());
   expect((await add("anna@gmail.com")).status).toBe(201);
   await settle();
-  expect(opened.map((o) => o.memberId)).toEqual([ANNA]);
-  expect(opened[0].text).toContain("20");
-  const mc = approval.mailConversationOf(ANNA)!;
-  expect(mc).toMatchObject({ reading: "pending" });
-  expect(scan.mailNightlyStatus().members[ANNA]).toMatchObject({ conversation_id: mc.conversation_id });
-  // No yes yet: nothing is read, and nothing is said after the question.
+  // The free work of the night, done the same day.
+  expect(calls.map((c) => c.tool)).toEqual(expect.arrayContaining(["scan_mailbox", "triage_mailbox", "calibrate_reading", "estimate_reading"]));
+  expect(costLines).toHaveLength(1);
+  expect(costLines[0]).toContain(`[mail] ${ANNA}: 20 message(s) to read`);
+  const ms = scan.mailNightlyStatus().members[ANNA]!;
+  expect(ms.announced_at).toBeTruthy();
+  expect(ms.conversation_id).toBeNull();
+  // No word yet: nothing is read, and nobody was asked anything.
+  expect(approval.readingState(ANNA)).toBe("pending");
   expect(reading.readingWanted(ANNA)).toBe(false);
-  expect(getMessages(mc.conversation_id).filter((m) => m.content === MAIL_OPENER_STRINGS.en!.approved)).toHaveLength(0);
+  expect(spoken()).toEqual(before);
 
   expect((await add("anna2@gmail.com")).status).toBe(201);
   await settle();
-  expect(opened).toHaveLength(1);
+  expect(costLines).toHaveLength(1);
+  expect(scan.mailNightlyStatus().members[ANNA]!.announced_at).toBe(ms.announced_at);
+  expect(spoken()).toEqual(before);
+  expect(db.query(`SELECT COUNT(*) AS n FROM conversations WHERE user_id = ?`).get(ANNA)).toEqual({ n: 0 });
 });
 
-test("a yes from the card before the conversation is kept: read now, and carried into the conversation when it opens", async () => {
-  db.run(`DELETE FROM mail_conversations WHERE member_id = ?`, [ANNA]);
-  // The first mailbox's walk never gets to the numbers: no conversation.
+test("a walk that never gets to the numbers logs nothing, and leaves the estimate to be logged when one does", async () => {
   scan.setMailScanDeps(day((_m, tool) => (tool === "scan_mailbox" ? { error: "MailboxError: the mailbox could not be reached" } : undefined)));
   expect((await add("anna@gmail.com")).status).toBe(201);
   await settle();
-  expect(opened).toHaveLength(0);
-  expect(reading.readingWanted(ANNA)).toBe(false);
-  // The yes, as decideReading leaves it on the mailbox, with no row to mirror it.
-  expect(accountsSvc.approveMailboxes(ANNA)).toBe(1);
-  expect(approval.mailConversationOf(ANNA)).toBeNull();
-  expect(reading.readingWanted(ANNA)).toBe(true);
-
-  // The conversation opens later: the yes is mirrored and said there.
+  expect(costLines).toHaveLength(0);
+  expect(scan.mailNightlyStatus().members[ANNA]?.announced_at ?? null).toBeNull();
   scan.setMailScanDeps(day());
   expect((await add("anna2@gmail.com")).status).toBe(201);
   await settle();
-  expect(opened).toHaveLength(1);
-  const mc = approval.mailConversationOf(ANNA)!;
-  expect(mc.reading).toBe("approved");
-  expect(getMessages(mc.conversation_id).at(-1)).toMatchObject({ role: "assistant", content: MAIL_OPENER_STRINGS.en!.approved });
+  expect(costLines).toHaveLength(1);
+  expect(scan.mailNightlyStatus().members[ANNA]!.announced_at).toBeTruthy();
+  expect(spoken()).toEqual(before);
+});
+
+test("a mailbox added after the yes waits for its own, on its card: not approved, not read, and nothing said about it", async () => {
+  scan.setMailScanDeps(day());
+  expect((await add("anna@gmail.com")).status).toBe(201);
+  await settle();
+  // The yes, from the card.
+  const yes = await req("/reading", { method: "POST", body: JSON.stringify({ action: "approve" }) });
+  expect(yes.status).toBe(200);
+  expect((await yes.json()).decision).toEqual({ reading: "approved", already: false, job_id: "job_r", decided_at: "2026-10-10T08:00:00+00:00" });
+  expect(approval.readingState(ANNA)).toBe("approved");
   expect(reading.readingWanted(ANNA)).toBe(true);
+  expect(accountsSvc.approvedMailboxAddresses(ANNA)).toEqual(["anna@gmail.com"]);
+
+  expect((await add("anna2@gmail.com")).status).toBe(201);
+  await settle();
+  expect(accountsSvc.approvedMailboxAddresses(ANNA)).toEqual(["anna@gmail.com"]);
+  expect(reading.readingWanted(ANNA)).toBe(true);
+  // The view its card reads says which mailbox has the member's word.
+  const view = await (await req("/scan")).json();
+  expect(view.state).toBe("done");
+  // Through the yes and the second mailbox: no conversation, no message.
+  expect(spoken()).toEqual(before);
+  expect(db.query(`SELECT COUNT(*) AS n FROM conversations WHERE user_id = ?`).get(ANNA)).toEqual({ n: 0 });
+});
+
+test("the night's record of a conversation opened before is kept as it was, and is not opened again", async () => {
+  // A member who had the conversation with the numbers, before 10 October 2026.
+  const deps = night({
+    members: () => [{ id: "m-anna" }],
+    call: gateway((_m, tool) => (tool === "scan_mailbox" ? { status: "started", job: { id: "j", state: "running" } } : tool === "scan_status" ? done(100) : undefined)),
+  });
+  expect(await scan.runMailNightly(deps)).toBe("walked");
+  const ms = scan.mailNightlyStatus().members["m-anna"]!;
+  ms.conversation_id = "conv_before";
+  ms.announced_at = "2026-09-26T13:52:00.000Z";
+  costLines = [];
+  expect(await scan.runMailNightly(deps)).toBe("walked");
+  expect(scan.mailNightlyStatus().members["m-anna"]).toMatchObject({ conversation_id: "conv_before", announced_at: "2026-09-26T13:52:00.000Z" });
+  expect(costLines).toHaveLength(0);
+  expect(spoken()).toEqual(before);
 });

@@ -1,13 +1,15 @@
 /**
- * The member routes of the drawer "Define my domains" (routes/domains.ts,
- * services/domainProposals.ts, P2-D): the list of open proposals with their
- * weights, a rename, an adoption (the same as the tool: domain, bound
- * conversations, first brief), a dismissal, the whole lot at once — and, each
- * time, the message Maurice leaves in the conversation saying what was done,
- * fanned out to the room. A proposal of another member's is not found, a
- * settled one is refused, the garden notes are written only when asked for
- * (in the background, announced in turn), and the conversation's tools keep
- * working beside the drawer.
+ * The member routes of the app's list of proposals (routes/domains.ts,
+ * services/domainProposals.ts): the open proposals with their weights and
+ * what is new since the member last looked, the settled ones under them, a
+ * rename, an adoption (the same as the tool: domain, bound conversations,
+ * first brief), a dismissal and the way back from it, a merge, a cut, the
+ * whole lot at once — and the conversations of a domain with how each came
+ * to it. A proposal of another member's is not found, a settled one is
+ * refused, the garden notes are written only when asked for (in the
+ * background), the tools keep working beside the list — and nothing here
+ * writes a message anywhere: since 10 October 2026 no conversation carries
+ * the proposals.
  */
 import fs from "node:fs";
 import os from "node:os";
@@ -28,6 +30,7 @@ const seeding = await import("../src/services/domainSeeding");
 const { setRoomPublisher, setSubscriberCount } = await import("../src/services/roomBus");
 const { createSession } = await import("../src/services/auth");
 const { getMaurice } = await import("../src/services/maurices");
+const { setConversationMaurice } = await import("../src/services/conversations");
 const routes = (await import("../src/routes/domains")).default;
 
 const ANNA = "drawer-anna";
@@ -59,8 +62,7 @@ async function write(req: { invocation: string; prompt: string }) {
     if (/bread/i.test(p)) return reply('{"name": "Baking bread", "summary": "Sourdough and machines.", "is_domain": true, "split_hint": ""}');
     return reply('{"name": "Sailing", "summary": "A summer that passed.", "is_domain": true, "split_hint": ""}');
   }
-  if (req.invocation === "domain_brief") return reply("You practise the violin.");
-  return reply('{"intro": "Tonight I read our conversations.", "nuances": "", "invitation": "Tell me."}');
+  return reply("You practise the violin.");
 }
 
 async function map(_memberId: string, ids: string[]) {
@@ -94,18 +96,29 @@ let ben = "";
 const req = (path: string, init: RequestInit = {}, auth = anna) =>
   routes.request(path, { ...init, headers: { Authorization: auth, "Content-Type": "application/json", ...(init.headers as any) } });
 
-/** The night for Anna: three proposals (violin, bread alive; sailing lived) in one conversation. */
+/** The night for Anna: three proposals (violin, bread alive; sailing lived), in no conversation. */
 async function night() {
   annaCorpus();
   const r = await mapping.mapMember(ANNA);
-  expect(r.outcome).toBe("opened");
-  const list = proposals.openProposals(ANNA);
-  const byName = new Map(list.map((p) => [p.name, p]));
-  return { conversationId: r.conversation_id!, byName };
+  expect(r.outcome).toBe("proposed");
+  return { byName: new Map(proposals.openProposals(ANNA).map((p) => [p.name, p])) };
 }
 
-function messagesOf(conversationId: string): Array<{ role: string; content: string }> {
-  return db.query(`SELECT role, content FROM messages WHERE conversation_id = ? ORDER BY created_at, rowid`).all(conversationId) as any;
+/** What Maurice did on his own in the member's conversations: the ones he
+ *  opened, and every message of his. */
+function spoken(member: string): { opened: number; said: number } {
+  const opened = db.query(`SELECT COUNT(*) AS n FROM conversations WHERE user_id = ? AND opened_by = 'maurice'`).get(member) as { n: number };
+  const said = db
+    .query(`SELECT COUNT(*) AS n FROM messages m JOIN conversations c ON c.id = m.conversation_id WHERE c.user_id = ? AND m.role = 'assistant'`)
+    .get(member) as { n: number };
+  return { opened: opened.n, said: said.n };
+}
+
+/** Nothing opened, nothing said since `before`, and nothing fanned out to a room. */
+function expectSilence(before: { opened: number; said: number }) {
+  expect(spoken(ANNA)).toEqual(before);
+  expect(spoken(ANNA).opened).toBe(0);
+  expect(published.filter((p) => p.event.type === "message")).toEqual([]);
 }
 
 beforeAll(() => {
@@ -121,7 +134,7 @@ beforeAll(() => {
   for (const inv of ["domain_mapping", "domain_brief", "domain_seed"]) setPinnedModel(inv, NIGHT);
   setRoomPublisher((topic, data) => published.push({ topic, event: JSON.parse(data) }));
   setSubscriberCount(() => 1);
-  mapping.setMappingDeps({ write: write as any, map, now: () => TODAY });
+  mapping.setMappingDeps({ write: write as any, map, match: async () => [], now: () => TODAY });
   briefs.setBriefDeps({ write: write as any, search: async () => [] });
   seeding.setSeedDeps({ write: write as any, now: () => TODAY });
   anna = `Bearer ${createSession(ANNA).token}`;
@@ -142,31 +155,78 @@ beforeEach(() => {
   requests = [];
   db.run(`DELETE FROM domain_proposals`);
   db.run(`DELETE FROM domain_briefs`);
+  db.run(`DELETE FROM domain_seen`);
+  db.run(`UPDATE users SET domain_proposals_seen_at = NULL WHERE id IN (?, ?)`, [ANNA, BEN]);
   db.run(`DELETE FROM conversations WHERE user_id IN (?, ?)`, [ANNA, BEN]);
   db.run(`DELETE FROM maurices WHERE created_by IN (?, ?)`, [ANNA, BEN]);
 });
 
+const post = (path: string, body?: unknown, auth = anna) => req(path, { method: "POST", ...(body === undefined ? {} : { body: typeof body === "string" ? body : JSON.stringify(body) }) }, auth);
+
 test("GET /proposals: the member's open proposals, alive first, with weight, share and one line; nothing for a member without any", async () => {
-  expect(await (await req("/proposals")).json()).toEqual({ conversation_id: null, total_conversations: 0, proposals: [], settled: [] });
-  const { conversationId } = await night();
+  expect(await (await req("/proposals")).json()).toEqual({ total_conversations: 0, seen_at: null, unseen: 0, proposals: [], settled: [] });
+  await night();
   const res = await req("/proposals");
   expect(res.status).toBe(200);
   const body = await res.json();
-  expect(body.conversation_id).toBe(conversationId);
+  expect(body).not.toHaveProperty("conversation_id");
   expect(body.total_conversations).toBe(12);
+  expect(body.seen_at).toBeNull();
+  expect(body.unseen).toBe(3);
   expect(body.proposals.map((p: any) => p.name)).toEqual(["The violin", "Baking bread", "Sailing"]);
   const violin = body.proposals[0];
-  expect(violin).toMatchObject({ state: "proposed", verdict: "alive", conversations: 5, weight: 5, share: 42, recent_90_days: 3, one_line: "You practise and ask about technique.", conversation_id: conversationId, seed: null });
+  expect(violin).toMatchObject({ state: "proposed", verdict: "alive", conversations: 5, weight: 5, share: 42, recent_90_days: 3, one_line: "You practise and ask about technique.", seed: null, origin: "mapping", is_new: true });
+  expect(violin).not.toHaveProperty("conversation_id");
+  expect(violin.created_at).toBeTruthy();
   expect(violin.sample).toHaveLength(3);
   expect(body.proposals[1]).toMatchObject({ name: "Baking bread", weight: 4, share: 33 });
   expect(body.proposals[2]).toMatchObject({ name: "Sailing", verdict: "lived", weight: 4, share: 25 });
   expect(body.settled).toEqual([]);
   // Ben sees nothing of Anna's.
-  expect((await (await req("/proposals", {}, ben)).json()).proposals).toEqual([]);
+  expect(await (await req("/proposals", {}, ben)).json()).toMatchObject({ unseen: 0, proposals: [], settled: [] });
+});
+
+test("the badge: GET /api/domains counts what is open and what is new; POST /proposals/seen takes the new away until the night proposes again", async () => {
+  expect((await (await req("/")).json()).proposals).toEqual({ open: 0, unseen: 0 });
+  const { byName } = await night();
+  const home = await (await req("/")).json();
+  expect(home.proposals).toEqual({ open: 3, unseen: 3 });
+  expect(home.domains).toEqual([]);
+  // Reading the list is not opening it: nothing is marked by a GET.
+  await req("/proposals");
+  expect((await (await req("/")).json()).proposals).toEqual({ open: 3, unseen: 3 });
+
+  // Ben opening his list does nothing to Anna's.
+  expect(await (await post("/proposals/seen", undefined, ben)).json()).toEqual({ open: 0, unseen: 0 });
+  expect(proposals.proposalCounts(ANNA)).toEqual({ open: 3, unseen: 3 });
+  expect(proposals.proposalsSeenAt(ANNA)).toBeNull();
+
+  const seen = await post("/proposals/seen");
+  expect(seen.status).toBe(200);
+  expect(await seen.json()).toEqual({ open: 3, unseen: 0 });
+  expect(proposals.proposalsSeenAt(ANNA)).toBeTruthy();
+  const list = await (await req("/proposals")).json();
+  expect(list.seen_at).toBe(proposals.proposalsSeenAt(ANNA));
+  expect(list.unseen).toBe(0);
+  expect(list.proposals.every((p: any) => p.is_new === false)).toBe(true);
+
+  // A later night: one more, and only that one is new.
+  const garden = proposals.insertProposal({ member_id: ANNA, name: "The garden", summary: "Beds.", conversation_ids: [], stats: { verdict: "alive", origin: "mapping" } });
+  db.run(`UPDATE domain_proposals SET created_at = datetime('now', '+1 day') WHERE id = ?`, [garden.id]);
+  expect((await (await req("/")).json()).proposals).toEqual({ open: 4, unseen: 1 });
+  const later = await (await req("/proposals")).json();
+  expect(later.unseen).toBe(1);
+  expect(later.proposals.filter((p: any) => p.is_new).map((p: any) => p.name)).toEqual(["The garden"]);
+  // A settled one is never new, and leaves the count.
+  await post(`/proposals/${garden.id}/dismiss`);
+  await post(`/proposals/${byName.get("Sailing")!.id}/dismiss`);
+  expect((await (await req("/")).json()).proposals).toEqual({ open: 2, unseen: 0 });
+  expect((await (await req("/proposals")).json()).settled.every((p: any) => p.is_new === false)).toBe(true);
 });
 
 test("PATCH /proposals/:id: the member's words on name and summary; someone else's is not found", async () => {
   const { byName } = await night();
+  const before = spoken(ANNA);
   const violin = byName.get("The violin")!;
   const res = await req(`/proposals/${violin.id}`, { method: "PATCH", body: JSON.stringify({ name: "Le violon", summary: "Ma pratique du violon." }) });
   expect(res.status).toBe(200);
@@ -178,114 +238,280 @@ test("PATCH /proposals/:id: the member's words on name and summary; someone else
   expect((await req(`/proposals/${violin.id}`, { method: "PATCH", body: "nope" })).status).toBe(400);
   expect((await req(`/proposals/${violin.id}`, { method: "PATCH", body: JSON.stringify({ name: "Mine" }) }, ben)).status).toBe(404);
   expect((await req(`/proposals/nope`, { method: "PATCH", body: JSON.stringify({ name: "Mine" }) })).status).toBe(404);
-  // Nothing was said in the conversation for a rename alone through PATCH.
-  expect(messagesOf(violin.conversation_id!)).toHaveLength(1);
+  expectSilence(before);
 });
 
-test("POST /proposals/:id/adopt: the domain as the tool makes it, its brief in the background, Maurice's word in the conversation; no notes unless asked", async () => {
-  const { conversationId, byName } = await night();
+test("GET /proposals/:id: one proposal in full, whatever its state; someone else's is not found", async () => {
+  const { byName } = await night();
   const violin = byName.get("The violin")!;
-  const res = await req(`/proposals/${violin.id}/adopt`, { method: "POST", body: JSON.stringify({ name: "Le violon" }) });
+  const res = await req(`/proposals/${violin.id}`);
+  expect(res.status).toBe(200);
+  const { proposal } = await res.json();
+  expect(proposal).toMatchObject({ id: violin.id, name: "The violin", state: "proposed", conversations: 5, mail_threads: 0, weight: 5, share: 42, origin: "mapping" });
+  expect(proposal.conversations_list).toHaveLength(5);
+  expect(proposal.conversations_list[0]).toEqual({ id: violin.conversation_ids[0]!, date: "2026-05-02", title: "Violin lesson 0" });
+  expect(proposal.mail_list).toEqual([]);
+  expect((await req(`/proposals/${violin.id}`, {}, ben)).status).toBe(404);
+  expect((await req(`/proposals/nope`)).status).toBe(404);
+  // Still readable once put away.
+  await post(`/proposals/${violin.id}/dismiss`);
+  const put = await (await req(`/proposals/${violin.id}`)).json();
+  expect(put.proposal).toMatchObject({ state: "dismissed", is_new: false });
+  expect(put.proposal.conversations_list).toHaveLength(5);
+});
+
+test("POST /proposals/:id/adopt: the domain as the tool makes it, its brief in the background, not a word in any conversation; no notes unless asked", async () => {
+  const { byName } = await night();
+  const before = spoken(ANNA);
+  const violin = byName.get("The violin")!;
+  const res = await post(`/proposals/${violin.id}/adopt`, { name: "Le violon" });
   expect(res.status).toBe(200);
   const body = await res.json();
+  expect(Object.keys(body)).toEqual(["adopted"]);
   expect(body.adopted).toMatchObject({ id: violin.id, name: "Le violon", conversations_bound: 5, seeding: false });
-  expect(body.message_id).toBeTruthy();
   const domain = getMaurice(body.adopted.domain_id)!;
   expect(domain.kind).toBe("domain");
   expect(domain.created_by).toBe(ANNA);
   expect(domain.prompt).toBe("You practise and ask about technique. Lately the bow arm.");
   expect(db.query(`SELECT COUNT(*) AS n FROM conversations WHERE maurice_id = ?`).get(domain.id)).toEqual({ n: 5 });
   expect(proposals.getProposal(violin.id)).toMatchObject({ state: "adopted", maurice_id: domain.id, name: "Le violon" });
-  // Maurice said it, in Anna's language, and the room heard it.
-  const msgs = messagesOf(conversationId);
-  expect(msgs).toHaveLength(2);
-  expect(msgs[1]!.role).toBe("assistant");
-  expect(msgs[1]!.content).toContain("C'est fait, depuis l'app. Adopté : **Le violon**.");
-  expect(msgs[1]!.content).toContain("Aucune note n'a été écrite dans ton jardin.");
-  const fanned = published.filter((p) => p.event.type === "message");
-  expect(fanned).toHaveLength(1);
-  expect(fanned[0]!.topic).toContain(conversationId);
-  expect(fanned[0]!.event.message.id).toBe(body.message_id);
   // The brief followed.
   await new Promise((r) => setTimeout(r, 50));
   expect(briefs.getBrief(domain.id, ANNA)).not.toBeNull();
-  // The notes were neither written nor declined: the conversation may still offer them.
+  // Maurice said nothing, anywhere: the list shows what was done.
+  expectSilence(before);
+  const list = await (await req("/proposals")).json();
+  expect(list.settled.map((p: any) => [p.name, p.state, p.domain_id])).toEqual([["Le violon", "adopted", domain.id]]);
+  expect((await (await req("/")).json()).domains.map((d: any) => d.name)).toEqual(["Le violon"]);
+  // The notes were neither written nor declined: a conversation may still offer them.
   expect(proposals.getProposal(violin.id)!.stats.seed).toBeUndefined();
-  expect(proposals.domainToolsFor(conversationId, ANNA)).toHaveLength(4);
+  expect(proposals.domainToolsFor(ANNA)).toHaveLength(4);
   // Adopted twice is a 409; Ben cannot adopt Anna's.
-  expect((await req(`/proposals/${violin.id}/adopt`, { method: "POST", body: "{}" })).status).toBe(409);
-  expect((await req(`/proposals/${byName.get("Baking bread")!.id}/adopt`, { method: "POST", body: "{}" }, ben)).status).toBe(404);
+  expect((await post(`/proposals/${violin.id}/adopt`, {})).status).toBe(409);
+  expect((await post(`/proposals/${byName.get("Baking bread")!.id}/adopt`, {}, ben)).status).toBe(404);
 });
 
-test("POST /proposals/:id/dismiss: put away, said in the conversation, never mapped again", async () => {
-  const { conversationId, byName } = await night();
+test("POST /proposals/:id/dismiss, then /restore: put away in silence, never mapped again — until the member comes back on it", async () => {
+  const { byName } = await night();
+  const before = spoken(ANNA);
   const sailing = byName.get("Sailing")!;
-  const res = await req(`/proposals/${sailing.id}/dismiss`, { method: "POST" });
+  const res = await post(`/proposals/${sailing.id}/dismiss`);
   expect(res.status).toBe(200);
-  expect((await res.json()).dismissed).toEqual({ id: sailing.id, name: "Sailing" });
+  expect(await res.json()).toEqual({ dismissed: { id: sailing.id, name: "Sailing" } });
   expect(proposals.getProposal(sailing.id)!.state).toBe("dismissed");
-  expect(messagesOf(conversationId)[1]!.content).toBe("Rangé : **Sailing** — leurs conversations ne remonteront plus.");
   expect(mapping.unattachedConversations(ANNA).map((c) => c.id)).not.toContain(sailing.conversation_ids[0]);
-  expect((await req(`/proposals/${sailing.id}/dismiss`, { method: "POST" })).status).toBe(409);
+  expect((await post(`/proposals/${sailing.id}/dismiss`)).status).toBe(409);
+  const list = await (await req("/proposals")).json();
+  expect(list.proposals.map((p: any) => p.name)).toEqual(["The violin", "Baking bread"]);
+  expect(list.settled.map((p: any) => [p.name, p.state])).toEqual([["Sailing", "dismissed"]]);
+
+  // Ben cannot bring it back; Anna can, and it is open again as it was.
+  expect((await post(`/proposals/${sailing.id}/restore`, undefined, ben)).status).toBe(404);
+  const back = await post(`/proposals/${sailing.id}/restore`);
+  expect(back.status).toBe(200);
+  const { proposal } = await back.json();
+  expect(proposal).toMatchObject({ id: sailing.id, name: "Sailing", state: "proposed", conversations: 3, verdict: "lived" });
+  expect(proposal.conversations_list).toHaveLength(3);
+  expect(proposals.openProposals(ANNA).map((p) => p.id)).toContain(sailing.id);
+  expect((await (await req("/proposals")).json()).settled).toEqual([]);
+  // An open one is not restored, nor an adopted one.
+  const again = await post(`/proposals/${sailing.id}/restore`);
+  expect(again.status).toBe(409);
+  expect((await again.json()).state).toBe("proposed");
+  const violin = byName.get("The violin")!;
+  await post(`/proposals/${violin.id}/adopt`, {});
+  const adopted = await post(`/proposals/${violin.id}/restore`);
+  expect(adopted.status).toBe(409);
+  expect((await adopted.json()).state).toBe("adopted");
+  expect(proposals.getProposal(violin.id)!.state).toBe("adopted");
+
+  // One the old six-week rule put away is listed with the settled, and comes back the same way.
+  const bread = byName.get("Baking bread")!;
+  proposals.updateProposal(bread.id, { state: "expired" });
+  expect((await (await req("/proposals")).json()).settled.map((p: any) => [p.name, p.state]).sort()).toEqual([["Baking bread", "expired"], ["The violin", "adopted"]]);
+  expect((await post(`/proposals/${bread.id}/restore`)).status).toBe(200);
+  expect(proposals.getProposal(bread.id)!.state).toBe("proposed");
+  await new Promise((r) => setTimeout(r, 50));
+  expectSilence(before);
 });
 
-test("POST /proposals/apply: the whole drawer at once — adopt with notes, rename, put away — one message, the notes announced after", async () => {
-  const { conversationId, byName } = await night();
+test("POST /proposals/merge: two or more open proposals into one new one; the parts live on in it", async () => {
+  const { byName } = await night();
+  const before = spoken(ANNA);
   const violin = byName.get("The violin")!;
   const bread = byName.get("Baking bread")!;
   const sailing = byName.get("Sailing")!;
-  const res = await req(`/proposals/apply`, {
-    method: "POST",
-    body: JSON.stringify({
-      items: [
-        { id: violin.id, action: "adopt", name: "Le violon", seed: true },
-        { id: bread.id, action: "keep", summary: "Le pain au levain, surtout." },
-        { id: sailing.id, action: "dismiss" },
-        { id: "nope", action: "adopt" },
-        { id: bread.id, action: "explode" },
-      ],
-    }),
+  // Not his, not enough, not a body.
+  expect((await post(`/proposals/merge`, { ids: [violin.id, bread.id] }, ben)).status).toBe(422);
+  expect((await post(`/proposals/merge`, { ids: [violin.id] })).status).toBe(422);
+  expect((await post(`/proposals/merge`, { ids: [violin.id, violin.id] })).status).toBe(422);
+  expect((await post(`/proposals/merge`, { ids: [violin.id, "nope"] })).status).toBe(422);
+  expect((await post(`/proposals/merge`, {})).status).toBe(400);
+  expect((await post(`/proposals/merge`, "nope")).status).toBe(400);
+  expect(proposals.openProposals(ANNA)).toHaveLength(3);
+
+  // Without a name: made of theirs.
+  const res = await post(`/proposals/merge`, { ids: [violin.id, bread.id] });
+  expect(res.status).toBe(200);
+  const body = await res.json();
+  expect(body.from).toEqual(["The violin", "Baking bread"]);
+  expect(body.proposal).toMatchObject({ name: "The violin & Baking bread", state: "proposed", conversations: 9, origin: "merge", verdict: "alive", recent_90_days: 5 });
+  expect(body.proposal.summary).toBe("You practise and ask about technique. Lately the bow arm.\n\nSourdough and machines.");
+  expect(body.proposal.conversations_list).toHaveLength(9);
+  expect(proposals.getProposal(violin.id)!.state).toBe("superseded");
+  expect(proposals.getProposal(bread.id)!.state).toBe("superseded");
+  // A superseded part is neither open nor settled, and cannot be merged again.
+  const list = await (await req("/proposals")).json();
+  expect(list.proposals.map((p: any) => p.name)).toEqual(["The violin & Baking bread", "Sailing"]);
+  expect(list.settled).toEqual([]);
+  expect((await post(`/proposals/merge`, { ids: [violin.id, sailing.id] })).status).toBe(422);
+
+  // With the member's name and summary.
+  const all = await post(`/proposals/merge`, { ids: [body.proposal.id, sailing.id], name: "Loisirs", summary: "Tout ce que je fais de mes mains." });
+  expect(all.status).toBe(200);
+  expect((await all.json()).proposal).toMatchObject({ name: "Loisirs", summary: "Tout ce que je fais de mes mains.", conversations: 12, share: 100 });
+  expect(proposals.openProposals(ANNA).map((p) => p.name)).toEqual(["Loisirs"]);
+  expectSilence(before);
+});
+
+test("POST /proposals/:id/split: each part a proposal of its own, conversations and mail; what is assigned to none stays", async () => {
+  const { byName } = await night();
+  const before = spoken(ANNA);
+  const violin = byName.get("The violin")!;
+  const [a, b, c, d, e] = violin.conversation_ids as [string, string, string, string, string];
+  expect((await post(`/proposals/${violin.id}/split`, { parts: [{ name: "Bow", conversation_ids: [a] }] }, ben)).status).toBe(404);
+  expect((await post(`/proposals/${violin.id}/split`, {})).status).toBe(400);
+  // No part with a name and something of this proposal's.
+  expect((await post(`/proposals/${violin.id}/split`, { parts: [{ name: "", conversation_ids: [a] }, { name: "Elsewhere", conversation_ids: ["not-in-it"] }] })).status).toBe(422);
+  expect(proposals.getProposal(violin.id)!.conversation_ids).toHaveLength(5);
+
+  const res = await post(`/proposals/${violin.id}/split`, { parts: [{ name: "The bow arm", summary: "My right arm.", conversation_ids: [a, b, "not-in-it"] }] });
+  expect(res.status).toBe(200);
+  const body = await res.json();
+  expect(body.left).toBe(3);
+  expect(body.parts).toHaveLength(1);
+  expect(body.parts[0]).toMatchObject({ name: "The bow arm", summary: "My right arm.", state: "proposed", conversations: 2, origin: "split", verdict: "alive" });
+  expect(body.parts[0].conversations_list.map((l: any) => l.id)).toEqual([a, b]);
+  expect(body.original).toMatchObject({ id: violin.id, name: "The violin", conversations: 3 });
+  expect(proposals.getProposal(violin.id)!.conversation_ids).toEqual([c, d, e]);
+
+  // Everything assigned: the original lives on in its parts only.
+  const rest = await post(`/proposals/${violin.id}/split`, { parts: [{ name: "Scales", conversation_ids: [c] }, { name: "Recital", conversation_ids: [d, e, c] }] });
+  const done = await rest.json();
+  expect(done.left).toBe(0);
+  expect(done.original).toBeNull();
+  expect(done.parts.map((p: any) => [p.name, p.conversations])).toEqual([["Scales", 1], ["Recital", 2]]);
+  expect(proposals.getProposal(violin.id)!.state).toBe("superseded");
+  expect((await post(`/proposals/${violin.id}/split`, { parts: [{ name: "Again", conversation_ids: [a] }] })).status).toBe(409);
+  expect(proposals.openProposals(ANNA).map((p) => p.name).sort()).toEqual(["Baking bread", "Recital", "Sailing", "Scales", "The bow arm"]);
+
+  // Mail threads are cut the same way, by their garden paths.
+  const post_ = proposals.insertProposal({ member_id: ANNA, name: "The landlord", summary: "", conversation_ids: [], mail: ["mail/fr/lease.md", "mail/fr/boiler.md", "mail/fr/deposit.md"] });
+  const cut = await (await post(`/proposals/${post_.id}/split`, { parts: [{ name: "The boiler", mail: ["mail/fr/boiler.md", "mail/fr/unknown.md"] }] })).json();
+  expect(cut.left).toBe(2);
+  expect(cut.parts[0]).toMatchObject({ name: "The boiler", conversations: 0, mail_threads: 1 });
+  expect(proposals.getProposal(cut.parts[0].id)!.mail).toEqual(["mail/fr/boiler.md"]);
+  expect(proposals.getProposal(post_.id)!.mail).toEqual(["mail/fr/lease.md", "mail/fr/deposit.md"]);
+  expectSilence(before);
+});
+
+test("POST /proposals/apply: the whole list at once — adopt with notes, rename, put away — and no message, before or after the notes", async () => {
+  const { byName } = await night();
+  const before = spoken(ANNA);
+  const violin = byName.get("The violin")!;
+  const bread = byName.get("Baking bread")!;
+  const sailing = byName.get("Sailing")!;
+  const res = await post(`/proposals/apply`, {
+    items: [
+      { id: violin.id, action: "adopt", name: "Le violon", seed: true },
+      { id: bread.id, action: "keep", summary: "Le pain au levain, surtout." },
+      { id: sailing.id, action: "dismiss" },
+      { id: "nope", action: "adopt" },
+      { id: bread.id, action: "explode" },
+    ],
   });
   expect(res.status).toBe(200);
   const body = await res.json();
+  expect(Object.keys(body).sort()).toEqual(["adopted", "dismissed", "errors", "renamed"]);
   expect(body.adopted).toHaveLength(1);
   expect(body.adopted[0]).toMatchObject({ name: "Le violon", seeding: true });
   expect(body.dismissed).toEqual([{ id: sailing.id, name: "Sailing" }]);
   expect(body.renamed.map((r: any) => r.name).sort()).toEqual(["Baking bread", "Le violon"]);
   expect(body.errors).toEqual([{ id: "nope", error: "no such proposal" }]);
-  expect(body.conversation_id).toBe(conversationId);
   expect(proposals.getProposal(bread.id)).toMatchObject({ state: "proposed", summary: "Le pain au levain, surtout." });
+  expectSilence(before);
 
-  const said = messagesOf(conversationId)[1]!.content;
-  expect(said).toContain("Adopté : **Le violon**.");
-  expect(said).toContain("Rangé : **Sailing**");
-  expect(said).toContain("Corrigé : **Baking bread**.");
-  expect(said).toContain("Tu as demandé des notes de jardin sur **Le violon**");
-  expect(said).not.toContain("Aucune note");
-
-  // The notes, written in the background and announced in turn.
+  // The notes, written in the background — and not announced either.
   await proposals.seedingSettled();
-  const msgs = messagesOf(conversationId);
-  expect(msgs).toHaveLength(3);
-  expect(msgs[2]!.content).toContain("Les notes sur **Le violon** sont dans ton jardin (2 notes)");
-  expect(msgs[2]!.content).toContain("](/g/");
   expect(proposals.getProposal(violin.id)!.stats.seed?.state).toBe("written");
   expect(fs.existsSync(path.join(GARDENS, ANNA, "notes", "fr", "le-violon.md"))).toBe(true);
   expect(requests.filter((r) => r.invocation === "domain_seed")).toHaveLength(1);
+  await new Promise((r) => setTimeout(r, 50));
+  expectSilence(before);
 
-  // The drawer now shows the one still open, and the settled ones for the record.
+  // The list now shows the one still open, and the settled ones under it.
   const list = await (await req("/proposals")).json();
   expect(list.proposals.map((p: any) => p.name)).toEqual(["Baking bread"]);
   expect(list.settled.map((p: any) => [p.name, p.state]).sort()).toEqual([["Le violon", "adopted"], ["Sailing", "dismissed"]]);
   expect(list.settled.find((p: any) => p.name === "Le violon").seed.state).toBe("written");
+  // The domain's page counts its notes.
+  const mine = (await (await req("/")).json()).domains.find((d: any) => d.name === "Le violon");
+  expect(mine.notes).toMatchObject({ total: 2, unreviewed: 2 });
 
-  // The conversation's tools still work beside the drawer.
-  const t = await proposals.runDomainTool("domains__adjust", { action: "rename", id: bread.id, name: "Le pain" }, conversationId);
+  // The tools still work beside the list, for the member, in whatever conversation.
+  const t = await proposals.runDomainTool("domains__adjust", { action: "rename", id: bread.id, name: "Le pain" }, ANNA);
   expect(t.isError).toBe(false);
   expect(proposals.getProposal(bread.id)!.name).toBe("Le pain");
-  // A body without items is a 400; an empty drawer changes nothing and says nothing.
-  expect((await req(`/proposals/apply`, { method: "POST", body: "{}" })).status).toBe(400);
-  const nothing = await (await req(`/proposals/apply`, { method: "POST", body: JSON.stringify({ items: [] }) })).json();
-  expect(nothing.message_id).toBeNull();
-  expect(messagesOf(conversationId)).toHaveLength(3);
+  // Someone else's items are errors, not acts.
+  const bens = await (await post(`/proposals/apply`, { items: [{ id: bread.id, action: "dismiss" }] }, ben)).json();
+  expect(bens.errors).toEqual([{ id: bread.id, error: "no such proposal" }]);
+  expect(proposals.getProposal(bread.id)!.state).toBe("proposed");
+  // A body without items is a 400; an empty list changes nothing.
+  expect((await post(`/proposals/apply`, {})).status).toBe(400);
+  expect(await (await post(`/proposals/apply`, { items: [] })).json()).toEqual({ adopted: [], dismissed: [], renamed: [], errors: [] });
+  expectSilence(before);
+});
+
+test("GET /:id/conversations: what is bound to a domain and how it came there, the night's first; taken back by the member, it leaves", async () => {
+  const { byName } = await night();
+  const violin = byName.get("The violin")!;
+  const adopted = (await (await post(`/proposals/${violin.id}/adopt`, {})).json()).adopted;
+  const domainId = adopted.domain_id as string;
+  await new Promise((r) => setTimeout(r, 50));
+  // Two more, filed by the night.
+  const filed = [convo(ANNA, "Violin strings", "2026-09-12"), convo(ANNA, "Violin rosin", "2026-09-13")];
+  expect(mapping.bindAuto(ANNA, domainId, filed)).toBe(2);
+
+  const res = await req(`/${domainId}/conversations`);
+  expect(res.status).toBe(200);
+  const body = await res.json();
+  expect(body.total).toBe(7);
+  expect(body.auto).toBe(2);
+  expect(body.conversations).toHaveLength(7);
+  expect(Object.keys(body.conversations[0]).sort()).toEqual(["bound_at", "bound_by", "id", "origin", "title", "updated_at"]);
+  // The night's come first, marked; the adoption's carry no mark.
+  expect(body.conversations.slice(0, 2).map((c: any) => c.id).sort()).toEqual([...filed].sort());
+  expect(body.conversations.slice(0, 2).every((c: any) => c.bound_by === "auto" && c.bound_at)).toBe(true);
+  expect(body.conversations.slice(2).every((c: any) => c.bound_by === null)).toBe(true);
+  expect(body.conversations.slice(2).map((c: any) => c.id).sort()).toEqual([...violin.conversation_ids].sort());
+  expect(body.conversations.find((c: any) => c.id === filed[0])!.title).toBe("Violin strings");
+
+  const auto = await (await req(`/${domainId}/conversations?auto=1`)).json();
+  expect(auto.conversations.map((c: any) => c.id).sort()).toEqual([...filed].sort());
+  expect(auto).toMatchObject({ total: 7, auto: 2 });
+  const two = await (await req(`/${domainId}/conversations?limit=2`)).json();
+  expect(two.conversations).toHaveLength(2);
+  expect(two.total).toBe(7);
+  expect((await (await req(`/${domainId}/conversations?limit=0`)).json()).conversations).toHaveLength(7);
+
+  // The domain is its maker's.
+  expect((await req(`/${domainId}/conversations`, {}, ben)).status).toBe(404);
+  expect((await req(`/nope/conversations`)).status).toBe(404);
+
+  // Taken back: gone from the list, and never filed again.
+  expect(setConversationMaurice(filed[0]!, ANNA, null)).toBe(true);
+  const after = await (await req(`/${domainId}/conversations`)).json();
+  expect(after).toMatchObject({ total: 6, auto: 1 });
+  expect(after.conversations.map((c: any) => c.id)).not.toContain(filed[0]);
+  expect(mapping.bindAuto(ANNA, domainId, [filed[0]!])).toBe(0);
 });

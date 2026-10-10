@@ -357,6 +357,41 @@ class CorpusMCPServer:
                     },
                 ),
                 Tool(
+                    name="match_domains",
+                    description=(
+                        "Which of the caller's domains a conversation, or a piece of text, "
+                        "resembles — by asking its neighbours. The vectors are centred on the "
+                        "member's mean, the twelve nearest conversations taken among all of "
+                        "theirs, and those bound to a domain counted: `{id, domain, votes, k}` "
+                        "per item, `domain` null when no neighbour is bound. `domains` maps a "
+                        "domain id to the conversations bound to it (the server knows; the "
+                        "store does not). Reads only, the member's file only; `text` costs one "
+                        "embedding."
+                    ),
+                    inputSchema={
+                        "type": "object",
+                        "properties": {
+                            "domains": {
+                                "type": "object",
+                                "description": "domain id → conversation ids bound to it",
+                                "additionalProperties": {"type": "array", "items": {"type": "string"}},
+                            },
+                            "conversation_ids": {
+                                "type": "array",
+                                "items": {"type": "string"},
+                                "description": "Conversations to place, each left out of its own vote",
+                            },
+                            "text": {"type": "string", "description": "A turn to place (embedded as the conversations are)"},
+                            "exclude": {
+                                "type": "array",
+                                "items": {"type": "string"},
+                                "description": "Conversations kept out of every vote (the one `text` belongs to)",
+                            },
+                        },
+                        "required": ["domains"],
+                    },
+                ),
+                Tool(
                     name="reconcile_status",
                     description=(
                         "The full conversations reconciliation: { running, started_at, finished_at, "
@@ -572,6 +607,8 @@ class CorpusMCPServer:
                 payload = self._map_conversations(arguments or {})
             elif name == "map_notes":
                 payload = self._map_notes(arguments or {})
+            elif name == "match_domains":
+                payload = await self._match_domains(arguments or {})
             elif name == "reconcile_status":
                 payload = self.orchestrator.reconcile_status()
             elif name == "import_chat_export":
@@ -677,6 +714,48 @@ class CorpusMCPServer:
             "requested": len(paths) if isinstance(paths, list) else None,
             "groups": groups_payload(groups, key="note_paths"),
         }
+
+    async def _match_domains(self, args: dict[str, Any]) -> dict[str, Any]:
+        """The neighbours' vote (src/domain_map.py). A turn asks this while the
+        member waits, so the centred vectors of their conversations are kept
+        between calls and read again only when the store's conversation
+        chunks changed."""
+        store = self.orchestrator.indexer
+        if not hasattr(store, "conversation_signature"):
+            return {"error": "this store cannot match domains"}
+        try:
+            from .domain_map import Neighbourhood, match_domains
+        except ImportError:  # pragma: no cover - script fallback
+            from src.domain_map import Neighbourhood, match_domains
+        domains = args.get("domains")
+        if not isinstance(domains, dict):
+            return {"error": "domains must map a domain id to its conversation ids"}
+        signature = store.conversation_signature()
+        cache = getattr(self, "_hoods", None)
+        if cache is None:
+            cache = self._hoods = {}
+        kept = cache.get(signature[0])
+        if kept is None or kept[0] != signature:
+            kept = (signature, Neighbourhood.of(store.conversation_centroids(roles=["user"])))
+            cache[signature[0]] = kept
+        hood = kept[1]
+        queries = {}
+        text = str(args.get("text") or "").strip()
+        if text:
+            # As a document: that is how the conversations' turns were embedded.
+            embedded = await self.orchestrator.embedder.embed_batch([text[:6000]])
+            if embedded.vectors:
+                queries["text"] = embedded.vectors[0]
+        ids = args.get("conversation_ids")
+        exclude = args.get("exclude")
+        matches = match_domains(
+            hood,
+            {str(d): [str(c) for c in (cids or [])] for d, cids in domains.items()},
+            candidates=[str(i) for i in ids] if isinstance(ids, list) else None,
+            queries=queries,
+            exclude=[str(i) for i in exclude] if isinstance(exclude, list) else (),
+        )
+        return {"conversations": len(hood.ids), "matches": matches}
 
     async def run(self) -> None:
         async with stdio_server() as (read_stream, write_stream):
