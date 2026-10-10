@@ -1,6 +1,6 @@
 ---
 title: Applications, plugins, and the case of the mail
-date: '2026-09-25'
+date: '2026-10-10'
 flags: []
 locale: en
 description: 'How a personal application like mail triage attaches to the Maurice
@@ -33,6 +33,10 @@ to what follows: Gmail's reduced scopes (read-only, modify-without-send) exist
 only for the Gmail API, and are as restricted as full access; over IMAP a
 credential always opens everything, so the honest claim is "the tool has no
 way to send", not "the credential cannot".
+
+## The mail without a conversation (10 October 2026)
+
+The public mail path — the read-only `email` tool, the member's sealed accounts, the header walk, the reading on consent, the fiches and digests ([[maurice-tools]], [[maurice-knowledge]]) — no longer speaks to the member through a conversation Maurice opens. It did for two weeks: "Your mailbox, in numbers", a question, a tool that took the yes, and a message after each documents pass. Now the member's whole dealing with their mail is in **Settings → Mail**: the card shows what the mailbox holds and what a reading would take, and carries the yes, the no, a yes per mailbox added later, *read now*, *read further back* and *read everything*; the result is read in the garden, under *My mail*. The reason is the one that moved the domain proposals into a list ([[maurice-domains]]): a thing that waits for the member belongs somewhere they can find it, not in a thread. An application that wants the member's attention gets a card and, at most, a badge.
 
 ## The question
 

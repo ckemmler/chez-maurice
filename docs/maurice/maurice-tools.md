@@ -1,6 +1,6 @@
 ---
 title: The MCP tool ecosystem
-date: '2026-10-07'
+date: '2026-10-10'
 flags: []
 locale: en
 description: 'The gateway that gives Maurice his capabilities: discovery, per-member
@@ -72,6 +72,11 @@ Per question the first is barely cheaper — at Sonnet's prices the answer's out
 **What a small model sees.** Every roster now holds one tool, so an Ollama turn always offers tools; a local model that cannot take them pays one refused request before the loop retries without (the path that existed). The tool's description names the notes of the set actually read, so it moves only when the documentation set does — daily at most.
 
 ## The domain proposal tools — `domains__propose`, `domains__adjust`, `domains__adopt`, `domains__seed`
+
+**Since 10 October 2026 these four are no longer tied to a conversation Maurice opened** — he opens none. They are offered in any conversation the member holds alone with Maurice while a proposal of theirs is open (or for a day after an adoption, for `domains__seed`), act on that member's proposals whatever their age, and post nothing: the app's list of domains is where the member sees and settles them ([[maurice-domains]]). The description below is otherwise still theirs.
+
+**`corpus__match_domains`** (10 October 2026, server-only like the other mapping tools): given the conversations bound to each of the member's domains, says for a conversation — or for a text, embedded as the conversations were — which domain its twelve nearest conversations belong to, and how many of them. The night files conversations with it, and every private turn asks it once. The member's centred vectors are kept in the gateway between calls and read again only when their conversation chunks change.
+
 
 Three more native tools since the night of 19 September 2026 (P2-B of the domains roadmap, `server/src/services/domainProposals.ts`), a fourth since the evening (P2-C), and the first ones **granted by the conversation rather than by a family**: they exist in exactly one place, the conversation Maurice opened at night to propose [[maurice-domains|domains]], while at least one proposal in it is still open or an adopted domain's garden notes still wait for the member's word — and nowhere else, whatever the member's families or experimental flag say. `domainToolsFor(conversationId, memberId)` answers the four or nothing; the check is made again inside every call, on the conversation itself, so a stale roster cannot reach them. They are appended after the MCP roster so an ordinary conversation's cached prefix does not move, and the roster notice lists them as *Domain proposals* (a `domains` family that is `core` in `toolFamilies.ts`, so the experimental gate never withholds them).
 
@@ -293,6 +298,8 @@ them to read (this Gmail is a legacy box: Facebook, Medium and Uber fill it);
 the calibration on a hundred bodies gave **18.9 tokens per kB** on the wire
 and 139 tokens in a preview, 44 of the hundred read whole — so a full reading
 is about 449 000 tokens, the light pass 93 000, one or two nights.
+
+**Since 10 October 2026 Maurice does not open that conversation, and `mail__approve_reading` is gone.** The numbers are shown, and the yes or the no given, on the card under Settings → Mail (`POST /api/mail-accounts/reading`); the member's word is kept in `mail_reading_consent`, filled once from the conversations that had carried an answer so that nobody's was lost; a mailbox added after the yes asks for its own on its card; and after a documents pass nothing is said — the fiches and digests are in the garden under *My mail*, marked as not reviewed. A consent is better given on a card that says what it is a consent to than read out of a sentence by a model. What a reading would cost still goes to the log, once per member, for the operator. The paragraphs below, down to the documents, describe the conversation as it was.
 
 **Then Maurice opens the conversation** ([[maurice-chat]] has the surface;
 `services/mailOpener.ts` the text): once per member, only when the walk is

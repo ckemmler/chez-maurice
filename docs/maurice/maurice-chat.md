@@ -1,6 +1,6 @@
 ---
 title: The chat experience
-date: '2026-10-09'
+date: '2026-10-10'
 flags: []
 locale: en
 description: Streaming render, tool-result data cards, math, markdown, images, dictation,
@@ -66,6 +66,11 @@ The app answers `maurice://conversations/<id>` since the same day (`MauriceApp.s
 In a conversation you have alone with him, Maurice reads the briefs of your [[maurice-domains|domains]] — the short texts he keeps on the parts of your life he follows — under one budget, after the persona and whatever the [[maurice-composer|composer]] loaded. Never in a room. What he read is what the domain page shows, so a correction there is what he reads from the next turn on.
 
 ## A conversation Maurice opens
+
+**Since 10 October 2026 neither night opens one.** The domain proposals are a section of the app's list of domains, with a badge on its button ([[maurice-domains]]); the mailbox's numbers and the yes to the reading are the card under Settings → Mail, and what the reading writes is read in the garden ([[maurice-tools]]). The brick below remains — `services/openedConversations.ts`, its guard, `POST /api/admin/conversations/open` for the operator's hand — and the conversations already opened stay in their members' lists as ordinary ones; what follows describes the two uses that were retired.
+
+**A turn says which domain it falls into** (10 October 2026). Before the model answers a member alone with Maurice, the server asks the corpus which of their domains the nearest past conversations belong to; a recognised domain travels on the `tool_data` channel as `domain_recognised` (with `card: "domain_recognised"`, so no client draws it as a tool result, and left out of the tool trail later turns read), and the app wears it as a pastille. See [[maurice-domains]].
+
 
 Since 19 September 2026 a conversation can begin with Maurice. The server creates it for one member with a first message in his voice (`conversations.opened_by = 'maurice'`, `server/src/services/openedConversations.ts`), gives it a title (the one asked for, else the first line of the message), and leaves it unread: the member's global socket receives a `conversation_opened` event, and a member with no socket live gets an APNs push ("Maurice: …"), the way a room notifies its members. In the sidebar the row carries one quiet caption under its title, "Opened by Maurice" — the first author tells it apart, not a colour — and the unread dot until it is opened; the list rows carry `unread` so a cold start shows the dot too, and the foyer badge counts it. Opening it marks it read; replying is an ordinary turn, charged to the member. [[maurice-carnet|Carnet]] lists and reads these conversations too (since 19 September 2026, on its Domains shelf) and registers for the push under its own platform, `carnet-ios`; it cannot answer, and the push reaches it only once the server sends under Carnet's own APNs topic.
 
