@@ -2740,9 +2740,23 @@ private struct ComposerBar: View {
     /// the send reads it — and, more to the point, dictation can no longer
     /// deliver into a field the send has just cleared, which put the sent
     /// sentence back in the composer as if it had failed.
+    ///
+    /// On the phone this stop is not "the user stopped": that one gives the
+    /// field its focus back, in the same breath as the send takes it away, and
+    /// the keyboard came up over the answer of a dictated question.
     private func submit(_ action: () -> Void) {
-        if dictation.isListening { dictation.stop(userStopped: true) }
+        if dictation.isListening { dictation.stop(userStopped: keepsKeyboardOnSend) }
         action()
+    }
+
+    /// The phone puts its keyboard away at the send (ChatView.dismissKeyboard);
+    /// the iPad and the Mac keep theirs.
+    private var keepsKeyboardOnSend: Bool {
+        #if os(iOS)
+        return Platform.isPad
+        #else
+        return true
+        #endif
     }
 
     /// Has the user attached any context (live items or locked carry-over)?
