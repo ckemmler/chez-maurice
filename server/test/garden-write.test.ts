@@ -14,7 +14,7 @@ import { spawnSync } from "node:child_process";
 const TMP = fs.mkdtempSync(path.join(os.tmpdir(), "maurice-write-"));
 process.env.MAURICE_GARDENS_DIR = path.join(TMP, "gardens");
 
-const { addNote, noteBlock, withNote, writeShared, setPublished, setDeployRunner, deployState, requestDeploy, deleteEntry, archiveEntry, completeCard, setCover, EntryWriteError } =
+const { addNote, noteBlock, withNote, writeShared, setPublished, setDeployRunner, deployState, requestDeploy, deleteEntry, archiveEntry, completeCard, completeCover, setCover, EntryWriteError } =
   await import("../data-api/services/gardenWrite");
 const { getShelfEntry, listShelf } = await import("../data-api/services/gardenShelf");
 const { searchLinkTargets } = await import("../data-api/services/gardenLinks");
@@ -177,7 +177,7 @@ describe("the shared side", () => {
     expect(await completeCard(MEMBER.id, garden, ref)).toEqual([]);
     expect(read("series/fr/creek.md")).toBe(raw);
     // No card, nothing to complete.
-    await expect(completeCard(MEMBER.id, garden, { collection: "articles", locale: "fr", slug: "soil" })).rejects.toThrow("no card");
+    expect(await completeCard(MEMBER.id, garden, { collection: "articles", locale: "fr", slug: "soil" })).toEqual([]);
   });
 
   test("an emptied body is a blank shared side again, the card and its identity kept", async () => {
@@ -318,6 +318,21 @@ describe("a cover brought by the device", () => {
     expect((await entry("articles", "fr", "bare"))!.image).toBe(`/images/${MEMBER.username}/resources/articles/fr-bare.jpg`);
     expect(log()[0]).toBe("Cover for articles/bare");
     expect(spawnSync("git", ["status", "--porcelain"], { cwd: garden.root, encoding: "utf-8" }).stdout).not.toContain("bare");
+  });
+
+  test("an entry with only a fiche takes the cover already in the garden under its name", async () => {
+    write("series/fr/kept-fiche.md",
+      `---\ntitle: Kept\nresource_collection: series\nresource_id: kept\ndate: '2026-10-09'\ntags: []\nlocale: fr\nmeta:\n  tmdb_id: 2\n---\n`);
+    const ref = { collection: "series", locale: "fr", slug: "kept" };
+    // Nothing to take, nothing fetched: it says so and writes nothing.
+    expect(await completeCover(MEMBER.id, garden, ref)).toBe(false);
+    write("images/resources/series/fr-kept.jpg", "jpg");
+    expect(await completeCover(MEMBER.id, garden, ref)).toBe(true);
+    expect((await entry("series", "fr", "kept"))!.image).toBe(`/images/${MEMBER.username}/resources/series/fr-kept.jpg`);
+    // And once it has one, it is left alone.
+    const before = log().length;
+    expect(await completeCover(MEMBER.id, garden, ref)).toBe(true);
+    expect(log()).toHaveLength(before);
   });
 
   test("what is not a picture is refused, and nothing is written", () => {

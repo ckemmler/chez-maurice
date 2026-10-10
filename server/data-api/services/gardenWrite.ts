@@ -312,7 +312,9 @@ function coverSource(meta: Record<string, any>): string | null {
  */
 export async function completeCard(memberId: string, garden: GardenRef, ref: EntryRef): Promise<string[]> {
   const entry = findEntry(garden, ref);
-  if (!entry.card) throw new EntryWriteError("Nothing is written yet: there is no card to complete", 409);
+  // An entry that is a fiche and nothing else has no card to complete: that is
+  // not a fault, and asking is the same gesture for every entry.
+  if (!entry.card) return [];
   const file = path.join(garden.root, entry.card.file);
   const raw = fs.readFileSync(file, "utf-8");
   const card = parseFiche(raw);
@@ -383,6 +385,11 @@ export function setCover(memberId: string, garden: GardenRef, ref: EntryRef, byt
   const cover = resourceImagePaths(garden, entry.collection as ResourceCollection, entry.locale, entry.slug);
   fs.mkdirSync(path.dirname(cover.file), { recursive: true });
   fs.writeFileSync(cover.file, bytes);
+  attachCover(memberId, garden, entry, cover);
+}
+
+/** Name the cover file on the entry's faces, and commit it with them. */
+function attachCover(memberId: string, garden: GardenRef, entry: GardenEntry, cover: { file: string; url: string }): void {
   const touched = [cover.file];
 
   if (entry.fiche) {
@@ -404,6 +411,22 @@ export function setCover(memberId: string, garden: GardenRef, ref: EntryRef, byt
   }
   autoCommit(garden, touched, `Cover for ${entry.collection}/${entry.slug}`);
   indexGardenPaths(memberId, touched.filter((f) => f.endsWith(".md")));
+}
+
+/**
+ * An entry that shows without a cover is given the one it can have without
+ * asking anyone: the file already under its name in the garden, or the
+ * provider's, fetched from the address the fiche kept. Whatever faces it has
+ * — a fiche alone, a card alone, both. Answers whether it now has one.
+ */
+export async function completeCover(memberId: string, garden: GardenRef, ref: EntryRef): Promise<boolean> {
+  const entry = findEntry(garden, ref);
+  if (entry.image) return true;
+  const cover = resourceImagePaths(garden, entry.collection as ResourceCollection, entry.locale, entry.slug);
+  const source = coverSource(readFace(garden, entry.fiche?.file)?.meta ?? {});
+  if (!fs.existsSync(cover.file) && !(source && (await downloadImage(source, cover.file)))) return false;
+  attachCover(memberId, garden, entry, cover);
+  return true;
 }
 
 // ── Deleting, putting away ──

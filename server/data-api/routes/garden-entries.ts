@@ -12,7 +12,7 @@ import { GARDEN_COLLECTIONS, listGardenEntries } from "../services/gardenEntries
 import { cardsFace } from "../services/flashcards";
 import { getShelfEntry, listNotes, listShelf, siteFor } from "../services/gardenShelf";
 import {
-  addNote, archiveEntry, completeCard, deleteEntry, setCover, deployState, entryForBook, EntryWriteError, setPublished, writeShared, type EntryRef,
+  addNote, archiveEntry, completeCard, completeCover, deleteEntry, setCover, deployState, entryForBook, EntryWriteError, setPublished, writeShared, type EntryRef,
 } from "../services/gardenWrite";
 
 const app = new Hono();
@@ -145,6 +145,10 @@ app.put("/entries/:collection/:locale/:slug/shared", async (c) => {
  */
 app.post("/entries/:collection/:locale/:slug/details", (c) =>
   written(c, null, async (memberId, garden, ref) => {
+    // The same request for every kind and every shape of entry: a cover for
+    // one that has none, whatever faces it has; then the card's own fields,
+    // when there is a card.
+    await completeCover(memberId, garden, ref);
     await completeCard(memberId, garden, ref);
   }));
 
