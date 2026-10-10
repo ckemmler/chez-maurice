@@ -51,6 +51,8 @@ _EXACT_KEYS = ("source_type", "collection")
 # Keys an expression index serves: a filter made only of these is cheap to
 # test for emptiness before the vector search.
 _INDEXED_KEYS = frozenset(_EXACT_KEYS + ("conversation_id", "message_id"))
+# Vectors read under one hold of the lock when centroids are rebuilt.
+_CENTROID_BATCH = 256
 
 
 def _db_filename(member_id: Optional[str]) -> str:
@@ -454,6 +456,67 @@ class SqliteVecStore:
                 if vec.shape[0] != self.vector_size:
                     continue
                 yield cid, vec
+
+        return _centroids(pairs())
+
+    def conversation_chunk_rows(
+        self,
+        *,
+        roles: Iterable[str] = ("user",),
+        member_id: Optional[str] = None,
+    ) -> Dict[str, tuple]:
+        """The chunk rows each conversation has on those roles, without their
+        vectors: what a reader that kept the centroids compares with what it
+        read last, so that a turn written to one conversation costs that
+        conversation and not every one of them (`centroids_of_rows`)."""
+        role_list = [r for r in roles if r]
+        if not role_list:
+            return {}
+        conn = self._conn(member_id)
+        sql = (
+            "SELECT id, json_extract(payload, '$.conversation_id') FROM chunks "
+            "WHERE source_type = 'conversation' "
+            f"AND json_extract(payload, '$.role') IN ({','.join('?' * len(role_list))}) ORDER BY id"
+        )
+        with self._lock:
+            rows = conn.execute(sql, role_list).fetchall()
+        out: Dict[str, list] = {}
+        for rowid, cid in rows:
+            if cid:
+                out.setdefault(cid, []).append(int(rowid))
+        return {cid: tuple(ids) for cid, ids in out.items()}
+
+    def centroids_of_rows(
+        self,
+        rows: Dict[str, Iterable[int]],
+        *,
+        member_id: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """`conversation_centroids` for the conversations and chunk rows given
+        (`conversation_chunk_rows`). The vectors are read a few hundred at a
+        time and the lock let go in between: read from a worker thread, a
+        whole store must not keep a search waiting."""
+        from .domain_map import centroids as _centroids  # numpy only
+
+        import numpy as np
+
+        conn = self._conn(member_id)
+        wanted = [(cid, int(rowid)) for cid, ids in rows.items() for rowid in ids]
+
+        def pairs():
+            for start in range(0, len(wanted), _CENTROID_BATCH):
+                batch = wanted[start:start + _CENTROID_BATCH]
+                with self._lock:
+                    blobs = [
+                        conn.execute("SELECT embedding FROM vec_chunks WHERE rowid = ?", (rowid,)).fetchone()
+                        for _, rowid in batch
+                    ]
+                for (cid, _), row in zip(batch, blobs):
+                    if row is None:
+                        continue
+                    vec = np.frombuffer(row[0], dtype=np.float32)
+                    if vec.shape[0] == self.vector_size:
+                        yield cid, vec
 
         return _centroids(pairs())
 

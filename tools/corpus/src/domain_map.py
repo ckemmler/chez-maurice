@@ -261,6 +261,39 @@ class Neighbourhood:
         return cls(ids=ids, mean=mean, X=_centred(raw, mean))
 
 
+@dataclass
+class Kept:
+    """A member's neighbourhood as it was last read from their store, with
+    what it was read from: the store's signature at the time, and the chunk
+    rows behind each conversation's vector."""
+
+    signature: tuple
+    rows: dict[str, tuple]
+    vectors: dict[str, np.ndarray]
+    hood: Neighbourhood
+
+
+def keep_neighbourhood(store: Any, member_id: str, kept: Kept | None = None, *, roles: Iterable[str] = ("user",)) -> Kept:
+    """The member's neighbourhood, brought up to date from `kept`.
+
+    Every turn writes its conversation to the store, so the neighbourhood is
+    stale after each one. Read whole, it cost the owner's five thousand
+    conversations thirty-eight seconds a turn (10 October 2026); here only
+    the conversations whose chunk rows changed are read again, and those that
+    left the store are dropped. Runs in a worker thread (src/mcp_server.py).
+    """
+    # Read before the rows: a chunk written in between leaves a signature
+    # older than what was read, and the next call simply comes back.
+    signature = store.conversation_signature(member_id=member_id)
+    rows = store.conversation_chunk_rows(roles=roles, member_id=member_id)
+    known = kept.rows if kept else {}
+    changed = {cid: ids for cid, ids in rows.items() if known.get(cid) != ids}
+    vectors = {cid: v for cid, v in (kept.vectors if kept else {}).items() if cid in rows and cid not in changed}
+    if changed:
+        vectors.update(store.centroids_of_rows(changed, member_id=member_id))
+    return Kept(signature=signature, rows=rows, vectors=vectors, hood=Neighbourhood.of(vectors))
+
+
 def _centred(M: np.ndarray, mean: np.ndarray) -> np.ndarray:
     C = M - mean
     norms = np.linalg.norm(C, axis=1, keepdims=True)
@@ -326,6 +359,6 @@ def match_domains(
 
 
 __all__ = [
-    "Group", "MATCH_K", "MATCH_MIN_CONVERSATIONS", "Neighbourhood", "centroids", "cluster", "default_k",
-    "groups_payload", "match_domains", "merge_close", "spherical_kmeans",
+    "Group", "Kept", "MATCH_K", "MATCH_MIN_CONVERSATIONS", "Neighbourhood", "centroids", "cluster", "default_k",
+    "groups_payload", "keep_neighbourhood", "match_domains", "merge_close", "spherical_kmeans",
 ]

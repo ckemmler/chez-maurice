@@ -57,6 +57,10 @@ class CorpusMCPServer:
                 Path(__file__).resolve().parents[3] / "research/dossiers",
             )
         ).expanduser()
+        # A member's neighbourhood of conversations, and the task reading it
+        # (_match_domains).
+        self._hoods: dict[str, Any] = {}
+        self._hood_tasks: dict[str, asyncio.Task] = {}
         self._register()
 
     def _register(self) -> None:
@@ -647,6 +651,26 @@ class CorpusMCPServer:
                 return [TextContent(type="text", text=f"Unknown tool: {name}")]
             return [TextContent(type="text", text=json.dumps(payload, ensure_ascii=False, indent=2))]
 
+    def _read_hood(self, member: str) -> "asyncio.Task":
+        """The task bringing a member's neighbourhood up to date — one at a
+        time per member, whoever asks."""
+        task = self._hood_tasks.get(member)
+        if task is None or task.done():
+            try:
+                from .domain_map import keep_neighbourhood
+            except ImportError:  # pragma: no cover - script fallback
+                from src.domain_map import keep_neighbourhood
+
+            async def read():
+                kept = await asyncio.to_thread(keep_neighbourhood, self.orchestrator.indexer, member, self._hoods.get(member))
+                self._hoods[member] = kept
+                return kept
+
+            task = self._hood_tasks[member] = asyncio.create_task(read())
+            # Nobody may be waiting on it; a failure is the next call's to meet.
+            task.add_done_callback(lambda t: t.cancelled() or t.exception())
+        return task
+
     def _map_conversations(self, args: dict[str, Any]) -> dict[str, Any]:
         """The domains' mapping: centroids from the member's store, grouped by
         src/domain_map.py. Only the sqlite-vec store can hand out its vectors;
@@ -717,28 +741,32 @@ class CorpusMCPServer:
 
     async def _match_domains(self, args: dict[str, Any]) -> dict[str, Any]:
         """The neighbours' vote (src/domain_map.py). A turn asks this while the
-        member waits, so the centred vectors of their conversations are kept
-        between calls and read again only when the store's conversation
-        chunks changed."""
+        member waits, and every turn changes the store: the member's
+        neighbourhood is kept between calls, brought up to date in a worker
+        thread — nothing else the gateway serves waits on it — and a turn is
+        answered from the one that is kept while the next is being read."""
         store = self.orchestrator.indexer
-        if not hasattr(store, "conversation_signature"):
+        if not hasattr(store, "conversation_chunk_rows"):
             return {"error": "this store cannot match domains"}
         try:
-            from .domain_map import Neighbourhood, match_domains
+            from .domain_map import match_domains
         except ImportError:  # pragma: no cover - script fallback
-            from src.domain_map import Neighbourhood, match_domains
+            from src.domain_map import match_domains
         domains = args.get("domains")
         if not isinstance(domains, dict):
             return {"error": "domains must map a domain id to its conversation ids"}
-        signature = store.conversation_signature()
-        cache = getattr(self, "_hoods", None)
-        if cache is None:
-            cache = self._hoods = {}
-        kept = cache.get(signature[0])
-        if kept is None or kept[0] != signature:
-            kept = (signature, Neighbourhood.of(store.conversation_centroids(roles=["user"])))
-            cache[signature[0]] = kept
-        hood = kept[1]
+        ids = args.get("conversation_ids")
+        # In a thread like the rest: the count is a scan of the member's file.
+        signature = await asyncio.to_thread(store.conversation_signature)
+        member = signature[0]
+        kept = self._hoods.get(member)
+        if kept is None or kept.signature != signature:
+            reading = self._read_hood(member)
+            # The night's filing wants the store as it is; a turn only waits
+            # when nothing was ever read (the first one after a start).
+            if kept is None or isinstance(ids, list):
+                kept = await asyncio.shield(reading)
+        hood = kept.hood
         queries = {}
         text = str(args.get("text") or "").strip()
         if text:
@@ -746,7 +774,6 @@ class CorpusMCPServer:
             embedded = await self.orchestrator.embedder.embed_batch([text[:6000]])
             if embedded.vectors:
                 queries["text"] = embedded.vectors[0]
-        ids = args.get("conversation_ids")
         exclude = args.get("exclude")
         matches = match_domains(
             hood,

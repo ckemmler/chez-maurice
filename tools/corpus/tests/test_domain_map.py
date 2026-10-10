@@ -233,6 +233,128 @@ def test_store_conversation_signature_moves_with_the_chunks():
         assert before[0] == after[0] == "m1" and before != after, (before, after)
 
 
+def _conversation_records(cid, vecs, start=0):
+    return [{
+        "chunk_id": f"{cid}-{start + n}", "unit_key": f"conv:{cid}", "unit_hash": f"h{cid}{start + n}",
+        "source_type": "conversation", "vector": [float(x) for x in v],
+        "payload": {"conversation_id": cid, "role": "user"},
+    } for n, v in enumerate(vecs)]
+
+
+def test_kept_neighbourhood_reads_only_what_changed():
+    import sqlite_vec  # noqa: F401
+    from src.domain_map import keep_neighbourhood
+    from src.sqlite_vec_store import SqliteVecStore
+
+    local = np.random.default_rng(23)
+    with tempfile.TemporaryDirectory() as tmp:
+        store = SqliteVecStore(vectors_dir=Path(tmp), vector_size=DIM, embedding_model="test-model")
+        for cid in ("A", "B", "C"):
+            store.bulk_load(_conversation_records(cid, [unit(local.normal(size=DIM)) for _ in range(3)]), member_id="m1")
+        read: list[set] = []
+        whole = store.centroids_of_rows
+        store.centroids_of_rows = lambda rows, **kw: read.append(set(rows)) or whole(rows, **kw)
+
+        first = keep_neighbourhood(store, "m1")
+        assert read == [{"A", "B", "C"}] and set(first.hood.ids) == {"A", "B", "C"}
+        assert first.signature == store.conversation_signature(member_id="m1")
+
+        # Nothing written: nothing read.
+        same = keep_neighbourhood(store, "m1", first)
+        assert len(read) == 1 and same.signature == first.signature
+
+        # A turn in B, a new conversation D, C gone: B and D are read, no more.
+        store.bulk_load(_conversation_records("B", [unit(local.normal(size=DIM))], start=3), member_id="m1")
+        store.bulk_load(_conversation_records("D", [unit(local.normal(size=DIM))]), member_id="m1")
+        store.delete_unit(unit_key="conv:C", member_id="m1")
+        second = keep_neighbourhood(store, "m1", first)
+        assert read[-1] == {"B", "D"}, read
+        assert set(second.hood.ids) == {"A", "B", "D"}
+        # And it is what a whole reading gives.
+        full = store.conversation_centroids(member_id="m1")
+        assert set(full) == set(second.vectors)
+        for cid, v in full.items():
+            assert np.allclose(v, second.vectors[cid], atol=1e-6), cid
+        assert second.vectors["A"] is first.vectors["A"]
+        assert keep_neighbourhood(store, "m2").hood.ids == []
+        store.close()
+
+
+def test_match_domains_keeps_the_gateway_free():
+    """A slow reading of the store neither holds the event loop nor a turn
+    that has a neighbourhood to be answered from."""
+    import asyncio
+    import time
+    from types import SimpleNamespace
+
+    from src.mcp_server import CorpusMCPServer
+
+    local = np.random.default_rng(29)
+    centres = [unit(local.normal(size=DIM)) for _ in range(2)]
+
+    class Store:
+        def __init__(self):
+            self.n = 40
+            self.slow = 0.0
+            self.reads = 0
+
+        def conversation_signature(self, *, member_id=None):
+            return (member_id or "m1", self.n, self.n)
+
+        def conversation_chunk_rows(self, *, roles=("user",), member_id=None):
+            return {f"c{i}": (i,) for i in range(self.n)}
+
+        def centroids_of_rows(self, rows, *, member_id=None):
+            self.reads += 1
+            time.sleep(self.slow)
+            return {cid: unit(centres[int(cid[1:]) % 2] + 0.1 * local.normal(size=DIM)).astype(np.float32) for cid in rows}
+
+    class Embedder:
+        async def embed_batch(self, texts):
+            return SimpleNamespace(vectors=[[float(x) for x in centres[0]]])
+
+    store = Store()
+    server = CorpusMCPServer(orchestrator=SimpleNamespace(indexer=store, embedder=Embedder()))
+    domains = {"even": [f"c{i}" for i in range(0, 40, 2)]}
+
+    async def scenario():
+        ticks = 0
+
+        async def heart():
+            nonlocal ticks
+            while True:
+                await asyncio.sleep(0.01)
+                ticks += 1
+
+        beat = asyncio.create_task(heart())
+        # The first reading is waited for — off the loop, which keeps beating.
+        store.slow = 0.3
+        out = await server._match_domains({"domains": domains, "text": "x"})
+        assert out["conversations"] == 40 and out["matches"][0]["domain"] == "even", out
+        assert ticks >= 10, ticks
+
+        # A turn was written: the next one is answered from what is kept …
+        store.n = 41
+        started = time.perf_counter()
+        out = await server._match_domains({"domains": domains, "text": "x"})
+        assert time.perf_counter() - started < 0.15 and out["conversations"] == 40, out
+        # … two of them start one reading, not two …
+        await server._match_domains({"domains": domains, "text": "x"})
+        await server._hood_tasks["m1"]
+        assert store.reads == 2, store.reads
+        # … and the turn after has the new conversation.
+        out = await server._match_domains({"domains": domains, "text": "x"})
+        assert out["conversations"] == 41, out
+
+        # The night's filing waits for the store as it is.
+        store.n = 42
+        out = await server._match_domains({"domains": domains, "conversation_ids": ["c41"]})
+        assert out["conversations"] == 42 and out["matches"][0]["id"] == "c41", out
+        beat.cancel()
+
+    asyncio.run(scenario())
+
+
 def test_groups_payload_names_its_ids():
     from src.domain_map import groups_payload
 
