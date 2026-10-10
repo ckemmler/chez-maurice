@@ -21,8 +21,6 @@ import { getUser } from "../users";
 import { gardensRoot } from "../gardensRoot";
 import { estimateTokens } from "./notes";
 
-const GARDENS = gardensRoot();
-
 /** Mirrors data-api's RESOURCE_COLLECTIONS: every collection that has fiches. */
 const COLLECTIONS = [
   "books", "articles", "movies", "games", "music", "series", "podcasts", "people",
@@ -108,7 +106,7 @@ export function scanFiches(memberId: string): Map<string, FicheMeta> {
   const user = getUser(memberId);
   if (user) {
     for (const collection of COLLECTIONS) {
-      const collDir = path.join(GARDENS, user.username, collection);
+      const collDir = path.join(gardensRoot(), user.username, collection);
       if (!fs.existsSync(collDir)) continue;
       for (const locale of fs.readdirSync(collDir)) {
         const dir = path.join(collDir, locale);
