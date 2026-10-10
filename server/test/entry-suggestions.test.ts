@@ -411,7 +411,7 @@ describe("a conversation held from an entry", () => {
 describe("opening a conversation from an entry", () => {
   test("the entry is bound and its fiche is the context from the first turn", async () => {
     const conversations = (await import("../src/routes/conversations")).default;
-    const { getSpec } = await import("../src/services/composer/specs");
+    const { getSpec, resolveToText } = await import("../src/services/composer/specs");
     const post = (body: unknown) => conversations.request("/", {
       method: "POST", body: JSON.stringify(body),
       headers: { Authorization: annaAuth, "Content-Type": "application/json" },
@@ -420,7 +420,10 @@ describe("opening a conversation from an entry", () => {
     expect(made.status).toBe(201);
     const convo = (await made.json()) as any;
     expect(convo.entry_ref).toBe("series/fr/sugar");
-    expect(getSpec(ANNA, convo.id).items.map((i: any) => [i.type, i.id])).toEqual([["fiche", "series/fr/sugar"]]);
+    expect(getSpec(ANNA, convo.id).items.map((i: any) => [i.type, i.id])).toEqual([["fiche", "series/fr/sugar-fiche"]]);
+    // Found, and read: what the model is given holds what is written on the fiche.
+    expect(getSpec(ANNA, convo.id).items[0]!.snapshot.count).toBe(1);
+    expect(resolveToText(ANNA, convo.id).items[0]!.text).toContain("Vu le pilote.");
     // Not theirs, or not there: no conversation is made.
     expect((await post({ entry: "series/fr/nope" })).status).toBe(404);
   });

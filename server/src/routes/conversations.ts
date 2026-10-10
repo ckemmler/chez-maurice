@@ -114,7 +114,10 @@ conversations.post("/", async (c) => {
     if (!entryRef) return c.json({ error: "No such entry" }, 404);
   }
   const convo = createConversation(uid, maurice_id ?? null, { entryRef });
-  if (entryRef) saveSpec(uid, convo.id, [{ type: "fiche", id: entryRef }]);
+  // The composer names a fiche by its file's stem, `-fiche` included: under
+  // the entry's own ref it found nothing, and the turn went out with no
+  // context at all (10 October 2026).
+  if (entryRef) saveSpec(uid, convo.id, [{ type: "fiche", id: `${entryRef}-fiche` }]);
   return c.json(convo, 201);
 });
 
