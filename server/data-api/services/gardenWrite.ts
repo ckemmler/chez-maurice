@@ -50,6 +50,7 @@ export interface EntryRef { collection: string; locale: string; slug: string }
 
 // The note as text lives in gardenNote.ts, free of the shelf's imports.
 import { noteBlock, withNote, type NoteInput } from "./gardenNote";
+import { isSharedWith, memberBriefByUsername } from "./entryShares";
 export { noteBlock, withNote, type NoteInput };
 
 const today = () => new Date().toISOString().slice(0, 10);
@@ -502,7 +503,15 @@ export function deleteEntry(memberId: string, garden: GardenRef, ref: EntryRef):
  */
 export function archiveEntry(memberId: string, garden: GardenRef, id: string, on: boolean): string[] {
   let ids: string[];
+  const foreign = id.match(/^@([^/]+)\/([^/]+)\/([^/]+)\/([^/]+)$/);
   if (/^calibre\/\d+$/.test(id)) {
+    ids = [id];
+  } else if (foreign) {
+    // Another member's entry, shared with this one: put away from their own
+    // list under the id it has there. Nothing of the owner's changes.
+    const owner = memberBriefByUsername(foreign[1]!);
+    const ref = { owner_id: owner?.id ?? "", collection: foreign[2]!, locale: foreign[3]!, slug: foreign[4]! };
+    if (!owner || !isSharedWith(memberId, ref)) throw new EntryWriteError(`Not an entry: ${id}`, 404);
     ids = [id];
   } else {
     const [collection, locale, slug, ...rest] = id.split("/");

@@ -15,7 +15,43 @@ import {
   addNote, archiveEntry, completeCard, completeCover, deleteEntry, setCover, deployState, entryForBook, EntryWriteError, setPublished, writeShared, type EntryRef,
 } from "../services/gardenWrite";
 
+import {
+  dropShares, EntryShareError, isSharedWith, memberBrief, memberBriefByUsername, shareEntry, unshareEntry,
+} from "../services/entryShares";
+
 const app = new Hono();
+
+// A member an entry is shared with reads it and adds notes to it: the two
+// routes that take `?owner=`. Every other write is on the caller's own garden
+// — and must not land there by accident when the request named someone else's
+// entry: the same slug may exist in both.
+app.use("/entries/*", async (c, next) => {
+  const named = (c.req.query("owner") ?? "").trim().replace(/^@/, "");
+  if (!named || c.req.method === "GET") return next();
+  const mine = memberBrief(c.get("userId") as string)?.username;
+  const allowed = /\/notes$|\/participants\/[^/]+$/.test(c.req.path);
+  if (named !== mine && !allowed) return c.json({ error: "Only the owner changes this" }, 403);
+  return next();
+});
+
+/**
+ * Whose garden a request reads: the member's own, or — `?owner=<username>` —
+ * that of a member who shared this entry with them. An entry that is not
+ * shared with the caller does not exist as far as they are told.
+ */
+function reach(c: any): { memberId: string; ownerId: string; garden: NonNullable<ReturnType<typeof gardenFor>> } | null {
+  const memberId = c.get("userId") as string;
+  const named = (c.req.query("owner") ?? "").trim().replace(/^@/, "");
+  const owner = named ? memberBriefByUsername(named) : null;
+  if (named && !owner) return null;
+  const ownerId = owner?.id ?? memberId;
+  if (ownerId !== memberId) {
+    const { collection, locale, slug } = c.req.param();
+    if (!isSharedWith(memberId, { owner_id: ownerId, collection, locale, slug })) return null;
+  }
+  const garden = gardenFor(ownerId);
+  return garden ? { memberId, ownerId, garden } : null;
+}
 
 app.get("/entries", async (c) => {
   const memberId = c.get("userId") as string;
@@ -54,14 +90,54 @@ app.get("/entries", async (c) => {
 
 /** One entry with both faces in full — the page the list opens. */
 app.get("/entries/:collection/:locale/:slug", async (c) => {
+  const at = reach(c);
+  if (!at) return c.json({ error: "No such entry" }, 404);
+
+  const { collection, locale, slug } = c.req.param();
+  const entry = await getShelfEntry(at.memberId, at.garden, collection, locale, slug, undefined, at.ownerId);
+  if (!entry) return c.json({ error: "No such entry" }, 404);
+  return c.json(entry);
+});
+
+// ── Sharing (services/entryShares.ts) ──
+
+/** Share the entry with a member of the household: `{ member_id }` or `{ username }`. The owner's to do. */
+app.post("/entries/:collection/:locale/:slug/participants", async (c) => {
   const memberId = c.get("userId") as string;
   const garden = gardenFor(memberId);
   if (!garden) return c.json({ error: "No garden for this member" }, 404);
+  const body = await jsonBody(c);
+  const target = body?.member_id ? memberBrief(String(body.member_id))
+    : body?.username ? memberBriefByUsername(String(body.username)) : null;
+  if (!target) return c.json({ error: "Unknown member" }, 404);
 
   const { collection, locale, slug } = c.req.param();
-  const entry = await getShelfEntry(memberId, garden, collection, locale, slug);
-  if (!entry) return c.json({ error: "No such entry" }, 404);
-  return c.json(entry);
+  if (!(await getShelfEntry(memberId, garden, collection, locale, slug))) {
+    return c.json({ error: "No such entry" }, 404);
+  }
+  try {
+    shareEntry({ owner_id: memberId, collection, locale, slug }, target.id);
+  } catch (e) {
+    if (e instanceof EntryShareError) return c.json({ error: e.message }, e.status);
+    throw e;
+  }
+  return c.json(await getShelfEntry(memberId, garden, collection, locale, slug), 201);
+});
+
+/**
+ * Take a member off the entry. The owner removes whom they will; a member the
+ * entry is shared with (`?owner=`) may only take themselves off.
+ */
+app.delete("/entries/:collection/:locale/:slug/participants/:memberId", async (c) => {
+  const at = reach(c);
+  if (!at) return c.json({ error: "No such entry" }, 404);
+  const { collection, locale, slug, memberId: target } = c.req.param();
+  if (at.ownerId !== at.memberId && target !== at.memberId) {
+    return c.json({ error: "Only the owner removes someone else" }, 403);
+  }
+  unshareEntry({ owner_id: at.ownerId, collection, locale, slug }, target);
+  if (at.ownerId !== at.memberId) return c.json({ ok: true });
+  return c.json(await getShelfEntry(at.memberId, at.garden, collection, locale, slug));
 });
 
 // ── Writing (services/gardenWrite.ts) ──
@@ -97,6 +173,29 @@ async function jsonBody(c: any): Promise<Record<string, any> | null> {
 app.post("/entries/:collection/:locale/:slug/notes", async (c) => {
   const body = await jsonBody(c);
   if (!body) return c.json({ error: "Body must be JSON" }, 400);
+
+  // On an entry someone shared with the caller: the note goes on the owner's
+  // fiche, signed. It is the one thing a member writes there.
+  const at = reach(c);
+  if (!at) return c.json({ error: "No such entry" }, 404);
+  if (at.ownerId !== at.memberId) {
+    const ref = c.req.param() as EntryRef;
+    const author = memberBrief(at.memberId)?.username;
+    try {
+      const before = await getShelfEntry(at.memberId, at.garden, ref.collection, ref.locale, ref.slug, undefined, at.ownerId);
+      const bookId = before?.source?.type === "book" ? before.source.book_id : null;
+      // Filed and indexed in the owner's garden, under the owner's name.
+      addNote(at.ownerId, at.garden, ref, { text: body.text, quote: body.quote, where: body.where, author }, bookId);
+      const entry = await getShelfEntry(at.memberId, at.garden, ref.collection, ref.locale, ref.slug, undefined, at.ownerId);
+      return c.json(entry, 201);
+    } catch (e) {
+      if (e instanceof EntryWriteError) return c.json({ error: e.message }, e.status);
+      if (e instanceof Error && /^invalid (slug|locale)/.test(e.message)) return c.json({ error: e.message }, 400);
+      console.error("[garden-entries] shared note failed:", e);
+      return c.json({ error: "Failed to write" }, 500);
+    }
+  }
+
   return written(c, null, async (memberId, garden, ref) => {
     // The book the shelf matched by title, so the first write can record it.
     const before = await getShelfEntry(memberId, garden, ref.collection, ref.locale, ref.slug);
@@ -180,6 +279,7 @@ app.delete("/entries/:collection/:locale/:slug", (c) => {
   if (!garden) return c.json({ error: "No garden for this member" }, 404);
   try {
     const { deleted, deploy } = deleteEntry(memberId, garden, c.req.param() as EntryRef);
+    dropShares(memberId, deleted);
     return c.json({ deleted, ...(deploy ? { deploy } : {}) }, deploy ? 202 : 200);
   } catch (e) {
     if (e instanceof EntryWriteError) return c.json({ error: e.message }, e.status);

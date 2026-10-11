@@ -1,6 +1,6 @@
 ---
 title: The data model
-date: '2026-10-10'
+date: '2026-10-11'
 flags: []
 locale: en
 description: 'The SQLite schema behind the chat engine: identity, conversations, files,
@@ -86,6 +86,7 @@ There is **no `gardens` table.** Sharing is a fact about a note:
 
 | Table | Key columns | Notes |
 |---|---|---|
+| `entry_shares` | `owner_id` + `collection` + `locale` + `slug` + `member_id` (PK) | A media entry shared with a member (Carnet, 11 October 2026): one row per member it is shared with, the owner has none. The fiche stays in the owner's garden; see [[maurice-carnet]]. |
 | `note_shares` | `owner_id` + `slug` + `member_id` (PK) | A note's audience = its owner plus these rows. |
 | `garden_settings` | `id` = audience key (sorted member ids joined with `+`), `web_theme` | A "[[maurice-shared-gardens|shared garden]]" is the *set of notes with the same audience*, so there's nothing to keep in sync — the garden is computed from `note_shares`. |
 

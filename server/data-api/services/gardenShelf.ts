@@ -33,6 +33,12 @@ import { fragmentsDir, isOpened, parseFiche, publicUrl, type GardenRef } from ".
 import { listGardenEntries, type GardenEntry } from "./gardenEntries";
 import { NEEDS_CAPTURE } from "./gardenArticles";
 import { archivedIds } from "./shelfArchive";
+import { gardenFor } from "./gardenFiche";
+import { NOTE_AUTHOR } from "./gardenNote";
+import {
+  conversationInitiator, memberBrief, memberBriefByUsername, participantsByEntry, participantsOf, sharedWith,
+  type MemberBrief,
+} from "./entryShares";
 
 // ── Kinds ──
 
@@ -91,17 +97,32 @@ export interface ShelfEntry {
   shared: { state: "draft" | "published" } | null;
   /** Put away from the member's list (shelfArchive.ts); the entry itself is untouched. */
   archived: boolean;
+  /**
+   * Whose entry it is, when it is another member's shared with this one — the
+   * id then opens on `@<username>/`. Null for the member's own.
+   */
+  owner: MemberBrief | null;
+  /** The members it is shared with (entryShares.ts). The owner is not one. */
+  participants: MemberBrief[];
   /** The same subject in the member's other locales — one row per subject. */
   translations: { id: string; locale: string; shared: { state: "draft" | "published" } | null }[];
 }
 
+/**
+ * `author` is who wrote the item: on an entry's page it is always named, the
+ * owner for a note that carries no signature. `conversation` is the exchange
+ * with Maurice a note was kept from, and who started it.
+ */
 export type MineItem =
   | { kind: "note" | "quote"; id: null; date: string | null; text: string; quote: string | null;
-      where: { page?: string; chapter_title?: string } | null }
+      where: { page?: string; chapter_title?: string } | null;
+      author?: MemberBrief | null; conversation?: { id: string; initiator: MemberBrief | null } | null }
   | { kind: "resonance"; id: null; date: string | null; text: string; quote: string | null;
-      from: { label: string; entry_id: string | null; published_url: string | null } | null }
+      from: { label: string; entry_id: string | null; published_url: string | null } | null;
+      author?: MemberBrief | null }
   | { kind: "highlight"; id: string; date: string; text: string; quote: string;
-      where: { chapter_slug: string | null; chapter_title: string | null; view: string } }
+      where: { chapter_slug: string | null; chapter_title: string | null; view: string };
+      author?: MemberBrief | null }
   | { kind: "fragment"; id: string; date: null; text: string; summary: string };
 
 export interface SharedLink {
@@ -218,9 +239,13 @@ const DATED = /^(\d{4}-\d{2}-\d{2})(?:\s+—\s+(.*?))?\s*(:)?\s*$/;
 
 interface Parsed { prose: string; items: MineItem[] }
 
-function parseBlocks(kind: "note" | "resonance", text: string): MineItem[] {
+/** A member by username — how a signed note finds its author. */
+type Members = (username: string) => MemberBrief | null;
+const CONVERSATION_LINK = /maurice:\/\/conversations\/([A-Za-z0-9_-]+)/;
+
+function parseBlocks(kind: "note" | "resonance", text: string, members?: Members): MineItem[] {
   const items: MineItem[] = [];
-  let cur: { date: string | null; head: string; colon: boolean; lines: string[] } | null = null;
+  let cur: { date: string | null; head: string; colon: boolean; lines: string[]; author: MemberBrief | null } | null = null;
   const flush = () => {
     if (!cur) return;
     const quote = cur.lines.filter((l) => l.startsWith(">")).map((l) => l.replace(/^>\s?/, "")).join("\n").trim();
@@ -236,16 +261,19 @@ function parseBlocks(kind: "note" | "resonance", text: string): MineItem[] {
       const link = cur.head.match(/^de \[\[([^\]|]+)\|([^\]]+)\]\]$/);
       const plain = cur.head.match(/^de \*(.+)\*$/);
       items.push({
-        kind: "resonance", id: null, date: cur.date, text, quote: quote || null,
+        kind: "resonance", id: null, date: cur.date, text, quote: quote || null, author: cur.author,
         from: link ? { label: link[2]!, entry_id: link[1]!, published_url: null }
           : plain ? { label: plain[1]!, entry_id: null, published_url: null } : null,
       });
     } else {
       // `p. 112` names a page, `ch. Chapitre VII` the chapter being read.
       const place = cur.colon ? cur.head.match(/^(p|ch)\.\s*(.+)$/) : null;
+      const from = text.match(CONVERSATION_LINK);
       items.push({
         kind: quote ? "quote" : "note", id: null, date: cur.date, text, quote: quote || null,
         where: !place ? null : place[1] === "p" ? { page: place[2]! } : { chapter_title: place[2]! },
+        author: cur.author,
+        conversation: from ? { id: from[1]!, initiator: null } : null,
       });
     }
     cur = null;
@@ -254,10 +282,16 @@ function parseBlocks(kind: "note" | "resonance", text: string): MineItem[] {
     const m = line.match(DATED);
     if (m) {
       flush();
-      cur = { date: m[1]!, head: (m[2] ?? "").trim(), colon: !!m[3], lines: [] };
+      let head = (m[2] ?? "").trim();
+      // `@username` opens the head of a note someone else wrote on a shared
+      // entry — when it names a member; otherwise it is the note's own text.
+      const signed = members ? head.match(NOTE_AUTHOR) : null;
+      const author = signed ? members!(signed[1]!) : null;
+      if (author) head = (signed![2] ?? "").trim();
+      cur = { date: m[1]!, head, colon: !!m[3], lines: [], author };
     } else {
       // Text before the first date: the comment an article was saved with.
-      cur ??= { date: null, head: "", colon: true, lines: [] };
+      cur ??= { date: null, head: "", colon: true, lines: [], author: null };
       cur.lines.push(line);
     }
   }
@@ -265,7 +299,7 @@ function parseBlocks(kind: "note" | "resonance", text: string): MineItem[] {
   return items;
 }
 
-function parseMine(fiche: Face, collection: string): Parsed {
+function parseMine(fiche: Face, collection: string, members?: Members): Parsed {
   const lines = fiche.body.split("\n");
   const chunks: { kind: "prose" | "note" | "resonance"; lines: string[] }[] = [{ kind: "prose", lines: [] }];
   for (const line of lines) {
@@ -279,7 +313,7 @@ function parseMine(fiche: Face, collection: string): Parsed {
   let prose = chunks.filter((c) => c.kind === "prose").map((c) => c.lines.join("\n").trim()).filter(Boolean).join("\n\n");
   // An article's fiche opens on the page's own excerpt, quoted: not the member's.
   if (collection === "articles") prose = prose.replace(/^(?:>.*(?:\n|$))+/, "").trim();
-  const items = chunks.flatMap((c) => (c.kind === "prose" ? [] : parseBlocks(c.kind, c.lines.join("\n"))));
+  const items = chunks.flatMap((c) => (c.kind === "prose" ? [] : parseBlocks(c.kind, c.lines.join("\n"), members)));
   return { prose, items };
 }
 
@@ -464,6 +498,8 @@ async function describe(
       source, mine,
       shared: written ? { state: flags.includes("public") ? "published" : "draft" } : null,
       archived: false,
+      owner: null,
+      participants: [],
       translations: [],
     },
   };
@@ -511,6 +547,25 @@ function foldTranslations(rows: { row: ShelfEntry; subject: string }[], preferre
   return out;
 }
 
+/**
+ * A row of another member's garden, as the member it is shared with lists it:
+ * named after its owner. What is shared is the fiche: the owner's card is
+ * theirs to write and publish, and is read on their site once it is there.
+ * An article's captured text is read through the owner's own reading routes,
+ * which a share does not open: here it is its link.
+ */
+function foreignRow(row: ShelfEntry, owner: MemberBrief, ownerId: string): ShelfEntry {
+  return {
+    ...row,
+    id: `@${owner.username}/${row.id}`,
+    owner,
+    participants: participantsOf(ownerId, { collection: row.collection!, locale: row.locale!, slug: row.slug! }),
+    source: row.source?.type === "article" ? { ...row.source, captured: false } : row.source,
+    shared: null,
+    translations: [],
+  };
+}
+
 export function preferredLocale(memberId: string): string | null {
   try {
     return getUserPreferences(memberId).locale || null;
@@ -532,6 +587,8 @@ async function libraryRow(memberId: string, book: BookMetadata, marked: number):
     mine: marked ? { notes: marked, opened: true } : null,
     shared: null,
     archived: false,
+    owner: null,
+    participants: [],
     translations: [],
   };
 }
@@ -558,6 +615,27 @@ export async function listShelf(
     rows.push({ row, subject });
   }
   let entries = foldTranslations(rows, preferredLocale(memberId));
+  const shares = participantsByEntry(memberId);
+  for (const e of entries) {
+    e.participants = [e.id, ...e.translations.map((t) => t.id)].flatMap((id) => shares.get(id) ?? []);
+  }
+
+  // What other members shared with this one: read in their garden, listed here.
+  const gardens = new Map<string, { garden: GardenRef; all: GardenEntry[]; owner: MemberBrief } | null>();
+  for (const share of sharedWith(memberId)) {
+    if (!gardens.has(share.owner_id)) {
+      const theirs = gardenFor(share.owner_id);
+      const owner = memberBrief(share.owner_id);
+      gardens.set(share.owner_id, theirs && owner ? { garden: theirs, all: listGardenEntries(theirs), owner } : null);
+    }
+    const from = gardens.get(share.owner_id);
+    const e = from?.all.find(
+      (x) => x.collection === share.collection && x.locale === share.locale && x.slug === share.slug,
+    );
+    if (!from || !e || !KIND_OF[e.collection]) continue;
+    const { row } = await describe(memberId, from.garden, e, lib, counts);
+    entries.push(foreignRow(row, from.owner, share.owner_id));
+  }
 
   // The books nothing is written on yet: readable all the same.
   for (const book of lib.books) {
@@ -668,6 +746,12 @@ const WIKI_LINK = /\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g;
 export async function getShelfEntry(
   memberId: string, garden: GardenRef, collection: string, locale: string, slug: string,
   books?: BookMetadata[],
+  /**
+   * Whose garden this is, when it is not the reader's own: an entry shared
+   * with them. What is the reader's stays the reader's — their highlights,
+   * their reading position — and the rest is read in the owner's garden.
+   */
+  ownerId: string = memberId,
 ): Promise<ShelfEntryDetail | null> {
   if (!KIND_OF[collection]) return null;
   const all = listGardenEntries(garden);
@@ -677,7 +761,10 @@ export async function getShelfEntry(
   const lib = loadLibrary(books);
   const counts: Counts = { books: countHighlights(memberId), articles: countArticleHighlights(memberId) };
   const { row, card, fiche, book, subject } = await describe(memberId, garden, e, lib, counts);
-  const site = siteFor(memberId);
+  const site = siteFor(ownerId);
+  const foreign = ownerId !== memberId;
+  const owner = memberBrief(ownerId);
+  const reader = foreign ? memberBrief(memberId) : owner;
 
   // The page is of the locale asked for; its other locales are named beside it.
   for (const other of all) {
@@ -709,12 +796,24 @@ export async function getShelfEntry(
 
   let mine: ShelfEntryDetail["mine"] = null;
   if (fiche && e.fiche && row.mine) {
-    const parsed = row.mine.opened ? parseMine(fiche, collection) : { prose: "", items: [] };
-    const items: MineItem[] = parsed.items.map((item) =>
-      item.kind === "resonance" && item.from?.entry_id
-        ? { ...item, from: { label: item.from.label, ...resolve(item.from.entry_id) } }
-        : item,
-    );
+    const parsed = row.mine.opened ? parseMine(fiche, collection, memberBriefByUsername) : { prose: "", items: [] };
+    const items: MineItem[] = parsed.items.map((item) => {
+      if (item.kind === "resonance") {
+        const from = item.from?.entry_id ? { label: item.from.label, ...resolve(item.from.entry_id) } : item.from;
+        return { ...item, from, author: item.author ?? owner };
+      }
+      if (item.kind === "note" || item.kind === "quote") {
+        return {
+          ...item,
+          // A note that names nobody is the owner's.
+          author: item.author ?? owner,
+          conversation: item.conversation && {
+            id: item.conversation.id, initiator: conversationInitiator(item.conversation.id),
+          },
+        };
+      }
+      return item;
+    });
     if (row.mine.opened) items.push(...readFragments(garden, e.fiche.file, collection));
 
     if (book) {
@@ -724,6 +823,7 @@ export async function getShelfEntry(
           kind: "highlight", id: `h:${h.id}`, date: isoFromSqlite(h.created_at).slice(0, 10),
           quote: h.quote, text: h.note ?? "",
           where: { chapter_slug: h.chapter_slug, chapter_title: titles.get(h.chapter_slug) ?? null, view: h.view },
+          author: reader,
         });
       }
     } else if (collection === "articles") {
@@ -732,6 +832,7 @@ export async function getShelfEntry(
           kind: "highlight", id: `h:${h.id}`, date: isoFromSqlite(h.created_at).slice(0, 10),
           quote: h.quote, text: h.note ?? "",
           where: { chapter_slug: null, chapter_title: null, view: h.view },
+          author: reader,
         });
       }
     }
@@ -744,8 +845,9 @@ export async function getShelfEntry(
     };
   }
 
+  // The owner's card is theirs: it is not part of what is shared.
   let shared: ShelfEntryDetail["shared"] = null;
-  if (row.shared && card && e.card) {
+  if (row.shared && card && e.card && !foreign) {
     const body = card.body.trim();
     const links: SharedLink[] = [];
     for (const m of body.matchAll(WIKI_LINK)) {
@@ -762,5 +864,8 @@ export async function getShelfEntry(
 
   const away = archivedIds(memberId);
   const archived = away.has(row.id) || row.translations.some((t) => away.has(t.id));
-  return { ...row, archived, mine, shared };
+  if (foreign && owner) {
+    return { ...foreignRow(row, owner, ownerId), archived, mine: mine && { ...mine, web_path: null, file: "" }, shared };
+  }
+  return { ...row, archived, mine, shared, participants: participantsOf(ownerId, { collection, locale, slug }) };
 }

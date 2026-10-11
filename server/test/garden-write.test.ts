@@ -88,7 +88,7 @@ describe("my side", () => {
     const e = (await entry("books", "fr", "humus"))!;
     expect(e.mine!.prose).toBe("Roman de l'éco-anxiété.");
     const today = new Date().toISOString().slice(0, 10);
-    expect(e.mine!.items.filter((i) => i.kind !== "resonance")).toEqual([
+    expect(e.mine!.items.filter((i) => i.kind !== "resonance")).toMatchObject([
       { kind: "note", id: null, date: today, text: "Arthur = caricature.", quote: null, where: null },
       { kind: "quote", id: null, date: today, text: "C'est tout le livre.", quote: "en cessant d'enlever", where: { chapter_title: "Chapitre VII" } },
     ]);

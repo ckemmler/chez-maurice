@@ -277,6 +277,25 @@ db.run(`
   CREATE INDEX IF NOT EXISTS idx_note_shares_member
     ON note_shares(member_id, owner_id, slug)
 `);
+// A media entry shared with other members of the household (Carnet, 11
+// October 2026): the fiche stays one file in its owner's garden; the members
+// named here read it and sign the notes they add to it. One row per member it
+// is shared with — the owner has none. See data-api/services/entryShares.ts.
+db.run(`
+  CREATE TABLE IF NOT EXISTS entry_shares (
+    owner_id   TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    collection TEXT NOT NULL,
+    locale     TEXT NOT NULL,
+    slug       TEXT NOT NULL,
+    member_id  TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    PRIMARY KEY (owner_id, collection, locale, slug, member_id)
+  )
+`);
+db.run(`
+  CREATE INDEX IF NOT EXISTS idx_entry_shares_member
+    ON entry_shares(member_id)
+`);
 // Per-garden web theme, keyed by the audience key (sorted member ids joined
 // with '+'). "How this garden looks on the web — every gardener sees it."
 db.run(`

@@ -11,7 +11,15 @@ export interface NoteInput {
   quote?: string;
   /** A page (a book read on paper), or the chapter being read. */
   where?: { page?: string; chapter_title?: string };
+  /**
+   * The username of who wrote it, when that is not the garden's owner: a
+   * member the entry is shared with. A note that names nobody is the owner's.
+   */
+  author?: string;
 }
+
+/** `@username` opening a note's head: who wrote it. */
+export const NOTE_AUTHOR = /^@([A-Za-z0-9][A-Za-z0-9._-]*)(?:\s+—\s+([\s\S]*))?$/;
 
 export const COMMENT_HEADING = "## Commentaire";
 
@@ -28,8 +36,10 @@ export function noteBlock(date: string, input: NoteInput): string {
   const chapter = (input.where?.chapter_title ?? "").replace(/\s+/g, " ").trim();
   const where = page ? `p. ${page}` : chapter ? `ch. ${chapter}` : "";
 
-  if (!quote && !where && !text.includes("\n")) return `${date} — ${text}`;
-  const blocks = [where ? `${date} — ${where} :` : `${date} :`];
+  const author = (input.author ?? "").trim();
+  const by = author ? `@${author} — ` : "";
+  if (!quote && !where && !text.includes("\n")) return `${date} — ${by}${text}`;
+  const blocks = [where ? `${date} — ${by}${where} :` : author ? `${date} — @${author} :` : `${date} :`];
   if (quote) blocks.push(quote.split("\n").map((l) => `> ${l}`.trimEnd()).join("\n"));
   if (text) blocks.push(text);
   return blocks.join("\n\n");

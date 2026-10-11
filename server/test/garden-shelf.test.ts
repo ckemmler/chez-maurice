@@ -273,7 +273,7 @@ describe("one entry", () => {
     expect(e.mine!.items.map((i) => i.kind)).toEqual(["highlight"]);
     expect(e.mine!.prose).toBe("");
     const soil = (await getShelfEntry(MEMBER.id, garden, "articles", "fr", "soil", BOOKS as any))!;
-    expect(soil.mine!.items).toEqual([{ kind: "note", id: null, date: null, text: "Lu chez L.", quote: null, where: null }]);
+    expect(soil.mine!.items).toMatchObject([{ kind: "note", id: null, date: null, text: "Lu chez L.", quote: null, where: null }]);
     expect(await getShelfEntry(MEMBER.id, garden, "books", "fr", "nope", BOOKS as any)).toBeNull();
     expect(await getShelfEntry(MEMBER.id, garden, "notes", "fr", "une-note", BOOKS as any)).toBeNull();
   });
