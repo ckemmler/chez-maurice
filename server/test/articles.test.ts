@@ -244,7 +244,7 @@ test("extraction reads JSON-LD @graph and article:published_time", () => {
 
 describe("the captured text keeps its paragraphs, and loses the page's furniture", async () => {
   const { htmlToBlocks } = await import("../data-api/services/articleExtract");
-  const { applyDropList, parseDropList, replaceFullText, splitBlocks } =
+  const { applyDropList, parseDropList, replaceFullText, readTextStyles, splitBlocks } =
     await import("../data-api/services/articleCleanup");
   const { readFullText } = await import("../data-api/services/articleSummary");
   const { createArticleHighlight } = await import("../data-api/services/articleHighlights");
@@ -321,4 +321,55 @@ test("an author declared as the address of their page is not taken for a name", 
 <script type="application/ld+json">{"@type":"NewsArticle","headline":"A title","author":{"@type":"Person","name":"Lulu Garcia-Navarro"}}</script>
 </head><body><article><p>${"Body of the article. ".repeat(60)}</p></article></body></html>`;
   expect(extractArticleFromHtml("https://ex.test/author", html).author).toBe("Lulu Garcia-Navarro");
+});
+
+describe("what the page set apart stays set apart", async () => {
+  const { htmlToStyledBlocks } = await import("../data-api/services/articleExtract");
+  const { readTextStyles, hasTextStyles } = await import("../data-api/services/articleCleanup");
+  const { readFullText } = await import("../data-api/services/articleSummary");
+
+  const answer = (n: number) => `Réponse ${n}. ${"Une phrase de la réponse, assez longue. ".repeat(18)}`.trim();
+  const interview = (title: string) => `<!doctype html><html lang="fr"><head>
+<title>${title}</title><meta property="og:title" content="${title}">
+<meta property="og:site_name" content="Le Monde"></head><body><article>
+<h2>Premier temps</h2>
+<p><strong>Une question, posée en gras ?</strong></p><p>${answer(1)}</p>
+<p><strong>Une autre question ?</strong></p><p>${answer(2)} Avec <em>un mot</em> en italique.</p>
+</article></body></html>`;
+
+  test("a block keeps its heading, its bold and its italic, by offsets in its own text", () => {
+    expect(
+      htmlToStyledBlocks(`<h2>Titre</h2><p><b>Q :</b>  et   <i>la <b>suite</b></i></p><p>rien</p>`),
+    ).toEqual([
+      { text: "Titre", heading: true, spans: [] },
+      { text: "Q : et la suite", spans: [[0, 3, "strong"], [10, 15, "strong"], [7, 15, "em"]] },
+      { text: "rien", spans: [] },
+    ]);
+  });
+
+  test("a saved interview serves its questions as ranges in the text", async () => {
+    const saved = await saveArticleFiche(MEMBER.id, { url: "https://ex.test/entretien", html: interview("Un entretien") });
+    const text = readFullText(saved.file);
+    const styles = readTextStyles(saved.file, text);
+    const said = (kind: string) => styles.filter((s) => s.kind === kind).map((s) => text.slice(s.start, s.end));
+    expect(said("strong")).toEqual(["Une question, posée en gras ?", "Une autre question ?"]);
+    expect(said("em")).toEqual(["un mot"]);
+    expect(said("heading")).toEqual(["Premier temps"]);
+  });
+
+  test("styles that no longer describe the text are not served", async () => {
+    const saved = await saveArticleFiche(MEMBER.id, { url: "https://ex.test/entretien-2", html: interview("Un autre entretien") });
+    expect(readTextStyles(saved.file, `Une ligne en plus.\n\n${readFullText(saved.file)}`)).toEqual([]);
+  });
+
+  test("a text captured before styles were kept takes them at the next share", async () => {
+    const url = "https://ex.test/entretien-3";
+    const saved = await saveArticleFiche(MEMBER.id, { url, html: interview("Un troisième entretien") });
+    fs.rmSync(path.join(path.dirname(saved.file), `${saved.slug}-fiche`, "text-styles.json"));
+    expect(hasTextStyles(saved.file)).toBe(false);
+
+    expect((await saveArticleFiche(MEMBER.id, { url, html: interview("Un troisième entretien") })).text_retaken).toBe(true);
+    expect(readTextStyles(saved.file, readFullText(saved.file)).length).toBeGreaterThan(0);
+    expect((await saveArticleFiche(MEMBER.id, { url, html: interview("Un troisième entretien") })).text_retaken).toBe(false);
+  });
 });

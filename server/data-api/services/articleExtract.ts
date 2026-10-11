@@ -103,8 +103,10 @@ export interface ArticleMeta {
   canonical_url: string;
   /** <html lang>. */
   lang: string;
-  /** Full article text (Readability). */
+  /** Full article text (Readability): its blocks, a blank line between them. */
   content: string;
+  /** The same blocks with what styling they keep. Empty when `content` is not made of them. */
+  blocks: StyledBlock[];
   word_count: number;
 }
 
@@ -261,10 +263,12 @@ export function extractArticleFromHtml(url: string, html: string): ArticleMeta {
 
   // Paragraphs, not Readability's `textContent`: that one is the DOM read flat,
   // so a heading runs into its byline and every paragraph into the next.
-  const content =
-    (article?.content ? htmlToBlocks(article.content).join("\n\n") : "") ||
-    article?.textContent?.trim() ||
-    "";
+  let blocks = article?.content ? htmlToStyledBlocks(article.content) : [];
+  let content = blocks.map((b) => b.text).join("\n\n");
+  if (!content) {
+    blocks = [];
+    content = article?.textContent?.trim() || "";
+  }
 
   return {
     title: title.trim(),
@@ -277,6 +281,7 @@ export function extractArticleFromHtml(url: string, html: string): ArticleMeta {
     canonical_url,
     lang,
     content,
+    blocks,
     word_count: content ? content.split(/\s+/).filter(Boolean).length : 0,
   };
 }
@@ -287,55 +292,130 @@ const BLOCK_TAGS = new Set([
   "BLOCKQUOTE", "FIGURE", "FIGCAPTION", "TABLE", "TR", "HR", "DETAILS", "SUMMARY",
 ]);
 
+/** A stretch of a block's text set apart by the page: bold, or italic. */
+export type StyleSpan = [start: number, end: number, kind: "strong" | "em"];
+
+export interface StyledBlock {
+  text: string;
+  /** The block is a heading inside the article. */
+  heading?: boolean;
+  /** Offsets in `text`, in UTF-16 units — what a JS string and an NSString both count. */
+  spans: StyleSpan[];
+}
+
+const STRONG = 1;
+const EM = 2;
+const STRONG_TAGS = new Set(["B", "STRONG"]);
+const EM_TAGS = new Set(["I", "EM"]);
+const HEADING_TAGS = new Set(["H1", "H2", "H3", "H4", "H5", "H6"]);
+
 /**
- * An article's HTML as its blocks of text, in reading order: one string per
+ * An article's HTML as its blocks of text, in reading order: one per
  * paragraph, heading, list item or caption. A `<br>` is a line break inside
  * its block; a `<pre>` keeps its own spacing.
+ *
+ * Each block keeps the little of the page's styling that carries meaning:
+ * that it is a heading, and which stretches were bold or italic. An interview
+ * tells its questions from its answers by nothing else.
  */
-export function htmlToBlocks(html: string): string[] {
+export function htmlToStyledBlocks(html: string): StyledBlock[] {
   const { document } = parseHTML(`<!doctype html><html><body>${html}</body></html>`);
-  const blocks: string[] = [];
-  let run = "";
+  const blocks: StyledBlock[] = [];
+  let chars: string[] = [];
+  let marks: number[] = [];
+  let mark = 0;
+  let heading = 0;
+
   const flush = () => {
-    const text = run
-      .replace(/[^\S\n]+/g, " ")
-      .replace(/ ?\n ?/g, "\n")
-      .replace(/\n{2,}/g, "\n")
-      .trim();
-    if (text) blocks.push(text);
-    run = "";
+    // Spaces collapsed, none around a line break, no empty line, trimmed —
+    // done on the characters so that each keeps the style it was read under.
+    const text: string[] = [];
+    const kept: number[] = [];
+    for (let i = 0; i < chars.length; i++) {
+      const ch = chars[i]!;
+      const last = text[text.length - 1];
+      if (ch === "\n") {
+        if (last === " ") { text.pop(); kept.pop(); }
+        if (!text.length || text[text.length - 1] === "\n") continue;
+      } else if (ch === " " && (last === undefined || last === " " || last === "\n")) {
+        continue;
+      }
+      text.push(ch);
+      kept.push(marks[i]!);
+    }
+    while (text.length && (text[text.length - 1] === " " || text[text.length - 1] === "\n")) {
+      text.pop();
+      kept.pop();
+    }
+    chars = [];
+    marks = [];
+    if (!text.length) return;
+
+    const spans: StyleSpan[] = [];
+    for (const [bit, kind] of [[STRONG, "strong"], [EM, "em"]] as const) {
+      let start = -1;
+      for (let i = 0; i <= kept.length; i++) {
+        const on = i < kept.length && (kept[i]! & bit) !== 0;
+        if (on && start < 0) start = i;
+        if (!on && start >= 0) {
+          spans.push([start, i, kind]);
+          start = -1;
+        }
+      }
+    }
+    blocks.push({ text: text.join(""), ...(heading ? { heading: true } : {}), spans });
   };
+  const push = (text: string) => {
+    // By UTF-16 unit, as the offsets are counted.
+    for (let i = 0; i < text.length; i++) {
+      chars.push(text[i]!);
+      marks.push(mark);
+    }
+  };
+
   const walk = (node: any) => {
     for (const child of node.childNodes ?? []) {
       if (child.nodeType === 3) {
-        run += String(child.textContent ?? "").replace(/\s+/g, " ");
+        push(String(child.textContent ?? "").replace(/\s+/g, " "));
         continue;
       }
       if (child.nodeType !== 1) continue;
       const tag = String(child.tagName ?? "").toUpperCase();
       if (tag === "SCRIPT" || tag === "STYLE" || tag === "NOSCRIPT" || tag === "TEMPLATE") continue;
       if (tag === "BR") {
-        run += "\n";
+        chars.push("\n");
+        marks.push(0);
       } else if (tag === "PRE") {
         flush();
         const code = String(child.textContent ?? "").replace(/\n{2,}/g, "\n").trim();
-        if (code) blocks.push(code);
+        if (code) blocks.push({ text: code, spans: [] });
       } else if (tag === "TD" || tag === "TH") {
         // A row is one block; its cells must not run into one another.
         walk(child);
-        run += " ";
+        push(" ");
       } else if (BLOCK_TAGS.has(tag)) {
         flush();
+        if (HEADING_TAGS.has(tag)) heading++;
         walk(child);
         flush();
+        if (HEADING_TAGS.has(tag)) heading--;
       } else {
+        const bit = STRONG_TAGS.has(tag) ? STRONG : EM_TAGS.has(tag) ? EM : 0;
+        const before = mark;
+        mark |= bit;
         walk(child);
+        mark = before;
       }
     }
   };
   if (document.body) walk(document.body);
   flush();
   return blocks;
+}
+
+/** The blocks' text alone. */
+export function htmlToBlocks(html: string): string[] {
+  return htmlToStyledBlocks(html).map((b) => b.text);
 }
 
 /** Insert a <base href> so Readability resolves relative URLs in supplied HTML. */

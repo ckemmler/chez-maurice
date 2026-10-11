@@ -34,7 +34,7 @@ import {
   scheduleArticleSummary,
   summarizeAndStore,
 } from "../services/articleSummary";
-import { cleanAndStore } from "../services/articleCleanup";
+import { cleanAndStore, readTextStyles } from "../services/articleCleanup";
 import { asHighlightView, HIGHLIGHT_VIEWS } from "../services/highlights";
 import {
   countArticleHighlights,
@@ -195,7 +195,12 @@ app.get("/:slug/text", (c) => {
     const ref = findArticleBySlug(memberId, c.req.param("slug"), c.req.query("locale"));
     const text = readFullText(ref.file);
     if (!text) return c.json({ error: "No captured text for this article" }, 404);
-    return c.json({ slug: ref.slug, locale: ref.locale, title: ref.title, text });
+    // `styles` are ranges in `text`: headings, and what the page set in bold
+    // or italic. A client that ignores them shows the same text, plain.
+    return c.json({
+      slug: ref.slug, locale: ref.locale, title: ref.title, text,
+      styles: readTextStyles(ref.file, text),
+    });
   } catch (e) {
     if (e instanceof ArticleSaveError) return c.json({ error: e.message }, e.status);
     throw e;

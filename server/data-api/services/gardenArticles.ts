@@ -51,7 +51,7 @@ import {
   type ParsedFiche,
 } from "./gardenFiche";
 import { indexGardenPaths } from "./gardenIndex";
-import { retakeFlatText } from "./articleCleanup";
+import { retakeText, writeTextStyles } from "./articleCleanup";
 
 const COLLECTION = "articles" as const;
 
@@ -240,11 +240,11 @@ export async function saveArticleFiche(
   if (found && !stub) {
     if (comment) appendComment(memberId, garden, found, comment);
     // Sharing it again from the browser is also how a text captured before
-    // paragraphs were kept gets its paragraphs back.
+    // paragraphs and styles were kept gets them back.
     let retaken = false;
     if (input.html) {
       try {
-        retaken = retakeFlatText(memberId, found, extractArticleFromHtml(rawUrl, input.html).content);
+        retaken = retakeText(memberId, found, extractArticleFromHtml(rawUrl, input.html));
       } catch {
         // The article is saved; a page that will not parse changes nothing.
       }
@@ -295,7 +295,7 @@ export async function saveArticleFiche(
     const byCanonical = findArticleFiche(garden, article.canonical_url);
     if (byCanonical && !isStub(byCanonical)) {
       if (comment) appendComment(memberId, garden, byCanonical, comment);
-      const retaken = !!input.html && retakeFlatText(memberId, byCanonical, article.content);
+      const retaken = !!input.html && retakeText(memberId, byCanonical, article);
       return { ...describeExisting(garden, byCanonical, { duplicate: true }), text_retaken: retaken };
     }
   }
@@ -367,6 +367,8 @@ export async function saveArticleFiche(
   // duplicate scan above stays a cheap read.
   if (article.content) {
     written.push(writeFragment(file, `Texte intégral — ${publication}`, article.content));
+    // What the page set in bold or italic, and its headings, beside the text.
+    if (article.blocks.length) written.push(writeTextStyles(file, article.blocks));
   }
 
   autoCommit(

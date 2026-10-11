@@ -23,6 +23,7 @@ import { ancillaryComplete } from "../../src/services/ancillary";
 import { atomicWrite, autoCommit, fragmentsDir, gardenFor, parseFiche, writeFiche } from "./gardenFiche";
 import { indexGardenPaths } from "./gardenIndex";
 import { countArticleHighlights } from "./articleHighlights";
+import type { StyledBlock } from "./articleExtract";
 import type { ArticleFicheRef } from "./gardenArticles";
 
 /** What the model sees of each block: enough to tell a paragraph from a label. */
@@ -160,6 +161,102 @@ export function replaceFullText(ficheFile: string, text: string): string {
   return frag;
 }
 
+// ── The styles beside the text ──
+//
+// The fragment holds plain text: that is what is searched, summarised, and
+// what a highlight's offsets count in. What the page said in bold or italic,
+// and which blocks were headings, is kept apart, block by block, in a small
+// file beside the fragments. A reader that knows nothing of it loses nothing.
+
+interface StoredStyles {
+  v: 1;
+  /** One entry per block of the text, in order: its length, and its styling. */
+  blocks: Array<{ n: number; h?: 1; s?: StyledBlock["spans"] }>;
+}
+
+function stylesFile(ficheFile: string): string {
+  return path.join(path.dirname(fragmentsDir(ficheFile)), "text-styles.json");
+}
+
+function readStoredStyles(ficheFile: string): StoredStyles | null {
+  try {
+    const parsed = JSON.parse(fs.readFileSync(stylesFile(ficheFile), "utf-8"));
+    return parsed?.v === 1 && Array.isArray(parsed.blocks) ? (parsed as StoredStyles) : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Whether the text was captured with its styles (even if it had none to keep). */
+export function hasTextStyles(ficheFile: string): boolean {
+  return fs.existsSync(stylesFile(ficheFile));
+}
+
+/** Write the styles of a text just captured. Returns the file, for the commit. */
+export function writeTextStyles(ficheFile: string, blocks: StyledBlock[]): string {
+  const stored: StoredStyles = {
+    v: 1,
+    blocks: blocks.map((b) => ({
+      n: b.text.length,
+      ...(b.heading ? { h: 1 as const } : {}),
+      ...(b.spans.length ? { s: b.spans } : {}),
+    })),
+  };
+  const file = stylesFile(ficheFile);
+  atomicWrite(file, JSON.stringify(stored));
+  return file;
+}
+
+/** Carry the styles over a cleanup: `kept` is `before` with some blocks taken out. */
+function keepTextStyles(ficheFile: string, before: string[], kept: string[]): string {
+  const stored = readStoredStyles(ficheFile);
+  if (!stored) return "";
+  const file = stylesFile(ficheFile);
+  const out: StoredStyles["blocks"] = [];
+  if (stored.blocks.length === before.length) {
+    let j = 0;
+    for (let i = 0; i < before.length && j < kept.length; i++) {
+      if (before[i] === kept[j]) {
+        out.push(stored.blocks[i]!);
+        j++;
+      }
+    }
+  }
+  // Out of step with the text: no styles is right, wrong styles is not.
+  atomicWrite(file, JSON.stringify({ v: 1, blocks: out.length === kept.length ? out : [] }));
+  return file;
+}
+
+export interface TextStyle {
+  start: number;
+  end: number;
+  kind: "heading" | "strong" | "em";
+}
+
+/**
+ * The styles of a stored text, as ranges in that text. Empty when the file
+ * beside it does not describe this very text — one edited by hand, say.
+ */
+export function readTextStyles(ficheFile: string, text: string): TextStyle[] {
+  const stored = readStoredStyles(ficheFile);
+  if (!stored) return [];
+  const blocks = text.split("\n\n");
+  if (blocks.length !== stored.blocks.length) return [];
+  const out: TextStyle[] = [];
+  let at = 0;
+  for (let i = 0; i < blocks.length; i++) {
+    const block = blocks[i]!;
+    const style = stored.blocks[i]!;
+    if (style.n !== block.length) return [];
+    if (style.h) out.push({ start: at, end: at + block.length, kind: "heading" });
+    for (const [start, end, kind] of style.s ?? []) {
+      if (start >= 0 && end <= block.length && start < end) out.push({ start: at + start, end: at + end, kind });
+    }
+    at += block.length + 2;
+  }
+  return out;
+}
+
 /**
  * Whether the stored text may still be replaced. A highlight is filed by its
  * character offsets in the text it was made on: once there is one, the text
@@ -171,21 +268,31 @@ export function textIsReplaceable(memberId: string, ref: ArticleFicheRef): boole
 }
 
 /**
- * Replace a text captured flat — one run, no paragraph in it, as every save
- * was before the extraction kept blocks — with a capture that has them.
+ * Replace a text from an earlier capture with one that holds more: a text
+ * captured flat (one run, no paragraph in it, as every save was at first), or
+ * one captured before styles were kept, when the page has some to give.
  * Returns whether it did.
  */
-export function retakeFlatText(memberId: string, ref: ArticleFicheRef, content: string): boolean {
+export function retakeText(
+  memberId: string,
+  ref: ArticleFicheRef,
+  capture: { content: string; blocks: StyledBlock[] },
+): boolean {
   const garden = gardenFor(memberId);
-  if (!garden || ref.kind !== "fiche" || splitBlocks(content).length < MIN_BLOCKS) return false;
+  if (!garden || ref.kind !== "fiche" || capture.blocks.length < MIN_BLOCKS) return false;
   const frag = soleFragment(ref.file);
   if (!frag) return false;
   const stored = fs.readFileSync(frag, "utf-8").replace(/^---\n[\s\S]*?\n---\n?/, "").trim();
-  if (!stored || /\n\s*\n/.test(stored)) return false;
+  if (!stored) return false;
+  const flat = !/\n\s*\n/.test(stored);
+  const unstyled =
+    !hasTextStyles(ref.file) && capture.blocks.some((b) => b.heading || b.spans.length);
+  if (!flat && !unstyled) return false;
   if (!textIsReplaceable(memberId, ref)) return false;
-  replaceFullText(ref.file, content);
-  autoCommit(garden, [frag], `Retake article text: ${ref.slug}`);
-  indexGardenPaths(memberId, [frag]);
+  replaceFullText(ref.file, capture.content);
+  const written = [frag, writeTextStyles(ref.file, capture.blocks)];
+  autoCommit(garden, written, `Retake article text: ${ref.slug}`);
+  indexGardenPaths(memberId, written);
   return true;
 }
 
@@ -218,6 +325,8 @@ export async function cleanAndStore(memberId: string, ref: ArticleFicheRef): Pro
   if (!textIsReplaceable(memberId, ref)) return false;
   replaceFullText(ref.file, cleaned);
   const written = [frag];
+  const styles = keepTextStyles(ref.file, splitBlocks(before), splitBlocks(cleaned));
+  if (styles) written.push(styles);
 
   // Re-read, as the summary does: the fiche may have changed since.
   const fresh = parseFiche(fs.readFileSync(ref.file, "utf-8"));
