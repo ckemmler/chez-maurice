@@ -241,3 +241,84 @@ test("extraction reads JSON-LD @graph and article:published_time", () => {
   expect(a.published_at).toBe("2026-08-21");
   expect(a.lang).toBe("en");
 });
+
+describe("the captured text keeps its paragraphs, and loses the page's furniture", async () => {
+  const { htmlToBlocks } = await import("../data-api/services/articleExtract");
+  const { applyDropList, parseDropList, replaceFullText, splitBlocks } =
+    await import("../data-api/services/articleCleanup");
+  const { readFullText } = await import("../data-api/services/articleSummary");
+  const { createArticleHighlight } = await import("../data-api/services/articleHighlights");
+
+  const para = (n: number) => `Paragraphe ${n}. ${"Une phrase du corps de l'article. ".repeat(20)}`.trim();
+  const longPage = (title: string) => `<!doctype html><html lang="fr"><head>
+<title>${title}</title><meta property="og:title" content="${title}">
+<meta property="og:site_name" content="Le Monde"></head><body><article>
+<h2>Un intertitre</h2><p>${para(1)}</p><p>${para(2)}</p><p>${para(3)}</p>
+</article></body></html>`;
+
+  test("one block per paragraph, heading and caption; a <br> stays inside its block", () => {
+    expect(
+      htmlToBlocks(
+        `<div><header><span>The Interview</span><figcaption>Credit…<span>P. M.</span></figcaption></header>` +
+        `<h1>Title</h1><p>First <em>para</em>graph.</p><p>Vers un<br>vers deux</p><ul><li>a</li><li>b</li></ul></div>`,
+      ),
+    ).toEqual(["The Interview", "Credit…P. M.", "Title", "First paragraph.", "Vers un\nvers deux", "a", "b"]);
+  });
+
+  test("an extracted article separates its paragraphs with a blank line", () => {
+    const blocks = splitBlocks(extractArticleFromHtml("https://ex.test/blocs", longPage("Des blocs")).content);
+    expect(blocks.length).toBeGreaterThanOrEqual(3);
+    expect(blocks.some((b) => b.startsWith("Paragraphe 2."))).toBe(true);
+  });
+
+  test("the drop list is read out of the answer, and only real block numbers count", () => {
+    expect(parseDropList('Here: {"drop": [0, 2, 2, 9, -1, "3", 1.5]}', 4)).toEqual([0, 2]);
+    expect(parseDropList('{"drop": []}', 4)).toEqual([]);
+    expect(parseDropList("no json", 4)).toBeNull();
+    expect(parseDropList('{"keep": [1]}', 4)).toBeNull();
+  });
+
+  test("a paragraph is never dropped, and an answer that empties the text is refused", () => {
+    const blocks = ["Advertisement", para(1), "Credit…X", para(2)];
+    expect(applyDropList(blocks, [0, 1, 2])).toEqual([para(1), para(2)]);
+    expect(applyDropList(["a", "b", "c", "d"], [0, 1, 2])).toBeNull();
+  });
+
+  test("sharing a flat capture again from the browser brings its paragraphs back", async () => {
+    const url = "https://ex.test/reprise";
+    const first = await saveArticleFiche(MEMBER.id, { url, html: longPage("Une reprise") });
+    expect(first.duplicate).toBe(false);
+    // As every save was stored before blocks were kept.
+    replaceFullText(first.file, readFullText(first.file).replace(/\s+/g, " "));
+    expect(readFullText(first.file)).not.toContain("\n\n");
+
+    const again = await saveArticleFiche(MEMBER.id, { url, html: longPage("Une reprise") });
+    expect(again.duplicate).toBe(true);
+    expect(again.text_retaken).toBe(true);
+    expect(splitBlocks(readFullText(first.file)).length).toBeGreaterThanOrEqual(3);
+
+    // A text with paragraphs is left alone.
+    expect((await saveArticleFiche(MEMBER.id, { url, html: longPage("Une reprise") })).text_retaken).toBe(false);
+  });
+
+  test("a highlighted text is never replaced: its offsets index the text it was made on", async () => {
+    const url = "https://ex.test/surligne";
+    const first = await saveArticleFiche(MEMBER.id, { url, html: longPage("Un surlignage") });
+    const flat = readFullText(first.file).replace(/\s+/g, " ");
+    replaceFullText(first.file, flat);
+    createArticleHighlight(MEMBER.id, first.locale, first.slug, { quote: "Paragraphe 2", startOffset: 5, endOffset: 17 });
+
+    const again = await saveArticleFiche(MEMBER.id, { url, html: longPage("Un surlignage") });
+    expect(again.text_retaken).toBe(false);
+    expect(readFullText(first.file)).toBe(flat);
+  });
+});
+
+test("an author declared as the address of their page is not taken for a name", () => {
+  const html = `<!doctype html><html lang="en"><head><title>T</title>
+<meta property="og:title" content="A title">
+<meta property="article:author" content="https://www.nytimes.com/by/someone">
+<script type="application/ld+json">{"@type":"NewsArticle","headline":"A title","author":{"@type":"Person","name":"Lulu Garcia-Navarro"}}</script>
+</head><body><article><p>${"Body of the article. ".repeat(60)}</p></article></body></html>`;
+  expect(extractArticleFromHtml("https://ex.test/author", html).author).toBe("Lulu Garcia-Navarro");
+});

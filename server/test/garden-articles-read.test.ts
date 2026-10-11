@@ -13,12 +13,10 @@ import { spawnSync } from "node:child_process";
 const TMP = fs.mkdtempSync(path.join(os.tmpdir(), "maurice-garden-read-"));
 process.env.MAURICE_GARDENS_DIR = path.join(TMP, "gardens");
 
-// life.db must be a throwaway — these tests write highlights. Give this
-// suite its own data dir for that import, then hand the preload's throwaway
-// back (never `delete` it: with the variable unset, anything that resolves
-// the data dir lazily after this point lands in the real ~/.maurice).
-process.env.MAURICE_DATA_DIR = path.join(TMP, "data");
-fs.mkdirSync(process.env.MAURICE_DATA_DIR, { recursive: true });
+// life.db is the preload's throwaway, as for every suite: the highlights
+// module binds its path on import and other suites reach it too (a save looks
+// at an article's highlights), so a directory of this suite's own, removed
+// when it ends, would leave them a database that is gone.
 const {
   listArticleHighlights,
   createArticleHighlight,
@@ -26,7 +24,6 @@ const {
   deleteArticleHighlight,
   countArticleHighlights,
 } = await import("../data-api/services/articleHighlights");
-process.env.MAURICE_DATA_DIR = process.env.MAURICE_TEST_DATA_DIR!;
 
 const { saveArticleFiche, listArticles, describeArticle, readArticleBody, findArticleFiche } =
   await import("../data-api/services/gardenArticles");

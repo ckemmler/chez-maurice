@@ -1,6 +1,6 @@
 ---
 title: Knowledge capabilities
-date: '2026-10-09'
+date: '2026-10-11'
 flags: []
 locale: en
 description: 'What Maurice can do with knowledge: the garden (notes, media, journal),
@@ -59,6 +59,9 @@ One endpoint, `POST /api/v1/garden/articles`, that every capture surface calls: 
 - The caller may send the **DOM its browser already rendered**; the server parses that instead of fetching the URL — the only way past a paywall or a bot check. Carnet's share extension runs a script in the Safari page for exactly this.
 - **Duplicates** are found by scanning the collection's fiches, under the page's own `rel=canonical` — a tracking link and the plain URL are the same article. A re-share with a comment appends the comment rather than making a twin.
 - A site that **refuses robots** (a 403, a bot wall) does not lose the save: a **bookmark** fiche keeps the URL, the comment and the reason under `status: needs-capture`, and a later share from a browser completes it in place. A dead URL is an error, not a bookmark.
+- The **text keeps its paragraphs** (11 October 2026). Readability's flat `textContent` ran a heading into its byline and every paragraph into the next; the extraction now walks the article's HTML and stores one block per paragraph, heading, caption or list item, a blank line between them (`htmlToBlocks`, `articleExtract.ts`).
+- A **cleanup pass** then takes the page's furniture out of the text (`articleCleanup.ts`, invocation `article_cleanup`, light tier): the rubric, the title said again, photo credits, "Advertisement", newsletter boxes. The model is shown the blocks numbered, with the first 160 characters of each, and answers with the numbers to leave out — it never writes the text again, so the author's words stay as captured. The code holds it to that: a block over 400 characters always stays, and an answer that would remove more than a quarter of the text is ignored whole. The date and the author's line go only where the fiche already holds them under `meta:`; what the page's metadata did not give stays in the text. It runs after the response has gone out and before the summary. An author declared as the address of their page (the New York Times) is no longer taken for a name.
+- A text **captured flat** before that date cannot be re-cut (the HTML is not kept): sharing the article again from a browser replaces it with the new capture, then cleans it. **A highlighted text is never replaced**, by either path — highlights are filed by character offsets in the text they were made on. Each article's description carries `text_rev`, which changes when the stored text does, so a client knows its cached copy is stale.
 - An **AI summary** is generated after the response has gone out, into the frontmatter only, on a file re-read from disk.
 - Titles are quoted defensively in YAML — `[Analyse] …` once opened a flow sequence and silently took the fiche out of everything.
 
@@ -114,6 +117,7 @@ The member keeps, corrects, dismisses or forgets, from the card in the transcrip
 
 ## Gaps & notes
 
+- **Article cleanup** (11 October 2026): the pass is tested on its parsing and its limits, not yet judged on real articles with the model in place. Two bylines in neighbouring inline tags still run together in one block ("Jessica MurphyBBC News"). A re-share retakes the text, not the metadata: a fiche saved with an address for author keeps it.
 - **No automatic "temporal mirror."** Daily notes are a real, deliberate garden artifact, but Maurice does **not** generate weekly/monthly reviews of your thinking — that idea has no code (see [[maurice|the vision's]] corrected scope).
 - **Flashcards have no backup.** The gardens rely on git, which ignores the cards; the nightly backup covers `maurice.db` only. Either the backup grows to cover `~/.maurice/gardens`, or the cards are accepted as regenerable.
 - **The corpus reconciles itself nightly** (closed 19 September 2026, `services/corpusNightly.ts`): every conversation and a prune per member, from 03:00 local, once a day, and the admin can run it now. Since the evening of 19 September 2026 it also sweeps the shared `_default.db` (books, dossiers) with `corpus__prune {shared: true}`, so a book removed from Calibre loses its chunks the next night. Since 27 September 2026 it also walks the garden sources (`corpus__reindex` on notes, fiches, cards, fragments; only what changed is embedded): the watcher ignored moves, so every note saved atomically — by an editor, git or a coding session — had stayed out of the index, 31 of the owner's among them, and a file changed while the gateway was down was never caught either. Both now land by the next night at the latest.

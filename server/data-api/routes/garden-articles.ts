@@ -34,6 +34,7 @@ import {
   scheduleArticleSummary,
   summarizeAndStore,
 } from "../services/articleSummary";
+import { cleanAndStore } from "../services/articleCleanup";
 import { asHighlightView, HIGHLIGHT_VIEWS } from "../services/highlights";
 import {
   countArticleHighlights,
@@ -70,7 +71,16 @@ app.post("/", async (c) => {
     // Never for a bookmark: it has no text, so the summariser would fall back to
     // fetching the URL — the very call that just refused us, which is why the
     // bookmark exists.
-    if (!result.duplicate && !result.needs_capture) scheduleArticleSummary(memberId, result);
+    //
+    // The text is cleaned of the page's furniture first, so the summary reads
+    // the article alone. A re-share that brought a better text gets the
+    // cleanup too, and keeps the summary it has.
+    const clean = () => cleanAndStore(memberId, result);
+    if (!result.duplicate && !result.needs_capture) {
+      scheduleArticleSummary(memberId, result, { first: clean });
+    } else if (result.text_retaken) {
+      scheduleArticleSummary(memberId, result, { first: clean, summarise: false });
+    }
     return c.json(result, result.duplicate ? 200 : 201);
   } catch (e) {
     if (e instanceof ArticleSaveError) return c.json({ error: e.message }, e.status);

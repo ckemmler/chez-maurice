@@ -105,6 +105,12 @@ export const ANCILLARY_INVOCATIONS: AncillaryInvocation[] = [
     blurb: "A long conversation loaded as context, summarised for the composer." },
   { id: "article_summary", side: "server", tier: "standard", label: "Article summary",
     blurb: "The one-paragraph summary written on a saved article's fiche." },
+  // Before the summary (data-api/services/articleCleanup.ts): which blocks of a
+  // captured page are not the article — a credit, "Advertisement", the title
+  // again. A sorting job on previews, answered with a list of numbers.
+  { id: "article_cleanup", side: "server", tier: "light", label: "Article cleanup",
+    blurb: "Sorting a saved article's text from the page's furniture — credits, advertising markers, the header said twice — before it is read.",
+    prefer: ["qwen3.6-35b-a3b", "mistral-small-latest"] },
   { id: "flashcards", side: "server", tier: "heavy", label: "Flashcards",
     blurb: "Cards generated from a chapter, a book, a fiche or a fragment." },
   { id: "signal_parse", side: "server", tier: "light", label: "Signal parsing",

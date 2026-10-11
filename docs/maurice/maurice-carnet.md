@@ -1,6 +1,6 @@
 ---
 title: Carnet — the pocket companion
-date: '2026-10-10'
+date: '2026-10-11'
 flags: []
 locale: en
 description: 'The iOS/iPadOS companion to Maurice: log what happened, read books and
@@ -65,7 +65,7 @@ A conversation is rarely worth keeping; its result is. So under each reply Carne
 
 The **Library** shows the household's Calibre books with covers, chapters, summaries, and where you left off, ordered by what you last opened and then by what Calibre took in most recently (`/books` carries the Calibre `timestamp` as `added`; the last-opened side comes from the on-device reading positions, so the order is per device until a position syncs), with a sort menu for **Recently added**, **Title** and **Author**; the reader restores the exact position (character index in the full text, paragraph in the summary), synced per member and kept offline. That sync only started working in September 2026: `reading_progress` came from akita keyed on `book_id` alone, `member_id` was added by an ALTER that cannot change a primary key, and the upsert's `ON CONFLICT(member_id, book_id)` therefore threw on every call — silently, with the on-device store covering for it. The table is now rekeyed on the pair, so two members can track the same book and a position can reach the server. It is also what the [[maurice-composer|composer]]'s `progress` book scope reads. A row with `enabled = 0` is paused and the reader no longer moves it — which is how you consult a chapter well ahead without it counting as read. A book's page keeps Resume in a pinned footer and everything else behind one glyph each, two of which open a drawer: **reading** (where you are, a switch that pauses tracking so consulting an index or a chapter further on does not count as read, and reset) and **this book** (offline copy, summaries). Chapters can be extracted and summarised from there; a book can be downloaded for offline reading. Anything that places the reader goes by chapter *slug*: `Chapter.index` is derived from the file's `NNNN-` prefix and counts the front matter the list hides, so using it put the reader several chapters ahead of where they were. Passages can be **highlighted** with a note and a colour.
 
-The **Articles** shelf lists what was saved through the share sheet or the browser clipper, straight from the garden, each row carrying the lead image the save captured (served open at `/api/garden-images/<member>/…`, the mirror of the site's session-gated `/images/…`; a bookmark the site refused has none and keeps a lettered placeholder): readable in place when the text was captured, marked as a bookmark when the site refused, with the AI summary, highlights, notes, and links to the original and to the fiche on the site. An article that nobody has written on shows as *not a fiche yet*, with a button to open it by writing a note. See the pipeline in [[maurice-knowledge]].
+An article's text is cached on the device under its `text_rev` (11 October 2026): when the server cleans or retakes the text, the copy here is fetched again. The **Articles** shelf lists what was saved through the share sheet or the browser clipper, straight from the garden, each row carrying the lead image the save captured (served open at `/api/garden-images/<member>/…`, the mirror of the site's session-gated `/images/…`; a bookmark the site refused has none and keeps a lettered placeholder): readable in place when the text was captured, marked as a bookmark when the site refused, with the AI summary, highlights, notes, and links to the original and to the fiche on the site. An article that nobody has written on shows as *not a fiche yet*, with a button to open it by writing a note. See the pipeline in [[maurice-knowledge]].
 
 ## Domains
 
@@ -85,7 +85,7 @@ The domains shelf is the same in both scopes; the API lives in `Services/Domains
 
 ## The share extension
 
-"Save to Carnet" takes a URL, a file, or data from any app and posts it as the active member. For a web page it runs a script inside the Safari page and hands back the **rendered DOM**, so an article is saved from what you actually read rather than from a server-side fetch that meets a paywall. A note typed in the sheet becomes the fiche's first comment — and the gesture that opens it. The send finishes before the sheet dismisses, and an offline queue keeps shares that couldn't reach the server.
+"Save to Carnet" takes a URL, a file, or data from any app and posts it as the active member. For a web page it runs a script inside the Safari page and hands back the **rendered DOM**, so an article is saved from what you actually read rather than from a server-side fetch that meets a paywall. The sheet shows the page's title and a *Save* button; the note field is folded behind an *Add a note* link (it opens by itself when the share carries a highlighted passage), and there is no tags field since 11 October 2026. A note typed in the sheet becomes the fiche's first comment — and the gesture that opens it. The send finishes before the sheet dismisses, and an offline queue keeps shares that couldn't reach the server.
 
 ## Garden
 

@@ -218,9 +218,23 @@ const inFlight = new Set<Promise<unknown>>();
  * Deliberately fire-and-forget: the share sheet that triggered the save has
  * already been told the article is in. A failure here leaves the fiche without
  * a `summary` key — visible, and retryable through the summary route.
+ *
+ * `first` runs before it and may fail without consequence: the text cleanup,
+ * so that the summary reads the article and not the page around it — and so
+ * that the two never write the fiche at the same moment.
  */
-export function scheduleArticleSummary(memberId: string, ref: ArticleFicheRef): void {
-  const task = summarizeAndStore(memberId, ref)
+export function scheduleArticleSummary(
+  memberId: string,
+  ref: ArticleFicheRef,
+  opts: { first?: () => Promise<unknown>; summarise?: boolean } = {},
+): void {
+  const before = opts.first
+    ? opts.first().catch((err) => {
+        console.warn(`[articles] could not clean ${ref.slug}:`, (err as Error).message);
+      })
+    : Promise.resolve();
+  const task = before
+    .then(() => (opts.summarise === false ? { summary: "" } : summarizeAndStore(memberId, ref)))
     .then((r) => {
       if (r.summary) console.log(`[articles] summarised ${ref.slug}`);
     })

@@ -244,7 +244,10 @@ export function extractArticleFromHtml(url: string, html: string): ArticleMeta {
   // Merge: prefer OG > JSON-LD > Readability > meta > empty
   const title = og.title || jsonLd.headline || article?.title || meta.title || "";
   const subtitle = jsonLd.alternativeHeadline || meta.subtitle || "";
-  const author = og.author || jsonLd.author || article?.byline || meta.author || "";
+  // Some sites (the New York Times) declare `article:author` as the address of
+  // the author's page. That is not a name: take the next source that has one.
+  const named = (v?: string | null) => (v && !/^https?:\/\//i.test(v.trim()) ? v : "");
+  const author = named(og.author) || named(jsonLd.author) || named(article?.byline) || named(meta.author) || "";
   const description = og.description || jsonLd.description || article?.excerpt || meta.description || "";
   const image = og.image || jsonLd.image || "";
   const site_name = og.site_name || jsonLd.publisher || article?.siteName || "";
@@ -256,7 +259,12 @@ export function extractArticleFromHtml(url: string, html: string): ArticleMeta {
     .slice(0, 8)
     .toLowerCase();
 
-  const content = article?.textContent?.trim() || "";
+  // Paragraphs, not Readability's `textContent`: that one is the DOM read flat,
+  // so a heading runs into its byline and every paragraph into the next.
+  const content =
+    (article?.content ? htmlToBlocks(article.content).join("\n\n") : "") ||
+    article?.textContent?.trim() ||
+    "";
 
   return {
     title: title.trim(),
@@ -271,6 +279,63 @@ export function extractArticleFromHtml(url: string, html: string): ArticleMeta {
     content,
     word_count: content ? content.split(/\s+/).filter(Boolean).length : 0,
   };
+}
+
+const BLOCK_TAGS = new Set([
+  "P", "DIV", "SECTION", "ARTICLE", "HEADER", "FOOTER", "ASIDE", "MAIN", "NAV",
+  "H1", "H2", "H3", "H4", "H5", "H6", "UL", "OL", "LI", "DL", "DT", "DD",
+  "BLOCKQUOTE", "FIGURE", "FIGCAPTION", "TABLE", "TR", "HR", "DETAILS", "SUMMARY",
+]);
+
+/**
+ * An article's HTML as its blocks of text, in reading order: one string per
+ * paragraph, heading, list item or caption. A `<br>` is a line break inside
+ * its block; a `<pre>` keeps its own spacing.
+ */
+export function htmlToBlocks(html: string): string[] {
+  const { document } = parseHTML(`<!doctype html><html><body>${html}</body></html>`);
+  const blocks: string[] = [];
+  let run = "";
+  const flush = () => {
+    const text = run
+      .replace(/[^\S\n]+/g, " ")
+      .replace(/ ?\n ?/g, "\n")
+      .replace(/\n{2,}/g, "\n")
+      .trim();
+    if (text) blocks.push(text);
+    run = "";
+  };
+  const walk = (node: any) => {
+    for (const child of node.childNodes ?? []) {
+      if (child.nodeType === 3) {
+        run += String(child.textContent ?? "").replace(/\s+/g, " ");
+        continue;
+      }
+      if (child.nodeType !== 1) continue;
+      const tag = String(child.tagName ?? "").toUpperCase();
+      if (tag === "SCRIPT" || tag === "STYLE" || tag === "NOSCRIPT" || tag === "TEMPLATE") continue;
+      if (tag === "BR") {
+        run += "\n";
+      } else if (tag === "PRE") {
+        flush();
+        const code = String(child.textContent ?? "").replace(/\n{2,}/g, "\n").trim();
+        if (code) blocks.push(code);
+      } else if (tag === "TD" || tag === "TH") {
+        // A row is one block; its cells must not run into one another.
+        walk(child);
+        run += " ";
+      } else if (BLOCK_TAGS.has(tag)) {
+        flush();
+        walk(child);
+        flush();
+      } else {
+        walk(child);
+      }
+    }
+  };
+  if (document.body) walk(document.body);
+  flush();
+  return blocks;
 }
 
 /** Insert a <base href> so Readability resolves relative URLs in supplied HTML. */

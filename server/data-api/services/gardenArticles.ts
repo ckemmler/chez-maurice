@@ -51,6 +51,7 @@ import {
   type ParsedFiche,
 } from "./gardenFiche";
 import { indexGardenPaths } from "./gardenIndex";
+import { retakeFlatText } from "./articleCleanup";
 
 const COLLECTION = "articles" as const;
 
@@ -95,6 +96,8 @@ export interface SaveArticleResult extends ArticleFicheRef {
   needs_capture: boolean;
   /** A bookmark that this save just filled in. */
   completed: boolean;
+  /** A re-share whose rendered page replaced a text captured without paragraphs. */
+  text_retaken?: boolean;
   subtitle: string | null;
   author: string | null;
   publication: string | null;
@@ -236,7 +239,17 @@ export async function saveArticleFiche(
   const stub = found && isStub(found) ? found : null;
   if (found && !stub) {
     if (comment) appendComment(memberId, garden, found, comment);
-    return describeExisting(garden, found, { duplicate: true });
+    // Sharing it again from the browser is also how a text captured before
+    // paragraphs were kept gets its paragraphs back.
+    let retaken = false;
+    if (input.html) {
+      try {
+        retaken = retakeFlatText(memberId, found, extractArticleFromHtml(rawUrl, input.html).content);
+      } catch {
+        // The article is saved; a page that will not parse changes nothing.
+      }
+    }
+    return { ...describeExisting(garden, found, { duplicate: true }), text_retaken: retaken };
   }
 
   // Extract. A caller-supplied DOM wins: it is already past whatever paywall or
@@ -282,7 +295,8 @@ export async function saveArticleFiche(
     const byCanonical = findArticleFiche(garden, article.canonical_url);
     if (byCanonical && !isStub(byCanonical)) {
       if (comment) appendComment(memberId, garden, byCanonical, comment);
-      return describeExisting(garden, byCanonical, { duplicate: true });
+      const retaken = !!input.html && retakeFlatText(memberId, byCanonical, article.content);
+      return { ...describeExisting(garden, byCanonical, { duplicate: true }), text_retaken: retaken };
     }
   }
 
@@ -623,6 +637,8 @@ export interface ArticleDescription extends ArticleFicheRef {
   word_count: number;
   summary: string | null;
   has_text: boolean;
+  /** Changes when the stored text does, so a reader knows its copy is stale. */
+  text_rev: string | null;
   capture_error: string | null;
   source_client: string | null;
   /** False until the member has written on it; a card is opened by definition. */
@@ -639,6 +655,18 @@ export function hasFullText(ficheFile: string): boolean {
     return fs.readdirSync(dir).some((f) => f.endsWith(".frag"));
   } catch {
     return false;
+  }
+}
+
+/** A mark of the stored text's version: its fragment's last write. */
+function textRevision(ficheFile: string): string | null {
+  const dir = fragmentsDir(ficheFile);
+  try {
+    const frags = fs.readdirSync(dir).filter((f) => f.endsWith(".frag")).sort();
+    if (!frags.length) return null;
+    return String(Math.max(...frags.map((f) => Math.floor(fs.statSync(path.join(dir, f)).mtimeMs))));
+  } catch {
+    return null;
   }
 }
 
@@ -663,6 +691,7 @@ export function describeArticle(garden: GardenRef, ref: ArticleFicheRef): Articl
     word_count: Number(meta.word_count ?? 0),
     summary: meta.summary ?? null,
     has_text: ref.kind === "fiche" && hasFullText(ref.file),
+    text_rev: ref.kind === "fiche" ? textRevision(ref.file) : null,
     capture_error: meta.capture_error ?? null,
     source_client: meta.source_client ?? null,
     opened: ref.kind !== "fiche" || isOpened(fm),
