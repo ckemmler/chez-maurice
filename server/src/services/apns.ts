@@ -38,11 +38,35 @@ function isCarnet(platform: string | null | undefined): boolean {
 export function apnsTopicFor(platform: string | null | undefined): string {
   return isCarnet(platform) ? CARNET_TOPIC : TOPIC;
 }
-// Dev/sandbox by default (matches the app's `aps-environment: development`).
-// Set APNS_PRODUCTION=1 for App Store / TestFlight builds.
-const HOST = process.env.APNS_PRODUCTION === "1"
-  ? "https://api.push.apple.com"
-  : "https://api.sandbox.push.apple.com";
+// A device token belongs to one APNs environment — sandbox for a build run from
+// Xcode, production for a TestFlight or App Store build — and the token does not
+// say which. Both kinds register with the same server, so a token the first
+// environment refuses as BadDeviceToken is tried on the other, and the one that
+// took it is remembered. APNS_PRODUCTION=1 only picks which is tried first.
+const SANDBOX = "https://api.sandbox.push.apple.com";
+const PRODUCTION = "https://api.push.apple.com";
+const HOSTS = process.env.APNS_PRODUCTION === "1" ? [PRODUCTION, SANDBOX] : [SANDBOX, PRODUCTION];
+const hostOf = new Map<string, string>();
+
+/** Try a token's known environment, else each in turn; BadDeviceToken from all
+ *  of them means the token is dead, anything else is the answer. */
+export async function sendToEitherHost(
+  deviceToken: string,
+  post: (host: string) => Promise<ApnsResult>,
+  hosts: string[] = HOSTS,
+  known: Map<string, string> = hostOf,
+): Promise<ApnsResult> {
+  const first = known.get(deviceToken);
+  const order = first ? [first, ...hosts.filter((h) => h !== first)] : hosts;
+  let last: ApnsResult = { ok: false, status: 0, reason: "NoHost" };
+  for (const host of order) {
+    last = await post(host);
+    if (last.ok) known.set(deviceToken, host);
+    if (last.reason !== "BadDeviceToken") return last;
+  }
+  known.delete(deviceToken);
+  return last;
+}
 
 /** The provider's key: the file it names, else `AuthKey_<key id>.p8` in the
  *  secrets directory. */
@@ -118,10 +142,10 @@ export async function sendApns(
     ...(payload.householdTag ? { householdTag: payload.householdTag } : {}),
   });
 
-  return new Promise<ApnsResult>((resolve) => {
+  return sendToEitherHost(deviceToken, (host) => new Promise<ApnsResult>((resolve) => {
     let settled = false;
     const done = (r: ApnsResult) => { if (!settled) { settled = true; resolve(r); } };
-    const client = connect(HOST);
+    const client = connect(host);
     client.on("error", (e: any) => { done({ ok: false, status: 0, reason: String(e?.message || e) }); try { client.close(); } catch {} });
     const req = client.request({
       ":method": "POST",
@@ -143,5 +167,5 @@ export async function sendApns(
     });
     req.on("error", (e: any) => done({ ok: false, status: 0, reason: String(e?.message || e) }));
     req.end(body);
-  });
+  }));
 }
