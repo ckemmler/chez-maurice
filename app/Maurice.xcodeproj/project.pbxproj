@@ -307,11 +307,11 @@
 				LastUpgradeCheck = 1430;
 				TargetAttributes = {
 					047472439A78AABB86703D1F = {
-						DevelopmentTeam = 33DB976938;
+						DevelopmentTeam = F5B4ZC8LEU;
 						ProvisioningStyle = Automatic;
 					};
 					BE41AFBA15F7E24D1881B207 = {
-						DevelopmentTeam = 33DB976938;
+						DevelopmentTeam = F5B4ZC8LEU;
 						ProvisioningStyle = Automatic;
 					};
 				};
@@ -474,7 +474,7 @@
 				CODE_SIGN_ENTITLEMENTS = Maurice_macOS.entitlements;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = 33DB976938;
+				DEVELOPMENT_TEAM = F5B4ZC8LEU;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_RESOURCE_ACCESS_AUDIO_INPUT = YES;
 				ENABLE_RESOURCE_ACCESS_CALENDARS = NO;
@@ -496,7 +496,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MARKETING_VERSION = 0.1;
-				PRODUCT_BUNDLE_IDENTIFIER = eu.chezmaurice.app;
+				PRODUCT_BUNDLE_IDENTIFIER = eu.chezmaurice.maurice;
 				PRODUCT_MODULE_NAME = Maurice;
 				PRODUCT_NAME = "Chez Maurice";
 				RUNTIME_EXCEPTION_ALLOW_DYLD_ENVIRONMENT_VARIABLES = NO;
@@ -639,7 +639,7 @@
 				CODE_SIGN_ENTITLEMENTS = Maurice_macOS.entitlements;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = 33DB976938;
+				DEVELOPMENT_TEAM = F5B4ZC8LEU;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_RESOURCE_ACCESS_AUDIO_INPUT = YES;
 				ENABLE_RESOURCE_ACCESS_CALENDARS = NO;
@@ -661,7 +661,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MARKETING_VERSION = 0.1;
-				PRODUCT_BUNDLE_IDENTIFIER = eu.chezmaurice.app;
+				PRODUCT_BUNDLE_IDENTIFIER = eu.chezmaurice.maurice;
 				PRODUCT_MODULE_NAME = Maurice;
 				PRODUCT_NAME = "Chez Maurice";
 				RUNTIME_EXCEPTION_ALLOW_DYLD_ENVIRONMENT_VARIABLES = NO;
@@ -683,7 +683,7 @@
 				CODE_SIGN_ENTITLEMENTS = Maurice_iOS.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = 33DB976938;
+				DEVELOPMENT_TEAM = F5B4ZC8LEU;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "Maurice-iOS-Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = "Chez Maurice";
@@ -699,7 +699,7 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 0.1;
-				PRODUCT_BUNDLE_IDENTIFIER = eu.chezmaurice.app;
+				PRODUCT_BUNDLE_IDENTIFIER = eu.chezmaurice.maurice;
 				PRODUCT_NAME = Maurice;
 				SDKROOT = iphoneos;
 				SUPPORTS_MACCATALYST = NO;
@@ -714,7 +714,7 @@
 				CODE_SIGN_ENTITLEMENTS = Maurice_iOS.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = 33DB976938;
+				DEVELOPMENT_TEAM = F5B4ZC8LEU;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "Maurice-iOS-Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = "Chez Maurice";
@@ -730,7 +730,7 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 0.1;
-				PRODUCT_BUNDLE_IDENTIFIER = eu.chezmaurice.app;
+				PRODUCT_BUNDLE_IDENTIFIER = eu.chezmaurice.maurice;
 				PRODUCT_NAME = Maurice;
 				SDKROOT = iphoneos;
 				SUPPORTS_MACCATALYST = NO;

@@ -6,8 +6,8 @@ describe("apnsTopicFor", () => {
     expect(apnsTopicFor("carnet-ios")).toBe("eu.chezmaurice.carnet");
   });
   it("routes everything else to the Maurice app", () => {
-    expect(apnsTopicFor("ios")).toBe("eu.chezmaurice.app");
-    expect(apnsTopicFor(null)).toBe("eu.chezmaurice.app");
-    expect(apnsTopicFor(undefined)).toBe("eu.chezmaurice.app");
+    expect(apnsTopicFor("ios")).toBe("eu.chezmaurice.maurice");
+    expect(apnsTopicFor(null)).toBe("eu.chezmaurice.maurice");
+    expect(apnsTopicFor(undefined)).toBe("eu.chezmaurice.maurice");
   });
 });

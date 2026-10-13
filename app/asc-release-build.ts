@@ -22,7 +22,7 @@ import { readFileSync } from "node:fs";
 
 const KEY_ID = process.env.ASC_KEY_ID;
 const ISSUER = process.env.ASC_ISSUER_ID;
-const BUNDLE = process.env.IOS_BUNDLE_ID || "eu.chezmaurice.app";
+const BUNDLE = process.env.IOS_BUNDLE_ID || "eu.chezmaurice.maurice";
 const [buildNumber, ...platformArgs] = process.argv.slice(2);
 const WAIT_MINUTES = Number(process.env.ASC_WAIT_MINUTES || 25);
 

@@ -24,7 +24,7 @@ async function api(path: string) {
   if (!r.ok) throw new Error(`${r.status} ${path} ${typeof b === "string" ? b.slice(0,300) : JSON.stringify(b.errors?.[0] ?? b).slice(0,400)}`);
   return b;
 }
-const bundle = process.argv[2] || "eu.chezmaurice.app";
+const bundle = process.argv[2] || "eu.chezmaurice.maurice";
 const app = (await api(`/v1/apps?filter[bundleId]=${bundle}`)).data?.[0];
 console.log("app", app?.id, app?.attributes?.name);
 for (const kind of ["betaFeedbackCrashSubmissions", "betaFeedbackScreenshotSubmissions"]) {

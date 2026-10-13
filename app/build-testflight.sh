@@ -7,7 +7,7 @@
 # profile as needed (the key must have the App Manager role for that).
 #
 # One-time prerequisites (account/console state — not code):
-#   1. App Store Connect → Apps → + : an app record for eu.chezmaurice.app.
+#   1. App Store Connect → Apps → + : an app record for eu.chezmaurice.maurice.
 #   2. The Free/Paid Apps agreement accepted in App Store Connect.
 #   3. API key role = App Manager (or pre-create the Apple Distribution cert in
 #      Xcode → Settings → Accounts → Manage Certificates).
@@ -28,7 +28,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT="$SCRIPT_DIR/Maurice.xcodeproj"
-TEAM_ID="${TEAM_ID:-33DB976938}"
+TEAM_ID="${TEAM_ID:-F5B4ZC8LEU}"
 PLATFORMS="${PLATFORMS:-ios macos}"
 BUILD_DIR="$SCRIPT_DIR/build"
 
@@ -85,9 +85,9 @@ archive_and_upload() {
   local plat="$1" scheme destination archive opts bundle profile
   case "$plat" in
     ios)   scheme="Maurice_iOS";   destination="generic/platform=iOS"
-           bundle="${IOS_BUNDLE_ID:-eu.chezmaurice.app}"; profile="${PROVISIONING_PROFILE_IOS:-}" ;;
+           bundle="${IOS_BUNDLE_ID:-eu.chezmaurice.maurice}"; profile="${PROVISIONING_PROFILE_IOS:-}" ;;
     macos) scheme="Maurice_macOS"; destination="generic/platform=macOS"
-           bundle="${MACOS_BUNDLE_ID:-eu.chezmaurice.app}"; profile="${PROVISIONING_PROFILE_MACOS:-}" ;;
+           bundle="${MACOS_BUNDLE_ID:-eu.chezmaurice.maurice}"; profile="${PROVISIONING_PROFILE_MACOS:-}" ;;
     *) echo "ERROR: unknown platform '$plat' (use ios|macos)"; return 1 ;;
   esac
   archive="$BUILD_DIR/Maurice_$plat.xcarchive"

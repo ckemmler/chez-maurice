@@ -20,7 +20,7 @@ import { readFileSync } from "node:fs";
 
 const KEY_ID = process.env.ASC_KEY_ID;
 const ISSUER = process.env.ASC_ISSUER_ID;
-const BUNDLE = process.env.IOS_BUNDLE_ID || "eu.chezmaurice.app";
+const BUNDLE = process.env.IOS_BUNDLE_ID || "eu.chezmaurice.maurice";
 
 if (!KEY_ID || !ISSUER) {
   console.error("asc-build-info: set ASC_KEY_ID and ASC_ISSUER_ID");

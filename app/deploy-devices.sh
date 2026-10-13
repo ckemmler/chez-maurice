@@ -27,7 +27,7 @@ set -euo pipefail
 cd "$(dirname "$0")"
 WHAT="${1:-all}"
 DD="${DERIVED_DATA:-/tmp/maurice-deploy-dd}"
-BUNDLE_ID="eu.chezmaurice.app"
+BUNDLE_ID="eu.chezmaurice.maurice"
 TS="$(command -v tailscale || echo /Applications/Tailscale.app/Contents/MacOS/Tailscale)"
 
 say() { printf '\033[1m%s\033[0m\n' "$*"; }

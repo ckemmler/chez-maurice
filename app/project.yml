@@ -50,8 +50,8 @@ targetTemplates:
         product: SwiftMath
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: eu.chezmaurice.app
-        DEVELOPMENT_TEAM: 33DB976938
+        PRODUCT_BUNDLE_IDENTIFIER: eu.chezmaurice.maurice
+        DEVELOPMENT_TEAM: F5B4ZC8LEU
         GENERATE_INFOPLIST_FILE: YES
         INFOPLIST_KEY_CFBundleDisplayName: Chez Maurice
         INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.education

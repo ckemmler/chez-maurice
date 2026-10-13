@@ -66,32 +66,49 @@ It needs ssh access to that host and nothing else: no token, no account.
 ```
 # macOS
 PROVISIONING_PROFILE_MACOS="Maurice macOS App Store" PLATFORMS=macos \
-ASC_KEY_ID=2MFNJ8HD9A ASC_ISSUER_ID=81a9b8ba-55cc-43cb-bc93-00e73c673425 \
+ASC_KEY_ID=<key id> ASC_ISSUER_ID=<issuer id> \
 ./app/build-testflight.sh
 
 # iOS (iPhone + iPad, universal) — version from app/VERSION, build from ASC
 PROVISIONING_PROFILE_IOS="Maurice iOS App Store" PLATFORMS=ios \
-ASC_KEY_ID=2MFNJ8HD9A ASC_ISSUER_ID=81a9b8ba-55cc-43cb-bc93-00e73c673425 \
+ASC_KEY_ID=<key id> ASC_ISSUER_ID=<issuer id> \
 ./app/build-testflight.sh
 
 # both at once: PLATFORMS="macos ios" and set both PROVISIONING_PROFILE_* vars
 ```
 Builds appear under TestFlight in App Store Connect after a few minutes' processing.
 
+The key and the issuer are those of the company team (see below): the app's
+record lives there, and a key of the individual team cannot see it.
+
 ## Signing assets (in the login Keychain / Provisioning Profiles dir — not in git)
+
+Two developer teams since October 2026. The app (macOS + iOS, bundle id
+`eu.chezmaurice.maurice`, App Store Connect app `6822024416`) belongs to the
+company, **Palacehotel Software sprl** (`F5B4ZC8LEU`). The server's Developer ID
+signing and Carnet stay on the individual team, **Candide Kemmler**
+(`33DB976938`).
 
 | Asset | Identifier | Used by |
 |---|---|---|
-| Apple Developer Team | `33DB976938` (Individual) | everything |
+| Team — app | `F5B4ZC8LEU` (Palacehotel Software sprl) | app (macOS+iOS) |
+| Team — server, Carnet | `33DB976938` (Individual) | server `.pkg`, Carnet |
 | Developer ID Application | `Developer ID Application: Candide Kemmler (33DB976938)` | server bun/binaries |
 | Developer ID Installer | `Developer ID Installer: Candide Kemmler (33DB976938)` | server `.pkg` |
-| Apple Distribution | `Apple Distribution: Candide Kemmler (33DB976938)` | app (macOS+iOS) |
-| Mac Installer Distribution | `3rd Party Mac Developer Installer: Candide Kemmler (33DB976938)` | macOS App Store `.pkg` |
-| Profile — macOS App Store | `Maurice macOS App Store` (UUID `793e8ceb-94af-4fdb-8296-8fae1d969052`) | macOS app export |
-| Profile — iOS App Store | `Maurice iOS App Store` (UUID `04e0882d-1e14-49a4-9961-069525d47def`) | iOS app export |
-| API key — notarization | `TJBDUXNG6C` (Developer role) | `notarytool` (`maurice-notary` profile) |
-| API key — signing/upload | `2MFNJ8HD9A` (App Manager role) | `xcodebuild` cloud signing + TestFlight upload |
-| API key Issuer ID | `81a9b8ba-55cc-43cb-bc93-00e73c673425` | both keys |
+| Apple Distribution | `Apple Distribution: Palacehotel Software sprl (F5B4ZC8LEU)` | app (macOS+iOS) |
+| Mac Installer Distribution | `3rd Party Mac Developer Installer: Palacehotel Software sprl (F5B4ZC8LEU)` | macOS App Store `.pkg` |
+| Profile — macOS App Store | `Maurice macOS App Store`, to be made again on `F5B4ZC8LEU` | macOS app export |
+| Profile — iOS App Store | `Maurice iOS App Store`, to be made again on `F5B4ZC8LEU` | iOS app export |
+| API key — notarization | `TJBDUXNG6C` (Developer role, individual team) | `notarytool` (`maurice-notary` profile) |
+| API key — signing/upload | to be made on `F5B4ZC8LEU` (App Manager role) | `xcodebuild` cloud signing + TestFlight upload |
+| API key — Carnet upload | `2MFNJ8HD9A` (App Manager role, individual team) | Carnet's `build-testflight.sh` |
+| API key Issuer ID | `81a9b8ba-55cc-43cb-bc93-00e73c673425` (individual team; the company team has its own) | the individual team's keys |
+| APNs key — app | to be made on `F5B4ZC8LEU`, named to the server with `APNS_KEY_ID` | push to the app |
+| APNs key — Carnet | `64JJ6Y74J7` (individual team) | push to Carnet |
+
+The server signs each push with the key of the app it goes to (`apns.ts`): a
+key file is `server/.secrets/AuthKey_<key id>.p8`, or the path in `APNS_KEY_PATH`
+(`APNS_CARNET_KEY_PATH` for Carnet).
 
 `.p8` keys live in `~/.appstoreconnect/private_keys/`. To rebuild this Mac (or set
 up CI), re-create/import these. Provisioning profiles install to
@@ -117,7 +134,7 @@ from the footer (*Self-host* → `/docs`).
 
 ## TestFlight: one link for all platforms
 
-It's **one app record** (bundle id `eu.chezmaurice.app`, both platforms), so a
+It's **one app record** (bundle id `eu.chezmaurice.maurice`, both platforms), so a
 **single TestFlight public link covers iPhone, iPad, and Mac** — the TestFlight
 app on each device serves the right build (iOS build is universal iPhone/iPad).
 Create it in App Store Connect → your app → **TestFlight → (external group) →

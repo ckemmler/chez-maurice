@@ -1,6 +1,6 @@
 ---
 title: The server
-date: '2026-10-10'
+date: '2026-10-13'
 flags: []
 locale: en
 description: 'The Hono/Bun engine: API surface, the streaming agentic loop, prompt
@@ -320,6 +320,8 @@ The garden proxy (`app.notFound` in `index.ts`) tells the engine who is asking a
 ## Push
 
 APNs dispatch lives in `server/src/services/push.ts` (+ `apns.ts`), keyed by `device_tokens` (platform, household tag). This is what notifies you when someone chats with you — including across households when you're a guest elsewhere.
+
+Since 13 October 2026 the Maurice app is `eu.chezmaurice.maurice` on the company's developer team (`F5B4ZC8LEU`), while Carnet is still on the first team until it follows. An APNs key signs for one team only, so `apns.ts` holds one sending identity per app — team, key id, key file — and picks it, like the topic, from the platform the token was registered with (`carnet-*` → Carnet, anything else → the Maurice app). Maurice: `APNS_TEAM_ID`, `APNS_KEY_ID` (no default: the key is made on the new team), `APNS_KEY_PATH`, `APNS_TOPIC`. Carnet: `APNS_CARNET_TEAM_ID`, `APNS_CARNET_KEY_ID`, `APNS_CARNET_KEY_PATH`, `APNS_CARNET_TOPIC`, defaulting to the first team and its key. A key file not named by its path variable is looked up as `server/.secrets/AuthKey_<key id>.p8`. Without `APNS_KEY_ID` a push to the Maurice app answers `NoProviderKey`; tokens registered by the old `eu.chezmaurice.app` builds are refused by APNs (`DeviceTokenNotForTopic`) and are not purged. Once Carnet is on the same team, one identity serves both again.
 
 ## MCP execution
 

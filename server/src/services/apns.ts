@@ -3,21 +3,40 @@
 // signed with the .p8 EC key) is cached and reused for up to ~50 min.
 
 import { connect } from "node:http2";
-import { readFileSync, readdirSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
 const SECRETS_DIR = join(import.meta.dir, "../../.secrets");
-const KEY_ID = process.env.APNS_KEY_ID || "64JJ6Y74J7";
-const TEAM_ID = process.env.APNS_TEAM_ID || "33DB976938";
-const TOPIC = process.env.APNS_TOPIC || "eu.chezmaurice.app";
-// Carnet is a second app under the same team: its tokens belong to its own
-// bundle id, and APNs answers DeviceTokenNotForTopic when the topic is wrong.
+const TOPIC = process.env.APNS_TOPIC || "eu.chezmaurice.maurice";
+// Carnet is a second app: its tokens belong to its own bundle id, and APNs
+// answers DeviceTokenNotForTopic when the topic is wrong.
 const CARNET_TOPIC = process.env.APNS_CARNET_TOPIC || "eu.chezmaurice.carnet";
+
+// The Maurice app has moved to the company's developer team and Carnet has not
+// yet, and an APNs key signs for one team only: until Carnet follows, each app
+// has its own provider (team, key id, key file). The Maurice key id has no
+// default — the key is made on the new team and named with APNS_KEY_ID. Once
+// Carnet is on the same team, one provider serves both again.
+interface Provider { teamId: string; keyId: string; keyPath?: string }
+const MAURICE: Provider = {
+  teamId: process.env.APNS_TEAM_ID || "F5B4ZC8LEU",
+  keyId: process.env.APNS_KEY_ID || "",
+  keyPath: process.env.APNS_KEY_PATH,
+};
+const CARNET: Provider = {
+  teamId: process.env.APNS_CARNET_TEAM_ID || "33DB976938",
+  keyId: process.env.APNS_CARNET_KEY_ID || "64JJ6Y74J7",
+  keyPath: process.env.APNS_CARNET_KEY_PATH,
+};
+
+function isCarnet(platform: string | null | undefined): boolean {
+  return (platform ?? "").startsWith("carnet");
+}
 
 /** The APNs topic for a device token, from the platform the client registered
  *  it with (`carnet-ios` → Carnet's bundle id; anything else → the Maurice app). */
 export function apnsTopicFor(platform: string | null | undefined): string {
-  return (platform ?? "").startsWith("carnet") ? CARNET_TOPIC : TOPIC;
+  return isCarnet(platform) ? CARNET_TOPIC : TOPIC;
 }
 // Dev/sandbox by default (matches the app's `aps-environment: development`).
 // Set APNS_PRODUCTION=1 for App Store / TestFlight builds.
@@ -25,13 +44,11 @@ const HOST = process.env.APNS_PRODUCTION === "1"
   ? "https://api.push.apple.com"
   : "https://api.sandbox.push.apple.com";
 
-function loadKeyPem(): string | null {
+/** The provider's key: the file it names, else `AuthKey_<key id>.p8` in the
+ *  secrets directory. */
+function loadKeyPem(p: Provider): string | null {
   try {
-    const explicit = process.env.APNS_KEY_PATH;
-    const path = explicit || (() => {
-      const f = readdirSync(SECRETS_DIR).find((n) => n.endsWith(".p8"));
-      return f ? join(SECRETS_DIR, f) : "";
-    })();
+    const path = p.keyPath || (p.keyId ? join(SECRETS_DIR, `AuthKey_${p.keyId}.p8`) : "");
     return path ? readFileSync(path, "utf8") : null;
   } catch {
     return null;
@@ -39,7 +56,7 @@ function loadKeyPem(): string | null {
 }
 
 export function apnsConfigured(): boolean {
-  return loadKeyPem() !== null;
+  return loadKeyPem(MAURICE) !== null || loadKeyPem(CARNET) !== null;
 }
 
 // ── Provider JWT (ES256) ────────────────────────────────────────
@@ -55,25 +72,27 @@ function pemToDer(pem: string): Uint8Array {
   return Uint8Array.from(Buffer.from(body, "base64"));
 }
 
-let cachedJwt = "";
-let cachedAt = 0;
-let signingKey: CryptoKey | null = null;
+const cached = new Map<Provider, { jwt: string; at: number }>();
+const signingKeys = new Map<Provider, CryptoKey>();
 
-async function providerToken(): Promise<string | null> {
+async function providerToken(p: Provider): Promise<string | null> {
   const now = Math.floor(Date.now() / 1000);
-  if (cachedJwt && now - cachedAt < 3000) return cachedJwt; // APNs allows reuse < 60 min
-  const pem = loadKeyPem();
+  const hit = cached.get(p);
+  if (hit && now - hit.at < 3000) return hit.jwt; // APNs allows reuse < 60 min
+  const pem = loadKeyPem(p);
   if (!pem) return null;
+  let signingKey = signingKeys.get(p);
   if (!signingKey) {
     signingKey = await crypto.subtle.importKey(
       "pkcs8", pemToDer(pem) as any, { name: "ECDSA", namedCurve: "P-256" }, false, ["sign"],
     );
+    signingKeys.set(p, signingKey);
   }
-  const input = `${b64urlStr(JSON.stringify({ alg: "ES256", kid: KEY_ID }))}.${b64urlStr(JSON.stringify({ iss: TEAM_ID, iat: now }))}`;
+  const input = `${b64urlStr(JSON.stringify({ alg: "ES256", kid: p.keyId }))}.${b64urlStr(JSON.stringify({ iss: p.teamId, iat: now }))}`;
   const sig = await crypto.subtle.sign({ name: "ECDSA", hash: "SHA-256" }, signingKey, new TextEncoder().encode(input));
-  cachedJwt = `${input}.${b64url(new Uint8Array(sig))}`;
-  cachedAt = now;
-  return cachedJwt;
+  const jwt = `${input}.${b64url(new Uint8Array(sig))}`;
+  cached.set(p, { jwt, at: now });
+  return jwt;
 }
 
 // ── Send ────────────────────────────────────────────────────────
@@ -90,7 +109,7 @@ export async function sendApns(
   deviceToken: string,
   payload: { title: string; body: string; conversationId?: string; householdTag?: string; platform?: string },
 ): Promise<ApnsResult> {
-  const jwt = await providerToken();
+  const jwt = await providerToken(isCarnet(payload.platform) ? CARNET : MAURICE);
   if (!jwt) return { ok: false, status: 0, reason: "NoProviderKey" };
 
   const body = JSON.stringify({
