@@ -10,23 +10,16 @@ const SECRETS_DIR = join(import.meta.dir, "../../.secrets");
 const TOPIC = process.env.APNS_TOPIC || "eu.chezmaurice.maurice";
 // Carnet is a second app: its tokens belong to its own bundle id, and APNs
 // answers DeviceTokenNotForTopic when the topic is wrong.
-const CARNET_TOPIC = process.env.APNS_CARNET_TOPIC || "eu.chezmaurice.carnet";
+const CARNET_TOPIC = process.env.APNS_CARNET_TOPIC || "eu.chezmaurice.carnet.app";
 
-// The Maurice app has moved to the company's developer team and Carnet has not
-// yet, and an APNs key signs for one team only: until Carnet follows, each app
-// has its own provider (team, key id, key file). The Maurice key id has no
-// default — the key is made on the new team and named with APNS_KEY_ID. Once
-// Carnet is on the same team, one provider serves both again.
+// Both apps are on the company's developer team, and an APNs key signs for a
+// whole team: one provider (team, key id, key file) serves both. The key id has
+// no default — it names the key made on that team, with APNS_KEY_ID.
 interface Provider { teamId: string; keyId: string; keyPath?: string }
-const MAURICE: Provider = {
+const PROVIDER: Provider = {
   teamId: process.env.APNS_TEAM_ID || "F5B4ZC8LEU",
   keyId: process.env.APNS_KEY_ID || "",
   keyPath: process.env.APNS_KEY_PATH,
-};
-const CARNET: Provider = {
-  teamId: process.env.APNS_CARNET_TEAM_ID || "33DB976938",
-  keyId: process.env.APNS_CARNET_KEY_ID || "64JJ6Y74J7",
-  keyPath: process.env.APNS_CARNET_KEY_PATH,
 };
 
 function isCarnet(platform: string | null | undefined): boolean {
@@ -80,7 +73,7 @@ function loadKeyPem(p: Provider): string | null {
 }
 
 export function apnsConfigured(): boolean {
-  return loadKeyPem(MAURICE) !== null || loadKeyPem(CARNET) !== null;
+  return loadKeyPem(PROVIDER) !== null;
 }
 
 // ── Provider JWT (ES256) ────────────────────────────────────────
@@ -133,7 +126,7 @@ export async function sendApns(
   deviceToken: string,
   payload: { title: string; body: string; conversationId?: string; householdTag?: string; platform?: string },
 ): Promise<ApnsResult> {
-  const jwt = await providerToken(isCarnet(payload.platform) ? CARNET : MAURICE);
+  const jwt = await providerToken(PROVIDER);
   if (!jwt) return { ok: false, status: 0, reason: "NoProviderKey" };
 
   const body = JSON.stringify({

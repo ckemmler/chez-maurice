@@ -85,31 +85,29 @@ record lives there, and a key of the individual team cannot see it.
 
 Two developer teams since October 2026. The app (macOS + iOS, bundle id
 `eu.chezmaurice.maurice`, App Store Connect app `6822024416`) belongs to the
-company, **Palacehotel Software sprl** (`F5B4ZC8LEU`). The server's Developer ID
-signing and Carnet stay on the individual team, **Candide Kemmler**
-(`33DB976938`).
+company, **Palacehotel Software sprl** (`F5B4ZC8LEU`), and so does Carnet
+(bundle id `eu.chezmaurice.carnet.app`, share extension `….app.share`, App Group
+`group.eu.chezmaurice.carnet.app`). The server's Developer ID signing stays on
+the individual team, **Candide Kemmler** (`33DB976938`).
 
 | Asset | Identifier | Used by |
 |---|---|---|
-| Team — app | `F5B4ZC8LEU` (Palacehotel Software sprl) | app (macOS+iOS) |
-| Team — server, Carnet | `33DB976938` (Individual) | server `.pkg`, Carnet |
+| Team — apps | `F5B4ZC8LEU` (Palacehotel Software sprl) | app (macOS+iOS), Carnet |
+| Team — server | `33DB976938` (Individual) | server `.pkg` |
 | Developer ID Application | `Developer ID Application: Candide Kemmler (33DB976938)` | server bun/binaries |
 | Developer ID Installer | `Developer ID Installer: Candide Kemmler (33DB976938)` | server `.pkg` |
-| Apple Distribution | `Apple Distribution: Palacehotel Software sprl (F5B4ZC8LEU)` | app (macOS+iOS) |
+| Apple Distribution | `Apple Distribution: Palacehotel Software sprl (F5B4ZC8LEU)` | app (macOS+iOS), Carnet |
 | Mac Installer Distribution | `3rd Party Mac Developer Installer: Palacehotel Software sprl (F5B4ZC8LEU)` | macOS App Store `.pkg` |
 | Profile — macOS App Store | `Maurice macOS App Store` (on `F5B4ZC8LEU`, expires 13 Oct 2027) | macOS app export |
 | Profile — iOS App Store | `Maurice iOS App Store` (on `F5B4ZC8LEU`, expires 13 Oct 2027) | iOS app export |
 | API key — notarization | `TJBDUXNG6C` (Developer role, individual team) | `notarytool` (`maurice-notary` profile) |
-| API key — signing/upload | `LJ382ZY7ZA` (App Manager role, company team) | `xcodebuild` cloud signing + TestFlight upload |
-| API key — Carnet upload | `2MFNJ8HD9A` (App Manager role, individual team) | Carnet's `build-testflight.sh` |
+| API key — signing/upload | `LJ382ZY7ZA` (App Manager role, company team) | `xcodebuild` cloud signing + TestFlight upload, Carnet's `build-testflight.sh` |
 | API key Issuer ID — individual team | `81a9b8ba-55cc-43cb-bc93-00e73c673425` | the individual team's keys |
 | API key Issuer ID — company team | `69a6de7a-d21a-47e3-e053-5b8c7c11a4d1` | the company team's key |
-| APNs key — app | `B42HPU8U77` (company team, all topics), named to the server with `APNS_KEY_ID` | push to the app |
-| APNs key — Carnet | `64JJ6Y74J7` (individual team) | push to Carnet |
+| APNs key | `B42HPU8U77` (company team, all topics), named to the server with `APNS_KEY_ID` | push to the app and to Carnet |
 
-The server signs each push with the key of the app it goes to (`apns.ts`): a
-key file is `server/.secrets/AuthKey_<key id>.p8`, or the path in `APNS_KEY_PATH`
-(`APNS_CARNET_KEY_PATH` for Carnet).
+The server signs every push with that one key (`apns.ts`): the key file is
+`server/.secrets/AuthKey_<key id>.p8`, or the path in `APNS_KEY_PATH`.
 
 `.p8` keys live in `~/.appstoreconnect/private_keys/`. To rebuild this Mac (or set
 up CI), re-create/import these. Provisioning profiles install to

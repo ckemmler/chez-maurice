@@ -3,7 +3,7 @@ import { apnsTopicFor, sendToEitherHost, type ApnsResult } from "../src/services
 
 describe("apnsTopicFor", () => {
   it("routes Carnet tokens to Carnet's bundle id", () => {
-    expect(apnsTopicFor("carnet-ios")).toBe("eu.chezmaurice.carnet");
+    expect(apnsTopicFor("carnet-ios")).toBe("eu.chezmaurice.carnet.app");
   });
   it("routes everything else to the Maurice app", () => {
     expect(apnsTopicFor("ios")).toBe("eu.chezmaurice.maurice");
