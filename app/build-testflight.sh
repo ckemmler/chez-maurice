@@ -13,7 +13,7 @@
 #      Xcode → Settings → Accounts → Manage Certificates).
 #
 # Usage:
-#   ASC_KEY_ID=TJBDUXNG6C ASC_ISSUER_ID=<issuer-uuid> ./build-testflight.sh
+#   ASC_KEY_ID=LJ382ZY7ZA ASC_ISSUER_ID=<issuer-uuid> ./build-testflight.sh
 #   PLATFORMS="macos" ASC_KEY_ID=… ASC_ISSUER_ID=… ./build-testflight.sh   # macOS only
 #
 # After the upload, asc-release-build.ts waits for processing and hands the

@@ -97,13 +97,14 @@ signing and Carnet stay on the individual team, **Candide Kemmler**
 | Developer ID Installer | `Developer ID Installer: Candide Kemmler (33DB976938)` | server `.pkg` |
 | Apple Distribution | `Apple Distribution: Palacehotel Software sprl (F5B4ZC8LEU)` | app (macOS+iOS) |
 | Mac Installer Distribution | `3rd Party Mac Developer Installer: Palacehotel Software sprl (F5B4ZC8LEU)` | macOS App Store `.pkg` |
-| Profile — macOS App Store | `Maurice macOS App Store`, to be made again on `F5B4ZC8LEU` | macOS app export |
-| Profile — iOS App Store | `Maurice iOS App Store`, to be made again on `F5B4ZC8LEU` | iOS app export |
+| Profile — macOS App Store | `Maurice macOS App Store` (on `F5B4ZC8LEU`, expires 13 Oct 2027) | macOS app export |
+| Profile — iOS App Store | `Maurice iOS App Store` (on `F5B4ZC8LEU`, expires 13 Oct 2027) | iOS app export |
 | API key — notarization | `TJBDUXNG6C` (Developer role, individual team) | `notarytool` (`maurice-notary` profile) |
-| API key — signing/upload | to be made on `F5B4ZC8LEU` (App Manager role) | `xcodebuild` cloud signing + TestFlight upload |
+| API key — signing/upload | `LJ382ZY7ZA` (App Manager role, company team) | `xcodebuild` cloud signing + TestFlight upload |
 | API key — Carnet upload | `2MFNJ8HD9A` (App Manager role, individual team) | Carnet's `build-testflight.sh` |
-| API key Issuer ID | `81a9b8ba-55cc-43cb-bc93-00e73c673425` (individual team; the company team has its own) | the individual team's keys |
-| APNs key — app | to be made on `F5B4ZC8LEU`, named to the server with `APNS_KEY_ID` | push to the app |
+| API key Issuer ID — individual team | `81a9b8ba-55cc-43cb-bc93-00e73c673425` | the individual team's keys |
+| API key Issuer ID — company team | `69a6de7a-d21a-47e3-e053-5b8c7c11a4d1` | the company team's key |
+| APNs key — app | `B42HPU8U77` (company team, all topics), named to the server with `APNS_KEY_ID` | push to the app |
 | APNs key — Carnet | `64JJ6Y74J7` (individual team) | push to Carnet |
 
 The server signs each push with the key of the app it goes to (`apns.ts`): a
