@@ -240,3 +240,32 @@ in Carnet `AskMauriceView`, `MauriceAPI`, `DictationMic`, `Dictation.swift`
 Left: the Carnet thread is text only (no sources, images, tool trail, stop);
 the Maurice app's drawer does not say which rows are bound or will be linked;
 a refusal of a subject still holds everywhere while a refused note does not.
+
+## 11. Looking again (14 October 2026)
+
+The wrong podcast was offered: the pass named *The Daily* (The New York Times),
+and Podcast Index, asked for "The Daily" alone, gave back a page of sports
+dailies (*Locked On Warriors – Daily Podcast…*). Two changes:
+
+1. **The maker goes into the podcast search** — Podcast Index takes one term,
+   so it is `title creator`, then the title alone if that finds nothing. And a
+   top candidate whose subtitle carries the maker named is taken without
+   asking: the copies of a feed, the editions of a book that follow it under
+   the same title are the same work.
+2. **Every offer that was looked up can be looked up again**:
+   `POST /api/suggestions/:id/search {query?}`.
+   - With the member's own `query`: that term, no year, no author, and all it
+     finds — even one result is shown to be picked.
+   - Without one ("Chercher encore"): Maurice rephrases the search
+     (`entry_suggest_refine`, from what was named, what was said, the person's
+     question and the results that were wrong); failing the model, the title
+     and its maker. Candidates already shown are not shown again.
+   - The garden is asked first, as for the pass: a term that names an entry
+     of theirs makes the row that entry.
+   - Nothing found leaves the row as it was (`found: 0`).
+   - Not for the conversation's own entry, nor for someone from the member's
+     life, never looked up (`searchable: false` on the row).
+
+`entry_suggestions` gains `query` (the last term searched) and `seen` (every
+candidate id already shown). Both drawers — the Maurice app's and Carnet's —
+carry « Chercher encore » and « Préciser » under each offer.

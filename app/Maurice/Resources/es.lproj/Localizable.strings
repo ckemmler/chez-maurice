@@ -887,6 +887,12 @@
 "suggest.keep" = "Guardar";
 "suggest.add_note" = "Añadir la nota";
 "suggest.dismiss" = "Esta no";
+"suggest.search_again" = "Buscar de nuevo";
+"suggest.search_refine" = "Precisar";
+"suggest.search_placeholder" = "El título y quién lo hizo";
+"suggest.search_go" = "Buscar";
+"suggest.search_nothing_new" = "Nada nuevo.";
+"suggest.search_nothing" = "Nada encontrado para «%@».";
 "suggest.kind.movies" = "Película";
 "suggest.kind.series" = "Serie";
 "suggest.kind.books" = "Libro";

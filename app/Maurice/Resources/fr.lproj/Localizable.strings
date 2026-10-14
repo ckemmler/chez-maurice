@@ -887,6 +887,12 @@
 "suggest.keep" = "Garder";
 "suggest.add_note" = "Ajouter la note";
 "suggest.dismiss" = "Pas celle-ci";
+"suggest.search_again" = "Chercher encore";
+"suggest.search_refine" = "Préciser";
+"suggest.search_placeholder" = "Le titre, et qui l’a fait";
+"suggest.search_go" = "Chercher";
+"suggest.search_nothing_new" = "Rien de nouveau.";
+"suggest.search_nothing" = "Rien trouvé pour « %@ ».";
 "suggest.kind.movies" = "Film";
 "suggest.kind.series" = "Série";
 "suggest.kind.books" = "Livre";

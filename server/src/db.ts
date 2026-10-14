@@ -960,6 +960,12 @@ db.run(`
   )
 `);
 try { db.run(`CREATE INDEX IF NOT EXISTS idx_entry_suggestions_member ON entry_suggestions(member_id, kind, key, state)`); } catch {}
+// The member's word when the lookup found the wrong work (14 October 2026):
+// the last term searched for it — theirs, or the one Maurice tried when asked
+// to look again — and every candidate id already shown, which a new search
+// does not bring back.
+try { db.run(`ALTER TABLE entry_suggestions ADD COLUMN query TEXT`); } catch {}
+try { db.run(`ALTER TABLE entry_suggestions ADD COLUMN seen TEXT`); } catch {}
 
 // A member's mail accounts (25 September 2026, services/mailAccounts.ts), read
 // by the `email` tool through a loopback route. Only the member sees or edits

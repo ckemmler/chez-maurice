@@ -275,6 +275,98 @@ describe("one list per conversation", () => {
   });
 });
 
+describe("looking again (14 October 2026)", () => {
+  const sportsDailies = [
+    { id: "52833", title: "Locked On Warriors – Daily Podcast", year: null, subtitle: "Locked On Podcast Network", image: "https://img/w.jpg" },
+    { id: "217331", title: "Locked On NBA – Daily Podcast", year: null, subtitle: "Locked On Podcast Network", image: "" },
+  ];
+  const theDaily = [
+    { id: "743229", title: "The Daily", year: null, subtitle: "The New York Times", image: "https://img/daily.jpg" },
+    { id: "7467411", title: "The Daily", year: null, subtitle: "The New York Times", image: "" },
+  ];
+  const named = (extra: Record<string, unknown> = {}) =>
+    ({ subjects: [{ kind: "podcasts", title: "The Daily", creator: "The New York Times", note: "Un professeur de mathématiques face à l'IA.", ...extra }] });
+
+  test("a podcast is searched with its maker, and the maker settles its copies", async () => {
+    searchResults.search_podcast = theDaily;
+    modelSays = named();
+    await turn();
+    expect(toolCalls[0]!.args.title).toBe("The Daily The New York Times");
+    const [s] = sug.suggestionsFor(ANNA, convo);
+    expect(s!.key).toBe("id:743229");
+  });
+
+  test("their own term: all it finds, one to pick even when it is alone, and the pick is what is opened", async () => {
+    searchResults.search_podcast = sportsDailies;
+    modelSays = named({ creator: "" });
+    await turn();
+    const id = sug.suggestionsFor(ANNA, convo)[0]!.id;
+    searchResults.search_podcast = [theDaily[0]];
+    toolCalls = [];
+    const res = await req(annaAuth, `/${id}/search`, { method: "POST", body: JSON.stringify({ query: "The Daily New York Times" }) });
+    expect(res.status).toBe(200);
+    const row = await res.json() as any;
+    expect(row.found).toBe(1);
+    expect(row.query).toBe("The Daily New York Times");
+    expect(row.candidates.map((c: any) => c.id)).toEqual(["743229"]);
+    expect(toolCalls[0]!.args).toMatchObject({ title: "The Daily New York Times" });
+    expect(modelCalls).toBe(1); // the pass only: their term needs no model
+
+    expect((await req(annaAuth, `/${id}/keep`, { method: "POST", body: JSON.stringify({ candidate: "743229" }) })).status).toBe(200);
+    expect(toolCalls.find((c) => c.tool === "open_fiche")!.args.podcastindex_id).toBe(743229);
+    // Not in the garden for the tests that follow.
+    fs.rmSync(path.join(root, "podcasts"), { recursive: true, force: true });
+  });
+
+  test("asked to look again, Maurice rephrases from what was wrong and shows only what is new", async () => {
+    searchResults.search_podcast = sportsDailies;
+    modelSays = named({ creator: "" });
+    const q = "Je viens d'écouter le daily du New York Times";
+    const mid = `m-${convo}`;
+    db.run(`INSERT INTO messages (id, conversation_id, role, content, created_at) VALUES (?, ?, 'user', ?, datetime('now', '-1 second'))`, [`q-${convo}`, convo, q]);
+    db.run(`INSERT INTO messages (id, conversation_id, role, content) VALUES (?, ?, 'assistant', 'Un témoignage fort.')`, [mid, convo]);
+    await sug.suggestForTurn(ANNA, convo, mid, q, "Un témoignage fort.");
+    const id = sug.suggestionsFor(ANNA, convo)[0]!.id;
+    modelSays = { query: "The Daily New York Times" };
+    searchResults.search_podcast = [...sportsDailies, ...theDaily];
+    toolCalls = [];
+    const row = await (await req(annaAuth, `/${id}/search`, { method: "POST", body: "{}" })).json() as any;
+    expect(lastPrompt).toContain("Locked On Warriors");
+    expect(lastPrompt).toContain("le daily du New York Times"); // what they said
+    expect(toolCalls[0]!.args.title).toBe("The Daily New York Times");
+    expect(row.candidates.map((c: any) => c.id)).toEqual(["743229", "7467411"]);
+    expect(row.image).toBe("https://img/daily.jpg");
+
+    // Nothing new the next time: the row stays as it was.
+    const again = await (await req(annaAuth, `/${id}/search`, { method: "POST", body: "{}" })).json() as any;
+    expect(again.found).toBe(0);
+    expect(again.candidates.map((c: any) => c.id)).toEqual(["743229", "7467411"]);
+  });
+
+  test("their term names an entry of theirs: it is that entry, no provider asked", async () => {
+    searchResults.search_series = [{ id: 9, title: "Sugar Rush", year: 2018, subtitle: "", image: "" }];
+    modelSays = { subjects: [{ kind: "series", title: "Sugar Rush", note: "n" }] };
+    await turn();
+    const id = sug.suggestionsFor(ANNA, convo)[0]!.id;
+    toolCalls = [];
+    const row = await (await req(annaAuth, `/${id}/search`, { method: "POST", body: JSON.stringify({ query: "Sugar" }) })).json() as any;
+    expect(toolCalls).toEqual([]);
+    expect(row.existing).toBe(true);
+    expect(row.entry).toBe("series/fr/sugar");
+    expect(row.candidates).toEqual([]);
+  });
+
+  test("not for someone from their own life, nor for another member", async () => {
+    modelSays = { subjects: [{ kind: "people", title: "Marc Lambert", public: false, note: "Le voisin." }] };
+    await turn();
+    const s = sug.suggestionsFor(ANNA, convo)[0]!;
+    expect((await req(annaAuth, `/${s.id}/search`, { method: "POST", body: "{}" })).status).toBe(409);
+    expect((await req(benAuth, `/${s.id}/search`, { method: "POST", body: "{}" })).status).toBe(404);
+    const list = await (await req(annaAuth, `/?conversation=${convo}`)).json() as any;
+    expect(list.suggestions[0].searchable).toBe(false);
+  });
+});
+
 describe("keeping", () => {
   test("on an entry of theirs: the note lands under Commentaire, before Résonances", async () => {
     modelSays = { subjects: [{ kind: "series", title: "Sugar", note: "Colin Farrell joue John Sugar." }] };

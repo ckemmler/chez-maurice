@@ -37,6 +37,11 @@ struct EntrySuggestion: Decodable, Identifiable, Equatable {
     let entry: String?
     /// Where the entry reads in your garden, once there is one.
     let web_path: String?
+    /// The last term searched for it, once you asked for another look.
+    let query: String?
+    /// Whether another look makes sense: not for the conversation's own
+    /// entry, nor for someone from your life, who is never looked up.
+    let searchable: Bool?
 
     var isKept: Bool { state == "kept" }
 }
@@ -48,6 +53,8 @@ private struct SuggestionList: Decodable {
 }
 
 private struct KeepBody: Encodable { let candidate: String? }
+private struct SearchBody: Encodable { let query: String? }
+private struct SearchAnswer: Decodable { let found: Int }
 
 // MARK: - The mark in the header
 
@@ -143,7 +150,8 @@ struct SuggestionsDrawer: View {
                     if !pending.isEmpty {
                         section(L("suggest.section_pending")) {
                             ForEach(pending) { row in
-                                SuggestionRow(row: row, onKeep: { await keep(row, candidate: $0) }, onDismiss: { dismissRow(row) })
+                                SuggestionRow(row: row, onKeep: { await keep(row, candidate: $0) },
+                                              onSearch: { await search(row, query: $0) }, onDismiss: { dismissRow(row) })
                             }
                         }
                     }
@@ -218,6 +226,21 @@ struct SuggestionsDrawer: View {
         } catch {
             failed = true
             return false
+        }
+    }
+
+    /// Another look: `query` is your own term; without it Maurice rephrases
+    /// the search. The number found, or nil when the call failed.
+    private func search(_ row: EntrySuggestion, query: String?) async -> Int? {
+        guard let api else { return nil }
+        do {
+            let answer: SearchAnswer = try await api.client.post(
+                "/api/suggestions/\(row.id)/search", body: SearchBody(query: query), token: api.token, timeout: 40)
+            await load()
+            return answer.found
+        } catch {
+            failed = true
+            return nil
         }
     }
 
@@ -314,10 +337,17 @@ private struct SuggestionRow: View {
     @Environment(\.mauriceTheme) private var theme
     let row: EntrySuggestion
     let onKeep: (String?) async -> Bool
+    let onSearch: (String?) async -> Int?
     let onDismiss: () -> Void
 
     @State private var working = false
     @State private var picked: String?
+    @State private var searching = false
+    @State private var refining = false
+    @State private var term = ""
+    /// What the last look came back with, when it found nothing.
+    @State private var nothing: String?
+    @FocusState private var termFocused: Bool
 
     private var needsPick: Bool { !row.candidates.isEmpty }
     private var canKeep: Bool { !needsPick || picked != nil }
@@ -380,10 +410,74 @@ private struct SuggestionRow: View {
                 .disabled(working || !canKeep)
                 if working { ProgressView().controlSize(.small) }
             }
+
+            if row.searchable == true { lookAgain }
         }
         .padding(12)
         .background(RoundedRectangle(cornerRadius: 12).fill(theme.bg))
         .overlay(RoundedRectangle(cornerRadius: 12).stroke(theme.rule, lineWidth: 1))
+    }
+
+    /// Not the right one: Maurice looks again, or you say what to look for.
+    private var lookAgain: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 16) {
+                Button { Task { await search(nil) } } label: {
+                    Label(L("suggest.search_again"), systemImage: "arrow.clockwise")
+                }
+                Button {
+                    refining.toggle()
+                    if refining {
+                        term = row.query ?? row.title
+                        termFocused = true
+                    }
+                } label: {
+                    Label(L("suggest.search_refine"), systemImage: "magnifyingglass")
+                }
+                if searching { ProgressView().controlSize(.small) }
+            }
+            .buttonStyle(.plain)
+            .font(.system(size: 12, weight: .medium))
+            .foregroundStyle(theme.inkSoft)
+            .disabled(searching || working)
+
+            if refining {
+                HStack(spacing: 8) {
+                    TextField(L("suggest.search_placeholder"), text: $term)
+                        .textFieldStyle(.roundedBorder)
+                        .font(.system(size: 13))
+                        .focused($termFocused)
+                        .submitLabel(.search)
+                        .onSubmit { Task { await search(term) } }
+                    Button(L("suggest.search_go")) { Task { await search(term) } }
+                        .buttonStyle(.plain)
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(theme.ink)
+                        .disabled(searching || term.trimmingCharacters(in: .whitespaces).isEmpty)
+                }
+            }
+
+            if let nothing {
+                Text(nothing).font(.system(size: 11)).foregroundStyle(theme.inkMute)
+            }
+        }
+    }
+
+    private func search(_ query: String?) async {
+        let typed = query?.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let typed, typed.isEmpty { return }
+        searching = true
+        nothing = nil
+        let found = await onSearch(typed)
+        searching = false
+        guard let found else { return }
+        if found == 0 {
+            nothing = typed.map { L("suggest.search_nothing", $0) } ?? L("suggest.search_nothing_new")
+        } else {
+            // A new list: the pick made on the old one no longer holds.
+            picked = nil
+            refining = false
+        }
     }
 
     /// Which of these did the conversation mean?

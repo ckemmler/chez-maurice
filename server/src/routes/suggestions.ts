@@ -8,6 +8,7 @@ import {
   keptCount,
   keptWebPath,
   pendingCount,
+  searchAgain,
   settled,
   SuggestionError,
   suggestionsFor,
@@ -40,8 +41,14 @@ const view = (memberId: string, s: EntrySuggestion, bound: string | null = bound
   bound: !!bound && (s.kept_path ?? s.existing) === bound,
   /** Kept from a conversation held on another entry: keeping links the two. */
   links: !!bound && (s.kept_path ?? s.existing) !== bound,
-  /** Several possible identities: one must be picked to keep it. */
-  candidates: s.candidates.length > 1 ? s.candidates : [],
+  /** Several possible identities — or what the member's own search found —:
+   *  one must be picked to keep it. */
+  candidates: s.candidates.length > 1 || (s.query && !s.existing) ? s.candidates : [],
+  /** The last term searched for it, when the member asked for another look. */
+  query: s.query,
+  /** Whether another look makes sense: not for the conversation's own entry,
+   *  nor for someone from the member's life, who is never looked up. */
+  searchable: s.state === "proposed" && !(bound && s.existing === bound) && !(s.kind === "people" && !s.public),
   /** The garden entry this is, `<collection>/<locale>/<slug>`, once there is
    *  one — what Carnet opens (`carnet://entry/…`). */
   entry: s.kept_path ?? s.existing,
@@ -80,6 +87,21 @@ suggestions.post("/:id/keep", async (c) => {
     if (e instanceof SuggestionError) return c.json({ error: e.message }, e.status as any);
     console.error("[suggest] keep failed:", e);
     return c.json({ error: "Failed to keep" }, 500);
+  }
+});
+
+/** Not the right one: look again — `{query}` is the member's own term;
+ *  without it Maurice rephrases the search. `found: 0` leaves the row as it was. */
+suggestions.post("/:id/search", async (c) => {
+  const uid = c.get("userId");
+  const body = await c.req.json().catch(() => ({}));
+  try {
+    const { suggestion, found } = await searchAgain(uid, c.req.param("id"), body?.query ? String(body.query) : null);
+    return c.json({ ...view(uid, suggestion), found });
+  } catch (e) {
+    if (e instanceof SuggestionError) return c.json({ error: e.message }, e.status as any);
+    console.error("[suggest] search failed:", e);
+    return c.json({ error: "Failed to search" }, 500);
   }
 });
 

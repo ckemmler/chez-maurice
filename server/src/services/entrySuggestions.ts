@@ -77,6 +77,10 @@ export interface EntrySuggestion {
   created_at: string;
   updated_at: string;
   decided_at: string | null;
+  /** The last term searched for it, once the member asked for another look. */
+  query: string | null;
+  /** Every candidate id already shown: a new look does not bring them back. */
+  seen: string[];
 }
 
 /** What the pass says of one subject, before anything is resolved. */
@@ -91,8 +95,10 @@ export interface Named {
 
 function hydrate(row: any): EntrySuggestion {
   let candidates: Candidate[] = [];
+  let seen: string[] = [];
   try { candidates = row.candidates ? JSON.parse(row.candidates) : []; } catch {}
-  return { ...row, public: !!row.public, candidates };
+  try { seen = row.seen ? JSON.parse(row.seen) : []; } catch {}
+  return { ...row, public: !!row.public, candidates, query: row.query ?? null, seen };
 }
 
 // ── A conversation held from an entry ───────────────────────────────────────
@@ -307,11 +313,29 @@ async function searchProvider(memberId: string, named: Named, locale: string): P
   if (named.year && ["movies", "series", "games", "music"].includes(named.kind)) args.year = named.year;
   if (named.creator && named.kind === "books") { args.author = named.creator; args.locale = locale; }
   if (named.creator && named.kind === "music") args.artist = named.creator;
-  const tool = SEARCH_TOOL[named.kind];
+  // Podcast Index takes one term: "The Daily" alone is a page of sports
+  // dailies, "The Daily The New York Times" is the show.
+  if (named.creator && named.kind === "podcasts") {
+    const found = await searchCall(memberId, named.kind, { ...args, title: `${named.title} ${named.creator}` }, MAX_CANDIDATES);
+    if (found.length) return found;
+  }
+  return searchCall(memberId, named.kind, args, MAX_CANDIDATES);
+}
+
+/** A free term, as the member typed it or Maurice rephrased it: no year, no
+ *  author — the term says what it says. */
+function searchTerm(memberId: string, kind: string, term: string, locale: string, limit: number): Promise<Candidate[]> {
+  const args: Record<string, unknown> = kind === "people" ? { name: term, limit } : { title: term, limit };
+  if (kind === "books") args.locale = locale;
+  return searchCall(memberId, kind, args, limit);
+}
+
+async function searchCall(memberId: string, kind: string, args: Record<string, unknown>, limit: number): Promise<Candidate[]> {
+  const tool = SEARCH_TOOL[kind];
   if (!tool) return [];
   const card = await gardenCall(memberId, tool, args);
   const rows = Array.isArray(card?.results) ? card.results : [];
-  return rows.slice(0, MAX_CANDIDATES).map((r: any) => ({
+  return rows.slice(0, limit).map((r: any) => ({
     id: String(r?.id ?? ""),
     title: String(r?.title ?? ""),
     year: Number.isInteger(Number(r?.year)) && Number(r?.year) > 0 ? Number(r.year) : null,
@@ -331,6 +355,10 @@ export function confident(named: Named, candidates: Candidate[]): boolean {
   const same = (c: Candidate) => named.kind === "people" ? sameName(c.title, named.title) : normalise(c.title) === normalise(named.title);
   if (!same(top)) return false;
   if (named.year && top.year) return Math.abs(named.year - top.year) <= 1;
+  // The maker named agrees: the copies of a feed or the editions of a book
+  // that follow it under the same title are the same work.
+  const maker = named.creator ? normalise(named.creator) : "";
+  if (maker && top.subtitle && normalise(top.subtitle).includes(maker)) return true;
   return candidates.filter(same).length === 1;
 }
 
@@ -657,6 +685,115 @@ export function dismissSuggestion(memberId: string, id: string): EntrySuggestion
     announce(memberId, s.conversation_id);
   }
   return own(memberId, id);
+}
+
+// ── Another look ─────────────────────────────────────────────────────────────
+
+const REFINE = `A person's assistant named a work or a person from their conversation, and looked it up in a catalogue. The person says the results are not it.
+
+Write the one search term most likely to find the right one in that catalogue: the usual title (in the catalogue's language, often the original one), with the maker's name when that tells it apart from works of the same title. Not a sentence, not the results already tried.
+
+Answer with JSON only: {"query": "..."}`;
+
+const CATALOGUE: Record<string, string> = {
+  movies: "TMDB (films)", series: "TMDB (TV series)", books: "Google Books", music: "MusicBrainz (albums)",
+  podcasts: "Podcast Index (podcast feeds)", games: "IGDB (video games)", people: "Wikidata (people)",
+};
+
+/** What the person asked in the turn the row came from. */
+function questionOf(s: EntrySuggestion): string {
+  const row = (s.message_id
+    ? db.query(
+        `SELECT content FROM messages WHERE conversation_id = ? AND role = 'user'
+           AND created_at <= (SELECT created_at FROM messages WHERE id = ?)
+         ORDER BY created_at DESC, rowid DESC LIMIT 1`,
+      ).get(s.conversation_id, s.message_id)
+    : null) as { content: string } | null;
+  return row?.content ?? "";
+}
+
+/** Maurice's own second try at a term, from what was said and what was wrong. */
+async function refineQuery(memberId: string, s: EntrySuggestion): Promise<string | null> {
+  const tried = [s.title, s.query].filter(Boolean).map((q) => `"${q}"`).join(", ");
+  const wrong = s.candidates.map((c) => `- ${c.title}${c.subtitle ? ` (${c.subtitle})` : ""}`).join("\n");
+  const prompt =
+    `Catalogue: ${CATALOGUE[s.kind] ?? s.kind}\n` +
+    `Named: "${s.title}"${s.year ? `, ${s.year}` : ""}${s.subtitle ? `, by ${s.subtitle}` : ""}\n` +
+    `Terms already tried: ${tried}\n` +
+    (wrong ? `Results that are not it:\n${wrong}\n` : "") +
+    `What was said of it: ${s.note}\n\nTHE PERSON SAID:\n${questionOf(s).slice(0, 2000)}`;
+  try {
+    const result = await completeWith({
+      invocation: "entry_suggest_refine", system: REFINE, prompt, maxTokens: 200, temperature: 0, reasoning: "none",
+    });
+    recordSpend(result.usage, memberId);
+    const start = result.text.indexOf("{");
+    const end = result.text.lastIndexOf("}");
+    const q = start >= 0 && end > start ? String(JSON.parse(result.text.slice(start, end + 1))?.query ?? "") : "";
+    return q.replace(/\s+/g, " ").trim().slice(0, 200) || null;
+  } catch (err) {
+    console.warn(`[suggest] refine failed (${(err as Error).message})`);
+    return null;
+  }
+}
+
+/**
+ * Not the right one: look again. With the member's own `query`, that term,
+ * and every result it gives. Without one, Maurice rephrases the search from
+ * what was said, and what was already shown is not shown again. The garden
+ * is asked first, as for the pass. Returns the row and how many it found —
+ * none leaves the row as it was.
+ */
+export async function searchAgain(
+  memberId: string, id: string, query?: string | null,
+): Promise<{ suggestion: EntrySuggestion; found: number }> {
+  const s = own(memberId, id);
+  if (!s) throw new SuggestionError("not found", 404);
+  if (s.state !== "proposed") throw new SuggestionError("already decided", 409);
+  const bound = boundEntry(memberId, s.conversation_id);
+  if (bound && s.existing === refOf(bound)) throw new SuggestionError("this is the conversation's own entry", 409);
+  if (s.kind === "people" && !s.public) throw new SuggestionError("someone from the member's life is not looked up", 409);
+  const garden = gardenFor(memberId);
+  if (!garden) throw new SuggestionError("No garden for this member", 404);
+
+  const typed = query?.replace(/\s+/g, " ").trim().slice(0, 200) || null;
+  // Asked to look again without a word: what the pass named, with its maker,
+  // when the model has nothing better.
+  const term = typed ?? (await refineQuery(memberId, s)) ?? [s.title, s.subtitle].filter(Boolean).join(" ");
+  const seen = new Set([...s.seen, ...s.candidates.map((c) => c.id)]);
+
+  // Their own entry under that name: nothing to look up.
+  const entry = findInGarden(garden, { kind: s.kind, title: term, note: s.note });
+  if (entry && refOf(entry) !== s.existing) {
+    db.run(
+      `UPDATE entry_suggestions SET existing = ?, title = ?, year = ?, image = ?, candidates = NULL, query = ?, seen = ?,
+              updated_at = datetime('now') WHERE id = ?`,
+      [refOf(entry), entry.title, entryYear(garden, entry), openImage(garden, entry.image), term, JSON.stringify([...seen]), id],
+    );
+    return { suggestion: own(memberId, id)!, found: 1 };
+  }
+
+  let found: Candidate[];
+  try {
+    found = await searchTerm(memberId, s.kind, term, gardenLocale(memberId), MAX_CANDIDATES * 3);
+  } catch (err) {
+    throw new SuggestionError(`The search failed: ${(err as Error).message}`, 502);
+  }
+  // Their own term shows all it finds; another look, only what is new.
+  if (!typed) found = found.filter((c) => !seen.has(c.id));
+  found = found.slice(0, MAX_CANDIDATES);
+  if (!found.length) {
+    // The term is kept, for the field to show what was tried.
+    db.run(`UPDATE entry_suggestions SET query = ?, updated_at = datetime('now') WHERE id = ?`, [term, id]);
+    return { suggestion: own(memberId, id)!, found: 0 };
+  }
+  for (const c of found) seen.add(c.id);
+  db.run(
+    `UPDATE entry_suggestions SET candidates = ?, existing = NULL, image = ?, query = ?, seen = ?,
+            updated_at = datetime('now') WHERE id = ?`,
+    [JSON.stringify(found), found[0]!.image || null, term, JSON.stringify([...seen]), id],
+  );
+  return { suggestion: own(memberId, id)!, found: found.length };
 }
 
 /** The entry the conversation is held from, as a ref — what a row is compared
