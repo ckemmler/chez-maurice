@@ -691,7 +691,7 @@ export function dismissSuggestion(memberId: string, id: string): EntrySuggestion
 
 const REFINE = `A person's assistant named a work or a person from their conversation, and looked it up in a catalogue. The person says the results are not it.
 
-Write the one search term most likely to find the right one in that catalogue: the usual title (in the catalogue's language, often the original one), with the maker's name when that tells it apart from works of the same title. Not a sentence, not the results already tried.
+Write the one search term most likely to find the right one in that catalogue: the usual title (in the catalogue's language, often the original one), followed by the maker's name when that tells it apart from works of the same title. The catalogue matches words: just the words, no "by", no "from", no punctuation, not a sentence, not the results already tried.
 
 Answer with JSON only: {"query": "..."}`;
 
@@ -757,43 +757,50 @@ export async function searchAgain(
   if (!garden) throw new SuggestionError("No garden for this member", 404);
 
   const typed = query?.replace(/\s+/g, " ").trim().slice(0, 200) || null;
-  // Asked to look again without a word: what the pass named, with its maker,
-  // when the model has nothing better.
-  const term = typed ?? (await refineQuery(memberId, s)) ?? [s.title, s.subtitle].filter(Boolean).join(" ");
+  // Asked to look again without a word: Maurice's term first, then what the
+  // pass named with its maker, then the title alone. A catalogue reads its
+  // term literally — "The Daily by The New York Times" finds nothing where
+  // "The Daily The New York Times" finds the show — so one that comes back
+  // empty is not the end of the look.
+  const terms = typed
+    ? [typed]
+    : [...new Set([await refineQuery(memberId, s), [s.title, s.subtitle].filter(Boolean).join(" "), s.title]
+        .filter((t): t is string => !!t))];
   const seen = new Set([...s.seen, ...s.candidates.map((c) => c.id)]);
 
-  // Their own entry under that name: nothing to look up.
-  const entry = findInGarden(garden, { kind: s.kind, title: term, note: s.note });
-  if (entry && refOf(entry) !== s.existing) {
-    db.run(
-      `UPDATE entry_suggestions SET existing = ?, title = ?, year = ?, image = ?, candidates = NULL, query = ?, seen = ?,
-              updated_at = datetime('now') WHERE id = ?`,
-      [refOf(entry), entry.title, entryYear(garden, entry), openImage(garden, entry.image), term, JSON.stringify([...seen]), id],
-    );
-    return { suggestion: own(memberId, id)!, found: 1 };
-  }
+  for (const term of terms) {
+    // Their own entry under that name: nothing to look up.
+    const entry = findInGarden(garden, { kind: s.kind, title: term, note: s.note });
+    if (entry && refOf(entry) !== s.existing) {
+      db.run(
+        `UPDATE entry_suggestions SET existing = ?, title = ?, year = ?, image = ?, candidates = NULL, query = ?, seen = ?,
+                updated_at = datetime('now') WHERE id = ?`,
+        [refOf(entry), entry.title, entryYear(garden, entry), openImage(garden, entry.image), term, JSON.stringify([...seen]), id],
+      );
+      return { suggestion: own(memberId, id)!, found: 1 };
+    }
 
-  let found: Candidate[];
-  try {
-    found = await searchTerm(memberId, s.kind, term, gardenLocale(memberId), MAX_CANDIDATES * 3);
-  } catch (err) {
-    throw new SuggestionError(`The search failed: ${(err as Error).message}`, 502);
+    let found: Candidate[];
+    try {
+      found = await searchTerm(memberId, s.kind, term, gardenLocale(memberId), MAX_CANDIDATES * 3);
+    } catch (err) {
+      throw new SuggestionError(`The search failed: ${(err as Error).message}`, 502);
+    }
+    // Their own term shows all it finds; another look, only what is new.
+    if (!typed) found = found.filter((c) => !seen.has(c.id));
+    found = found.slice(0, MAX_CANDIDATES);
+    if (!found.length) continue;
+    for (const c of found) seen.add(c.id);
+    db.run(
+      `UPDATE entry_suggestions SET candidates = ?, existing = NULL, image = ?, query = ?, seen = ?,
+              updated_at = datetime('now') WHERE id = ?`,
+      [JSON.stringify(found), found[0]!.image || null, term, JSON.stringify([...seen]), id],
+    );
+    return { suggestion: own(memberId, id)!, found: found.length };
   }
-  // Their own term shows all it finds; another look, only what is new.
-  if (!typed) found = found.filter((c) => !seen.has(c.id));
-  found = found.slice(0, MAX_CANDIDATES);
-  if (!found.length) {
-    // The term is kept, for the field to show what was tried.
-    db.run(`UPDATE entry_suggestions SET query = ?, updated_at = datetime('now') WHERE id = ?`, [term, id]);
-    return { suggestion: own(memberId, id)!, found: 0 };
-  }
-  for (const c of found) seen.add(c.id);
-  db.run(
-    `UPDATE entry_suggestions SET candidates = ?, existing = NULL, image = ?, query = ?, seen = ?,
-            updated_at = datetime('now') WHERE id = ?`,
-    [JSON.stringify(found), found[0]!.image || null, term, JSON.stringify([...seen]), id],
-  );
-  return { suggestion: own(memberId, id)!, found: found.length };
+  // Nothing: the term is kept, for the field to show what was tried.
+  db.run(`UPDATE entry_suggestions SET query = ?, updated_at = datetime('now') WHERE id = ?`, [terms[0] ?? null, id]);
+  return { suggestion: own(memberId, id)!, found: 0 };
 }
 
 /** The entry the conversation is held from, as a ref — what a row is compared

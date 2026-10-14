@@ -343,6 +343,37 @@ describe("looking again (14 October 2026)", () => {
     expect(again.candidates.map((c: any) => c.id)).toEqual(["743229", "7467411"]);
   });
 
+  test("Maurice's term finds nothing: the title with its maker is tried next", async () => {
+    searchResults.search_podcast = sportsDailies;
+    modelSays = named();
+    // The first look finds only the sports dailies, whatever is asked.
+    await turn();
+    const id = sug.suggestionsFor(ANNA, convo)[0]!.id;
+    // The catalogue reads words literally: "by" finds nothing.
+    sug.setGardenCall(async (_m, tool, args) => {
+      toolCalls.push({ tool, args });
+      return { card: "candidates", results: String(args.title).includes(" by ") ? [] : theDaily };
+    });
+    try {
+      modelSays = { query: "The Daily by The New York Times" };
+      toolCalls = [];
+      const row = await (await req(annaAuth, `/${id}/search`, { method: "POST", body: "{}" })).json() as any;
+      expect(toolCalls.map((c) => c.args.title)).toEqual(["The Daily by The New York Times", "The Daily The New York Times"]);
+      expect(row.found).toBe(2);
+      expect(row.query).toBe("The Daily The New York Times");
+    } finally {
+      sug.setGardenCall(async (_m, tool, args) => {
+        toolCalls.push({ tool, args });
+        if (tool === "open_fiche") {
+          const slug = String(args.title).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+          write(`${args.resource_collection}/${args.locale}/${slug}-fiche.md`, `---\ntitle: ${args.title}\nresource_collection: ${args.resource_collection}\nresource_id: ${slug}\ndate: '2026-10-09'\ntags: []\nlocale: ${args.locale}\n---\n`);
+          return { card: "media", resource_id: slug, locale: args.locale, title: args.title };
+        }
+        return { card: "candidates", results: searchResults[tool] ?? [] };
+      });
+    }
+  });
+
   test("their term names an entry of theirs: it is that entry, no provider asked", async () => {
     searchResults.search_series = [{ id: 9, title: "Sugar Rush", year: 2018, subtitle: "", image: "" }];
     modelSays = { subjects: [{ kind: "series", title: "Sugar Rush", note: "n" }] };
