@@ -54,6 +54,7 @@
 		9BCAFB3EF7CD1C5F4BB61912 /* DomainsViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = F2BCD320C3B31E341073ED84 /* DomainsViews.swift */; };
 		A6490C4406B6EA6D2FA33CBF /* SourcesCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 988F2B4726342A3066B8B593 /* SourcesCard.swift */; };
 		A6ADC54545F72E5329A2D0D9 /* DomainBriefView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5C3DB8955BF008783D2F7399 /* DomainBriefView.swift */; };
+		A8A26FAE2A930D83368AA035 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = C5F7A16D701B0F743DEDA0E9 /* PrivacyInfo.xcprivacy */; };
 		AE476FD86F5124FDD239F5AB /* OFL.txt in Resources */ = {isa = PBXBuildFile; fileRef = 51780E1D57A085038F7AB3A4 /* OFL.txt */; };
 		AF3DE3F5A58AC486DD4036F1 /* ComposerViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A157516CA9C98CE6FB4E293 /* ComposerViews.swift */; };
 		B124B0C5C8B1A67C94E9A4FE /* BoaterHat.swift in Sources */ = {isa = PBXBuildFile; fileRef = EE3170FDE5751A81E295CF2E /* BoaterHat.swift */; };
@@ -77,6 +78,7 @@
 		EEF2722A0817C78F1649422B /* Glass.swift in Sources */ = {isa = PBXBuildFile; fileRef = C5ABD3D073D2DB74064F5A13 /* Glass.swift */; };
 		F48AE829445AE2B014A9A7B4 /* ThinkingPulse.swift in Sources */ = {isa = PBXBuildFile; fileRef = 60C505B6E7E7122F0D8C38C4 /* ThinkingPulse.swift */; };
 		F8D5EA6FB79DA0781074F0DA /* ScopePickerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 68242686E76201D100B8C3A9 /* ScopePickerView.swift */; };
+		F96C2B2D974F15AC97AFC477 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = C5F7A16D701B0F743DEDA0E9 /* PrivacyInfo.xcprivacy */; };
 		FEA11BEC64D6D78DD1F6145E /* SwiftMath in Frameworks */ = {isa = PBXBuildFile; productRef = BF74ECA03676D1736856AEB2 /* SwiftMath */; };
 		FF9F6DF88F721A8C74CFAEF4 /* PairingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00B700626149A3D1C0D6D5CB /* PairingView.swift */; };
 /* End PBXBuildFile section */
@@ -116,6 +118,7 @@
 		C1ABC13222ECFAD2CFC3180B /* MauriceTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MauriceTheme.swift; sourceTree = "<group>"; };
 		C51DFC4112740952D536AA5F /* Maurice_macOS.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Maurice_macOS.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		C5ABD3D073D2DB74064F5A13 /* Glass.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Glass.swift; sourceTree = "<group>"; };
+		C5F7A16D701B0F743DEDA0E9 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		CC55EBC69472BBED58BC1614 /* SortMenu.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SortMenu.swift; sourceTree = "<group>"; };
 		CCF7CFD4DA400C3D744B7A69 /* fr */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = fr; path = fr.lproj/Localizable.strings; sourceTree = "<group>"; };
 		CEB5E21AE21611A0C6FC115B /* DictateIntent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DictateIntent.swift; sourceTree = "<group>"; };
@@ -156,6 +159,7 @@
 			children = (
 				2E85AEEB530CF3C1C5C3E79F /* Assets.xcassets */,
 				1A0683126686701347E9871B /* MauriceApp.swift */,
+				C5F7A16D701B0F743DEDA0E9 /* PrivacyInfo.xcprivacy */,
 				9544D22B5062986C68793257 /* Models */,
 				6E4D158A05D27EBC8AF8AB9C /* Resources */,
 				C331BA31ABD6A594580C9D2D /* Services */,
@@ -354,6 +358,7 @@
 				5421D4350871A4F9836C8B60 /* Assets.xcassets in Resources */,
 				DE41C437D70BFE6F0A82015E /* Localizable.strings in Resources */,
 				AE476FD86F5124FDD239F5AB /* OFL.txt in Resources */,
+				A8A26FAE2A930D83368AA035 /* PrivacyInfo.xcprivacy in Resources */,
 				B80161B44335BB6CEC01F7DA /* YoungSerif-Regular.ttf in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -365,6 +370,7 @@
 				8354A2864D971667617A4546 /* Assets.xcassets in Resources */,
 				2B268BBE8FAF1C5EE355B1D4 /* Localizable.strings in Resources */,
 				91817BB3A32C4F1FE886B982 /* OFL.txt in Resources */,
+				F96C2B2D974F15AC97AFC477 /* PrivacyInfo.xcprivacy in Resources */,
 				5B4288B9598CBE20AE92F4D9 /* YoungSerif-Regular.ttf in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
