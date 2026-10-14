@@ -492,6 +492,16 @@ describe("a podcast's episodes (14 October 2026)", () => {
     expect(entry.show).toEqual({ slug: "the-daily", title: "The Daily" });
   });
 
+  test("an episode's entry shows the cover open_fiche downloaded, not the feed's address", async () => {
+    write("podcasts/fr/the-daily--cover-test-fiche.md", `---\ntitle: Cover test\nresource_collection: podcasts\nresource_id: the-daily--cover-test\ndate: '2026-10-14'\ntags: []\nlocale: fr\nmeta:\n  image: https://img.example.org/ep.jpg\n  show: the-daily\n  show_title: The Daily\n---\n`);
+    const { listGardenEntries } = await import("../data-api/services/gardenEntries");
+    const find = () => listGardenEntries({ username: ANNA, root } as any).find((e) => e.slug === "the-daily--cover-test")!;
+    expect(find().image).toBe("https://img.example.org/ep.jpg");
+    write("images/resources/podcasts/fr-the-daily--cover-test.jpg", "jpg");
+    expect(find().image).toBe(`/images/${ANNA}/resources/podcasts/fr-the-daily--cover-test.jpg`);
+    fs.rmSync(path.join(root, "images"), { recursive: true, force: true });
+  });
+
   test("several episodes: each its own fiche, the note on every one", async () => {
     searchResults.search_podcast = theDaily;
     modelSays = { subjects: [{ kind: "podcasts", title: "The Daily", creator: "The New York Times", note: "Deux épisodes sur l'IA." }] };

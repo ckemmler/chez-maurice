@@ -181,6 +181,16 @@ export function listGardenEntries(garden: GardenRef): GardenEntry[] {
         if (!e.image) e.image = fm.image ?? meta.image ?? null;
       }
 
+      // The cover open_fiche downloaded, when the entry names none of the
+      // garden's own: a fiche keeps its provider's address (an episode's art,
+      // a film's poster path), which a client reading the garden's images —
+      // Carnet — cannot show.
+      for (const e of bySlug.values()) {
+        if (e.image?.startsWith("/images/")) continue;
+        const cover = path.join("images", "resources", collection, `${locale}-${e.slug}.jpg`);
+        if (fs.existsSync(path.join(garden.root, cover))) e.image = `/images/${garden.username}/resources/${collection}/${locale}-${e.slug}.jpg`;
+      }
+
       out.push(...bySlug.values());
     }
   }

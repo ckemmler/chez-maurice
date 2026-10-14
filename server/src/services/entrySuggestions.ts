@@ -141,7 +141,11 @@ Each subject: {"kind": "movies|series|books|music|podcasts|games|people", "title
 - "year": the work's first release, when you are sure. Omit otherwise.
 - "creator": the author, the artist, the director — when the exchange or common knowledge gives it. Omit for people.
 - "public": for people only. true for a public figure, false for someone from the person's own life.
-- "note": one to three sentences, in the language of the exchange, stating what the person now knows about the subject from THIS exchange. Only what the reply said; add nothing of your own. Written as a note to oneself: the facts themselves, with the names and dates that make them worth rereading in a year. Never "the exchange confirms", "the reply says", "the conversation" — the note is read without them.
+- "note": one to three sentences, in the language the person wrote in (French if they wrote French, whatever the language of these instructions), addressed to them: "you" in English; in French "tu" or "vous", as the assistant addresses them. Never "the person", "the user", "they".
+  The note keeps what will be worth rereading in a year:
+  - When the person brings something of their own to the subject — a work they read, watched or listened to, someone they met — and says what it stirred in them, the note says that first: why it struck them, what it brought back or made them think about, in their own terms and with the particulars they gave — their work, their practice, the people in their life they mentioned; then what the exchange made of it. Not a summary of the work: they know what it is about. For someone who wrote that a novel about a cook made them think of their grandmother's kitchen and of quitting their office job: "Tu as lu ce roman en pensant à la cuisine de ta grand-mère et à ton envie de quitter le bureau ; …" — not "This novel tells the story of a cook".
+  - When they asked for facts, the facts the reply gave, with the names and dates that make them worth rereading.
+  Only what the exchange holds; add nothing of your own. Never "the exchange confirms", "the reply says", "the conversation" — the note is read without them.
 
 What deserves an entry: what the exchange is ABOUT, and a person or work it gives a real fact on. Not every name passing through a list, not a company, a place, a product, a concept, a piece of software, a news event, a politician cited in passing.
 The person asking about their own code, health, mail, money, schedule or plans: nothing.
