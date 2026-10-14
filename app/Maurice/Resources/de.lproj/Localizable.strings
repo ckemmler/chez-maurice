@@ -898,7 +898,8 @@
 "suggest.episodes_loading" = "Folgen werden gelesen…";
 "suggest.episode_suggested" = "Von Maurice erkannt";
 "suggest.keep_episode" = "Folge aufheben";
-"suggest.episodes_hint" = "Ohne gewählte Folge wird die Sendung aufgehoben.";
+"suggest.keep_episodes" = "Die %d Folgen aufheben";
+"suggest.episodes_hint" = "Ohne angekreuzte Folge wird die Sendung aufgehoben.";
 "suggest.kind.movies" = "Film";
 "suggest.kind.series" = "Serie";
 "suggest.kind.books" = "Buch";

@@ -639,42 +639,18 @@ export function provenance(conversationId: string, conversationTitle: string | n
  * on it. `candidateId` is the member's pick when the row had several.
  */
 export async function keepSuggestion(
-  memberId: string, id: string, candidateId?: string | null, episodeId?: string | null,
+  memberId: string, id: string, candidateId?: string | null, episodeIds: string[] = [],
 ): Promise<EntrySuggestion> {
   const s = own(memberId, id);
   if (!s) throw new SuggestionError("not found", 404);
   if (s.state === "kept") return s;
   const garden = gardenFor(memberId);
   if (!garden) throw new SuggestionError("No garden for this member", 404);
-  if (episodeId && s.kind !== "podcasts") throw new SuggestionError("only a podcast has episodes", 400);
+  const episodes = [...new Set(episodeIds.map(String).filter(Boolean))];
+  if (episodes.length && s.kind !== "podcasts") throw new SuggestionError("only a podcast has episodes", 400);
 
   const locale = gardenLocale(memberId);
-  let ref = s.existing;
-  let picked: Candidate | undefined;
-  // What the row reads as once kept: the episode, when one was picked.
-  let kept: { title: string; image: string | null } | null = null;
-  if (!ref || episodeId) {
-    if (!ref) {
-      picked = candidateId ? s.candidates.find((c) => c.id === candidateId) : s.candidates.length === 1 ? s.candidates[0] : undefined;
-      if (candidateId && !picked) throw new SuggestionError("unknown candidate", 400);
-      if (!picked && s.candidates.length > 1) throw new SuggestionError("a candidate must be picked", 409);
-    }
-    const args: Record<string, unknown> = { resource_collection: s.kind, title: picked?.title ?? s.title, locale };
-    if (episodeId) {
-      // One episode of the show: its own fiche, `<show>--<episode>`.
-      const feed = picked?.id ?? (await feedOf(memberId, garden, s));
-      if (!feed) throw new SuggestionError("the show's feed is not known", 409);
-      args.podcastindex_id = Number(feed);
-      args.podcast_episode_id = Number(episodeId);
-    } else {
-      if (s.year) args.year = picked?.year ?? s.year;
-      if (s.kind === "books" && s.subtitle) args.author = picked?.subtitle || s.subtitle;
-      const idArg = ID_ARG[s.kind];
-      if (picked && idArg) args[idArg.name] = idArg.integer ? Number(picked.id) : picked.id;
-      // Nothing to look up: someone from the member's life, or a subject no
-      // provider knew. The fiche is a name and what was said.
-      if (!picked) args.skip_metadata = true;
-    }
+  const open = async (args: Record<string, unknown>): Promise<any> => {
     let card: any;
     try {
       card = await gardenCall(memberId, "open_fiche", args);
@@ -682,41 +658,82 @@ export async function keepSuggestion(
       throw new SuggestionError(`The fiche could not be opened: ${(err as Error).message}`, 502);
     }
     if (!card?.resource_id) throw new SuggestionError("The fiche could not be opened", 502);
-    ref = `${s.kind}/${card.locale ?? locale}/${card.resource_id}`;
-    if (episodeId) {
-      const episode = episodeCache.get(`${s.id}:${args.podcastindex_id}`)?.episodes.find((e) => e.id === String(episodeId));
-      kept = { title: String(card.title ?? s.title), image: episode?.image || null };
+    return card;
+  };
+
+  let picked: Candidate | undefined;
+  if (!s.existing) {
+    picked = candidateId ? s.candidates.find((c) => c.id === candidateId) : s.candidates.length === 1 ? s.candidates[0] : undefined;
+    if (candidateId && !picked) throw new SuggestionError("unknown candidate", 400);
+    if (!picked && s.candidates.length > 1) throw new SuggestionError("a candidate must be picked", 409);
+  }
+
+  // Where the note goes: the entry, or — for a podcast — each episode picked,
+  // every one its own fiche, `<show>--<episode>`.
+  const refs: Array<{ ref: string; title: string; image: string | null }> = [];
+  if (episodes.length) {
+    const feed = picked?.id ?? (await feedOf(memberId, garden, s));
+    if (!feed) throw new SuggestionError("the show's feed is not known", 409);
+    const listed = episodeCache.get(`${s.id}:${feed}`)?.episodes ?? [];
+    for (const episode of episodes) {
+      const card = await open({
+        resource_collection: s.kind, title: picked?.title ?? s.title, locale,
+        podcastindex_id: Number(feed), podcast_episode_id: Number(episode),
+      });
+      refs.push({
+        ref: `${s.kind}/${card.locale ?? locale}/${card.resource_id}`,
+        title: String(card.title ?? s.title),
+        image: listed.find((e) => e.id === episode)?.image || null,
+      });
     }
+  } else if (s.existing) {
+    refs.push({ ref: s.existing, title: s.title, image: null });
+  } else {
+    const args: Record<string, unknown> = { resource_collection: s.kind, title: picked?.title ?? s.title, locale };
+    if (s.year) args.year = picked?.year ?? s.year;
+    if (s.kind === "books" && s.subtitle) args.author = picked?.subtitle || s.subtitle;
+    const idArg = ID_ARG[s.kind];
+    if (picked && idArg) args[idArg.name] = idArg.integer ? Number(picked.id) : picked.id;
+    // Nothing to look up: someone from the member's life, or a subject no
+    // provider knew. The fiche is a name and what was said.
+    if (!picked) args.skip_metadata = true;
+    const card = await open(args);
+    refs.push({ ref: `${s.kind}/${card.locale ?? locale}/${card.resource_id}`, title: picked?.title ?? s.title, image: picked?.image || null });
   }
 
   const convo = getConversation(s.conversation_id, memberId);
-  noteOnFiche(memberId, garden, ref, noteText(s, convo?.title ?? null, locale));
-
-  // Kept from a conversation held on another entry: the two are linked, by a
-  // résonance on that entry — a [[wiki-link]] to this one, under what was said.
   const bound = boundEntry(memberId, s.conversation_id);
-  if (bound && refOf(bound) !== ref) {
-    const [, , slug] = ref.split("/") as [string, string, string];
-    try {
-      appendResonance(memberId, garden, {
-        to: { collection: bound.collection, locale: bound.locale, slug: bound.slug },
-        comment: `${s.note.trim()} ${provenance(s.conversation_id, convo?.title ?? null, locale)}`,
-        source: { label: kept?.title ?? picked?.title ?? s.title, basename: `${slug}-fiche` },
-      });
-    } catch (err) {
-      // The entry is kept; a link that could not be written is not worth losing it.
-      console.warn(`[suggest] résonance on ${refOf(bound)} failed (${(err as Error).message})`);
+  for (const { ref, title } of refs) {
+    noteOnFiche(memberId, garden, ref, noteText(s, convo?.title ?? null, locale));
+
+    // Kept from a conversation held on another entry: the two are linked, by a
+    // résonance on that entry — a [[wiki-link]] to this one, under what was said.
+    if (bound && refOf(bound) !== ref) {
+      const [, , slug] = ref.split("/") as [string, string, string];
+      try {
+        appendResonance(memberId, garden, {
+          to: { collection: bound.collection, locale: bound.locale, slug: bound.slug },
+          comment: `${s.note.trim()} ${provenance(s.conversation_id, convo?.title ?? null, locale)}`,
+          source: { label: title, basename: `${slug}-fiche` },
+        });
+      } catch (err) {
+        // The entry is kept; a link that could not be written is not worth losing it.
+        console.warn(`[suggest] résonance on ${refOf(bound)} failed (${(err as Error).message})`);
+      }
     }
   }
 
+  // The row reads as the first entry kept, and says how many others came with it.
+  const first = refs[0]!;
+  const title = refs.length > 1 ? `${first.title} (+${refs.length - 1})` : first.title;
   db.run(
     `UPDATE entry_suggestions SET state = 'kept', kept_path = ?, existing = ?, title = ?, year = ?, image = COALESCE(?, image),
             candidates = NULL, decided_at = datetime('now'), updated_at = datetime('now') WHERE id = ?`,
-    [ref, ref, kept?.title ?? picked?.title ?? s.title, kept ? null : picked?.year ?? s.year, kept?.image ?? picked?.image ?? null, id],
+    [first.ref, first.ref, title, episodes.length ? null : picked?.year ?? s.year, first.image, id],
   );
   // From now on the garden answers for this subject, under its path: the row
   // takes that key, so a later mention finds it instead of making a twin.
-  try { db.run(`UPDATE entry_suggestions SET key = ? WHERE id = ?`, [ref, id]); } catch {}
+  try { db.run(`UPDATE entry_suggestions SET key = ? WHERE id = ?`, [first.ref, id]); } catch {}
   announce(memberId, s.conversation_id);
   return own(memberId, id)!;
 }

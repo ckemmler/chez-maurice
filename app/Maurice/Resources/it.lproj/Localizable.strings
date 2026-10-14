@@ -898,7 +898,8 @@
 "suggest.episodes_loading" = "Lettura degli episodi…";
 "suggest.episode_suggested" = "Individuato da Maurice";
 "suggest.keep_episode" = "Tieni l’episodio";
-"suggest.episodes_hint" = "Senza episodio scelto, si tiene il programma.";
+"suggest.keep_episodes" = "Tieni i %d episodi";
+"suggest.episodes_hint" = "Senza episodi spuntati, si tiene il programma.";
 "suggest.kind.movies" = "Film";
 "suggest.kind.series" = "Serie";
 "suggest.kind.books" = "Libro";

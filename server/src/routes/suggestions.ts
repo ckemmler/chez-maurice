@@ -78,15 +78,15 @@ suggestions.get("/", async (c) => {
 });
 
 /** Keep it: the fiche is opened if the garden has none, the note filed on it.
- *  `{candidate?, episode?}`: the identity picked, and for a podcast the one
- *  episode, which gets a fiche of its own. */
+ *  `{candidate?, episodes?}`: the identity picked, and for a podcast the
+ *  episodes, each of which gets a fiche of its own and the note. */
 suggestions.post("/:id/keep", async (c) => {
   const uid = c.get("userId");
   const body = await c.req.json().catch(() => ({}));
   try {
-    const s = await keepSuggestion(
-      uid, c.req.param("id"), body?.candidate ? String(body.candidate) : null, body?.episode ? String(body.episode) : null,
-    );
+    // `episodes`: every episode picked; `episode`, one — the apps before 14 October.
+    const episodes = Array.isArray(body?.episodes) ? body.episodes.map(String) : body?.episode ? [String(body.episode)] : [];
+    const s = await keepSuggestion(uid, c.req.param("id"), body?.candidate ? String(body.candidate) : null, episodes);
     return c.json(view(uid, s));
   } catch (e) {
     if (e instanceof SuggestionError) return c.json({ error: e.message }, e.status as any);
@@ -96,7 +96,7 @@ suggestions.post("/:id/keep", async (c) => {
 });
 
 /** A podcast's recent episodes, and the one Maurice would pick — `feed` is
- *  the candidate picked, when the row has several. Keeping takes `{episode}`. */
+ *  the candidate picked, when the row has several. Keeping takes `{episodes}`. */
 suggestions.get("/:id/episodes", async (c) => {
   const uid = c.get("userId");
   try {

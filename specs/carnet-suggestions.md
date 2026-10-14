@@ -311,3 +311,9 @@ before, and a sure match is settled after another look as after the pass;
 an app picks a lone candidate at once. And *Chercher encore*, falling back
 to the title named, kept only what was new — the sports dailies, since the
 right show had been seen: the fallbacks now keep only what bears that title.
+
+**Several episodes** (same day). The episodes are ticked, not picked: one
+conversation is often about two or three. `POST /api/suggestions/:id/keep
+{episodes: [...]}` (`{episode}` still read) opens each episode's fiche and
+files the note on every one, linking each to the entry the conversation is
+held from; the row reads as the first, "(+N)" after its title.

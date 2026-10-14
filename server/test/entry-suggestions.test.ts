@@ -492,6 +492,27 @@ describe("a podcast's episodes (14 October 2026)", () => {
     expect(entry.show).toEqual({ slug: "the-daily", title: "The Daily" });
   });
 
+  test("several episodes: each its own fiche, the note on every one", async () => {
+    searchResults.search_podcast = theDaily;
+    modelSays = { subjects: [{ kind: "podcasts", title: "The Daily", creator: "The New York Times", note: "Deux épisodes sur l'IA." }] };
+    await turn();
+    const id = sug.suggestionsFor(ANNA, convo)[0]!.id;
+    modelSays = { episode: null };
+    await req(annaAuth, `/${id}/episodes`);
+    toolCalls = [];
+    const res = await req(annaAuth, `/${id}/keep`, {
+      method: "POST", body: JSON.stringify({ episodes: ["61667039106", "61667039100"] }),
+    });
+    expect(res.status).toBe(200);
+    const row = await res.json() as any;
+    expect(toolCalls.filter((c) => c.tool === "open_fiche").map((c) => c.args.podcast_episode_id)).toEqual([61667039106, 61667039100]);
+    for (const slug of ["mathematicians-latest-problem-what-if-a-i-can-do-our-job", "the-israeli-film-directors-pushing-for-a-reckoning"]) {
+      expect(fs.readFileSync(path.join(root, `podcasts/fr/the-daily--${slug}-fiche.md`), "utf-8")).toContain("Deux épisodes sur l'IA.");
+    }
+    expect(row.entry).toBe("podcasts/fr/the-daily--mathematicians-latest-problem-what-if-a-i-can-do-our-job");
+    expect(row.title).toBe("Mathematicians’ Latest Problem: What if A.I. Can Do Our Job? (+1)");
+  });
+
   test("several shows: the one picked is the one listed; episodes are for podcasts only", async () => {
     searchResults.search_podcast = [...theDaily, { id: "6296135", title: "The Daily", year: null, subtitle: "", image: "" }];
     modelSays = { subjects: [

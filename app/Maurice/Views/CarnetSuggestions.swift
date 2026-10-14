@@ -52,7 +52,7 @@ private struct SuggestionList: Decodable {
     let kept: Int
 }
 
-private struct KeepBody: Encodable { let candidate: String?; let episode: String? }
+private struct KeepBody: Encodable { let candidate: String?; let episodes: [String] }
 
 /// A podcast's recent episodes, and the one Maurice reads the conversation as
 /// being about (`GET /api/suggestions/:id/episodes`).
@@ -166,7 +166,7 @@ struct SuggestionsDrawer: View {
                     if !pending.isEmpty {
                         section(L("suggest.section_pending")) {
                             ForEach(pending) { row in
-                                SuggestionRow(row: row, onKeep: { await keep(row, candidate: $0, episode: $1) },
+                                SuggestionRow(row: row, onKeep: { await keep(row, candidate: $0, episodes: $1) },
                                               onEpisodes: { await episodes(row, feed: $0) },
                                               onSearch: { await search(row, query: $0) }, onDismiss: { dismissRow(row) })
                             }
@@ -234,11 +234,11 @@ struct SuggestionsDrawer: View {
         loaded = true
     }
 
-    private func keep(_ row: EntrySuggestion, candidate: String?, episode: String?) async -> Bool {
+    private func keep(_ row: EntrySuggestion, candidate: String?, episodes: [String]) async -> Bool {
         guard let api else { return false }
         do {
             let _: EntrySuggestion = try await api.client.post(
-                "/api/suggestions/\(row.id)/keep", body: KeepBody(candidate: candidate, episode: episode), token: api.token, timeout: 40)
+                "/api/suggestions/\(row.id)/keep", body: KeepBody(candidate: candidate, episodes: episodes), token: api.token, timeout: 40)
             await load()
             return true
         } catch {
@@ -362,15 +362,16 @@ private func identityLine(kind: String, year: Int?, subtitle: String?) -> String
 private struct SuggestionRow: View {
     @Environment(\.mauriceTheme) private var theme
     let row: EntrySuggestion
-    let onKeep: (String?, String?) async -> Bool
+    let onKeep: (String?, [String]) async -> Bool
     let onEpisodes: (String?) async -> EpisodeList?
     let onSearch: (String?) async -> Int?
     let onDismiss: () -> Void
 
     @State private var working = false
     @State private var picked: String?
-    /// For a podcast: the one episode, or none for the show itself.
-    @State private var episode: String?
+    /// For a podcast: the episodes ticked, in the order they were — none for
+    /// the show itself.
+    @State private var episodes: [String] = []
     @State private var searching = false
     @State private var refining = false
     @State private var term = ""
@@ -423,7 +424,7 @@ private struct SuggestionRow: View {
             // A show: which episode? Listed once the show is settled — the
             // row's own, or the candidate picked.
             if row.kind == "podcasts", !needsPick || picked != nil {
-                EpisodePicker(feed: needsPick ? picked : nil, onEpisodes: onEpisodes, selection: $episode)
+                EpisodePicker(feed: needsPick ? picked : nil, onEpisodes: onEpisodes, selection: $episodes)
                     .id("\(row.candidates.map(\.id).joined(separator: ","))|\(picked ?? "")")
             }
 
@@ -431,11 +432,13 @@ private struct SuggestionRow: View {
                 Button {
                     working = true
                     Task {
-                        _ = await onKeep(picked, episode)
+                        _ = await onKeep(picked, episodes)
                         working = false
                     }
                 } label: {
-                    Text(episode != nil ? L("suggest.keep_episode") : row.existing ? L("suggest.add_note") : L("suggest.keep"))
+                    Text(episodes.count > 1 ? L("suggest.keep_episodes", episodes.count)
+                         : episodes.count == 1 ? L("suggest.keep_episode")
+                         : row.existing ? L("suggest.add_note") : L("suggest.keep"))
                         .font(.system(size: 13, weight: .medium))
                         .foregroundStyle(theme.bg)
                         .padding(.horizontal, 16)
@@ -551,14 +554,14 @@ private struct SuggestionRow: View {
 
 /// A show's recent episodes, laid out as a podcast app lists them: the day
 /// it came out, the title, what it is about, its length, and its art — the
-/// one Maurice reads the conversation as being about picked in advance. A tap
-/// picks; a tap on the picked one leaves the show itself to be kept.
+/// one Maurice reads the conversation as being about ticked in advance. Each
+/// is ticked on its own; none ticked leaves the show itself to be kept.
 private struct EpisodePicker: View {
     @Environment(\.mauriceTheme) private var theme
     @Environment(SessionStore.self) private var session
     let feed: String?
     let onEpisodes: (String?) async -> EpisodeList?
-    @Binding var selection: String?
+    @Binding var selection: [String]
 
     @State private var list: EpisodeList?
     @State private var loading = true
@@ -598,20 +601,22 @@ private struct EpisodePicker: View {
             let got = await onEpisodes(feed)
             list = got
             if let got, let suggested = got.suggested, let at = got.episodes.firstIndex(where: { $0.id == suggested }) {
-                selection = suggested
+                selection = [suggested]
                 shown = max(shown, at + 1)
             } else {
-                selection = nil
+                selection = []
             }
             loading = false
         }
     }
 
     private func episodeRow(_ ep: EpisodeList.Episode, suggested: Bool) -> some View {
-        let on = selection == ep.id
-        return Button { selection = on ? nil : ep.id } label: {
+        let on = selection.contains(ep.id)
+        return Button {
+            if on { selection.removeAll { $0 == ep.id } } else { selection.append(ep.id) }
+        } label: {
             HStack(alignment: .top, spacing: 10) {
-                Image(systemName: on ? "largecircle.fill.circle" : "circle")
+                Image(systemName: on ? "checkmark.square.fill" : "square")
                     .font(.system(size: 15))
                     .foregroundStyle(on ? theme.ink : theme.inkMute)
                     .padding(.top, 1)

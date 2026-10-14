@@ -898,7 +898,8 @@
 "suggest.episodes_loading" = "Leyendo los episodios…";
 "suggest.episode_suggested" = "Detectado por Maurice";
 "suggest.keep_episode" = "Guardar el episodio";
-"suggest.episodes_hint" = "Sin episodio elegido, se guarda el programa.";
+"suggest.keep_episodes" = "Guardar los %d episodios";
+"suggest.episodes_hint" = "Sin episodio marcado, se guarda el programa.";
 "suggest.kind.movies" = "Película";
 "suggest.kind.series" = "Serie";
 "suggest.kind.books" = "Libro";

@@ -898,7 +898,8 @@
 "suggest.episodes_loading" = "Lecture des épisodes…";
 "suggest.episode_suggested" = "Repéré par Maurice";
 "suggest.keep_episode" = "Garder l’épisode";
-"suggest.episodes_hint" = "Sans épisode choisi, c’est l’émission qui est gardée.";
+"suggest.keep_episodes" = "Garder les %d épisodes";
+"suggest.episodes_hint" = "Sans épisode coché, c’est l’émission qui est gardée.";
 "suggest.kind.movies" = "Film";
 "suggest.kind.series" = "Série";
 "suggest.kind.books" = "Livre";
