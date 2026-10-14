@@ -269,3 +269,36 @@ dailies (*Locked On Warriors – Daily Podcast…*). Two changes:
 `entry_suggestions` gains `query` (the last term searched) and `seen` (every
 candidate id already shown). Both drawers — the Maurice app's and Carnet's —
 carry « Chercher encore » and « Préciser » under each offer.
+
+## 12. A podcast's episodes (14 October 2026)
+
+What was listened to is most often one episode. The show found, the drawer
+lists its recent episodes as a podcast app does — the day it came out, the
+title, two lines of what it is about, the length, the art — and the one the
+conversation was about is picked in advance ("Repéré par Maurice"). A tap
+picks another; a tap on the picked one leaves the show itself to be kept.
+
+- `GET /api/suggestions/:id/episodes?feed=` — the show's fifty latest
+  episodes (`search_podcast_episodes`, now with `image`, `duration`, `link`
+  and a plain-text description) and `suggested`, the ancillary invocation
+  `entry_suggest_episode` reading the note and the question against them
+  (titles change after release: it judges on what an episode is about).
+  `feed` is the candidate picked when the row has several; without it, the
+  row's one candidate, or the feed of the show already in the garden (its
+  fiche keeps `meta.podcastindex_id`; a card does not, and is looked up by
+  title). Read once per row and show, in memory.
+- `POST /api/suggestions/:id/keep {candidate?, episode?}` — with an episode,
+  `open_fiche {podcastindex_id, podcast_episode_id}` opens
+  `podcasts/<locale>/<show>--<episode>-fiche.md`, the slug the episode cards
+  already used: `meta` carries the show (`show`, `show_title`, as `subtitle`
+  for the fiche's headline), `host`, `published_at`, `duration`,
+  `description`, `image`, `url`, `audio_url`. The note is filed there.
+  `episodes/byid` is not on the metadata relay's list: through a relay the
+  episode is found among the show's hundred latest.
+- The server's slugs accept `--` between a show and its episode; a garden
+  entry that is an episode carries `show {slug, title}`, and the shelf's
+  byline for it is the show.
+
+Not done: the show is not opened beside its episode (the episode names it,
+nothing links to it yet); an episode older than the fifty latest cannot be
+picked.

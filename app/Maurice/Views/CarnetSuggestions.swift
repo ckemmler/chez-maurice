@@ -52,7 +52,23 @@ private struct SuggestionList: Decodable {
     let kept: Int
 }
 
-private struct KeepBody: Encodable { let candidate: String? }
+private struct KeepBody: Encodable { let candidate: String?; let episode: String? }
+
+/// A podcast's recent episodes, and the one Maurice reads the conversation as
+/// being about (`GET /api/suggestions/:id/episodes`).
+struct EpisodeList: Decodable, Equatable {
+    struct Episode: Decodable, Identifiable, Equatable {
+        let id: String
+        let title: String
+        let date: String?
+        let description: String
+        let image: String
+        let duration: Int?
+    }
+    let feed: String
+    let episodes: [Episode]
+    let suggested: String?
+}
 private struct SearchBody: Encodable { let query: String? }
 private struct SearchAnswer: Decodable { let found: Int }
 
@@ -150,7 +166,8 @@ struct SuggestionsDrawer: View {
                     if !pending.isEmpty {
                         section(L("suggest.section_pending")) {
                             ForEach(pending) { row in
-                                SuggestionRow(row: row, onKeep: { await keep(row, candidate: $0) },
+                                SuggestionRow(row: row, onKeep: { await keep(row, candidate: $0, episode: $1) },
+                                              onEpisodes: { await episodes(row, feed: $0) },
                                               onSearch: { await search(row, query: $0) }, onDismiss: { dismissRow(row) })
                             }
                         }
@@ -217,16 +234,25 @@ struct SuggestionsDrawer: View {
         loaded = true
     }
 
-    private func keep(_ row: EntrySuggestion, candidate: String?) async -> Bool {
+    private func keep(_ row: EntrySuggestion, candidate: String?, episode: String?) async -> Bool {
         guard let api else { return false }
         do {
-            let _: EntrySuggestion = try await api.client.post("/api/suggestions/\(row.id)/keep", body: KeepBody(candidate: candidate), token: api.token)
+            let _: EntrySuggestion = try await api.client.post(
+                "/api/suggestions/\(row.id)/keep", body: KeepBody(candidate: candidate, episode: episode), token: api.token, timeout: 40)
             await load()
             return true
         } catch {
             failed = true
             return false
         }
+    }
+
+    /// A podcast's episodes, for the show picked (`feed`) or the one the row
+    /// already settled on. Nil when there is none to list.
+    private func episodes(_ row: EntrySuggestion, feed: String?) async -> EpisodeList? {
+        guard let api else { return nil }
+        let query = feed.map { "?feed=\($0)" } ?? ""
+        return try? await api.client.get("/api/suggestions/\(row.id)/episodes\(query)", token: api.token, timeout: 40)
     }
 
     /// Another look: `query` is your own term; without it Maurice rephrases
@@ -336,12 +362,15 @@ private func identityLine(kind: String, year: Int?, subtitle: String?) -> String
 private struct SuggestionRow: View {
     @Environment(\.mauriceTheme) private var theme
     let row: EntrySuggestion
-    let onKeep: (String?) async -> Bool
+    let onKeep: (String?, String?) async -> Bool
+    let onEpisodes: (String?) async -> EpisodeList?
     let onSearch: (String?) async -> Int?
     let onDismiss: () -> Void
 
     @State private var working = false
     @State private var picked: String?
+    /// For a podcast: the one episode, or none for the show itself.
+    @State private var episode: String?
     @State private var searching = false
     @State private var refining = false
     @State private var term = ""
@@ -391,15 +420,22 @@ private struct SuggestionRow: View {
 
             if needsPick { candidates }
 
+            // A show: which episode? Listed once the show is settled — the
+            // row's own, or the candidate picked.
+            if row.kind == "podcasts", !needsPick || picked != nil {
+                EpisodePicker(feed: needsPick ? picked : nil, onEpisodes: onEpisodes, selection: $episode)
+                    .id("\(row.candidates.map(\.id).joined(separator: ","))|\(picked ?? "")")
+            }
+
             HStack(spacing: 10) {
                 Button {
                     working = true
                     Task {
-                        _ = await onKeep(picked)
+                        _ = await onKeep(picked, episode)
                         working = false
                     }
                 } label: {
-                    Text(row.existing ? L("suggest.add_note") : L("suggest.keep"))
+                    Text(episode != nil ? L("suggest.keep_episode") : row.existing ? L("suggest.add_note") : L("suggest.keep"))
                         .font(.system(size: 13, weight: .medium))
                         .foregroundStyle(theme.bg)
                         .padding(.horizontal, 16)
@@ -505,6 +541,145 @@ private struct SuggestionRow: View {
                 .buttonStyle(.plain)
             }
         }
+    }
+}
+
+/// A show's recent episodes, laid out as a podcast app lists them: the day
+/// it came out, the title, what it is about, its length, and its art — the
+/// one Maurice reads the conversation as being about picked in advance. A tap
+/// picks; a tap on the picked one leaves the show itself to be kept.
+private struct EpisodePicker: View {
+    @Environment(\.mauriceTheme) private var theme
+    @Environment(SessionStore.self) private var session
+    let feed: String?
+    let onEpisodes: (String?) async -> EpisodeList?
+    @Binding var selection: String?
+
+    @State private var list: EpisodeList?
+    @State private var loading = true
+    @State private var shown = 5
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            if loading {
+                HStack(spacing: 8) {
+                    ProgressView().controlSize(.small)
+                    Text(L("suggest.episodes_loading")).font(.system(size: 12)).foregroundStyle(theme.inkMute)
+                }
+                .padding(.vertical, 6)
+            } else if let list, !list.episodes.isEmpty {
+                Text(L("suggest.episodes").uppercased())
+                    .font(.system(size: 11, weight: .medium, design: .monospaced))
+                    .foregroundStyle(theme.inkMute)
+                    .padding(.bottom, 4)
+                ForEach(Array(list.episodes.prefix(shown).enumerated()), id: \.element.id) { i, ep in
+                    if i > 0 { Rectangle().fill(theme.rule).frame(height: 1) }
+                    episodeRow(ep, suggested: ep.id == list.suggested)
+                }
+                if list.episodes.count > shown {
+                    Button(L("suggest.episodes_more")) { withAnimation { shown += 10 } }
+                        .buttonStyle(.plain)
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(theme.inkSoft)
+                        .padding(.top, 8)
+                }
+                Text(L("suggest.episodes_hint"))
+                    .font(.system(size: 11))
+                    .foregroundStyle(theme.inkMute)
+                    .padding(.top, 6)
+            }
+        }
+        .task {
+            let got = await onEpisodes(feed)
+            list = got
+            if let got, let suggested = got.suggested, let at = got.episodes.firstIndex(where: { $0.id == suggested }) {
+                selection = suggested
+                shown = max(shown, at + 1)
+            } else {
+                selection = nil
+            }
+            loading = false
+        }
+    }
+
+    private func episodeRow(_ ep: EpisodeList.Episode, suggested: Bool) -> some View {
+        let on = selection == ep.id
+        return Button { selection = on ? nil : ep.id } label: {
+            HStack(alignment: .top, spacing: 10) {
+                Image(systemName: on ? "largecircle.fill.circle" : "circle")
+                    .font(.system(size: 15))
+                    .foregroundStyle(on ? theme.ink : theme.inkMute)
+                    .padding(.top, 1)
+                VStack(alignment: .leading, spacing: 3) {
+                    HStack(spacing: 6) {
+                        if let when = Self.when(ep.date, locale: session.resolvedLocale) {
+                            Text(when).font(.system(size: 11, weight: .semibold)).foregroundStyle(theme.inkMute)
+                        }
+                        if suggested {
+                            Text(L("suggest.episode_suggested"))
+                                .font(.system(size: 10, weight: .semibold))
+                                .foregroundStyle(theme.inkSoft)
+                                .padding(.horizontal, 6).padding(.vertical, 1)
+                                .background(Capsule().fill(theme.inkMute.opacity(0.12)))
+                        }
+                    }
+                    Text(ep.title)
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(theme.ink)
+                        .lineLimit(2)
+                        .multilineTextAlignment(.leading)
+                    if !ep.description.isEmpty {
+                        Text(ep.description)
+                            .font(.system(size: 12))
+                            .foregroundStyle(theme.inkSoft)
+                            .lineLimit(2)
+                            .multilineTextAlignment(.leading)
+                    }
+                    if let length = Self.length(ep.duration) {
+                        Text(length)
+                            .font(.system(size: 11, weight: .semibold).monospacedDigit())
+                            .foregroundStyle(theme.inkSoft)
+                            .padding(.horizontal, 8).padding(.vertical, 2)
+                            .background(Capsule().fill(theme.inkMute.opacity(0.1)))
+                            .padding(.top, 2)
+                    }
+                }
+                Spacer(minLength: 6)
+                SuggestionCover(image: ep.image.isEmpty ? nil : ep.image, kind: "podcasts", width: 56)
+            }
+            .padding(.vertical, 8)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
+    /// "il y a 20 h" within the week, the day otherwise — the year only when
+    /// it is not this one.
+    static func when(_ iso: String?, locale: Locale) -> String? {
+        guard let iso else { return nil }
+        let parser = ISO8601DateFormatter()
+        parser.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        guard let date = parser.date(from: iso) ?? ISO8601DateFormatter().date(from: iso) else { return nil }
+        if Date().timeIntervalSince(date) < 7 * 86_400 {
+            let f = RelativeDateTimeFormatter()
+            f.locale = locale
+            f.unitsStyle = .short
+            return f.localizedString(for: date, relativeTo: Date())
+        }
+        let sameYear = Calendar.current.isDate(date, equalTo: Date(), toGranularity: .year)
+        let style = sameYear
+            ? Date.FormatStyle(locale: locale).day().month(.abbreviated)
+            : Date.FormatStyle(locale: locale).day().month(.abbreviated).year()
+        return date.formatted(style)
+    }
+
+    /// "33 min", "1 h 5 min".
+    static func length(_ seconds: Int?) -> String? {
+        guard let seconds, seconds > 0 else { return nil }
+        let f = DateComponentsFormatter()
+        f.allowedUnits = seconds >= 3600 ? [.hour, .minute] : [.minute]
+        f.unitsStyle = .short
+        return f.string(from: TimeInterval(seconds))
     }
 }
 

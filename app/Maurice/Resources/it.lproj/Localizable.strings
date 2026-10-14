@@ -893,6 +893,12 @@
 "suggest.search_go" = "Cerca";
 "suggest.search_nothing_new" = "Niente di nuovo.";
 "suggest.search_nothing" = "Nessun risultato per «%@».";
+"suggest.episodes" = "Episodi";
+"suggest.episodes_more" = "Altri episodi";
+"suggest.episodes_loading" = "Lettura degli episodi…";
+"suggest.episode_suggested" = "Individuato da Maurice";
+"suggest.keep_episode" = "Tieni l’episodio";
+"suggest.episodes_hint" = "Senza episodio scelto, si tiene il programma.";
 "suggest.kind.movies" = "Film";
 "suggest.kind.series" = "Serie";
 "suggest.kind.books" = "Libro";

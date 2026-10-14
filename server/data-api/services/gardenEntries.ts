@@ -63,6 +63,8 @@ export interface GardenEntry {
    * entry with one is opened whatever its fiche says.
    */
   opened: boolean;
+  /** For a podcast episode (`<show>--<episode>`): the show it belongs to. */
+  show?: { slug: string; title: string } | null;
   /**
    * The third face: flashcards generated on this entry, counts only. Filled by
    * the entries route (services/flashcards.ts does the reading; it imports this
@@ -161,8 +163,15 @@ export function listGardenEntries(garden: GardenRef): GardenEntry[] {
         // The card is the published face — where both exist, its title and
         // date win. Tags and image are best-of-either: a card often carries
         // neither while its fiche does.
+        // An episode: its fiche names the show in `meta`; its card, older,
+        // carries the show's title as `title` and its own as `episode_title`.
+        const episodeTitle = fm.episode_title ? String(fm.episode_title) : null;
+        const show = meta.show ?? fm.show;
+        if (show && !e.show) {
+          e.show = { slug: String(show), title: String(meta.show_title ?? (episodeTitle ? fm.title : show)) };
+        }
         if (!isFiche || !e.title) {
-          e.title = String(fm.title ?? meta.title ?? slug);
+          e.title = String(episodeTitle ?? fm.title ?? meta.title ?? slug);
           e.date = String(
             fm.date ?? fm.date_watched ?? fm.date_read ?? fm.date_listened ?? fm.date_played ?? meta.saved_at ?? "",
           );

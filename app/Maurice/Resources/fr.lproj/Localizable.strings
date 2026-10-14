@@ -893,6 +893,12 @@
 "suggest.search_go" = "Chercher";
 "suggest.search_nothing_new" = "Rien de nouveau.";
 "suggest.search_nothing" = "Rien trouvé pour « %@ ».";
+"suggest.episodes" = "Épisodes";
+"suggest.episodes_more" = "Plus d’épisodes";
+"suggest.episodes_loading" = "Lecture des épisodes…";
+"suggest.episode_suggested" = "Repéré par Maurice";
+"suggest.keep_episode" = "Garder l’épisode";
+"suggest.episodes_hint" = "Sans épisode choisi, c’est l’émission qui est gardée.";
 "suggest.kind.movies" = "Film";
 "suggest.kind.series" = "Série";
 "suggest.kind.books" = "Livre";

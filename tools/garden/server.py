@@ -1060,6 +1060,7 @@ async def list_tools() -> list[Tool]:
                     "tmdb_id": {"type": "integer", "description": "TMDB id from search_movie / search_series — pass it whenever the user picked a candidate."},
                     "google_books_id": {"type": "string", "description": "Volume id from search_book — pass it whenever the user picked a candidate."},
                     "podcastindex_id": {"type": "integer", "description": "Feed id from search_podcast — pass it whenever the user picked a candidate."},
+                    "podcast_episode_id": {"type": "integer", "description": "Episode id from search_podcast_episodes: opens the fiche of that one episode (`<show>--<episode>`), not the show's. Pass podcastindex_id with it."},
                     "igdb_id": {"type": "integer", "description": "IGDB id from search_game — pass it whenever the user picked a candidate."},
                     "musicbrainz_id": {"type": "string", "description": "MusicBrainz release-group id from search_album — pass it whenever the user picked a candidate."},
                 },
@@ -1432,7 +1433,7 @@ async def list_tools() -> list[Tool]:
                 "type": "object",
                 "properties": {
                     "podcastindex_id": {"type": "integer", "description": "Podcast Index feed ID (from search_podcast)"},
-                    "limit": {"type": "integer", "default": 20, "description": "Max episodes to return"},
+                    "limit": {"type": "integer", "default": 20, "description": "Max episodes to return (100 at most)"},
                 },
                 "required": ["podcastindex_id"],
             },
@@ -3177,6 +3178,8 @@ def _handle_open_fiche(args: dict[str, Any]) -> dict[str, Any]:
     col = args["resource_collection"]
     if col not in _RESOURCE_COLLECTIONS:
         return {"error": f"invalid resource_collection: {col!r}"}
+    if col == "podcasts" and args.get("podcast_episode_id"):
+        return _open_episode_fiche(args)
     # "en" to match get_fiche / update_fiche. Diverging meant a model that
     # opened a fiche and then updated it without repeating the locale was told
     # the fiche did not exist.
@@ -5890,7 +5893,7 @@ def _search_podcast_episodes_sync(args: dict[str, Any]) -> dict[str, Any]:
         return {"error": 'No Podcast Index key configured — add the key and secret under "Other API keys" in the admin dashboard.'}
 
     feed_id = args["podcastindex_id"]
-    limit = args.get("limit", 20)
+    limit = max(1, min(int(args.get("limit", 20)), 100))
     headers = _podcastindex_auth_headers(api_key, api_secret)
     url = f"https://api.podcastindex.org/api/1.0/episodes/byfeedid?id={feed_id}&max={limit}"
     req = urllib.request.Request(url, headers=headers)
@@ -5905,11 +5908,133 @@ def _search_podcast_episodes_sync(args: dict[str, Any]) -> dict[str, Any]:
             "datePublished": ep.get("datePublished"),
             "season": ep.get("season"),
             "episode": ep.get("episode"),
-            "description": (ep.get("description", "") or "")[:200],
+            "description": _plain_text(ep.get("description", ""))[:400],
             "persons": [p.get("name", "") for p in (ep.get("persons", []) or [])],
+            # What a list of episodes shows: the episode's own art, else the show's.
+            "image": ep.get("image") or ep.get("feedImage") or "",
+            "duration": ep.get("duration"),
+            "link": ep.get("link") or "",
         })
 
     return {"feed_id": feed_id, "count": len(episodes), "episodes": episodes}
+
+
+def _plain_text(html_text: str | None) -> str:
+    """A feed's HTML description as one line of text."""
+    import html as _html
+    text = re.sub(r"<[^>]+>", " ", html_text or "")
+    return re.sub(r"\s+", " ", _html.unescape(text)).strip()
+
+
+def _podcastindex_episode(episode_id: int, feed_id: int | None, api_key: str, api_secret: str) -> dict[str, Any]:
+    """One episode by its id. Through a metadata relay that does not pass
+    `episodes/byid`, the show's recent episodes are searched for it instead."""
+    import urllib.request
+
+    headers = _podcastindex_auth_headers(api_key, api_secret)
+    try:
+        req = urllib.request.Request(f"https://api.podcastindex.org/api/1.0/episodes/byid?id={episode_id}", headers=headers)
+        with _urlopen(req) as resp:
+            ep = json.loads(resp.read()).get("episode")
+        if isinstance(ep, dict) and ep.get("id"):
+            return ep
+    except Exception as exc:
+        if not feed_id:
+            raise
+        LOGGER.info("episodes/byid failed for %s (%s); searching the feed", episode_id, exc)
+    if not feed_id:
+        return {}
+    req = urllib.request.Request(f"https://api.podcastindex.org/api/1.0/episodes/byfeedid?id={feed_id}&max=100", headers=headers)
+    with _urlopen(req) as resp:
+        items = json.loads(resp.read()).get("items", [])
+    return next((ep for ep in items if ep.get("id") == episode_id), {})
+
+
+def _open_episode_fiche(args: dict[str, Any]) -> dict[str, Any]:
+    """The fiche of one episode: `podcasts/<locale>/<show>--<episode>-fiche.md`,
+    the slug the episode cards already use, its show named in `meta`."""
+    locale = args.get("locale", "en")
+    episode_id = int(args["podcast_episode_id"])
+    feed_id = int(args["podcastindex_id"]) if args.get("podcastindex_id") else None
+    api_key = _api_key("PODCASTINDEX_API_KEY", "podcastindex_api_key")
+    api_secret = _api_key("PODCASTINDEX_API_SECRET", "podcastindex_api_secret")
+    if not api_key or not api_secret:
+        return {"error": 'No Podcast Index key configured — add the key and secret under "Other API keys" in the admin dashboard.'}
+    try:
+        ep = _podcastindex_episode(episode_id, feed_id, api_key, api_secret)
+        if not ep:
+            return {"error": f"could not fetch the picked podcast episode: {episode_id}"}
+        feed = _podcastindex_by_id(int(ep.get("feedId") or feed_id), api_key, api_secret)
+    except Exception as exc:
+        return {"error": f"could not fetch the picked podcast episode: {exc}"}
+
+    show_title = (feed or {}).get("title") or ep.get("feedTitle") or ""
+    show_slug = _slugify(show_title)
+    ep_title = ep.get("title") or ""
+    if not show_slug or not _slugify(ep_title):
+        return {"error": "the episode or its show has no title"}
+    slug = f"{show_slug}--{_slugify(ep_title)}"
+    path = _resolve_fiche_path("podcasts", slug, locale)
+
+    created = False
+    if path.exists():
+        fm, body = _parse_note(path)
+        meta = fm.get("meta") or {}
+    else:
+        published = ep.get("datePublished")
+        meta = {
+            "podcastindex_id": (feed or {}).get("id") or ep.get("feedId"),
+            "podcastindex_episode_id": ep.get("id"),
+            "title": ep_title,
+            # What the fiche's headline reads (web/src/lib/fiche.ts): the show
+            # under the title, its host, the day the episode came out.
+            "subtitle": show_title,
+            "show": show_slug,
+            "show_title": show_title,
+            "host": (feed or {}).get("author", ""),
+            "published_at": date.fromtimestamp(published).isoformat() if published else "",
+            "duration": ep.get("duration"),
+            "description": _plain_text(ep.get("description"))[:1000],
+            "image": ep.get("image") or ep.get("feedImage") or "",
+            "url": ep.get("link") or "",
+            "audio_url": ep.get("enclosureUrl") or "",
+        }
+        if ep.get("episode") is not None:
+            meta["episode_number"] = ep.get("episode")
+        if ep.get("season") is not None:
+            meta["season"] = ep.get("season")
+        result = _handle_create_fiche({
+            "resource_collection": "podcasts", "resource_id": slug, "locale": locale,
+            "title": ep_title, "prefetched_meta": meta,
+        })
+        if "error" in result:
+            return result
+        created = True
+        fm, body = _parse_note(path)
+        meta = fm.get("meta") or {}
+
+    image = _fiche_cover("podcasts", locale, slug, meta) if meta else ""
+    state, recto_chars, url = _recto_state("podcasts", slug, locale)
+    return {
+        "card": "media",
+        "collection": "podcasts",
+        "resource_id": slug,
+        "locale": locale,
+        "title": fm.get("title", ep_title),
+        "year": None,
+        "host": meta.get("host", ""),
+        "show": meta.get("show", ""),
+        "show_title": meta.get("show_title", ""),
+        "published_at": meta.get("published_at", ""),
+        "overview": (meta.get("description") or "")[:280],
+        "image": image,
+        "card_state": state,
+        "card_url": url,
+        "fiche_url": _fiche_url("podcasts", slug, locale),
+        "recto_chars": recto_chars,
+        "verso_chars": len(body.strip()),
+        "fiche_created": created,
+    }
 
 
 async def _handle_search_series_episodes(args: dict[str, Any]) -> dict[str, Any]:

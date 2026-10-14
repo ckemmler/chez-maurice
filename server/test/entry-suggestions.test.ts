@@ -398,6 +398,105 @@ describe("looking again (14 October 2026)", () => {
   });
 });
 
+describe("a podcast's episodes (14 October 2026)", () => {
+  const EPISODES = [
+    { id: 61667039106, title: "Mathematicians’ Latest Problem: What if A.I. Can Do Our Job?", datePublished: 1791884700, duration: 1997, image: "https://img/ep1.jpg", description: "Steven Strogatz on A.I. and the grief of mathematicians." },
+    { id: 61667039100, title: "The Israeli Film Directors Pushing for a Reckoning", datePublished: 1791798300, duration: 1920, image: "", description: "A documentary." },
+  ];
+  const stub = (_m: string, tool: string, args: any) => {
+    toolCalls.push({ tool, args });
+    if (tool === "search_podcast_episodes") return { feed_id: args.podcastindex_id, episodes: EPISODES };
+    if (tool === "open_fiche" && args.podcast_episode_id) {
+      const ep = EPISODES.find((e) => e.id === args.podcast_episode_id)!;
+      const slug = `the-daily--${ep.title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")}`;
+      write(`podcasts/${args.locale}/${slug}-fiche.md`, `---\ntitle: "${ep.title}"\nresource_collection: podcasts\nresource_id: ${slug}\ndate: '2026-10-14'\ntags: []\nlocale: ${args.locale}\nmeta:\n  show: the-daily\n  show_title: The Daily\n---\n`);
+      return { card: "media", resource_id: slug, locale: args.locale, title: ep.title };
+    }
+    return { card: "candidates", results: searchResults[tool] ?? [] };
+  };
+  const theDaily = [{ id: "743229", title: "The Daily", year: null, subtitle: "The New York Times", image: "" }];
+
+  beforeEach(() => {
+    sug.forgetEpisodes();
+    sug.setGardenCall(async (m, tool, args) => stub(m, tool, args));
+  });
+  afterAll(() => {
+    fs.rmSync(path.join(root, "podcasts"), { recursive: true, force: true });
+    sug.setGardenCall(async (_m, tool, args) => {
+      toolCalls.push({ tool, args });
+      if (tool === "open_fiche") {
+        const slug = String(args.title).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+        write(`${args.resource_collection}/${args.locale}/${slug}-fiche.md`, `---\ntitle: ${args.title}\nresource_collection: ${args.resource_collection}\nresource_id: ${slug}\ndate: '2026-10-09'\ntags: []\nlocale: ${args.locale}\n---\n`);
+        return { card: "media", resource_id: slug, locale: args.locale, title: args.title };
+      }
+      return { card: "candidates", results: searchResults[tool] ?? [] };
+    });
+  });
+
+  test("the show's episodes, newest first, with the one the conversation was about picked", async () => {
+    searchResults.search_podcast = theDaily;
+    modelSays = { subjects: [{ kind: "podcasts", title: "The Daily", creator: "The New York Times", note: "Un mathématicien face à l'IA." }] };
+    await turn();
+    const id = sug.suggestionsFor(ANNA, convo)[0]!.id;
+    modelSays = { episode: "61667039106" };
+    const list = await (await req(annaAuth, `/${id}/episodes`)).json() as any;
+    expect(list.feed).toBe("743229");
+    expect(list.episodes.map((e: any) => e.id)).toEqual(["61667039106", "61667039100"]);
+    expect(list.episodes[0]).toMatchObject({ duration: 1997, image: "https://img/ep1.jpg" });
+    expect(list.episodes[0].date).toStartWith("2026-");
+    expect(list.suggested).toBe("61667039106");
+    expect(lastPrompt).toContain("Strogatz");
+    // Read once: the drawer reopened asks neither the catalogue nor the model.
+    const calls = modelCalls;
+    await req(annaAuth, `/${id}/episodes`);
+    expect(modelCalls).toBe(calls);
+    expect(toolCalls.filter((c) => c.tool === "search_podcast_episodes")).toHaveLength(1);
+  });
+
+  test("keeping an episode opens its own fiche and files the note there", async () => {
+    searchResults.search_podcast = theDaily;
+    modelSays = { subjects: [{ kind: "podcasts", title: "The Daily", creator: "The New York Times", note: "Un mathématicien face à l'IA." }] };
+    await turn();
+    const id = sug.suggestionsFor(ANNA, convo)[0]!.id;
+    modelSays = { episode: null };
+    await req(annaAuth, `/${id}/episodes`);
+    const res = await req(annaAuth, `/${id}/keep`, { method: "POST", body: JSON.stringify({ episode: "61667039106" }) });
+    expect(res.status).toBe(200);
+    const row = await res.json() as any;
+    expect(row.entry).toBe("podcasts/fr/the-daily--mathematicians-latest-problem-what-if-a-i-can-do-our-job");
+    expect(row.title).toBe("Mathematicians’ Latest Problem: What if A.I. Can Do Our Job?");
+    expect(row.image).toBe("https://img/ep1.jpg");
+    const open = toolCalls.find((c) => c.tool === "open_fiche")!.args;
+    expect(open).toMatchObject({ podcastindex_id: 743229, podcast_episode_id: 61667039106 });
+    const fiche = fs.readFileSync(path.join(root, "podcasts/fr/the-daily--mathematicians-latest-problem-what-if-a-i-can-do-our-job-fiche.md"), "utf-8");
+    expect(fiche).toContain("Un mathématicien face à l'IA.");
+    // The garden lists it as an episode of its show.
+    const { listGardenEntries } = await import("../data-api/services/gardenEntries");
+    const entry = listGardenEntries({ username: ANNA, root } as any).find((e) => e.slug.startsWith("the-daily--"))!;
+    expect(entry.show).toEqual({ slug: "the-daily", title: "The Daily" });
+  });
+
+  test("several shows: the one picked is the one listed; episodes are for podcasts only", async () => {
+    searchResults.search_podcast = [...theDaily, { id: "6296135", title: "The Daily", year: null, subtitle: "", image: "" }];
+    modelSays = { subjects: [
+      { kind: "podcasts", title: "The Daily", note: "n" },
+      { kind: "movies", title: "Dune", note: "n" },
+    ] };
+    searchResults.search_movie = [{ id: 1, title: "Dune", year: 2021, subtitle: "", image: "" }];
+    await turn();
+    const rows = sug.suggestionsFor(ANNA, convo);
+    const pod = rows.find((r) => r.kind === "podcasts")!;
+    const dune = rows.find((r) => r.kind === "movies")!;
+    expect((await req(annaAuth, `/${pod.id}/episodes`)).status).toBe(409);
+    expect((await req(annaAuth, `/${pod.id}/episodes?feed=999`)).status).toBe(400);
+    modelSays = { episode: null };
+    const list = await (await req(annaAuth, `/${pod.id}/episodes?feed=6296135`)).json() as any;
+    expect(list.feed).toBe("6296135");
+    expect((await req(annaAuth, `/${dune.id}/episodes`)).status).toBe(400);
+    expect((await req(benAuth, `/${pod.id}/episodes?feed=6296135`)).status).toBe(404);
+  });
+});
+
 describe("keeping", () => {
   test("on an entry of theirs: the note lands under Commentaire, before Résonances", async () => {
     modelSays = { subjects: [{ kind: "series", title: "Sugar", note: "Colin Farrell joue John Sugar." }] };

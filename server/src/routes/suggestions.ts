@@ -4,6 +4,7 @@ import { isParticipant } from "../services/conversations";
 import {
   boundRef,
   dismissSuggestion,
+  episodesFor,
   keepSuggestion,
   keptCount,
   keptWebPath,
@@ -76,17 +77,34 @@ suggestions.get("/", async (c) => {
   });
 });
 
-/** Keep it: the fiche is opened if the garden has none, the note filed on it. */
+/** Keep it: the fiche is opened if the garden has none, the note filed on it.
+ *  `{candidate?, episode?}`: the identity picked, and for a podcast the one
+ *  episode, which gets a fiche of its own. */
 suggestions.post("/:id/keep", async (c) => {
   const uid = c.get("userId");
   const body = await c.req.json().catch(() => ({}));
   try {
-    const s = await keepSuggestion(uid, c.req.param("id"), body?.candidate ? String(body.candidate) : null);
+    const s = await keepSuggestion(
+      uid, c.req.param("id"), body?.candidate ? String(body.candidate) : null, body?.episode ? String(body.episode) : null,
+    );
     return c.json(view(uid, s));
   } catch (e) {
     if (e instanceof SuggestionError) return c.json({ error: e.message }, e.status as any);
     console.error("[suggest] keep failed:", e);
     return c.json({ error: "Failed to keep" }, 500);
+  }
+});
+
+/** A podcast's recent episodes, and the one Maurice would pick — `feed` is
+ *  the candidate picked, when the row has several. Keeping takes `{episode}`. */
+suggestions.get("/:id/episodes", async (c) => {
+  const uid = c.get("userId");
+  try {
+    return c.json(await episodesFor(uid, c.req.param("id"), c.req.query("feed") || null));
+  } catch (e) {
+    if (e instanceof SuggestionError) return c.json({ error: e.message }, e.status as any);
+    console.error("[suggest] episodes failed:", e);
+    return c.json({ error: "Failed to read the episodes" }, 500);
   }
 });
 

@@ -893,6 +893,12 @@
 "suggest.search_go" = "Search";
 "suggest.search_nothing_new" = "Nothing new.";
 "suggest.search_nothing" = "Nothing found for “%@”.";
+"suggest.episodes" = "Episodes";
+"suggest.episodes_more" = "More episodes";
+"suggest.episodes_loading" = "Reading the episodes…";
+"suggest.episode_suggested" = "Spotted by Maurice";
+"suggest.keep_episode" = "Keep the episode";
+"suggest.episodes_hint" = "With no episode picked, the show is kept.";
 "suggest.kind.movies" = "Film";
 "suggest.kind.series" = "Series";
 "suggest.kind.books" = "Book";

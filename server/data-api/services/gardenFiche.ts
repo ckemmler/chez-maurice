@@ -39,7 +39,10 @@ export function gardenFor(memberId: string): GardenRef | null {
 
 // ── Path safety ──
 
-const SLUG_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+// One hyphen between words; two between a podcast show and its episode
+// (`the-daily--when-ai-comes-for-your-purpose`), the shape the episode cards
+// and fiches are filed under.
+const SLUG_RE = /^[a-z0-9]+(?:--?[a-z0-9]+)*$/;
 const LOCALE_RE = /^[a-z]{2}(?:-[a-z]{2})?$/;
 
 export function assertSlug(value: string): string {

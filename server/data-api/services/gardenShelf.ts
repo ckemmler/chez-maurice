@@ -488,7 +488,8 @@ async function describe(
       id: `${e.collection}/${e.locale}/${e.slug}`,
       kind, collection: e.collection, locale: e.locale, slug: e.slug,
       title: e.title,
-      byline: byline(e.collection, card, fiche) ?? (book ? book.authors.join(", ") || null : null),
+      // An episode is known by its show, as a podcast app lists it.
+      byline: e.show?.title ?? byline(e.collection, card, fiche) ?? (book ? book.authors.join(", ") || null : null),
       date: e.date,
       // Reading is touching the entry too.
       updated_at: read && read > e.updated_at ? read : e.updated_at,
