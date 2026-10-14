@@ -1,6 +1,6 @@
 ---
 title: Knowledge capabilities
-date: '2026-10-11'
+date: '2026-10-14'
 flags: []
 locale: en
 description: 'What Maurice can do with knowledge: the garden (notes, media, journal),
@@ -28,7 +28,7 @@ The knowledge tools are how Maurice reads and grows what the household *knows*. 
 - **Journal** — dated **daily notes** (`write_daily_note`, `get_daily_note`, `search_daily_notes`) and **dreams** (`write_dream`, …), with entity-linking that turns named people into links to their fiches.
 - **Fragments** — `append_fragment` and friends: collapsible sub-sections within a note, and the place an article's full text lives beside its fiche.
 - **Resources** — typed entries for books, movies, series, podcasts, articles, games, music, and people. `search_*` then `create_*_entry` pull metadata and cover art from **Google Books, TMDB, IGDB, MusicBrainz, Podcast Index, Wikidata, and Open Graph**, downloading images into the garden. The metadata API keys are set from the admin dashboard. **Music** (since 8 October 2026) is filed by album: `search_album` / `create_album_entry` look up a MusicBrainz *release group* and take the sleeve from the Cover Art Archive. It needs no key, but MusicBrainz allows one request a second per IP, so the calls queue; when nobody picks a candidate, the original plain album is preferred over a reissue or a compilation of the same title. **A host's relay** (since 8 October 2026): a host that runs many households can keep the provider keys to itself. With `MAURICE_METADATA_RELAY_URL` and `MAURICE_METADATA_RELAY_TOKEN` in a household's environment, a lookup for a provider the household has no key for goes to the relay instead — same path and query as the provider's own, under `/v1/tmdb/`, `/v1/googlebooks/`, `/v1/igdb/`, `/v1/podcastindex/`, `/v1/musicbrainz/`, the token as a bearer and no key. A key the household set itself still wins for its provider; MusicBrainz, which takes none, always goes through the relay, since its one-request-a-second rule counts per IP. The dashboard's key section then says the host provides the lookups. Without the two variables nothing changes. The relay itself is not part of this repository.
-- **Fiches** — the working face of a media entry, see below. `open_fiche` fetches the metadata and opens one; `update_fiche` re-fetches it; `promote_fiche` turns it into a published card *when a verdict exists* — a card is the reader's verdict, not Maurice's to draft.
+- **Fiches** — the working face of a media entry, see below. `open_fiche` fetches the metadata and opens one — for a podcast, one episode too (`podcast_episode_id`, 14 October 2026): `podcasts/<locale>/<show>--<episode>-fiche.md`, the slug the episode cards already used, the show named in `meta` (`show`, `show_title`); a garden entry that is an episode carries `show {slug, title}`; `update_fiche` re-fetches it; `promote_fiche` turns it into a published card *when a verdict exists* — a card is the reader's verdict, not Maurice's to draft.
 - **Imagery & publishing** — `generate_evocation` + `generate_hero_image` (via **fal.ai**) make banner art; `publish_content` and `deploy_site` push the garden to the [[maurice-web-garden|web]], and publishing is something you can ask for in a chat.
 - **People** — `link_contact_to_person` / `find_person_by_contact` bind a garden person to a CardDAV contact.
 
