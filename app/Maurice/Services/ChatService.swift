@@ -394,6 +394,11 @@ final class ChatService {
             // reconnect, and replacing it wholesale re-rendered the sidebar
             // and the header for nothing (the flashes of 20 September 2026).
             if !Self.sameList(conversations, page) { conversations = page }
+            // The page is read after any event it could answer for: its counts
+            // are the fresher ones. A live count kept from before — an event
+            // heard before the app slept, a decision made on another device
+            // while the socket was down — would otherwise hide what waits.
+            for c in page { suggestionCounts[c.id] = nil }
             notice = nil
             hasMoreConversations = page.count >= conversationsPageSize
             // What the server says is unread (a conversation Maurice opened and
@@ -436,6 +441,9 @@ final class ChatService {
         messagesLoadedFor = nil
         unread.remove(id)
         await loadMessages(for: id)
+        // What it offers to keep, from the server: the header's mark must not
+        // depend on an event this device may never have heard.
+        Task { await refreshSuggestionCount(id) }
         // The thread's armed Maurice = its current maurice_id (sticky in-thread).
         currentMauriceId = activeConversation?.maurice_id
         // Mark read on the server so the foyer unread roll-up reflects it.
@@ -525,6 +533,15 @@ final class ChatService {
         if let live = suggestionCounts[conversationId] { return live }
         let row = conversations.first { $0.id == conversationId }
         return SuggestionCount(pending: row?.suggestions ?? 0, kept: row?.suggestions_kept ?? 0)
+    }
+
+    /// Ask the server what a conversation offers to keep — what the mark draws.
+    func refreshSuggestionCount(_ id: String) async {
+        struct Counts: Decodable { let pending: Int; let kept: Int }
+        guard let api, let token,
+              let counts: Counts = try? await api.get("/api/suggestions?conversation=\(id)", token: token) else { return }
+        let now = SuggestionCount(pending: counts.pending, kept: counts.kept)
+        if suggestionCount(for: id) != now { suggestionCounts[id] = now }
     }
 
     /// Move a conversation to the top of the list (most-recent-activity order).
@@ -786,6 +803,7 @@ final class ChatService {
             if x.id != y.id || x.title != y.title || x.updated_at != y.updated_at
                 || x.unread != y.unread || x.maurice_id != y.maurice_id || x.maurice_bound_by != y.maurice_bound_by
                 || x.message_count != y.message_count || x.last_message_at != y.last_message_at
+                || x.suggestions != y.suggestions || x.suggestions_kept != y.suggestions_kept
                 || (x.participants?.count ?? 0) != (y.participants?.count ?? 0) { return false }
         }
         return true
