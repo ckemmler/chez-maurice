@@ -334,13 +334,15 @@ describe("looking again (14 October 2026)", () => {
     expect(lastPrompt).toContain("Locked On Warriors");
     expect(lastPrompt).toContain("le daily du New York Times"); // what they said
     expect(toolCalls[0]!.args.title).toBe("The Daily New York Times");
-    expect(row.candidates.map((c: any) => c.id)).toEqual(["743229", "7467411"]);
+    // The copies of the feed fold into one: the show is settled.
+    expect(row.candidates.map((c: any) => c.id)).toEqual(["743229"]);
     expect(row.image).toBe("https://img/daily.jpg");
 
-    // Nothing new the next time: the row stays as it was.
+    // Nothing new the next time — the sports dailies do not bear the title
+    // named, so they do not count: the row stays as it was.
     const again = await (await req(annaAuth, `/${id}/search`, { method: "POST", body: "{}" })).json() as any;
     expect(again.found).toBe(0);
-    expect(again.candidates.map((c: any) => c.id)).toEqual(["743229", "7467411"]);
+    expect(again.candidates.map((c: any) => c.id)).toEqual(["743229"]);
   });
 
   test("Maurice's term finds nothing: the title with its maker is tried next", async () => {
@@ -359,7 +361,7 @@ describe("looking again (14 October 2026)", () => {
       toolCalls = [];
       const row = await (await req(annaAuth, `/${id}/search`, { method: "POST", body: "{}" })).json() as any;
       expect(toolCalls.map((c) => c.args.title)).toEqual(["The Daily by The New York Times", "The Daily The New York Times"]);
-      expect(row.found).toBe(2);
+      expect(row.found).toBe(1);
       expect(row.query).toBe("The Daily The New York Times");
     } finally {
       sug.setGardenCall(async (_m, tool, args) => {
@@ -372,6 +374,20 @@ describe("looking again (14 October 2026)", () => {
         return { card: "candidates", results: searchResults[tool] ?? [] };
       });
     }
+  });
+
+  test("copies of one feed are one candidate, and the pass settles on it", async () => {
+    const copies = [
+      { id: "743229", title: "The Daily", year: null, subtitle: "The New York Times", image: "a" },
+      { id: "6296135", title: "The Daily", year: null, subtitle: "", image: "" },
+      { id: "7467411", title: "The Daily", year: null, subtitle: "The New York Times", image: "" },
+    ];
+    expect(sug.distinct(copies).map((c) => c.id)).toEqual(["743229", "6296135"]);
+    searchResults.search_podcast = copies;
+    modelSays = named();
+    await turn();
+    const [s] = sug.suggestionsFor(ANNA, convo);
+    expect(s!.candidates.map((c) => c.id)).toEqual(["743229"]);
   });
 
   test("their term names an entry of theirs: it is that entry, no provider asked", async () => {

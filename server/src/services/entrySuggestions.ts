@@ -98,7 +98,8 @@ function hydrate(row: any): EntrySuggestion {
   let seen: string[] = [];
   try { candidates = row.candidates ? JSON.parse(row.candidates) : []; } catch {}
   try { seen = row.seen ? JSON.parse(row.seen) : []; } catch {}
-  return { ...row, public: !!row.public, candidates, query: row.query ?? null, seen };
+  // Rows filed before the copies were folded (14 October 2026) fold on read.
+  return { ...row, public: !!row.public, candidates: distinct(candidates), query: row.query ?? null, seen };
 }
 
 // ── A conversation held from an entry ───────────────────────────────────────
@@ -345,6 +346,30 @@ async function searchCall(memberId: string, kind: string, args: Record<string, u
 }
 
 /**
+ * One row per work: a catalogue lists the copies of a feed or the reprints of
+ * a book under the same title and maker, which read as a list of identical
+ * lines (three "The Daily · The New York Times"). The first stands for all.
+ */
+const workKey = (c: Candidate) => `${normalise(c.title)}|${normalise(c.subtitle)}|${c.year ?? ""}`;
+
+export function distinct(candidates: Candidate[]): Candidate[] {
+  const seen = new Set<string>();
+  return candidates.filter((c) => {
+    const key = workKey(c);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+/** The candidates as offered: one per work, and only the first when it is
+ *  surely the one named. */
+function settle(named: Named, found: Candidate[]): Candidate[] {
+  const list = distinct(found);
+  return confident(named, list) ? [list[0]!] : list;
+}
+
+/**
  * Is the first candidate the subject, without asking? Its title is the one
  * named, and nothing else in the list could be it too: the year agrees when
  * one was named, and no other candidate carries the same title otherwise.
@@ -404,6 +429,7 @@ async function resolve(
     return plain;
   }
   if (!candidates.length) return plain;
+  candidates = distinct(candidates);
   if (confident(named, candidates)) {
     const top = candidates[0]!;
     return {
@@ -899,13 +925,22 @@ export async function searchAgain(
   // term literally — "The Daily by The New York Times" finds nothing where
   // "The Daily The New York Times" finds the show — so one that comes back
   // empty is not the end of the look.
-  const terms = typed
-    ? [typed]
-    : [...new Set([await refineQuery(memberId, s), [s.title, s.subtitle].filter(Boolean).join(" "), s.title]
-        .filter((t): t is string => !!t))];
+  // The fallbacks look for what was named, so only what bears its title
+  // counts: "The Daily" alone also finds "Locked On 49ers – Daily Podcast".
+  const refined = typed ? null : await refineQuery(memberId, s);
+  const terms: Array<{ term: string; exact: boolean }> = typed
+    ? [{ term: typed, exact: false }]
+    : [
+        ...(refined ? [{ term: refined, exact: false }] : []),
+        { term: [s.title, s.subtitle].filter(Boolean).join(" "), exact: true },
+        { term: s.title, exact: true },
+      ].filter((t, i, all) => t.term && all.findIndex((u) => u.term === t.term) === i);
   const seen = new Set([...s.seen, ...s.candidates.map((c) => c.id)]);
+  const named: Named = { kind: s.kind, title: s.title, year: s.year, creator: s.subtitle ?? "", note: s.note };
+  const sameTitle = (c: Candidate) =>
+    s.kind === "people" ? sameName(c.title, s.title) : normalise(c.title) === normalise(s.title);
 
-  for (const term of terms) {
+  for (const { term, exact } of terms) {
     // Their own entry under that name: nothing to look up.
     const entry = findInGarden(garden, { kind: s.kind, title: term, note: s.note });
     if (entry && refOf(entry) !== s.existing) {
@@ -925,9 +960,13 @@ export async function searchAgain(
     }
     // Their own term shows all it finds; another look, only what is new.
     if (!typed) found = found.filter((c) => !seen.has(c.id));
-    found = found.slice(0, MAX_CANDIDATES);
+    if (exact) found = found.filter(sameTitle);
+    const fetched = found;
+    found = settle(named, found).slice(0, MAX_CANDIDATES);
     if (!found.length) continue;
-    for (const c of found) seen.add(c.id);
+    // What is shown is seen, and so are its copies, folded into it.
+    const shown = new Set(found.map(workKey));
+    for (const c of fetched) if (shown.has(workKey(c))) seen.add(c.id);
     db.run(
       `UPDATE entry_suggestions SET candidates = ?, existing = NULL, image = ?, query = ?, seen = ?,
               updated_at = datetime('now') WHERE id = ?`,
@@ -936,7 +975,7 @@ export async function searchAgain(
     return { suggestion: own(memberId, id)!, found: found.length };
   }
   // Nothing: the term is kept, for the field to show what was tried.
-  db.run(`UPDATE entry_suggestions SET query = ?, updated_at = datetime('now') WHERE id = ?`, [terms[0] ?? null, id]);
+  db.run(`UPDATE entry_suggestions SET query = ?, updated_at = datetime('now') WHERE id = ?`, [terms[0]?.term ?? null, id]);
   return { suggestion: own(memberId, id)!, found: 0 };
 }
 

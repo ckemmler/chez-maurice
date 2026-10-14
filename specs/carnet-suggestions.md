@@ -302,3 +302,12 @@ picks another; a tap on the picked one leaves the show itself to be kept.
 Not done: the show is not opened beside its episode (the episode names it,
 nothing links to it yet); an episode older than the fifty latest cannot be
 picked.
+
+**Fixed the same day.** Podcast Index lists copies of one feed — three
+"The Daily · The New York Times" — so the row read as four identical lines
+and no show was settled, which is what lists the episodes. Candidates are
+now one per work (title, maker, year), on read too for the rows filed
+before, and a sure match is settled after another look as after the pass;
+an app picks a lone candidate at once. And *Chercher encore*, falling back
+to the title named, kept only what was new — the sports dailies, since the
+right show had been seen: the fallbacks now keep only what bears that title.

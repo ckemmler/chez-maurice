@@ -449,6 +449,11 @@ private struct SuggestionRow: View {
 
             if row.searchable == true { lookAgain }
         }
+        // One possibility is the one: picked at once, so a show lists its
+        // episodes without a tap that says nothing.
+        .onChange(of: row.candidates.map(\.id), initial: true) { _, ids in
+            if ids.count == 1 { picked = ids[0] }
+        }
         .padding(12)
         .background(RoundedRectangle(cornerRadius: 12).fill(theme.bg))
         .overlay(RoundedRectangle(cornerRadius: 12).stroke(theme.rule, lineWidth: 1))
