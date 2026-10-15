@@ -413,6 +413,8 @@ const CHAPTER_SKIP_PATTERNS: RegExp[] = [
   /^cover$/, /^title\s+page$/, /^copyright/, /^dedication$/, /^epigraph$/,
   /^contents?$/, /^table\s+of\s+contents/, /^toc$/, /^index$/, /^bibliography/,
   /^about\s+the\s+author/, /^also\s+by/, /^none$/,
+  // The licence Project Gutenberg appends to every book it distributes.
+  /project\s+gutenberg.*licen[cs]e/,
 ];
 
 /** True if a chapter file is non-content (too small, or a front-matter title).

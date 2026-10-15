@@ -159,6 +159,12 @@ describe("epubSections", () => {
     expect(s[0]!.text).toContain("Gregor woke");
   });
 
+  it("leaves the Gutenberg licence out, like the other back matter", async () => {
+    const { shouldSkipChapter } = await import("../data-api/services/calibre");
+    expect(shouldSkipChapter("0007-THE FULL PROJECT GUTENBERG™ LICENSE.txt", 20_000)).toBe(true);
+    expect(shouldSkipChapter("0004-I.txt", 20_000)).toBe(false);
+  });
+
   it("names chapter files the way the reader parses them", () => {
     expect(chapterFileName(7, "THE FULL PROJECT GUTENBERG™ LICENSE")).toBe("0007-THE FULL PROJECT GUTENBERG™ LICENSE.txt");
     expect(chapterFileName(1, "Part 1/2: a\tb.")).toBe("0001-Part 1 2: a b.txt");
