@@ -10,18 +10,21 @@ import add from "./add";
 
 const calibre = new Hono();
 
-// An install that has no Calibre — the Linux container does not ship it — says
-// so once, here. Without this every route below still answers 200 with an empty
-// library, or spawns a binary that isn't there and surfaces the ENOENT as a 500
-// with no explanation. A 503 naming the flag is the difference between "Maurice
-// is broken" and "this instance doesn't read books".
+// An install without Calibre's binaries — the Linux container does not ship
+// them — says so on the one route that runs one: `/add` spawns `calibredb`.
+// Everything else reads metadata.db as plain SQLite and the artifact files,
+// and extraction and summaries run in this process (services/bookProcessing.ts),
+// so they stay open. A hosted household adds books through Calibre-Web.
+// Until 15 October 2026 the flag closed every route, which is why no hosted
+// household could read or summarize a book.
 if (process.env.MAURICE_CALIBRE_DISABLED) {
-  calibre.all("/*", (c) =>
+  const noCalibre = (c: any) =>
     c.json(
-      { error: "Calibre is not available on this instance (MAURICE_CALIBRE_DISABLED)" },
+      { error: "Adding books needs Calibre, which this instance does not have: add them through the library page (/calibre)." },
       503,
-    ),
-  );
+    );
+  calibre.all("/add", noCalibre);
+  calibre.all("/add/*", noCalibre);
 }
 
 // Read-only routes are public (site is behind Cloudflare Access)

@@ -5,6 +5,12 @@
  * POST /:bookId/summarize  — generate AI summaries for chapters
  * POST /:bookId/index      — index summaries to Qdrant
  * GET  /:bookId/status     — processing status (chapter/summary counts)
+ *
+ * Extraction (of an EPUB) and summarization run in this process
+ * (services/bookProcessing.ts), so every instance has them, hosted ones
+ * included. The private Python tool is still called where it exists for what
+ * has not moved: a PDF's chapters, and indexing summaries into the corpus. An
+ * instance without it says so instead of spawning a script that is not there.
  */
 
 import { openSync, mkdirSync, existsSync, closeSync, readFileSync, appendFileSync, unlinkSync } from "node:fs";
@@ -13,13 +19,16 @@ import { spawn, spawnSync } from "node:child_process";
 
 import { Hono } from "hono";
 
-import { getBookMetadata, getChapterStats, getLibraryRoot } from "../../services/calibre";
+import { getBookFile, getBookMetadata, getChapterStats, getLibraryRoot } from "../../services/calibre";
+import { BookProcessingError, extractChapters, summarizeChapters } from "../../services/bookProcessing";
 
 const actions = new Hono();
 
 const repoRoot = resolve(import.meta.dir, "../../../..");
 const cliPath = resolve(repoRoot, "tools/calibre/cli.py");
 const logDir = resolve(repoRoot, "logs");
+/** The private tool is a symlink into maurice-tools; a hosted image has none. */
+const hasPythonTool = () => existsSync(cliPath);
 
 /** True if this interpreter can import a module — a cheap capability probe.
  *  `import xml.parsers.expat` gates extraction (Homebrew's python@3.14 ships a
@@ -96,6 +105,23 @@ function jobOutcome(action: string, output: string, code: number | null): JobInf
   }
   if (!error && code !== 0) error = output.trim().slice(-400) || `exited with code ${code}`;
   return { action, state: error ? "error" : "ok", error, at: new Date().toISOString() };
+}
+
+/** Run an in-process action in the background, tracked like a spawned one so
+ *  /status reports it the same way. */
+function runInProcess(bookId: number, action: string, work: () => Promise<unknown>): void {
+  jobs.set(bookId, { action, state: "running", at: new Date().toISOString() });
+  work().then(
+    (result) => {
+      jobs.set(bookId, { action, state: "ok", at: new Date().toISOString() });
+      console.log(`[calibre] book ${bookId} ${action} → ok ${JSON.stringify(result)}`);
+    },
+    (err) => {
+      const error = err instanceof Error ? err.message : String(err);
+      jobs.set(bookId, { action, state: "error", error, at: new Date().toISOString() });
+      console.error(`[calibre] book ${bookId} ${action} → error: ${error.slice(0, 200)}`);
+    },
+  );
 }
 
 function spawnCalibreAction(action: string, bookId: number, sync: boolean) {
@@ -194,34 +220,74 @@ actions.get("/:bookId/status", async (c) => {
 
 // --- Action endpoints ---
 
-for (const action of ["extract", "summarize", "index"] as const) {
-  actions.post(`/:bookId/${action}`, async (c) => {
-    const bookId = Number(c.req.param("bookId"));
-    if (Number.isNaN(bookId)) {
-      return c.json({ error: "Invalid book id" }, 400);
-    }
+const bookIdOf = (raw: string) => {
+  const n = Number(raw);
+  return Number.isInteger(n) && n > 0 ? n : null;
+};
 
-    const metadata = await getBookMetadata(bookId);
-    if (!metadata) {
-      return c.json({ error: "Book not found" }, 404);
-    }
-
-    const sync = c.req.query("sync") === "true";
-    const result = spawnCalibreAction(action, bookId, sync);
-
-    if (sync) {
-      if (!result.ok) {
-        return c.json({ error: result.error }, 500);
-      }
-      // CLI may return { error: "..." } inside the JSON result
-      if (result.result?.error) {
-        return c.json({ error: result.result.error }, 422);
-      }
-      return c.json({ status: "completed", result: result.result });
-    }
-
-    return c.json({ status: "started", pid: result.pid }, 202);
-  });
+/** One of the actions that run here: in the background unless `?sync=true`. */
+async function inProcess(
+  c: any,
+  bookId: number,
+  action: "extract" | "summarize",
+  work: () => Promise<unknown>,
+) {
+  if (jobs.get(bookId)?.state === "running") {
+    return c.json({ error: `A ${jobs.get(bookId)!.action} is already running for this book.` }, 409);
+  }
+  if (c.req.query("sync") !== "true") {
+    runInProcess(bookId, action, work);
+    return c.json({ status: "started" }, 202);
+  }
+  jobs.set(bookId, { action, state: "running", at: new Date().toISOString() });
+  try {
+    const result = await work();
+    jobs.set(bookId, { action, state: "ok", at: new Date().toISOString() });
+    return c.json({ status: "completed", result });
+  } catch (err) {
+    const error = err instanceof Error ? err.message : String(err);
+    jobs.set(bookId, { action, state: "error", error, at: new Date().toISOString() });
+    return c.json({ error }, err instanceof BookProcessingError ? (err.status as any) : 500);
+  }
 }
+
+/** The Python tool, for what it still does alone. */
+function viaPythonTool(c: any, bookId: number, action: "extract" | "index") {
+  const sync = c.req.query("sync") === "true";
+  const result = spawnCalibreAction(action, bookId, sync);
+  if (sync) {
+    if (!result.ok) return c.json({ error: result.error }, 500);
+    if (result.result?.error) return c.json({ error: result.result.error }, 422);
+    return c.json({ status: "completed", result: result.result });
+  }
+  return c.json({ status: "started", pid: result.pid }, 202);
+}
+
+actions.post("/:bookId/extract", async (c) => {
+  const bookId = bookIdOf(c.req.param("bookId"));
+  if (!bookId) return c.json({ error: "Invalid book id" }, 400);
+  if (!(await getBookMetadata(bookId))) return c.json({ error: "Book not found" }, 404);
+
+  if (await getBookFile(bookId, "EPUB")) return inProcess(c, bookId, "extract", () => extractChapters(bookId));
+  if ((await getBookFile(bookId, "PDF")) && hasPythonTool()) return viaPythonTool(c, bookId, "extract");
+  return c.json({ error: "Only a book with an EPUB file can be split into chapters here." }, 422);
+});
+
+actions.post("/:bookId/summarize", async (c) => {
+  const bookId = bookIdOf(c.req.param("bookId"));
+  if (!bookId) return c.json({ error: "Invalid book id" }, 400);
+  if (!(await getBookMetadata(bookId))) return c.json({ error: "Book not found" }, 404);
+  const memberId = c.get("userId") as string | undefined;
+  if (!memberId) return c.json({ error: "Authentication required" }, 401);
+  return inProcess(c, bookId, "summarize", () => summarizeChapters(bookId, memberId));
+});
+
+actions.post("/:bookId/index", async (c) => {
+  const bookId = bookIdOf(c.req.param("bookId"));
+  if (!bookId) return c.json({ error: "Invalid book id" }, 400);
+  if (!(await getBookMetadata(bookId))) return c.json({ error: "Book not found" }, 404);
+  if (!hasPythonTool()) return c.json({ error: "Indexing summaries into the corpus is not available on this server." }, 501);
+  return viaPythonTool(c, bookId, "index");
+});
 
 export default actions;

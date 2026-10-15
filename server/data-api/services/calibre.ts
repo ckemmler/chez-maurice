@@ -1,7 +1,8 @@
 import { Database } from "bun:sqlite";
 import { promises as fs } from "node:fs";
 import path from "node:path";
-import { getMauriceDbPath } from "../lib/config";
+import { existsSync } from "node:fs";
+import { getDataDir, getMauriceDbPath } from "../lib/config";
 import {
   CHAPTERS_DIR,
   SUMMARIES_DIR,
@@ -35,8 +36,22 @@ export interface ChapterInfo {
 // from the web admin UI (persisted in maurice.db `calibre_libraries`, the
 // admin account's default row). We resolve it from there so an admin edit takes
 // effect without a redeploy; env vars remain the fallback for first-run / tests.
-const ENV_LIBRARY_PATH =
-  process.env.CALIBRE_LIBRARY_PATH ?? `${process.env.HOME || "."}/Calibre Library`;
+//
+// With no row, the fallback is the environment, then the library Calibre-Web
+// serves (`<dataDir>/calibre/library`, which ensure-calibre-library.ts creates
+// on a hosted household) when it exists, then Calibre's own default location.
+// Before 15 October 2026 the second step was missing: a hosted household's
+// API looked in ~/Calibre Library while Calibre-Web filed its uploads under the
+// data dir, so a book added there never reached Carnet.
+function fallbackLibraryRoot(): string {
+  if (process.env.CALIBRE_LIBRARY_PATH) return process.env.CALIBRE_LIBRARY_PATH;
+  if (process.env.MAURICE_CALIBRE_LIBRARY) return process.env.MAURICE_CALIBRE_LIBRARY;
+  try {
+    const served = path.join(getDataDir(), "calibre", "library");
+    if (existsSync(path.join(served, "metadata.db"))) return served;
+  } catch { /* no data dir configured */ }
+  return `${process.env.HOME || "."}/Calibre Library`;
+}
 
 // Warn once per distinct cause: a latching boolean would hide a later, different
 // failure, and silence is what hid the admin setting being ignored in the first
@@ -45,7 +60,7 @@ const warnedCauses = new Set<string>();
 function warnFallback(cause: string): void {
   if (warnedCauses.has(cause)) return;
   warnedCauses.add(cause);
-  console.warn(`[calibre] ${cause}; falling back to library root ${ENV_LIBRARY_PATH}`);
+  console.warn(`[calibre] ${cause}; falling back to library root ${fallbackLibraryRoot()}`);
 }
 
 function resolveLibraryRoot(): string {
@@ -72,7 +87,7 @@ function resolveLibraryRoot(): string {
     // maurice.db unavailable (e.g. tests) — fall through to env.
     warnFallback(`could not read library root from ${getMauriceDbPath()} (${err})`);
   }
-  return ENV_LIBRARY_PATH;
+  return fallbackLibraryRoot();
 }
 
 // Resolving opens maurice.db, so cache the answer — re-resolving per query would
@@ -329,6 +344,20 @@ export async function getCoverFile(bookId: number): Promise<string | null> {
   }
 }
 
+/** Absolute path to one of a book's files (`EPUB`, `PDF`…), or null when the
+ *  book has no such format or its file is not on disk. Calibre names the file
+ *  in `data.name`, the extension being the format in lower case. */
+export async function getBookFile(bookId: number, format: string): Promise<string | null> {
+  const meta = await getBookMetadata(bookId);
+  if (!meta) return null;
+  const row = getDb()
+    .query("SELECT name FROM data WHERE book = ? AND UPPER(format) = ?")
+    .get(bookId, format.toUpperCase()) as { name: string } | undefined;
+  if (!row) return null;
+  const p = path.join(getLibraryRoot(), meta.bookPath, `${row.name}.${format.toLowerCase()}`);
+  return (await fileExists(p)) ? p : null;
+}
+
 export function searchBooksByTags(tags: string[]): BookMetadata[] {
   if (!tags.length) return [];
 
@@ -388,7 +417,7 @@ const CHAPTER_SKIP_PATTERNS: RegExp[] = [
 
 /** True if a chapter file is non-content (too small, or a front-matter title).
  *  `byteSize` is the file's UTF-8 byte length, matching Python's st_size check. */
-function shouldSkipChapter(filename: string, byteSize: number): boolean {
+export function shouldSkipChapter(filename: string, byteSize: number): boolean {
   if (byteSize < 1000) return true;
   const nameClean = filename.replace(/\.txt$/i, "").replace(/^\d+-/, "").toLowerCase();
   return CHAPTER_SKIP_PATTERNS.some((re) => re.test(nameClean));

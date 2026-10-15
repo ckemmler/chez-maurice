@@ -162,7 +162,9 @@ RUN cd /app/web && WEB_SSR=1 npm run build
 # MAURICE_GARDEN_PROFILE=public mirrors what infra/installer/build.sh does for a
 # public .pkg: the garden tool exposes its note tools only.
 #
-# No Calibre in this image, so the routes say so instead of failing at spawn.
+# No Calibre binaries in this image, so the one route that spawns `calibredb`
+# (/api/v1/calibre/add) says so instead of failing; books arrive through
+# Calibre-Web. Reading, extracting and summarizing need no Calibre.
 ENV NODE_ENV=production \
     MAURICE_CONTAINER_MODE=production \
     MAURICE_GARDEN_PROFILE=public \

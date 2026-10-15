@@ -111,6 +111,16 @@ export const ANCILLARY_INVOCATIONS: AncillaryInvocation[] = [
   { id: "article_cleanup", side: "server", tier: "light", label: "Article cleanup",
     blurb: "Sorting a saved article's text from the page's furniture — credits, advertising markers, the header said twice — before it is read.",
     prefer: ["qwen3.6-35b-a3b", "mistral-small-latest"] },
+  // A book's chapters condensed one by one (data-api/services/bookProcessing.ts),
+  // each with the summaries before it as context — what the reader shows beside
+  // the text and what the reading companion reads. The household's own default
+  // model, as the owner chose on 15 October 2026: the summaries are read like
+  // the chat. Each chapter carries every summary before it, so the input grows
+  // with the book: a long novel is some tens of euro cents on DeepSeek V4 Flash,
+  // most of it that context. Charged to the member who asked.
+  { id: "chapter_summary", side: "server", tier: "standard", label: "Chapter summaries",
+    blurb: "A book's chapters condensed one by one, each knowing the ones before it, when a member asks for them from the book's page.",
+    defaultModel: () => householdDefaultModel() },
   { id: "flashcards", side: "server", tier: "heavy", label: "Flashcards",
     blurb: "Cards generated from a chapter, a book, a fiche or a fragment." },
   { id: "signal_parse", side: "server", tier: "light", label: "Signal parsing",
