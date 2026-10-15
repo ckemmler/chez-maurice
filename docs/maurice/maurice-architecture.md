@@ -193,21 +193,33 @@ Calibre and Calibre-Web register on their own SQLite connections. `bun:sqlite`
 does not have it, so the Bun server *cannot* write to `metadata.db` even if it
 tried — which is the contract anyway, and now an enforced one.
 
-Still open: `MAURICE_CALIBRE_DISABLED` stays set on the production image. The
-`/api/v1/calibre/*` read paths need chapters, and extracting them still depends
-on `tools/calibre` in the private overlay — a separate piece of work. So a
-hosted household gets its library and its reader; the reading companion follows
-when that moves.
+**Books on a hosted household, closed on 15 October 2026.** The production
+image had `MAURICE_CALIBRE_DISABLED` set and the flag closed every
+`/api/v1/calibre/*` route, because chapters came from the private
+`tools/calibre` — `epubsplit.py` and `epub2txt`, the second a macOS binary —
+and summaries from the same tool calling Nebius on a key of its own, past the
+household's provider and its budget. Both now run in the server:
+`data-api/services/epubChapters.ts` cuts an EPUB at its table of contents (EPUB 3
+nav, else NCX, else one chapter per spine document) with a ZIP reader of a few
+lines over `node:zlib`, and `bookProcessing.ts` summarizes chapter by chapter
+with the summaries before it as context — the Python pipeline's prompts,
+chunking and `metadata.json` (`context-chained-v1`) — through the
+`chapter_summary` ancillary invocation: the household's **default model**
+unless the admin pins another, under the member's budget, on the ledger with
+the job id `chapter-summary:<book>`. On the nine Gutenberg classics the cut
+gives the Python tool's chapters and word counts; on the App Review household
+*Metamorphosis* was extracted and summarized on DeepSeek V4 Flash for 0.016 €.
+The flag now closes `/calibre/add` alone, the one route that spawns
+`calibredb`; books reach a hosted library through Calibre-Web. The Python tool
+is still called where it exists for a PDF's chapters and for indexing summaries
+into the corpus, and an instance without it says so. With no library declared
+in `calibre_libraries`, the API now reads the one Calibre-Web serves
+(`<dataDir>/calibre/library`) rather than `~/Calibre Library`: a book uploaded
+through Calibre-Web on a hosted household had never reached Carnet.
 
-Since 15 October 2026 one household can lift the flag on its own:
-`compose.household.yml` passes `MAURICE_CALIBRE_DISABLED` through, at `1` by
-default like the image, and a household whose env file sets it to an empty value
-reads the library in its volume. The App Review household does: nine public-domain
-classics from Project Gutenberg, their chapters extracted on the Mac with the
-private tool and copied into `data/calibre/artifacts`, the library declared for
-its admin in `calibre_libraries` — so Carnet has books to list and read there.
-Extraction and summaries still fail in that container; the chapters exist only
-because they were made elsewhere.
+The App Review household carries nine public-domain classics from Project
+Gutenberg in that library (`compose.household.yml` passes the flag through,
+default `1`, for a host that does give a household `calibredb`).
 
 **And a primitive that was simply missing.** `createUser` creates a row in `maurice.db` and stops: no garden directory, no `gardens.json` entry — and *nothing in the repo writes that manifest*, it is read by three places and maintained by hand. So on a fresh install a member exists, can log in, and `/g/<them>` answers "Garden not available". `scripts/provision-member.ts` is the missing half. Related: `start-web.sh` hardcoded `candide` as the garden it serves, which is correct on exactly one machine in the world; it now reads `MAURICE_DEFAULT_GARDEN`.
 
