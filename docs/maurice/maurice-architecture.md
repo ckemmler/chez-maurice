@@ -1,6 +1,6 @@
 ---
 title: Maurice — architecture overview
-date: '2026-10-09'
+date: '2026-10-15'
 flags: []
 locale: en
 description: The five cooperating parts of Maurice, how a message flows end-to-end,
@@ -198,6 +198,16 @@ Still open: `MAURICE_CALIBRE_DISABLED` stays set on the production image. The
 on `tools/calibre` in the private overlay — a separate piece of work. So a
 hosted household gets its library and its reader; the reading companion follows
 when that moves.
+
+Since 15 October 2026 one household can lift the flag on its own:
+`compose.household.yml` passes `MAURICE_CALIBRE_DISABLED` through, at `1` by
+default like the image, and a household whose env file sets it to an empty value
+reads the library in its volume. The App Review household does: nine public-domain
+classics from Project Gutenberg, their chapters extracted on the Mac with the
+private tool and copied into `data/calibre/artifacts`, the library declared for
+its admin in `calibre_libraries` — so Carnet has books to list and read there.
+Extraction and summaries still fail in that container; the chapters exist only
+because they were made elsewhere.
 
 **And a primitive that was simply missing.** `createUser` creates a row in `maurice.db` and stops: no garden directory, no `gardens.json` entry — and *nothing in the repo writes that manifest*, it is read by three places and maintained by hand. So on a fresh install a member exists, can log in, and `/g/<them>` answers "Garden not available". `scripts/provision-member.ts` is the missing half. Related: `start-web.sh` hardcoded `candide` as the garden it serves, which is correct on exactly one machine in the world; it now reads `MAURICE_DEFAULT_GARDEN`.
 
