@@ -1,6 +1,6 @@
 ---
 title: Shared gardens
-date: '2026-09-07'
+date: '2026-10-15'
 flags: []
 locale: en
 description: Per-note sharing that derives audience-keyed gardens — collaborative
@@ -42,7 +42,7 @@ In the app, the sidebar lists the gardens you tend; a garden page shows its memb
 
 ## On the web
 
-Each member's garden is served as its own Astro site (see [[maurice-web-garden]]). The registry `web/gardens/gardens.json` maps members to a base path (`/g/<member>`), title, and avatar; `GARDEN_BASE` rewrites internal links under that prefix, and **symlink shells** (`web/.garden-roots/<member>/`) with per-member caches let several gardens build from one shared engine without colliding.
+One engine serves every member's garden at `/g/<member>/` (see [[maurice-web-garden]]): the server names the garden, its base path and its owner's theme in headers on each request, and the engine reads the garden from disk. A member reading a note shared with them sees it inside the owner's garden, in the owner's theme.
 
 ## Ships vs. exists
 
@@ -50,6 +50,6 @@ Per-note sharing and derived gardens are part of the **core** server (they ship 
 
 ## Gaps & notes
 
-- **Theme wiring is a seam.** The server stores a `web_theme` per audience, but the Astro engine still picks theme by env/query/cookie — setting a garden's theme and having the public render honour it isn't fully joined (see [[maurice-web-garden]]).
+- **A shared garden's own theme is stored, not used.** `PATCH /api/v1/gardens/:id` writes a `web_theme` per audience, but a page is rendered in its owner's theme (the one the owner picks in the app for their private garden); nothing renders a shared audience in the theme set for it.
 - **Access is grant-and-leave, not roles.** There's no notion of read-only vs. co-editor within a shared garden, and no per-garden audit of who added what — sharing is a flat allow-list per note.
 - **"Earned by presence" is aspirational.** The richer idea that you join a garden by *participating* in a conversation that loads it (from the shared-rooms thinking) isn't implemented; today access is an explicit `share`.

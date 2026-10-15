@@ -258,7 +258,11 @@ the multi-household shape works on a real host; an update is one command
 the shipped image recorded host-wide so a later restart lands on it); and a
 household thinks on Scaleway end to end — `bge-multilingual-gemma2` for the
 corpus, Mistral Small 3.2 as the chat default — under one IAM key that can do
-nothing but that. The cutover happened the same day: the two A records now
+nothing but that. (That was the first day. Since 30 September 2026 the hosted
+policy is Scaleway without Mistral: DeepSeek V4 Flash as the everyday and
+default model, the small Qwen 3.6 for light work, and Qwen3-Embedding 8B for the
+corpus of a new household — the first ones keep `bge-multilingual-gemma2` until
+they are re-indexed. The default is a household setting, not a constant.) The cutover happened the same day: the two A records now
 point at the host, grey and unproxied, and the Mac's tunnel no longer lists
 them; Caddy had both certificates within a minute of the DNS change. The
 Mac-side instances are stopped, not deleted. Not yet: backups of the host's

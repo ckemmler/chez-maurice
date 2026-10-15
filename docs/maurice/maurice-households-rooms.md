@@ -1,6 +1,6 @@
 ---
 title: Households, rooms & devices
-date: '2026-10-03'
+date: '2026-10-15'
 flags: []
 locale: en
 description: Members and roles, guests, multi-person rooms, device pairing and PINs,
@@ -61,7 +61,7 @@ In a shared room, the long-press menu on a message offers **Report** and **Block
 
 ## Push
 
-When an event can't reach a live socket, it becomes an APNs push (`server/src/services/push.ts` + `apns.ts`, token-based ES256 over HTTP/2) — a room's activity, an invitation to a room, or a conversation Maurice opened ("Maurice: …", opening on the conversation when tapped). Device tokens carry a `platform` and a `household_tag`; the platform picks the APNs topic (`carnet-ios` → Carnet's bundle id `eu.chezmaurice.carnet`, `APNS_CARNET_TOPIC`; anything else → the Maurice app, `APNS_TOPIC`), so a conversation Maurice opens reaches Carnet too (19 September 2026, evening); dead tokens are pruned on Apple's say-so. This is what notifies you across households when you're a guest elsewhere.
+When an event can't reach a live socket, it becomes an APNs push (`server/src/services/push.ts` + `apns.ts`, token-based ES256 over HTTP/2) — a room's activity, an invitation to a room, or a conversation Maurice opened ("Maurice: …", opening on the conversation when tapped). Device tokens carry a `platform` and a `household_tag`; the platform picks the APNs topic (`carnet-ios` → Carnet's bundle id `eu.chezmaurice.carnet.app` since the apps moved to the company team on 13 October 2026, `APNS_CARNET_TOPIC`; anything else → the Maurice app, `eu.chezmaurice.maurice`, `APNS_TOPIC`; a token is tried on both APNs environments, so a TestFlight build is reached from any server), so a conversation Maurice opens reaches Carnet too (19 September 2026, evening); dead tokens are pruned on Apple's say-so. This is what notifies you across households when you're a guest elsewhere.
 
 ## The household archive
 

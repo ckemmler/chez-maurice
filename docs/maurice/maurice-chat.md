@@ -1,6 +1,6 @@
 ---
 title: The chat experience
-date: '2026-10-14'
+date: '2026-10-15'
 flags: []
 locale: en
 description: Streaming render, tool-result data cards, math, markdown, images, dictation,
@@ -125,7 +125,7 @@ The composer's input row keeps one **+** on the left (camera, photos, files, pas
 
 ## Model switcher
 
-The composer's model pill opens a Menu grouped by provider (Anthropic, OpenAI, Mistral, Z.ai, Ollama), each with its brand-coloured dot, limited to the providers the household has a key for. The choice persists onto the active Maurice — the member's everyday preference, or the persona's own `model`. See [[maurice-personas-hats]].
+The composer's model pill opens a Menu grouped by provider (Anthropic, OpenAI, Mistral, Z.ai, Scaleway, Ollama), each with its brand-coloured dot, limited to the providers the household has a key for. The choice persists onto the active Maurice — the member's everyday preference, or the persona's own `model`. See [[maurice-personas-hats]].
 
 ## The cost meter
 

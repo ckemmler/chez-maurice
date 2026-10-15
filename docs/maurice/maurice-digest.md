@@ -18,18 +18,18 @@ covers:
   maurice-applications: '2026-10-10'
   maurice-architecture: '2026-10-15'
   maurice-carnet: '2026-10-15'
-  maurice-chat: '2026-10-14'
+  maurice-chat: '2026-10-15'
   maurice-composer: '2026-09-22'
   maurice-data-model: '2026-10-14'
   maurice-docs: '2026-10-15'
   maurice-domains: '2026-10-10'
   maurice-files: '2026-06-19'
-  maurice-households-rooms: '2026-10-03'
+  maurice-households-rooms: '2026-10-15'
   maurice-knowledge: '2026-10-14'
   maurice-life: '2026-09-18'
   maurice-personas-hats: '2026-09-19'
-  maurice-server: '2026-10-14'
-  maurice-shared-gardens: '2026-09-07'
+  maurice-server: '2026-10-15'
+  maurice-shared-gardens: '2026-10-15'
   maurice-tools: '2026-10-10'
   maurice-web-garden: '2026-10-10'
 ---
@@ -310,9 +310,9 @@ Each member has folders and files (5 GB each), in **Settings**: text, images, PD
 - **Public, private, encrypted:** a note is published **only with the `public` flag**. An `encrypted` note is encrypted in the page (AES-256-GCM, the password typed in the browser) or withheld. Fiches, drafts, unopened articles, person fiches and other members' content never enter a published build — checked by an automated leak test.
 - **A member's site:** the household's public pages at `/@<member>/`, a static build behind a household switch; or a domain of one's own (today only at home, through Cloudflare Pages).
 - **Themes:** manuscript (default), botanical, newsprint, terminal, chosen in the app.
-- **Shared gardens:** sharing is a property of a note — its audience. A shared garden is simply the notes sharing an audience; members can see who reads a note, share it, or leave its audience; each audience can have its own theme.
+- **Shared gardens:** sharing is a property of a note — its audience. A shared garden is simply the notes sharing an audience; members can see who reads a note, share it, or leave its audience. A shared note is read inside its owner's garden, in the owner's theme.
 
-*Gaps:* English-only site search; translation and social sharing unavailable in the container; shared gardens have no roles (read-only vs co-editor); a public host's duties (reporting, takedown) are not defined.
+*Gaps:* English-only site search; translation and social sharing unavailable in the container; shared gardens have no roles (read-only vs co-editor), and a theme set for a shared audience is stored but not used; a public host's duties (reporting, takedown) are not defined.
 
 *Detail:* `web-garden`, `shared-gardens`.
 

@@ -24,7 +24,7 @@ One distinction runs throughout: *what ships* versus *what exists*. The public r
 
 The system is five cooperating parts: the native **Maurice app** (conversation), **Carnet** (the pocket companion for capturing and reading), a **server** (chat engine + data API), a fleet of MCP **tools**, and a **web** garden renderer.
 
-[[maurice-digest|The digest]] is the whole set condensed to its facts — the names, what ships, the gaps — rewritten every so often; it is what Maurice reads when asked about himself — through his **documentation tool** (`maurice_docs`, see [[maurice-tools]]) since the evening of 19 September 2026, through the built-in persona Maurice Maurice for the day before that — with any note updated since loaded whole beside it.
+[[maurice-digest|The digest]] is the whole set condensed for someone who uses Maurice and will never read its code: what he can do, how he behaves, what his architecture guarantees, what ships and what does not, the gaps, and a *How do I…* section — about 7 000 words, stating the present rather than a history, each section naming the notes that hold the detail. It is what Maurice reads when asked about himself, through his **documentation tool** (`maurice_docs`, see [[maurice-tools]]), with any note updated since loaded whole beside it; a note edit that changes what the digest says corrects the digest in the same piece of work, so that delta stays empty.
 
 ## Concept — the *why*
 
