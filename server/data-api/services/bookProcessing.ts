@@ -23,7 +23,7 @@
 
 import fs from "node:fs/promises";
 import path from "node:path";
-import { ancillaryComplete, ancillaryModel } from "../../src/services/ancillary";
+import { ancillaryComplete, ancillaryModel, AncillaryError } from "../../src/services/ancillary";
 import { recordSpend, verdict } from "../../src/services/budget";
 import { getModel } from "../../src/services/models";
 import { getBookFile, getBookMetadata, getLibraryRoot, shouldSkipChapter } from "./calibre";
@@ -149,11 +149,28 @@ export interface SummarizeResult {
  * name. Stops at the first failure — a refusal, an empty answer, the budget —
  * with what was written so far kept, so asking again resumes there.
  */
+/** Waits before the second and third attempt of a call that failed for a
+ *  passing reason. A whole book is dozens of calls, and one dropped stream
+ *  (Scaleway closed the socket mid-answer, 15 October 2026, on the App Review
+ *  household) used to end the run on its first chapter. */
+const RETRY_WAITS_MS = [2_000, 8_000];
+
+/** Worth asking again: the provider failed or the network did. Not a refusal,
+ *  an empty answer, the budget, or a missing key — those would fail the same
+ *  way twice. */
+function isTransient(err: unknown): boolean {
+  if (err instanceof BookProcessingError) return false;
+  if (err instanceof AncillaryError) return err.status >= 500;
+  return true;
+}
+
 export async function summarizeChapters(
   bookId: number,
   memberId: string,
   /** The model call — the ancillary door; a test hands in its own. */
   complete: typeof ancillaryComplete = ancillaryComplete,
+  /** How a retry waits; a test passes one that does not. */
+  wait: (ms: number) => Promise<void> = (ms) => Bun.sleep(ms),
 ): Promise<SummarizeResult> {
   const { meta, dir } = await bookDir(bookId);
   const chaptersDir = path.join(dir, CHAPTERS_DIR);
@@ -185,15 +202,24 @@ export async function summarizeChapters(
   let skipped = 0;
 
   const ask = async (prompt: string): Promise<string> => {
-    const v = verdict(provider, modelId, 0, memberId);
-    if (!v.ok) throw new BookProcessingError(v.reason ?? "The spending limit is reached.", 429);
-    const r = await complete({
-      invocation: "chapter_summary",
-      system: SYSTEM_PROMPT,
-      prompt,
-      maxTokens: 4000,
-      temperature: 0.3,
-    });
+    let r: Awaited<ReturnType<typeof ancillaryComplete>> | undefined;
+    for (let attempt = 0; !r; attempt++) {
+      const v = verdict(provider, modelId, 0, memberId);
+      if (!v.ok) throw new BookProcessingError(v.reason ?? "The spending limit is reached.", 429);
+      try {
+        r = await complete({
+          invocation: "chapter_summary",
+          system: SYSTEM_PROMPT,
+          prompt,
+          maxTokens: 4000,
+          temperature: 0.3,
+        });
+      } catch (err) {
+        if (attempt >= RETRY_WAITS_MS.length || !isTransient(err)) throw err;
+        console.warn(`[calibre] book ${bookId}: summary call failed (${err instanceof Error ? err.message.slice(0, 120) : err}); retrying`);
+        await wait(RETRY_WAITS_MS[attempt]!);
+      }
+    }
     recordSpend(r.usage, memberId, jobId);
     if (r.stop === "refusal") throw new BookProcessingError(`${r.model} declined to summarize this chapter.`, 502);
     if (!r.text.trim()) throw new BookProcessingError(`${r.model} returned an empty summary.`, 502);

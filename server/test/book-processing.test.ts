@@ -316,9 +316,41 @@ describe("a book, extracted and summarized in the server", () => {
     expect(prompts[0]).toContain("### II\nSummary 2.");
   });
 
-  it("stops on a refusal and keeps what was written", async () => {
+  it("asks again when the provider drops the stream, and only then", async () => {
+    const { AncillaryError } = await import("../src/services/ancillary");
     const dir = fs.readdirSync(path.join(TMP, "artifacts")).find((d) => d.startsWith("6a0e3d2c"))!;
     fs.rmSync(path.join(TMP, "artifacts", dir, "chapter_summaries", "0004-III.summary.txt"));
+    let calls = 0;
+    const waits: number[] = [];
+    const r = await summarizeChapters(1, MEMBER.id, (async () => {
+      if (++calls < 3) throw new AncillaryError("scaleway error: stream failed: The socket connection was closed unexpectedly");
+      return { text: "Third time.", model: "m", provider: "p", stop: "end", usage: null };
+    }) as any, async (ms) => { waits.push(ms); });
+    expect(r).toMatchObject({ created: 1, skipped: 2 });
+    expect(calls).toBe(3);
+    expect(waits).toEqual([2_000, 8_000]);
+
+    // A missing key fails the same way every time: no second call.
+    fs.rmSync(path.join(TMP, "artifacts", dir, "chapter_summaries", "0004-III.summary.txt"));
+    calls = 0;
+    await expect(summarizeChapters(1, MEMBER.id, (async () => {
+      calls++;
+      throw new AncillaryError("no scaleway API key configured for this household", 422);
+    }) as any, async () => {})).rejects.toThrow("no scaleway API key");
+    expect(calls).toBe(1);
+
+    // Three drops in a row: the run stops, with what was written kept.
+    calls = 0;
+    await expect(summarizeChapters(1, MEMBER.id, (async () => {
+      calls++;
+      throw new AncillaryError("scaleway error: stream failed");
+    }) as any, async () => {})).rejects.toThrow("stream failed");
+    expect(calls).toBe(3);
+  });
+
+  it("stops on a refusal and keeps what was written", async () => {
+    const dir = fs.readdirSync(path.join(TMP, "artifacts")).find((d) => d.startsWith("6a0e3d2c"))!;
+    fs.rmSync(path.join(TMP, "artifacts", dir, "chapter_summaries", "0004-III.summary.txt"), { force: true });
     await expect(summarizeChapters(1, MEMBER.id, (async () =>
       ({ text: "", model: "m", provider: "p", stop: "refusal", usage: null })) as any)).rejects.toThrow("declined");
     const chapters = await listChapters(1);

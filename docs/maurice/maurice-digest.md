@@ -280,7 +280,7 @@ Each member has folders and files (5 GB each), in **Settings**: text, images, PD
 ## 19. Books and the library
 
 - A household's library is a genuine **Calibre library**, managed in the browser with **Calibre-Web** at `/calibre` (upload, metadata, shelves, OPDS for e-readers, a reader, send to Kindle) behind Maurice's login — nobody signs in twice. Desktop Calibre can still open it.
-- **Chapters and summaries are made by the server** (since 15 October 2026, so on hosted households too): an EPUB is cut at its table of contents; each chapter is summarized with the summaries before it as context, in the voice of the book, by the household's default model, charged to the member who asks. Front and back matter (cover, contents, a Project Gutenberg licence…) is left out.
+- **Chapters and summaries are made by the server** (since 15 October 2026, so on hosted households too): an EPUB is cut at its table of contents; each chapter is summarized with the summaries before it as context, in the voice of the book, by the household's default model, charged to the member who asks. A call the provider drops is retried twice; if the run still stops, asking again resumes where it stopped. Front and back matter (cover, contents, a Project Gutenberg licence…) is left out.
 - Books feed Carnet's reader (§20), the composer (§12), reading companions (§14), flashcards and the corpus.
 - The App Review household carries nine public-domain classics from Project Gutenberg.
 

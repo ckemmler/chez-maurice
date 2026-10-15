@@ -1,15 +1,15 @@
 {
   "format": "maurice-docs",
   "version": 1,
-  "generated_at": "2026-10-15T06:31:30Z",
+  "generated_at": "2026-10-15T06:41:25Z",
   "notes": [
     { "file": "maurice-applications.md", "slug": "maurice-applications", "date": "2026-10-10", "bytes": 13984, "sha256": "715567c9d43b3f47a45ed74435828c4e6fca5c68d10e4e0da967d830938810cf" },
-    { "file": "maurice-architecture.md", "slug": "maurice-architecture", "date": "2026-10-15", "bytes": 36316, "sha256": "a3aa30e913078ef8aae527c76a09db7540670f3e2cd186fb496592c52c97475a" },
+    { "file": "maurice-architecture.md", "slug": "maurice-architecture", "date": "2026-10-15", "bytes": 36446, "sha256": "9e2c9a036bf79f343a0d79dda264a70d5b69d05a0ee9ce601d0e42619bdfe63a" },
     { "file": "maurice-carnet.md", "slug": "maurice-carnet", "date": "2026-10-15", "bytes": 34635, "sha256": "d4f86cb0b784b20b2eff80987a3c1598ae41a1b185d509dfaa7802f483f6df41" },
     { "file": "maurice-chat.md", "slug": "maurice-chat", "date": "2026-10-15", "bytes": 49837, "sha256": "4e85cff8e5d544e17a471c5340caced19324754da7a69fcef34b2ab1a651cd0e" },
     { "file": "maurice-composer.md", "slug": "maurice-composer", "date": "2026-09-22", "bytes": 11034, "sha256": "f3972e3134cd359ad0bdc47bbccd7deca1334fee83524cbcd9bfbdf6af7a65b0" },
     { "file": "maurice-data-model.md", "slug": "maurice-data-model", "date": "2026-10-14", "bytes": 35516, "sha256": "3e0fc0b56be589b8318d375d3f1261400097a903ebaa8539dc4551404b438fae" },
-    { "file": "maurice-digest.md", "slug": "maurice-digest", "date": "2026-10-15", "bytes": 45236, "sha256": "9ee1a306c76a662a902f8d2188ab614d619e2fe799678b4202b0f2bf6f22a070" },
+    { "file": "maurice-digest.md", "slug": "maurice-digest", "date": "2026-10-15", "bytes": 45343, "sha256": "16abfa5c736d51a715fc2b1a73cae65abc58886f9346de477feaa999c573e241" },
     { "file": "maurice-docs.md", "slug": "maurice-docs", "date": "2026-10-15", "bytes": 7875, "sha256": "8947d9c491bd4c8312f97425e17954022c0c812db9a827b8d66a83fccb3ee28f" },
     { "file": "maurice-domains.md", "slug": "maurice-domains", "date": "2026-10-10", "bytes": 42300, "sha256": "239ccfedfd6a0a0d13a9b52e3053212b239cf1547cf8e7553c8ab8829a641ae3" },
     { "file": "maurice-files.md", "slug": "maurice-files", "date": "2026-06-19", "bytes": 2618, "sha256": "efcfdcde55ae0036dede5249af40155debc54b2711290f1d9fae22fde7660c82" },

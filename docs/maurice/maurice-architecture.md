@@ -206,7 +206,7 @@ with the summaries before it as context — the Python pipeline's prompts,
 chunking and `metadata.json` (`context-chained-v1`) — through the
 `chapter_summary` ancillary invocation: the household's **default model**
 unless the admin pins another, under the member's budget, on the ledger with
-the job id `chapter-summary:<book>`. On the nine Gutenberg classics the cut
+the job id `chapter-summary:<book>`; a call the provider drops is asked again twice (after 2 and 8 s) before the run stops, and asking again resumes where it stopped. On the nine Gutenberg classics the cut
 gives the Python tool's chapters and word counts; on the App Review household
 *Metamorphosis* was extracted and summarized on DeepSeek V4 Flash for 0.016 €.
 The flag now closes `/calibre/add` alone, the one route that spawns
