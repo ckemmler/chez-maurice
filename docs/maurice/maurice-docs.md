@@ -1,6 +1,6 @@
 ---
 title: Maurice — system documentation
-date: '2026-10-06'
+date: '2026-10-15'
 flags:
 - moc
 locale: en
@@ -30,8 +30,6 @@ The system is five cooperating parts: the native **Maurice app** (conversation),
 
 [[maurice|Maurice — a household AI with a tamed memory]] — the founding vision: scoped, visible memory; the *apprivoisé* stance; hats as chosen personas; the garden growing by deliberate action; sovereignty and "small on purpose."
 
-[[maurice-what-im-building-for|What I'm actually building for]] — the honest restatement, and the pace that protects it.
-
 [[maurice-applications|Applications, plugins, and the case of the mail]] — how a personal application attaches to the Maurice story: what is generic in it, what is one person's life, and the open questions — client-side inference, conversational onboarding, and what sovereignty actually means when what you hand over is not a copy but the keys. A parked thread, written down to be picked up.
 
 [[maurice-domaines|Un seul Maurice, des domaines qui émergent]] — the design decided on 19 September 2026 (in French; being built session by session — see [[maurice-domains]] for what exists): one Maurice, domains that emerge from the conversations, each with a visible *cahier*, proposed in a conversation Maurice opens, the garden seeded on consent; the plan, the data, the costs, the test cases.
@@ -53,7 +51,6 @@ the apps at one and use the real thing, with no machine and no account.
 See [[maurice-architecture]]. **17 September:** the first rented host runs two
 real households on Scaleway, hosting and inference both, and Scaleway is a
 provider in the server — the friends first, the demos next.
-
 
 [[maurice-architecture|Architecture overview]] — the five parts, how a message flows end-to-end, and where each concern lives.
 
