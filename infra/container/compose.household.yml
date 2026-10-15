@@ -42,6 +42,11 @@ services:
       MAURICE_OAUTH_PASSWORD: ${MAURICE_OAUTH_PASSWORD:-}
       # Where Maurice's documentation (the maurice_docs tool) refreshes from; `off` for none.
       MAURICE_DOCS_URL: ${MAURICE_DOCS_URL:-}
+      # The image has no Calibre, so its routes answer 503 by default. A
+      # household whose volume holds a library with its chapters already
+      # extracted (the App Review one) sets this to an empty value in its env
+      # file to read it. `-` and not `:-`: empty must stay empty.
+      MAURICE_CALIBRE_DISABLED: ${MAURICE_CALIBRE_DISABLED-1}
       # The spending fuse (server/src/services/budget.ts): off unless set. For
       # a household that thinks on the operator's key rather than its own —
       # set it in the household's env file, or in defaults.env for all.
