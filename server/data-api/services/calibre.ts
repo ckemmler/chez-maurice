@@ -172,16 +172,15 @@ function getBookRecord(bookId: number): BookMetadata | null {
         b.id,
         b.title,
         b.path,
-        GROUP_CONCAT(a.name, ',') AS authors,
-        GROUP_CONCAT(t.name, ',') AS tags,
+        -- Subqueries, as listBooks does: authors and tags joined side by side
+        -- multiply each other, and a book with two tags came back as
+        -- "Franz Kafka, Franz Kafka" — written as such into the fiche it opened.
+        (SELECT GROUP_CONCAT(a2.name, ',') FROM books_authors_link bal2 JOIN authors a2 ON a2.id = bal2.author WHERE bal2.book = b.id) AS authors,
+        (SELECT GROUP_CONCAT(t2.name, ',') FROM books_tags_link btl2 JOIN tags t2 ON t2.id = btl2.tag WHERE btl2.book = b.id) AS tags,
         s.name AS series,
         c.text AS description,
         ${addedExpr()} AS added
       FROM books b
-      LEFT JOIN books_authors_link bal ON bal.book = b.id
-      LEFT JOIN authors a ON a.id = bal.author
-      LEFT JOIN books_tags_link btl ON b.id = btl.book
-      LEFT JOIN tags t ON t.id = btl.tag
       LEFT JOIN books_series_link bsl ON b.id = bsl.book
       LEFT JOIN series s ON s.id = bsl.series
       LEFT JOIN comments c ON c.book = b.id

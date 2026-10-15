@@ -237,8 +237,8 @@ beforeAll(() => {
     INSERT INTO books (id, title, path, uuid) VALUES (1, 'Metamorphosis', 'Franz Kafka/Metamorphosis (1)', '6a0e3d2c-1111-4222-8333-944455556666');
     INSERT INTO authors (id, name) VALUES (1, 'Franz Kafka');
     INSERT INTO books_authors_link (book, author) VALUES (1, 1);
-    INSERT INTO tags (id, name) VALUES (1, 'Fiction');
-    INSERT INTO books_tags_link (book, tag) VALUES (1, 1);
+    INSERT INTO tags (id, name) VALUES (1, 'Fiction'), (2, 'Psychological fiction');
+    INSERT INTO books_tags_link (book, tag) VALUES (1, 1), (1, 2);
     INSERT INTO data (book, format, name) VALUES (1, 'EPUB', 'Metamorphosis - Franz Kafka');
   `);
   meta.close();
@@ -264,6 +264,15 @@ afterAll(() => {
   }
   invalidateLibraryRoot();
   fs.rmSync(TMP, { recursive: true, force: true });
+});
+
+describe("a book's record", () => {
+  it("names each author once, however many tags the book has", async () => {
+    const { getBookMetadata } = await import("../data-api/services/calibre");
+    const meta = await getBookMetadata(1);
+    expect(meta!.authors).toEqual(["Franz Kafka"]);
+    expect(meta!.tags.sort()).toEqual(["Fiction", "Psychological fiction"]);
+  });
 });
 
 describe("a book, extracted and summarized in the server", () => {
