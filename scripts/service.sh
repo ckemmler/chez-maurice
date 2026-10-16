@@ -4,7 +4,7 @@
 # the one blessed way to run it. Installed once, they start on login and restart
 # on crash; you never hand-start or hunt for a process again.
 #
-#   scripts/service.sh install        create + load the agents (idempotent)
+#   scripts/service.sh install [name] create + load the agents, or one (idempotent)
 #   scripts/service.sh uninstall      unload + remove them (falls back to manual)
 #   scripts/service.sh restart [name] restart all, or one (api|mcp-gateway|web|calibre-web)
 #   scripts/service.sh stop [name]     stop all, or one (stays stopped)
@@ -36,6 +36,20 @@ label_of() { echo "com.maurice.$1"; }
 plist_of() { echo "$AGENTS/$(label_of "$1").plist"; }
 field()    { echo "$1" | cut -d'|' -f"$2"; }
 
+# How macOS schedules a service. Background caps its CPU, keeps it on the
+# efficiency cores and throttles its disk — right for work nobody is waiting
+# on. The API is not that: someone is waiting on every request it answers, and
+# the heavy work it does on this machine — Whisper transcribing a dictation,
+# above all — ran three times slower under Background (16 October 2026: 3.5 s
+# for 7.6 s of speech, against 1.2 s at normal priority). Standard is the
+# ordinary priority of a service, neither favoured nor held back.
+process_type_of() {
+  case "$1" in
+    api) echo "Standard" ;;
+    *)   echo "Background" ;;
+  esac
+}
+
 # Resolve a service spec by name (or echo all specs when no name given).
 specs_for() {
   local want="${1:-}"
@@ -64,7 +78,7 @@ write_plist() { # name script
   </dict>
   <key>RunAtLoad</key><true/>
   <key>KeepAlive</key><true/>
-  <key>ProcessType</key><string>Background</string>
+  <key>ProcessType</key><string>$(process_type_of "$name")</string>
   <key>StandardOutPath</key><string>$log</string>
   <key>StandardErrorPath</key><string>$log</string>
 </dict></plist>
@@ -81,7 +95,7 @@ stop_port() { # free a port from any manually-started instance
 
 cmd_install() {
   local s name port script
-  for s in "${SERVICES[@]}"; do
+  for s in $(specs_for "${1:-}"); do
     name="$(field "$s" 1)"; port="$(field "$s" 2)"; script="$(field "$s" 3)"
     echo "→ $name (:$port)"
     stop_port "$port"                                   # free the port
@@ -148,7 +162,7 @@ cmd_logs() {
 }
 
 case "${1:-status}" in
-  install)   cmd_install ;;
+  install)   cmd_install "${2:-}" ;;
   uninstall) cmd_uninstall "${2:-}" ;;
   restart)   cmd_restart "${2:-}" ;;
   stop)      cmd_stop "${2:-}" ;;

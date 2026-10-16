@@ -32,7 +32,7 @@
 	<key>ExitTimeOut</key>
 	<integer>10</integer>
 	<key>ProcessType</key>
-	<string>Background</string>
+	<string>Standard</string>
 	<key>StandardOutPath</key>
 	<string>__HOME__/Library/Logs/Maurice/api.log</string>
 	<key>StandardErrorPath</key>

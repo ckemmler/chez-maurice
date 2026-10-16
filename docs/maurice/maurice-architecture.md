@@ -107,7 +107,7 @@ The **home Mac is now the exception, not the model**: it still runs as launchd
 agents, and migrating it into the container is the last step. Everything below
 describes that install while it lasts.
 
-At home the whole thing is a set of **launchd agents** (`scripts/service.sh`): `com.maurice.api` (the server, port 3001), `com.maurice.mcp-gateway`, `com.maurice.web` (the Astro engine), a nightly `com.maurice.backup` of `maurice.db`, and one extra `com.maurice.household.<name>` per additional household — each its own server process on its own port with its own `MAURICE_DATA_DIR`. They start at login and restart on crash; there is no process to babysit. The server reads `~/.maurice/config.toml` and `~/.maurice/.env`.
+At home the whole thing is a set of **launchd agents** (`scripts/service.sh`): `com.maurice.api` (the server, port 3001), `com.maurice.mcp-gateway`, `com.maurice.web` (the Astro engine), a nightly `com.maurice.backup` of `maurice.db`, and one extra `com.maurice.household.<name>` per additional household — each its own server process on its own port with its own `MAURICE_DATA_DIR`. They start at login and restart on crash; there is no process to babysit. They run at macOS's `Background` priority, which caps CPU and disk for work nobody waits on — except the API, `Standard` since 16 October 2026: someone waits on every request it answers, and the Whisper it runs for dictation was three times slower held back. The server reads `~/.maurice/config.toml` and `~/.maurice/.env`.
 
 The apps ship through TestFlight. The server does **not** ship as a `.pkg` any
 more: `infra/installer` built a notarized one and it worked, but maintaining a
