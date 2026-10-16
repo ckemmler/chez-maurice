@@ -12,6 +12,8 @@ const db = (await import("../src/db")).default;
 const { addModel, getModel, setModelThinking, toModelInfo } = await import("../src/services/models");
 const { createMaurice, updateMaurice } = await import("../src/services/maurices");
 const { thinkingBody, getHouseholdConfig } = await import("../src/services/claude");
+const { anthropicThinking, anthropicTakesTemperature } = await import("../src/services/anthropicParams");
+const { ancillaryComplete } = await import("../src/services/ancillary");
 const { openaiTurn } = await import("../src/services/openaiChat");
 const { _resetErrors, fullHealth, DB_CHECK_TTL_MS } = await import("../src/services/health");
 const health = await import("../src/services/health");
@@ -25,7 +27,8 @@ describe("the roster knows which models reason", () => {
     const at = (id: string) => getModel(id)?.thinking;
     expect(at("glm-5.3-flash")).toBe("optional");
     expect(at("glm-5.3")).toBe("optional");
-    expect(at("claude-sonnet-4-6")).toBe("optional");
+    expect(at("claude-sonnet-5-5")).toBe("optional");
+    expect(at("claude-opus-5-5")).toBe("optional");
     expect(at("claude-haiku-4-5-20251001")).toBe("none"); // still the budget form, which Maurice does not send
     expect(at("gpt-oss-120b")).toBe("always");
     expect(at("mistral-small-3.2-24b-instruct-2506")).toBe("none");
@@ -122,6 +125,58 @@ describe("what reaches the provider", () => {
     expect(thinkingBody("scaleway", false, "qwen3.5-397b-a17b")).toBeUndefined();
     // And the roster says the model takes a choice.
     expect((db.query(`SELECT thinking FROM models WHERE id = 'deepseek-v4-flash-0731'`).get() as any)?.thinking).toBe("optional");
+  });
+
+  test("each Anthropic generation is told to answer directly in the form it accepts", () => {
+    // As the API answered on 16 October 2026 — every other form is a 400.
+    expect(anthropicThinking("claude-opus-5-5", false)).toEqual({ output_config: { effort: "low" } });
+    expect(anthropicThinking("claude-sonnet-5-5", false)).toEqual({ thinking: { type: "between_tools" } });
+    expect(anthropicThinking("claude-opus-5", false)).toEqual({ thinking: { type: "disabled" } });
+    expect(anthropicThinking("claude-sonnet-4-6", false)).toEqual({ thinking: { type: "disabled" } });
+    // Reasoning asked for is adaptive everywhere.
+    expect(anthropicThinking("claude-opus-5-5", true)).toEqual({ thinking: { type: "adaptive" } });
+    // The chat path reaches it through the one per-provider switch.
+    expect(thinkingBody("anthropic", false, "claude-sonnet-5-5")).toEqual({ thinking: { type: "between_tools" } });
+  });
+
+  test("no choice answers directly on the Claude models that would otherwise reason, and sends nothing on the others", () => {
+    // From Opus 5 / Sonnet 5 on, a request that says nothing reasons; a model
+    // upgrade must not turn reasoning on for a persona that never asked.
+    expect(anthropicThinking("claude-sonnet-5-5", undefined)).toEqual({ thinking: { type: "between_tools" } });
+    expect(anthropicThinking("claude-opus-5-5", undefined)).toEqual({ output_config: { effort: "low" } });
+    expect(anthropicThinking("claude-opus-5", undefined)).toEqual({ thinking: { type: "disabled" } });
+    // Up to Opus 4.8 nothing sent already means no reasoning.
+    expect(anthropicThinking("claude-sonnet-4-6", undefined)).toBeUndefined();
+    expect(anthropicThinking("claude-haiku-4-5-20251001", undefined)).toBeUndefined();
+  });
+
+  test("a side task on a Claude 5.x model is told not to reason, unless it asks for an effort", async () => {
+    db.run(`UPDATE households SET api_key = 'k-ant' WHERE id = 'default'`);
+    const realFetch = globalThis.fetch;
+    const sent: any[] = [];
+    globalThis.fetch = (async (_url: string, init: any) => {
+      sent.push(JSON.parse(init.body));
+      return new Response(JSON.stringify({ stop_reason: "end_turn", content: [{ type: "text", text: "ok" }], usage: { input_tokens: 5, output_tokens: 1 } }), { status: 200 });
+    }) as any;
+    try {
+      await ancillaryComplete({ invocation: "topic_tags", model: "claude-sonnet-5-5", prompt: "x", maxTokens: 100, temperature: 0, reasoning: "none" });
+      await ancillaryComplete({ invocation: "topic_tags", model: "claude-opus-5-5", prompt: "x", maxTokens: 100, effort: "high" });
+    } finally {
+      globalThis.fetch = realFetch;
+    }
+    expect(sent[0].thinking).toEqual({ type: "between_tools" });
+    expect(sent[0].temperature).toBeUndefined();
+    expect(sent[1].thinking).toBeUndefined();
+    expect(sent[1].output_config).toEqual({ effort: "high" });
+  });
+
+  test("a persona's temperature reaches only the Anthropic models that still take one", () => {
+    for (const m of ["claude-opus-5-5", "claude-sonnet-5-5", "claude-opus-5", "claude-opus-4-8", "claude-fable-5-1"]) {
+      expect(anthropicTakesTemperature(m)).toBe(false);
+    }
+    for (const m of ["claude-sonnet-4-6", "claude-opus-4-6", "claude-haiku-4-5-20251001"]) {
+      expect(anthropicTakesTemperature(m)).toBe(true);
+    }
   });
 
   test("the Chat Completions client sends the extra field as it is", async () => {

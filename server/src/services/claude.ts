@@ -36,6 +36,7 @@ import { t, userLocale } from "./i18n";
 import { newUsage, priceUsage, hasUsage, type TurnUsage } from "./pricing";
 import { verdict as budgetVerdict } from "./budget";
 import { providerPlugin, type ProviderPlugin, type ProviderTool } from "./providerPlugins";
+import { anthropicTakesTemperature, anthropicThinking } from "./anthropicParams";
 
 interface StreamEvent {
   // thinking: the model is reasoning and nothing visible is coming yet — an
@@ -996,6 +997,7 @@ export function openaiStyleKey(
 }
 
 /** The request field that turns a reasoning phase on or off, per provider.
+ *  Anthropic's differs by generation, and is in services/anthropicParams.ts.
  *  Z.ai's GLM models always think: since September 2026 `thinking.type =
  *  disabled` is refused outright ("This model always engages in thinking and
  *  cannot be disabled; please use low, high, or max", code 1210) and the dial
@@ -1023,6 +1025,7 @@ export function openaiStyleKey(
  *  reasoning the model tends to say a line before its tool calls ("let me
  *  look…"), which the member sees. Exported for tests. */
 export function thinkingBody(provider: string, thinking: boolean | undefined, model?: string): Record<string, unknown> | undefined {
+  if (provider === "anthropic") return model ? anthropicThinking(model, thinking) : undefined;
   if (provider === "zai") return { reasoning_effort: thinking ? "high" : "low" };
   if (provider === "scaleway" && thinking === false && model && REASONING_OFF[model]) return REASONING_OFF[model];
   return undefined;
@@ -1881,16 +1884,18 @@ function trackedBooks(
         messages,
         stream: true,
       };
-      if (temperature !== undefined) body.temperature = temperature;
+      // The 4.7+ models refuse a temperature outright (services/anthropicParams.ts).
+      if (temperature !== undefined && anthropicTakesTemperature(resolved)) body.temperature = temperature;
       if (tools.length) body.tools = tools;
       if (answerOnly && tools.length) body.tool_choice = { type: "none" };
       // Adaptive thinking is the one on-mode of the 4.6+ family (the fixed
-      // budget is gone from the newer models); sampling parameters are refused
-      // beside it on 4.7+, so the persona's creativity yields to its choice to
-      // reason. The blocks come back with a signature and are replayed as-is
-      // in the tool rounds below — see contentBlocks.
-      if (thinking === true) { body.thinking = { type: "adaptive" }; delete body.temperature; }
-      else if (thinking === false) body.thinking = { type: "disabled" };
+      // budget is gone from the newer models); a temperature is refused beside
+      // it, so the persona's creativity yields to its choice to reason. "Off"
+      // takes a different form per generation, and so does no choice — see
+      // services/anthropicParams.ts. The blocks come back with a signature and
+      // are replayed as-is in the tool rounds below — see contentBlocks.
+      Object.assign(body, thinkingBody("anthropic", thinking, resolved));
+      if (thinking === true) delete body.temperature;
 
       const roundStarted = performance.now();
       const roundUsage = { prompt: 0, cached: 0, completion: 0 };

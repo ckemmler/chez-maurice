@@ -1,6 +1,6 @@
 ---
 title: Maurice — the digest
-date: '2026-10-15'
+date: '2026-10-16'
 flags: []
 locale: en
 description: 'The system documentation condensed to what a user needs: everything
@@ -28,7 +28,7 @@ covers:
   maurice-knowledge: '2026-10-14'
   maurice-life: '2026-09-18'
   maurice-personas-hats: '2026-09-19'
-  maurice-server: '2026-10-15'
+  maurice-server: '2026-10-16'
   maurice-shared-gardens: '2026-10-15'
   maurice-tools: '2026-10-10'
   maurice-web-garden: '2026-10-10'
@@ -36,7 +36,7 @@ covers:
 
 # Maurice — the digest
 
-This is the whole documentation condensed for someone who uses Maurice and will never read its code: what it can do, how it behaves, what its architecture guarantees, what is finished and what is not. It describes the system as it stands on 15 October 2026. Each section names the note that holds the detail (*Detail:* `server`, `carnet`…); any of them can be asked for in full.
+This is the whole documentation condensed for someone who uses Maurice and will never read its code: what it can do, how it behaves, what its architecture guarantees, what is finished and what is not. It describes the system as it stands on 16 October 2026. Each section names the note that holds the detail (*Detail:* `server`, `carnet`…); any of them can be asked for in full.
 
 Two distinctions run through everything. **Ships vs. exists**: what every install and every hosted household gets, against what runs only at the developer's home in a private overlay and is experimental. **Built vs. planned**: a planned feature is never described here as working; the gaps are listed at the end of each section and gathered at the end.
 
@@ -127,12 +127,12 @@ There is also a **browser clipper** that saves the page being read into the gard
 
 ## 7. Models and providers
 
-- **Providers:** Anthropic; OpenAI, Mistral, Z.ai and **Scaleway** (Generative APIs, Paris) through an OpenAI-style path; **Ollama** for local models (free, unmetered); an echo mode when no key is set.
+- **Providers:** Anthropic (Claude Opus 5.5, Sonnet 5.5 and Haiku 4.5); OpenAI, Mistral, Z.ai and **Scaleway** (Generative APIs, Paris) through an OpenAI-style path; **Ollama** for local models (free, unmetered); an echo mode when no key is set.
 - **A key is what makes a model exist**: the apps, the access grid and the admin console only list models whose provider has a key. The admin's **access grid** says which models each standard member may use; an admin may use all.
 - **Which model answers:** the conversation's domain (if it names one), else the member's everyday choice, else the household default. The model pill in the composer switches model, grouped by provider. There is **no automatic failover** between providers.
 - **The household default is a setting.** The policy for hosted households is Scaleway only: **DeepSeek V4 Flash** as the everyday model and the small **Qwen 3.6** for light work.
 - **Background work** (summaries, briefs, mail reading, the documentation tool…) runs through named *ancillary invocations*. Each resolves to an admin's pin, else its own default, else the household's ancillary model, else the chat default. Chapter summaries and the full mail reading use the household's default model; the night's domain work prefers DeepSeek V4 Flash; light sorting jobs prefer the small Qwen.
-- **Reasoning:** a household setting for the everyday Maurice ("answer directly" by default) and a per-domain choice; some models always reason, DeepSeek V4 Flash can be told not to.
+- **Reasoning:** a household setting for the everyday Maurice ("answer directly" by default) and a per-domain choice; some models always reason, DeepSeek V4 Flash can be told not to, and on Claude Opus 5.5 "answer directly" means the least reasoning it allows. A domain's creativity setting is ignored by the current Claude models, which accept none.
 - **Prompt caching** lowers the cost of repeated prefixes: explicitly on Anthropic, automatically on Z.ai and, among Scaleway's models, reported only by DeepSeek V4 Flash. The cost meter shows what it saved.
 - **Context window:** when a conversation outgrows the model's window, the oldest turns are dropped, the cut is remembered so later turns stay consistent, and the model is told the beginning is missing.
 - **Provider plugins** can add a provider from outside the repository; none ships.
@@ -161,7 +161,7 @@ There is also a **browser clipper** that saves the page being read into the gard
 - **Data cards:** what a tool returns is drawn from the tool's data beside the prose, so Maurice cannot quietly misreport it. **Source cards** show exactly what a search found.
 - **A reply belongs to the conversation, not to the phone.** Locking the phone or losing the network does not stop it: the turn runs to the end on the server and the app reattaches. **Stop** ends it and keeps what was written. One reply at a time per conversation.
 
-*Gaps:* a server restart loses a reply in progress; reasoning-off DeepSeek can open an answer with an English working sentence.
+*Gaps:* a server restart loses a reply in progress; reasoning-off DeepSeek can open an answer with an English working sentence, and reasoning-off Claude Sonnet 5.5 says a line before a tool call that runs into its answer.
 
 *Detail:* `server`, `chat`.
 

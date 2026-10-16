@@ -212,7 +212,7 @@ export function docsUpdatedAt(): string | null {
  *  that exist in the roster count, so an older household's Anthropic seed
  *  (Sonnet 4.5) is found by the later entries. */
 const DOCS_MODEL_CANDIDATES: Record<string, string[]> = {
-  anthropic: ["claude-sonnet-4-6", "claude-sonnet-4-5-20250929", "claude-opus-4-8", "claude-opus-4-6"],
+  anthropic: ["claude-sonnet-5-5", "claude-sonnet-4-6", "claude-sonnet-4-5-20250929", "claude-opus-5-5", "claude-opus-4-8"],
   scaleway: ["mistral-medium-3.5-128b", "qwen3.5-397b-a17b", "glm-5.2", "gpt-oss-120b"],
   mistral: ["mistral-large-latest"],
   openai: ["gpt-4o"],

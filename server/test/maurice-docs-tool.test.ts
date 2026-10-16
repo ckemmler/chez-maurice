@@ -82,10 +82,10 @@ function completer(text = "Nightly, with restic.", cost = 0.05) {
     seen.push(req);
     return {
       text,
-      model: "claude-sonnet-4-6",
+      model: "claude-sonnet-5-5",
       provider: "anthropic",
       stop: "end",
-      usage: { provider: "anthropic", model: "claude-sonnet-4-6", rounds: 1, input: 20_000, output: 200, cache_read: 0, cache_write: 0, cost, cost_uncached: cost },
+      usage: { provider: "anthropic", model: "claude-sonnet-5-5", rounds: 1, input: 20_000, output: 200, cache_read: 0, cache_write: 0, cost, cost_uncached: cost },
     };
   };
   return { complete, seen };
@@ -124,7 +124,7 @@ test("a question runs one sub-turn on the digest and the newer notes, charged to
   const a = await askMauriceDocs({ question: "Comment Maurice sauvegarde-t-il ?" }, MEMBER, complete);
   expect(a.isError).toBe(false);
   expect(a.text).toBe("Nightly, with restic.");
-  expect(a.model).toBe("claude-sonnet-4-6");
+  expect(a.model).toBe("claude-sonnet-5-5");
   expect(seen.length).toBe(1);
   const req = seen[0]!;
   expect(req.invocation).toBe(MAURICE_DOCS_INVOCATION);
@@ -143,7 +143,7 @@ test("a question runs one sub-turn on the digest and the newer notes, charged to
   // The ledger: the member's row, not the night's.
   expect(budget.spentTodayUsd(MEMBER) - before).toBeCloseTo(0.05, 6);
   const row = db.query(`SELECT user_id, model FROM spend_ledger WHERE user_id = ? ORDER BY at DESC LIMIT 1`).get(MEMBER) as any;
-  expect(row).toEqual({ user_id: MEMBER, model: "claude-sonnet-4-6" });
+  expect(row).toEqual({ user_id: MEMBER, model: "claude-sonnet-5-5" });
 });
 
 test("a note comes back in full without a model call; an unknown one lists the notes", async () => {
@@ -179,8 +179,8 @@ test("a cut-short answer says so; a refusal is an error", async () => {
 
 test("the member's own cap stops the sub-turn before it is made", async () => {
   db.run(`UPDATE households SET api_key = 'k-ant' WHERE id = 'default'`);
-  setPinnedModel(MAURICE_DOCS_INVOCATION, "claude-sonnet-4-6");
-  expect(ancillaryModel(MAURICE_DOCS_INVOCATION)).toBe("claude-sonnet-4-6");
+  setPinnedModel(MAURICE_DOCS_INVOCATION, "claude-sonnet-5-5");
+  expect(ancillaryModel(MAURICE_DOCS_INVOCATION)).toBe("claude-sonnet-5-5");
   db.run(`UPDATE users SET spend_cap_daily_usd = 0.01 WHERE id = ?`, [MEMBER]);
   try {
     const { complete, seen } = completer();
@@ -198,14 +198,14 @@ test("the member's own cap stops the sub-turn before it is made", async () => {
 
 test("the docs model is a strong cloud model of a provider with a key, and is what the invocation runs on unpinned", () => {
   db.run(`UPDATE households SET api_key = NULL, scaleway_api_key = NULL, openai_api_key = NULL, mistral_api_key = NULL, zai_api_key = NULL WHERE id = 'default'`);
-  db.run(`UPDATE households SET default_model = 'claude-sonnet-4-6', ancillary_model = 'claude-sonnet-4-6' WHERE id = 'default'`);
+  db.run(`UPDATE households SET default_model = 'claude-sonnet-5-5', ancillary_model = 'claude-sonnet-5-5' WHERE id = 'default'`);
   db.run(`DELETE FROM ancillary_models WHERE invocation = ?`, [MAURICE_DOCS_INVOCATION]);
 
   // Anthropic key → Sonnet, as the effective model; not as advice, which
   // would mark an Anthropic-only household as seeded.
   db.run(`UPDATE households SET api_key = 'k-ant' WHERE id = 'default'`);
-  expect(docsModel()).toBe("claude-sonnet-4-6");
-  expect(ancillaryModel(MAURICE_DOCS_INVOCATION)).toBe("claude-sonnet-4-6");
+  expect(docsModel()).toBe("claude-sonnet-5-5");
+  expect(ancillaryModel(MAURICE_DOCS_INVOCATION)).toBe("claude-sonnet-5-5");
   expect(recommendedModel(MAURICE_DOCS_INVOCATION)).toBeNull();
   expect(hasRecommendations()).toBe(false);
 
@@ -233,9 +233,9 @@ test("the docs model is a strong cloud model of a provider with a key, and is wh
   }
 
   // No key at all → no computed default; the invocation falls back like any other.
-  db.run(`UPDATE households SET api_key = NULL, scaleway_api_key = NULL, default_model = 'claude-sonnet-4-6' WHERE id = 'default'`);
+  db.run(`UPDATE households SET api_key = NULL, scaleway_api_key = NULL, default_model = 'claude-sonnet-5-5' WHERE id = 'default'`);
   expect(docsModel()).toBeNull();
-  expect(ancillaryModel(MAURICE_DOCS_INVOCATION)).toBe("claude-sonnet-4-6");
+  expect(ancillaryModel(MAURICE_DOCS_INVOCATION)).toBe("claude-sonnet-5-5");
 });
 
 // ── The persona is gone ─────────────────────────────────────────────────────

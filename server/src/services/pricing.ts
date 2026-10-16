@@ -21,10 +21,10 @@ export interface ModelPrice {
   cacheRead: number;
 }
 
-// Anthropic's cache pricing is uniform across the family: a write costs 1.25x a
-// normal input token (5-minute TTL; the 1-hour TTL is 2x, which we don't use),
-// and a read costs 0.1x. Both are expressed as multipliers so a price change
-// only has to be made in one place.
+// Anthropic's cache pricing: a write costs 1.25x a normal input token (5-minute
+// TTL; the 1-hour TTL is 2x, which we don't use), and a read costs 0.1x — 0.05x
+// on the 5.5 models, which override it below. Both are expressed as
+// multipliers so a price change only has to be made in one place.
 const ANTHROPIC_CACHE = { cacheWrite: 1.25, cacheRead: 0.1 };
 
 // The sheets are in dollars (Scaleway's in euros — its entries below are
@@ -38,17 +38,17 @@ const EUR_USD = 1.1537;
 /** List prices per million tokens. Keys are bare model ids — a dated snapshot
  *  id (`...-20251001`) resolves to its base entry, see `priceFor`. */
 const PRICES: Record<string, ModelPrice> = {
-  // Anthropic — https://platform.claude.com/docs/en/pricing
+  // Anthropic — https://platform.claude.com/docs/en/about-claude/pricing (read
+  // 16 October 2026). The 5.5 models read the cache at 0.05x, not 0.1x.
+  "claude-opus-5-5": { input: 4, output: 20, ...ANTHROPIC_CACHE, cacheRead: 0.05 },
   "claude-opus-5": { input: 5, output: 25, ...ANTHROPIC_CACHE },
   "claude-opus-4-8": { input: 5, output: 25, ...ANTHROPIC_CACHE },
   "claude-opus-4-7": { input: 5, output: 25, ...ANTHROPIC_CACHE },
   "claude-opus-4-6": { input: 5, output: 25, ...ANTHROPIC_CACHE },
-  // Sonnet 5 carries an introductory rate of $2/$10 through 2026-08-31, after
-  // which it is the $3/$15 below. Deliberately priced at the standard rate: a
-  // cost meter that reads high is an annoyance, one that reads low is a false
-  // reassurance, and the intro rate would silently become the wrong number the
-  // moment it lapsed. Over the intro period this overstates by half.
-  "claude-sonnet-5": { input: 3, output: 15, ...ANTHROPIC_CACHE },
+  "claude-sonnet-5-5": { input: 2, output: 10, ...ANTHROPIC_CACHE, cacheRead: 0.05 },
+  // Sonnet 5's launch rate of $2/$10 became its standard price; the $3/$15
+  // announced for 1 September 2026 never happened.
+  "claude-sonnet-5": { input: 2, output: 10, ...ANTHROPIC_CACHE },
   "claude-sonnet-4-6": { input: 3, output: 15, ...ANTHROPIC_CACHE },
   "claude-sonnet-4-5": { input: 3, output: 15, ...ANTHROPIC_CACHE },
   "claude-haiku-4-5": { input: 1, output: 5, ...ANTHROPIC_CACHE },

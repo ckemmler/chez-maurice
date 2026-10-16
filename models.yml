@@ -1,7 +1,7 @@
 models:
   light: "claude-haiku-4-5-20251001"
-  standard: "claude-sonnet-4-5-20250929"
-  heavy: "claude-opus-4-6"
+  standard: "claude-sonnet-5-5"
+  heavy: "claude-opus-5-5"
 
 model_assignments:
   dossier_title: light

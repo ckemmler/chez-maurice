@@ -685,6 +685,7 @@ try { db.run(`ALTER TABLE households ADD COLUMN vision_seeded INTEGER NOT NULL D
 // after the rows exist, on a generation counter like vision's.
 try { db.run(`ALTER TABLE models ADD COLUMN thinking TEXT NOT NULL DEFAULT 'none'`); } catch {}
 try { db.run(`ALTER TABLE households ADD COLUMN thinking_seeded INTEGER NOT NULL DEFAULT 0`); } catch {}
+try { db.run(`ALTER TABLE households ADD COLUMN anthropic_roster_gen INTEGER NOT NULL DEFAULT 0`); } catch {}
 
 // A persona's choice for a model that reasons optionally: NULL leaves the
 // provider's own default (Z.ai thinks unless told not to; Anthropic 4.6+ does
@@ -777,9 +778,9 @@ try {
 // Seed the Anthropic cloud roster once — real model ids (the three families
 // don't share a version number, so they can't be derived from one suffix).
 const CLOUD_SEED: Array<[string, string, number, string]> = [
-  ["claude-opus-4-8",           "Claude Opus 4.8",   200, "Deepest reasoning. Hard, multi-step problems."],
-  ["claude-sonnet-4-6",         "Claude Sonnet 4.6", 200, "Balanced and fast — the everyday default."],
-  ["claude-haiku-4-5-20251001", "Claude Haiku 4.5",  200, "Quick and economical. Good for kids."],
+  ["claude-opus-5-5",           "Claude Opus 5.5",   1000, "Deepest reasoning. Hard, multi-step problems."],
+  ["claude-sonnet-5-5",         "Claude Sonnet 5.5", 1000, "Balanced and fast — the everyday default."],
+  ["claude-haiku-4-5-20251001", "Claude Haiku 4.5",  200,  "Quick and economical. Good for kids."],
 ];
 try {
   const have = db.query(`SELECT COUNT(*) AS n FROM models WHERE tier = 'cloud'`).get() as { n: number };
@@ -1253,8 +1254,8 @@ try {
   // Sonnet (the original default) rather than guess.
   const def = (db.query(`SELECT default_model FROM households WHERE id = 'default'`).get() as any)?.default_model;
   if ((!def || !db.query(`SELECT 1 FROM models WHERE id = ?`).get(def)) &&
-      db.query(`SELECT 1 FROM models WHERE id = 'claude-sonnet-4-6'`).get()) {
-    db.run(`UPDATE households SET default_model = 'claude-sonnet-4-6' WHERE id = 'default'`);
+      db.query(`SELECT 1 FROM models WHERE id = 'claude-sonnet-5-5'`).get()) {
+    db.run(`UPDATE households SET default_model = 'claude-sonnet-5-5' WHERE id = 'default'`);
   }
 } catch {}
 
@@ -1376,6 +1377,63 @@ try {
     db.run(`UPDATE households SET thinking_seeded = ? WHERE id = 'default'`, [THINKING_SEED_GENERATION]);
   }
 } catch {}
+
+// The Anthropic roster moves to the current generation of each family, on the
+// same generation-counter pattern so a model the admin adds back afterwards
+// stays. Generation 1 (16 October 2026): every earlier Opus becomes Claude
+// Opus 5.5 and every earlier Sonnet Claude Sonnet 5.5 — the row, and every
+// choice that named it (household default and side-task model, personas,
+// members' everyday model, access grants, side-task pins). History keeps the
+// id it ran on. Haiku 4.5 stays. The request differences between the
+// generations live in services/anthropicParams.ts.
+const ANTHROPIC_ROSTER_GENERATION = 1;
+const ANTHROPIC_SUCCESSORS: Array<{ id: string; name: string; replaces: string[] }> = [
+  { id: "claude-opus-5-5", name: "Claude Opus 5.5",
+    replaces: ["claude-opus-5", "claude-opus-4-8", "claude-opus-4-7", "claude-opus-4-6"] },
+  { id: "claude-sonnet-5-5", name: "Claude Sonnet 5.5",
+    replaces: ["claude-sonnet-5", "claude-sonnet-4-6", "claude-sonnet-4-5-20250929", "claude-sonnet-4-5"] },
+];
+try {
+  const gen =
+    (db.query(`SELECT anthropic_roster_gen FROM households WHERE id = 'default'`).get() as
+      | { anthropic_roster_gen: number }
+      | undefined
+    )?.anthropic_roster_gen ?? 0;
+  if (gen < ANTHROPIC_ROSTER_GENERATION) {
+    db.transaction(() => {
+      for (const { id, name, replaces } of ANTHROPIC_SUCCESSORS) {
+        const marks = replaces.map(() => "?").join(", ");
+        const old = db
+          .query(`SELECT id, descr, sort FROM models WHERE provider = 'anthropic' AND id IN (${marks}) ORDER BY sort`)
+          .all(...replaces) as Array<{ id: string; descr: string; sort: number }>;
+        if (old.length) {
+          // FK-safe, as in the remap above: insert the successor, repoint,
+          // then drop the old rows — never rename a referenced primary key.
+          db.run(
+            `INSERT OR IGNORE INTO models (id, name, tier, vendor, ctx, discovered, descr, sort, provider, vision, thinking)
+             VALUES (?, ?, 'cloud', 'Anthropic', 1000, 0, ?, ?, 'anthropic', 1, 'optional')`,
+            [id, name, old[0]!.descr, old[0]!.sort],
+          );
+          for (const { id: oldId } of old) {
+            db.run(`INSERT OR IGNORE INTO user_model_access (user_id, model_id) SELECT user_id, ? FROM user_model_access WHERE model_id = ?`, [id, oldId]);
+            db.run(`DELETE FROM user_model_access WHERE model_id = ?`, [oldId]);
+            db.run(`DELETE FROM models WHERE id = ?`, [oldId]);
+          }
+        }
+        // Choices can name an id with no row behind it, so these go by the
+        // whole list, not only the rows found above.
+        db.run(`UPDATE maurices SET model = ? WHERE model IN (${marks})`, [id, ...replaces]);
+        db.run(`UPDATE users SET everyday_model = ? WHERE everyday_model IN (${marks})`, [id, ...replaces]);
+        db.run(`UPDATE households SET default_model = ? WHERE default_model IN (${marks})`, [id, ...replaces]);
+        db.run(`UPDATE households SET ancillary_model = ? WHERE ancillary_model IN (${marks})`, [id, ...replaces]);
+        db.run(`UPDATE ancillary_models SET model_id = ? WHERE model_id IN (${marks})`, [id, ...replaces]);
+      }
+      db.run(`UPDATE households SET anthropic_roster_gen = ? WHERE id = 'default'`, [ANTHROPIC_ROSTER_GENERATION]);
+    })();
+  }
+} catch (e) {
+  console.error("[db] Anthropic roster migration failed:", e);
+}
 
 // Seed default access for standard members who have none yet: the household
 // default model, so everyone can at least chat. Admins are computed-all.

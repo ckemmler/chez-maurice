@@ -32,6 +32,7 @@ import { openaiTurn, PROMPT_CACHE_KEY_PROVIDERS } from "./openaiChat";
 import { ollamaTurn } from "./ollama";
 import { newUsage, priceUsage, type TurnUsage } from "./pricing";
 import { docsModel } from "./mauriceDocs";
+import { anthropicTakesTemperature, anthropicThinking } from "./anthropicParams";
 
 // ── The invocations ──────────────────────────────────────────────────────────
 
@@ -622,7 +623,12 @@ export async function ancillaryComplete(req: AncillaryRequest): Promise<Ancillar
         ? [{ type: "text", text: req.system, cache_control: { type: "ephemeral" } }]
         : req.system;
     }
-    if (req.temperature !== undefined) body.temperature = req.temperature;
+    if (req.temperature !== undefined && anthropicTakesTemperature(modelId)) body.temperature = req.temperature;
+    // A side task never asks for reasoning, and until the 5.x models it got
+    // none: those reason unless told not to, which on a 100-token budget can
+    // leave no room for the answer. So they are told not to — `reasoning:
+    // "none"` included. A caller's explicit effort still wins.
+    Object.assign(body, anthropicThinking(modelId, undefined));
     if (req.effort) body.output_config = { effort: req.effort };
     const response = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",

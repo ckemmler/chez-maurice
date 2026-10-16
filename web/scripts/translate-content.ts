@@ -61,7 +61,7 @@ interface ContentFile {
 const isDryRun = process.argv.includes("--dry-run");
 const isForce = process.argv.includes("--force");
 
-function resolveModel(invocation: string, fallback = "claude-sonnet-4-5-20250929"): string {
+function resolveModel(invocation: string, fallback = "claude-sonnet-5-5"): string {
   const configPath = path.resolve(PROJECT_ROOT, "..", "models.yml");
   try {
     const raw = jsYaml.load(fs.readFileSync(configPath, "utf-8")) as Record<string, any>;

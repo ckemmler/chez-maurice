@@ -204,7 +204,7 @@ export function householdDefaultModel(): string {
   const row = db
     .query(`SELECT default_model FROM households WHERE id = 'default'`)
     .get() as { default_model: string } | null;
-  return row?.default_model ?? "claude-sonnet-4-6";
+  return row?.default_model ?? "claude-sonnet-5-5";
 }
 
 /** Resolve a preferred model id to one that actually exists in the roster,

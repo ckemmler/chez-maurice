@@ -62,7 +62,7 @@ def _from_yaml(invocation: str) -> str | None:
     return None
 
 
-def resolve_model(invocation: str, fallback: str = "claude-sonnet-4-5-20250929") -> str:
+def resolve_model(invocation: str, fallback: str = "claude-sonnet-5-5") -> str:
     """Admin's choice first, then models.yml, then the caller's fallback."""
     return _from_admin(invocation) or _from_yaml(invocation) or fallback
 
