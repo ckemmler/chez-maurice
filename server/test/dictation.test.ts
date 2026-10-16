@@ -43,6 +43,45 @@ test("an upload is refused once it runs past the cap, length declared or not", a
   expect((await readCapped(null, 16))?.byteLength).toBe(0);
 });
 
+test("end credits Whisper tacked on after real speech are dropped, the member's own thanks kept", () => {
+  // The 16 October 2026 dictation: 64 s of audio for 20 s of speech.
+  expect(cleanTranscript("Tu peux ignorer ceci. C'était juste pour tester la dictée. Merci d'avoir regardé cette vidéo !")).toBe(
+    "Tu peux ignorer ceci. C'était juste pour tester la dictée.",
+  );
+  expect(cleanTranscript("Déplacé à jeudi, 15h ? Merci. Sous-titrage Société Radio-Canada")).toBe(
+    "Déplacé à jeudi, 15h ? Merci.",
+  );
+  expect(cleanTranscript("See you Sunday. Thanks for watching!")).toBe("See you Sunday.");
+  // A closing thank-you is the member's.
+  expect(cleanTranscript("Can you send it tomorrow? Thank you.")).toBe("Can you send it tomorrow? Thank you.");
+  expect(cleanTranscript("Rappelle-moi demain. Merci de votre attention.")).toBe("Rappelle-moi demain. Merci de votre attention.");
+  // A credit in the middle is not an ending, and is left alone.
+  expect(cleanTranscript("Merci d'avoir regardé cette vidéo ! C'était la mienne.")).toBe(
+    "Merci d'avoir regardé cette vidéo ! C'était la mienne.",
+  );
+});
+
+test("the voice detector is found beside the models and never taken for one", async () => {
+  const { mkdtempSync, writeFileSync } = await import("node:fs");
+  const { tmpdir } = await import("node:os");
+  const { join } = await import("node:path");
+  const { vadModel, whisperModel } = await import("../src/services/dictation");
+  const home = mkdtempSync(join(tmpdir(), "dict-home-"));
+  const dir = join(home, ".maurice", "models", "whisper");
+  (await import("node:fs")).mkdirSync(dir, { recursive: true });
+  writeFileSync(join(dir, "ggml-silero-v5.1.2.bin"), "");
+  const previous = process.env.HOME;
+  process.env.HOME = home;
+  try {
+    expect(whisperModel()).toBeNull();
+    expect(vadModel()).toBe(join(dir, "ggml-silero-v5.1.2.bin"));
+    writeFileSync(join(dir, "ggml-large-v3-turbo.bin"), "");
+    expect(whisperModel()).toBe(join(dir, "ggml-large-v3-turbo.bin"));
+  } finally {
+    process.env.HOME = previous;
+  }
+});
+
 test("Whisper's lines and spacing come back as one clean paragraph", () => {
   expect(cleanTranscript(" Bonjour Maurice,\n  peux-tu rappeler à Aline\n\n le rendez-vous ? ")).toBe(
     "Bonjour Maurice, peux-tu rappeler à Aline le rendez-vous ?",

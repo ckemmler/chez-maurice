@@ -353,7 +353,7 @@
 "settings.dictation.allow_server" = "Autoriser la transcription par Apple";
 "settings.dictation.caption" = "La dictée utilise le moteur de cet appareil ou le serveur de votre foyer. Si aucun des deux ne le peut et que la langue n'a pas de modèle hors ligne ici, autoriser ceci la fait transcrire par Apple — l'audio quitte alors votre appareil. Le micro affiche un nuage pendant ce temps-là.";
 "settings.dictation.prefer_household" = "Transcrire sur le serveur du foyer";
-"settings.dictation.household_caption" = "Le serveur de votre foyer écoute l'enregistrement en entier (Whisper) : la ponctuation et les noms sont plus souvent justes que sur l'appareil. Le texte apparaît quand vous arrêtez, et non pendant que vous parlez. Sur un serveur à la maison, l'audio ne quitte pas la maison. Les appareils sans le nouveau moteur d'Apple passent de toute façon par le serveur.";
+"settings.dictation.household_caption" = "Le serveur de votre foyer écoute l'enregistrement en entier (Whisper) : la ponctuation et les noms sont bien plus souvent justes que sur l'appareil. L'appareil écrit quand même les mots pendant que vous parlez ; le texte du serveur les remplace quand vous arrêtez. Sur un serveur à la maison, l'audio ne quitte pas la maison. Désactivez ceci pour garder la dictée sur cet appareil.";
 
 /* App Shortcut (Action Button / Shortcuts list) */
 "Dictate to Maurice" = "Dicter à Maurice";

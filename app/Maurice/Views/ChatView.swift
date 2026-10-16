@@ -1501,12 +1501,14 @@ enum ServerDictationPref {
     static let key = "maurice.allowServerDictation"
 }
 
-/// Whether dictation goes to the household's server even where the device has
-/// a good recogniser of its own (SpeechAnalyzer, OS 26). Off by default: the
-/// device shows words as they are spoken, the server only once the recording
-/// stops. Older systems use the server whatever this says.
+/// Whether dictation goes to the household's server (Whisper) even where the
+/// device has a recogniser of its own (SpeechAnalyzer, OS 26). On by default
+/// since 16 October 2026: the device's recogniser previews the words as they
+/// are spoken either way, and Whisper's text, heard over the whole recording,
+/// was clearly the better of the two in use. Off keeps dictation on the device.
 enum HouseholdDictationPref {
     static let key = "maurice.preferHouseholdDictation"
+    static let defaultValue = true
 }
 
 /// What a turn cost, in the action row under the reply. Hidden unless the user
@@ -2632,7 +2634,7 @@ private struct ComposerBar: View {
     @State private var softKeyboardShown = false
     #endif
     @AppStorage(ServerDictationPref.key) private var allowServerDictation = false
-    @AppStorage(HouseholdDictationPref.key) private var preferHouseholdDictation = false
+    @AppStorage(HouseholdDictationPref.key) private var preferHouseholdDictation = HouseholdDictationPref.defaultValue
     /// A send that arrived while dictation was still turning speech into text;
     /// it goes once the text is in the field.
     @State private var pendingSubmit: (() -> Void)?
@@ -3294,8 +3296,9 @@ private struct ComposerBar: View {
                 // their return from background, out of nowhere.
                 if userStopped { isFocused = true }
             }
-            // Have Apple's model fetched before the first dictation needs it.
-            if !preferHouseholdDictation { Dictation.prefetchModel(for: session.resolvedLocale) }
+            // Have Apple's model fetched before the first dictation needs it —
+            // it listens on its own, or previews what the server will hear.
+            Dictation.prefetchModel(for: session.resolvedLocale)
             startDictationIfRequested()
         }
         #if os(iOS)

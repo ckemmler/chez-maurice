@@ -83,20 +83,44 @@ export function ffmpegBinary(): string | null {
 /** The model to load: the one named, or the best ggml model found in
  *  ~/.maurice/models/whisper — large before medium before small, turbo
  *  preferred among the large ones for its speed. */
+const modelsDir = () => join(process.env.HOME || "/tmp", ".maurice", "models", "whisper");
+
+function ggmlFiles(): string[] {
+  try {
+    return readdirSync(modelsDir()).filter((f) => f.startsWith("ggml-") && f.endsWith(".bin"));
+  } catch {
+    return [];
+  }
+}
+
 export function whisperModel(): string | null {
   const named = process.env.MAURICE_WHISPER_MODEL;
   if (named) return existsSync(named) ? named : null;
-  const dir = join(process.env.HOME || "/tmp", ".maurice", "models", "whisper");
-  let files: string[];
-  try {
-    files = readdirSync(dir).filter((f) => f.startsWith("ggml-") && f.endsWith(".bin"));
-  } catch {
-    return null;
-  }
+  const dir = modelsDir();
+  // Silero is the voice detector that sits beside the models, not one of them.
+  const files = ggmlFiles().filter((f) => !f.includes("silero"));
   const rank = (f: string) =>
     (f.includes("large-v3-turbo") ? 0 : f.includes("large") ? 1 : f.includes("medium") ? 2 : f.includes("small") ? 3 : 4);
   files.sort((a, b) => rank(a) - rank(b) || a.localeCompare(b));
   return files[0] ? join(dir, files[0]) : null;
+}
+
+/**
+ * The voice-activity model, when one is installed (`ggml-silero-*.bin`, under
+ * a megabyte, or `MAURICE_WHISPER_VAD_MODEL`).
+ *
+ * Whisper hears silence as something to transcribe and fills it with the
+ * credits it saw most in training: a dictation the member stopped twenty
+ * seconds after their last word came back ending in "Merci d'avoir regardé
+ * cette vidéo !" (16 October 2026, 64 s of audio for 20 s of speech). With
+ * the detector, whisper.cpp hears only the stretches that hold a voice, and
+ * the same clip comes back clean, in the same time.
+ */
+export function vadModel(): string | null {
+  const named = process.env.MAURICE_WHISPER_VAD_MODEL;
+  if (named) return existsSync(named) ? named : null;
+  const silero = ggmlFiles().filter((f) => f.includes("silero")).sort().pop();
+  return silero ? join(modelsDir(), silero) : null;
 }
 
 /** Which engine would transcribe a clip now, or null when none can. */
@@ -193,6 +217,33 @@ function silenceKey(text: string): string {
 /** Compared the way a transcript is: through silenceKey. */
 const SILENCE_HALLUCINATIONS = new Set(SILENCE_HALLUCINATIONS_RAW.map(silenceKey));
 
+/**
+ * The credits Whisper tacks on after real speech, when the recording runs on
+ * into silence: only lines that belong to a video's end, never to a
+ * dictation's. "Merci." or "Thank you." closing a message are the member's
+ * and stay; "Merci d'avoir regardé cette vidéo !" was never theirs.
+ */
+const TRAILING_HALLUCINATIONS = new Set([
+  "sous-titres réalisés par la communauté d'amara.org",
+  "sous-titres réalisés para la communauté d'amara.org",
+  "sous-titrage st' 501",
+  "sous-titrage société radio-canada",
+  "merci d'avoir regardé",
+  "merci d'avoir regardé cette vidéo",
+  "thanks for watching",
+  "thank you for watching",
+  "subtitles by the amara.org community",
+].map(silenceKey));
+
+/** Drop the trailing sentences that are only Whisper's end credits. */
+function stripTrailingCredits(text: string): string {
+  const sentences = text.split(/(?<=[.!?…])\s+/);
+  while (sentences.length > 1 && TRAILING_HALLUCINATIONS.has(silenceKey(sentences[sentences.length - 1]!))) {
+    sentences.pop();
+  }
+  return sentences.join(" ");
+}
+
 export function cleanTranscript(raw: string): string {
   const text = raw
     .split(/\r?\n/)
@@ -202,7 +253,7 @@ export function cleanTranscript(raw: string): string {
     .replace(/\s+/g, " ")
     .trim();
   if (SILENCE_HALLUCINATIONS.has(silenceKey(text))) return "";
-  return text;
+  return stripTrailingCredits(text);
 }
 
 // ── Transcribing ────────────────────────────────────────────────────────────
@@ -297,6 +348,8 @@ async function transcribeLocally(input: TranscribeInput): Promise<TranscribeResu
 
     const args = [whisper, "-m", model, "-f", wav, "-nt", "-np", "-sns",
                   "-l", input.language ?? "auto"];
+    const vad = vadModel();
+    if (vad) args.push("--vad", "-vm", vad);
     const prompt = vocabularyPrompt();
     if (prompt) args.push("--prompt", prompt);
     const out = await run(args, LOCAL_TIMEOUT_MS);

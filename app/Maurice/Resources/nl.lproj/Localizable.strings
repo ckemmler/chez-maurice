@@ -353,7 +353,7 @@
 "settings.dictation.allow_server" = "Transcriptie door Apple toestaan";
 "settings.dictation.caption" = "Dicteren gebruikt de spraakherkenning van dit apparaat of de server van je huishouden. Kan geen van beide het en heeft de taal hier geen offline model, dan laat deze optie Apple het uitschrijven — het geluid verlaat dan je apparaat. De microfoon toont intussen een wolk.";
 "settings.dictation.prefer_household" = "Uitschrijven op de server van het huishouden";
-"settings.dictation.household_caption" = "De server van je huishouden hoort de hele opname in één keer (Whisper) en zet leestekens en namen vaker goed dan het apparaat. De tekst verschijnt als je stopt, niet terwijl je spreekt. Op een server thuis blijft het geluid in huis. Apparaten zonder Apples nieuwste spraakherkenning gebruiken de server hoe dan ook.";
+"settings.dictation.household_caption" = "De server van je huishouden hoort de hele opname in één keer (Whisper) en zet leestekens en namen veel vaker goed dan het apparaat. Het apparaat schrijft de woorden nog steeds mee terwijl je spreekt; de tekst van de server vervangt ze als je stopt. Op een server thuis blijft het geluid in huis. Zet dit uit om het dicteren op dit apparaat te houden.";
 
 /* App Shortcut (Action Button / Shortcuts list) */
 "Dictate to Maurice" = "Dicteren aan Maurice";

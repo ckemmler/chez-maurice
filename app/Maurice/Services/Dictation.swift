@@ -15,10 +15,10 @@ import Accelerate
 ///    none can does a start wait on the download, saying so.
 /// 2. **The household's server** — the clip is recorded here and sent whole to
 ///    `/api/dictation`, where Whisper transcribes it (whisper.cpp on the home
-///    server, or the household's provider). Used where SpeechAnalyzer isn't —
-///    an older system, a language it lacks — or everywhere when the member
-///    prefers it. No text until the recording stops; then the best text of the
-///    three, with the household's names spelled right.
+///    server, or the household's provider). The default since 16 October 2026,
+///    unless the member turns it off in Settings: the best text of the three,
+///    with the household's names spelled right. While it records, an on-device
+///    recogniser previews the words; Whisper's text replaces them at the stop.
 /// 3. **SFSpeechRecognizer** — the recogniser this file used to be, kept as the
 ///    last resort: no new API and no server reachable. Its on-device models are
 ///    the weakest, and not every language has one; the caller may pass
@@ -275,8 +275,8 @@ private final class LevelMeter: @unchecked Sendable {
 struct HouseholdTranscription: Sendable, Equatable {
     let baseURL: String
     let token: String
-    /// The member chose the server over the device even where the device has
-    /// a good recogniser (Settings › Dictation).
+    /// The server first, even where the device has a recogniser of its own
+    /// (Settings › Dictation; on unless the member turned it off).
     let preferred: Bool
 
     /// The dictation route, whatever the stored address ends with.
@@ -605,10 +605,10 @@ final class Dictation {
     /// it; then SpeechAnalyzer where the system has it for this language; then
     /// the server; then the old recogniser.
     ///
-    /// Unasked, the audio only goes to a server that transcribes it itself —
-    /// whisper.cpp at home, where it never leaves the house. A household whose
-    /// server hands clips on to its provider is used only by a member who
-    /// chose the server in Settings.
+    /// With the server turned off in Settings, the audio still goes to a
+    /// server that transcribes it itself — whisper.cpp at home, where it never
+    /// leaves the house — when the device has nothing better; never to one
+    /// that hands clips on to its provider.
     private func chooseEngine(locale: Locale, household: HouseholdTranscription?) async -> Engine {
         // Asked at most once per start, and only when the answer matters.
         var asked = false

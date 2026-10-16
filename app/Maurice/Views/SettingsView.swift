@@ -35,7 +35,7 @@ struct SettingsView: View {
     /// Dictation may use Apple's servers for languages with no local model.
     @AppStorage(ServerDictationPref.key) private var allowServerDictation = false
     /// Dictation goes to the household's server even where the device could.
-    @AppStorage(HouseholdDictationPref.key) private var preferHouseholdDictation = false
+    @AppStorage(HouseholdDictationPref.key) private var preferHouseholdDictation = HouseholdDictationPref.defaultValue
     /// The progress mark on the chat's activity line — see ThinkingPulse.
     @AppStorage(ThinkingPulse.prefKey) private var pulseRaw = ThinkingPulse.Style.defaultChoice.rawValue
     @State private var showCamera = false

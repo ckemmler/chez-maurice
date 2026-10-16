@@ -353,7 +353,7 @@
 "settings.dictation.allow_server" = "Allow Apple transcription";
 "settings.dictation.caption" = "Dictation uses this device's own recogniser or your household's server. If neither can, and the language has no offline model here, allowing this lets Apple transcribe it instead — the audio then leaves your device. The microphone shows a cloud while that is happening.";
 "settings.dictation.prefer_household" = "Transcribe on the household server";
-"settings.dictation.household_caption" = "Your household's server hears the whole recording at once (Whisper), which gets punctuation and names right more often than the device does. The words appear when you stop rather than as you speak. On a home server the audio stays in the house. Devices without Apple's newest recogniser use the server anyway.";
+"settings.dictation.household_caption" = "Your household's server hears the whole recording at once (Whisper), which gets punctuation and names right far more often than the device. The device still writes the words as you speak; the server's text replaces them when you stop. On a home server the audio stays in the house. Turn this off to keep dictation on this device.";
 
 /* App Shortcut (Action Button / Shortcuts list) */
 "Dictate to Maurice" = "Dictate to Maurice";
