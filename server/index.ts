@@ -43,6 +43,7 @@ import conversations from "./src/routes/conversations";
 import reports from "./src/routes/reports";
 import admin from "./src/routes/admin";
 import me from "./src/routes/me";
+import dictation from "./src/routes/dictation";
 import webAdmin from "./src/routes/web-admin";
 import webLogin from "./src/routes/web-login";
 import composer from "./src/routes/composer";
@@ -360,6 +361,7 @@ app.route("/api/models", models);
 app.route("/api/tool-families", toolFamilies);
 app.route("/api/admin", admin);
 app.route("/api/me", me);
+app.route("/api/dictation", dictation);
 app.route("/api/import", importRoutes);
 // With the trailing slash too: a 404 there reads as "the admin is gone".
 app.get("/admin/", (c) => c.redirect("/admin"));

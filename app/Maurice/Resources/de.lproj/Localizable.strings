@@ -336,6 +336,7 @@
 "dictation.error.audio_session" = "Das Mikrofon konnte nicht übernommen werden.";
 "dictation.error.interrupted" = "Diktat unterbrochen — das Mikrofon wurde anderweitig belegt. Das Gehörte bleibt erhalten.";
 "dictation.error.audio_engine" = "Die Aufnahme konnte nicht gestartet werden.";
+"dictation.error.transcription_failed" = "Das Diktat wurde beendet, aber die Aufnahme konnte nicht transkribiert werden – weder vom Server deines Haushalts noch auf diesem Gerät.";
 
 /* Dictation consent */
 "dictation.consent.title" = "Auf %@ diktieren?";
@@ -349,7 +350,9 @@
 "settings.pulse.caption" = "Das Zeichen, das Maurice bei der Arbeit zeigt, auf der Zeile, die sammelt, was eine Antwort bisher getan hat. Probieren Sie sie im Gespräch aus.";
 "settings.dictation.group" = "DIKTAT";
 "settings.dictation.allow_server" = "Transkription durch Apple erlauben";
-"settings.dictation.caption" = "Das Diktat bleibt auf diesem Gerät, sobald die Sprache ein Offline-Modell hat. Erlaubst du dies, werden Sprachen ohne Modell stattdessen von Apple transkribiert — die Aufnahme verlässt dann dein Gerät. Währenddessen zeigt das Mikrofon eine Wolke.";
+"settings.dictation.caption" = "Das Diktat nutzt die Spracherkennung dieses Geräts oder den Server deines Haushalts. Kann keines von beiden es und hat die Sprache hier kein Offline-Modell, lässt diese Option Apple transkribieren – der Ton verlässt dann dein Gerät. Das Mikrofon zeigt währenddessen eine Wolke.";
+"settings.dictation.prefer_household" = "Auf dem Haushaltsserver transkribieren";
+"settings.dictation.household_caption" = "Der Server deines Haushalts hört die ganze Aufnahme auf einmal (Whisper) und trifft Satzzeichen und Namen öfter als das Gerät. Der Text erscheint, wenn du aufhörst, nicht während du sprichst. Auf einem Server zu Hause bleibt der Ton im Haus. Geräte ohne Apples neueste Spracherkennung nutzen den Server ohnehin.";
 
 /* App Shortcut (Action Button / Shortcuts list) */
 "Dictate to Maurice" = "Maurice diktieren";

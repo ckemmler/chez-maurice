@@ -34,6 +34,8 @@ struct SettingsView: View {
     @AppStorage(TurnCostPref.key) private var showTurnCost = false
     /// Dictation may use Apple's servers for languages with no local model.
     @AppStorage(ServerDictationPref.key) private var allowServerDictation = false
+    /// Dictation goes to the household's server even where the device could.
+    @AppStorage(HouseholdDictationPref.key) private var preferHouseholdDictation = false
     /// The progress mark on the chat's activity line — see ThinkingPulse.
     @AppStorage(ThinkingPulse.prefKey) private var pulseRaw = ThinkingPulse.Style.defaultChoice.rawValue
     @State private var showCamera = false
@@ -233,6 +235,13 @@ struct SettingsView: View {
                     }
 
                     SetGroup(session.localized("settings.dictation.group")) {
+                        SetCard {
+                            SetCheckRow(label: session.localized("settings.dictation.prefer_household"),
+                                        on: preferHouseholdDictation, accent: accent) {
+                                preferHouseholdDictation.toggle()
+                            }
+                        }
+                        SetCaption(session.localized("settings.dictation.household_caption"))
                         SetCard {
                             SetCheckRow(label: session.localized("settings.dictation.allow_server"),
                                         on: allowServerDictation, accent: accent) {

@@ -336,6 +336,7 @@
 "dictation.error.audio_session" = "Non è stato possibile acquisire il microfono.";
 "dictation.error.interrupted" = "Dettatura interrotta — il microfono è passato ad altro. Ciò che è stato sentito è conservato.";
 "dictation.error.audio_engine" = "Non è stato possibile avviare la registrazione.";
+"dictation.error.transcription_failed" = "La dettatura si è fermata, ma la registrazione non è stata trascritta, né dal server della famiglia né su questo dispositivo.";
 
 /* Dictation consent */
 "dictation.consent.title" = "Dettare in %@?";
@@ -349,7 +350,9 @@
 "settings.pulse.caption" = "Il segno che mostra Maurice al lavoro, sulla riga che raccoglie ciò che una risposta ha già fatto. Provateli in una conversazione.";
 "settings.dictation.group" = "DETTATURA";
 "settings.dictation.allow_server" = "Consenti la trascrizione di Apple";
-"settings.dictation.caption" = "La dettatura resta su questo dispositivo ogni volta che la lingua ha un modello offline. Se lo consenti, le lingue che non ne hanno uno vengono trascritte da Apple, il che significa che l'audio lascia il dispositivo. Mentre accade, il microfono mostra una nuvola.";
+"settings.dictation.caption" = "La dettatura usa il riconoscimento di questo dispositivo o il server della tua famiglia. Se nessuno dei due può e la lingua non ha un modello offline qui, attivando questa opzione la trascrive Apple: l'audio lascia allora il dispositivo. Il microfono mostra una nuvola nel frattempo.";
+"settings.dictation.prefer_household" = "Trascrivi sul server di casa";
+"settings.dictation.household_caption" = "Il server della tua famiglia ascolta tutta la registrazione insieme (Whisper) e azzecca punteggiatura e nomi più spesso del dispositivo. Il testo compare quando ti fermi, non mentre parli. Su un server di casa, l'audio resta in casa. I dispositivi senza il riconoscimento più recente di Apple usano comunque il server.";
 
 /* App Shortcut (Action Button / Shortcuts list) */
 "Dictate to Maurice" = "Detta a Maurice";

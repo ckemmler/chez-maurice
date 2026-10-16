@@ -1,6 +1,6 @@
 ---
 title: Carnet — the pocket companion
-date: '2026-10-15'
+date: '2026-10-16'
 flags: []
 locale: en
 description: 'The iOS/iPadOS companion to Maurice: log what happened, read books and
@@ -66,7 +66,7 @@ Carnet had no chat; it has one where it is useful — on an entry. On the member
 
 A conversation is rarely worth keeping; its result is. So under each reply Carnet shows what the server found worth keeping, on the dotted paper it will land on: **a note for this entry** (*For this entry* · *Keep*), and the other works and people the exchange touched (*Keep and link*, *Add and link* when the member already has them; a pick first when the identity is unsure; *Search again* and *Refine* under each when the lookup found the wrong work, and for a podcast the show's episodes with the one the conversation was about picked in advance, as in the app — 14 October 2026). An episode on the shelf reads under its show's name. A kept note's link to its conversation is its own line under the note, not an inline grey link; a `carnet://entry/…` link is resolved by name, retried while the app wakes, rather than looked for once in the list; an entry shows the cover `open_fiche` downloaded when its text names a provider's address. Keeping files the note; for another entry it also links the two, by a résonance on this one. The note ends on a link to the conversation, and a tap on it in the entry's page opens that conversation in the same screen, with what was kept of it. Carnet keeps no socket: once the reply is in it asks `GET /api/suggestions?conversation=…&settle=1`, which answers when the pass the reply started is done. Closing the screen re-reads the entry if anything was kept. A book of the library nothing is written on has no Maurice button: it is not an entry until a first note.
 
-**Dictation** (the same day). A microphone sits beside every field Carnet writes in — the note sheet, the shared side's editor, the question to Maurice (`Views/DictationMic.swift`). The engine is the Maurice app's, copied as is (`Services/Dictation.swift`): on the device whenever the language has a local model, through Apple's servers only after the member said yes, once. It listens in **the entry's language**, not the phone's. What is heard is appended to the field and stays editable; nothing is kept or sent on the member's behalf.
+**Dictation** (the same day). A microphone sits beside every field Carnet writes in — the note sheet, the shared side's editor, the question to Maurice (`Views/DictationMic.swift`). The engine is the Maurice app's, copied as is (`Services/Dictation.swift`, see [[maurice-chat]]): since 16 October 2026 Apple's SpeechAnalyzer on the device where the system has it (iOS 26), the household's server (Whisper) where it hasn't or where the member turns on *Transcribe on the household server* in Settings, and the old recogniser last — through Apple's servers only after the member said yes, once. From the server the words arrive when the recording stops, after whatever was typed meanwhile. It listens in **the entry's language**, not the phone's. What is heard is appended to the field and stays editable; nothing is kept or sent on the member's behalf.
 
 ## Reading
 

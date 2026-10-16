@@ -1501,6 +1501,14 @@ enum ServerDictationPref {
     static let key = "maurice.allowServerDictation"
 }
 
+/// Whether dictation goes to the household's server even where the device has
+/// a good recogniser of its own (SpeechAnalyzer, OS 26). Off by default: the
+/// device shows words as they are spoken, the server only once the recording
+/// stops. Older systems use the server whatever this says.
+enum HouseholdDictationPref {
+    static let key = "maurice.preferHouseholdDictation"
+}
+
 /// What a turn cost, in the action row under the reply. Hidden unless the user
 /// turns it on in Settings — most people don't want a meter on every message,
 /// but when you're tuning prompt caching you need to see whether it's biting,
@@ -2624,6 +2632,10 @@ private struct ComposerBar: View {
     @State private var softKeyboardShown = false
     #endif
     @AppStorage(ServerDictationPref.key) private var allowServerDictation = false
+    @AppStorage(HouseholdDictationPref.key) private var preferHouseholdDictation = false
+    /// A send that arrived while dictation was still turning speech into text;
+    /// it goes once the text is in the field.
+    @State private var pendingSubmit: (() -> Void)?
     @FocusState var isFocused: Bool
     let onAddContext: () -> Void
     var onOpenTools: () -> Void = {}
@@ -2658,9 +2670,21 @@ private struct ComposerBar: View {
             await chat.startNewConversation()
             dictationAnchor = anchorAtSelection()
             lastDictatedText = nil
-            dictation.start(locale: session.resolvedLocale, allowServer: allowServerDictation)
+            startDictation()
         }
         #endif
+    }
+
+    /// Start listening, with what the engines need from the session: the
+    /// household's server and the names it should expect to hear.
+    private func startDictation(allowServer: Bool? = nil) {
+        let household: HouseholdTranscription? = {
+            guard let url = session.serverURL, let token = session.tokenForActiveUser else { return nil }
+            return HouseholdTranscription(baseURL: url, token: token, preferred: preferHouseholdDictation)
+        }()
+        let vocabulary = ["Maurice"] + session.deviceUsers.map(\.displayName) + maurices.maurices.map(\.name)
+        dictation.start(locale: session.resolvedLocale, allowServer: allowServer ?? allowServerDictation,
+                        household: household, vocabulary: Array(Set(vocabulary)).sorted())
     }
 
     private var trimmed: String {
@@ -2668,7 +2692,14 @@ private struct ComposerBar: View {
     }
 
     private var canSend: Bool {
-        (!trimmed.isEmpty || pendingImageData != nil) && !chat.isStreaming
+        (!trimmed.isEmpty || pendingImageData != nil || dictationDeliversLater) && !chat.isStreaming
+    }
+
+    /// Dictation whose words reach the field only after it stops — a recording
+    /// for the household's server, or the analyzer finalising. A send in the
+    /// meantime waits for them (see submit).
+    private var dictationDeliversLater: Bool {
+        (dictation.isListening && dictation.engineInUse == .household) || dictation.state == .transcribing
     }
 
     /// Where the next dictation writes. The end of the field, for now.
@@ -2756,8 +2787,17 @@ private struct ComposerBar: View {
     /// On the phone this stop is not "the user stopped": that one gives the
     /// field its focus back, in the same breath as the send takes it away, and
     /// the keyboard came up over the answer of a dictated question.
-    private func submit(_ action: () -> Void) {
-        if dictation.isListening { dictation.stop(userStopped: keepsKeyboardOnSend) }
+    ///
+    /// The household's server and the analyzer deliver after the stop rather
+    /// than inside it, so the send is held until the text has landed — sending
+    /// first would go without the dictated words, and then put them back in
+    /// the emptied field.
+    private func submit(_ action: @escaping () -> Void) {
+        if dictation.isListening || dictation.state == .transcribing {
+            pendingSubmit = action
+            if dictation.isListening { dictation.stop(userStopped: keepsKeyboardOnSend) }
+            return
+        }
         action()
     }
 
@@ -3104,16 +3144,30 @@ private struct ComposerBar: View {
                     // audio-input capability, and Dictation itself already ran
                     // there (no AVAudioSession, AVCaptureDevice for permission).
                     Button {
-                        if dictation.isListening {
+                        if dictation.state == .transcribing {
+                            // The words are on their way; nothing to do but wait.
+                            return
+                        } else if dictation.state == .preparing {
+                            // Changed their mind while the recogniser came up —
+                            // a model downloading can take a while.
+                            dictation.stop()
+                        } else if dictation.isListening {
                             dictation.stop(userStopped: true)
                         } else {
                             dictationAnchor = anchorAtSelection()
                             lastDictatedText = nil
-                            dictation.start(locale: session.resolvedLocale, allowServer: allowServerDictation)
+                            startDictation()
                         }
                     } label: {
                         Image(systemName: dictation.isListening ? "mic.fill" : "mic")
                             .font(.system(size: 17))
+                            // The text is on its way (or the engine coming up):
+                            // the mic gives way to progress, so a recording that
+                            // stopped doesn't look like one that did nothing.
+                            .opacity(dictation.isBusy ? 0 : 1)
+                            .overlay {
+                                if dictation.isBusy { ProgressView().controlSize(.small) }
+                            }
                             .foregroundStyle(dictation.isListening
                                              ? (session.activeDeviceUser?.color ?? .blue).legible(onDark: theme.isDark)
                                              : theme.inkSoft)
@@ -3125,6 +3179,13 @@ private struct ComposerBar: View {
                             .overlay(alignment: .topTrailing) {
                                 if dictation.isListening && dictation.usingServer {
                                     Image(systemName: "cloud.fill")
+                                        .font(.system(size: 8))
+                                        .foregroundStyle(theme.inkMute)
+                                        .offset(x: -9, y: 10)
+                                } else if dictation.isListening && dictation.usingHousehold {
+                                    // A house while the household's server
+                                    // will do the hearing.
+                                    Image(systemName: "house.fill")
                                         .font(.system(size: 8))
                                         .foregroundStyle(theme.inkMute)
                                         .offset(x: -9, y: 10)
@@ -3189,11 +3250,33 @@ private struct ComposerBar: View {
         .onAppear {
             dictation.onFinish = { text, userStopped in
                 if let anchor = dictationAnchor {
-                    let final = anchor.applying(text)
-                    lastDictatedText = final
-                    inputText = final
+                    if let written = lastDictatedText, inputText != written {
+                        // Words were streamed into the field, and the person
+                        // edited them while the last ones were being
+                        // finalised. Their edit wins, as it does while
+                        // listening: the field stays as they left it.
+                    } else {
+                        var target = anchor
+                        if lastDictatedText == nil, inputText != anchor.base {
+                            // The household's server writes nothing until the
+                            // end, so the field may have moved on while it
+                            // worked — typed words, a pasted line. They stay;
+                            // the dictation joins them at the end rather than
+                            // rebuilding the field from what it held when the
+                            // mic was tapped.
+                            let end = inputText.count
+                            target = DictationAnchor(base: inputText, offsets: end..<end)
+                        }
+                        let final = target.applying(text)
+                        lastDictatedText = final
+                        inputText = final
+                    }
                 }
                 dictationAnchor = nil
+                if let send = pendingSubmit {
+                    pendingSubmit = nil
+                    if !trimmed.isEmpty || pendingImageData != nil { send() }
+                }
                 // Only when the user chose to stop. Leaving the chat and
                 // backgrounding both route through here too, and re-focusing
                 // there pops the keyboard on a screen they just left — or on
@@ -3262,7 +3345,11 @@ private struct ComposerBar: View {
             if listening { dictationAnchor = anchorAtSelection() }
         }
         .onChange(of: inputText) { _, current in
-            guard dictation.isListening, current != lastDictatedText else { return }
+            // A recording for the household's server writes nothing until it
+            // stops, so there is nothing to fight over: typing alongside it is
+            // fine, and the words are joined at the end when they arrive.
+            guard dictation.isListening, dictation.engineInUse != .household,
+                  current != lastDictatedText else { return }
             dictationAnchor = nil
             dictation.stop(userStopped: true)
         }
@@ -3318,7 +3405,7 @@ private struct ComposerBar: View {
                 let language = consentLanguage
                 consentLanguage = nil
                 if language != nil {
-                    dictation.start(locale: session.resolvedLocale, allowServer: true)
+                    startDictation(allowServer: true)
                 }
             }
             Button(L("common.cancel"), role: .cancel) { consentLanguage = nil }

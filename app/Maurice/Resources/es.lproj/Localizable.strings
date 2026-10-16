@@ -336,6 +336,7 @@
 "dictation.error.audio_session" = "No se ha podido tomar el micrófono.";
 "dictation.error.interrupted" = "Dictado interrumpido — el micrófono pasó a otra cosa. Lo que se oyó se conserva.";
 "dictation.error.audio_engine" = "No se ha podido iniciar la grabación.";
+"dictation.error.transcription_failed" = "El dictado se detuvo, pero la grabación no se pudo transcribir, ni en el servidor de tu hogar ni en este dispositivo.";
 
 /* Dictation consent */
 "dictation.consent.title" = "¿Dictar en %@?";
@@ -349,7 +350,9 @@
 "settings.pulse.caption" = "La marca que muestra a Maurice trabajando, en la línea que reúne lo que una respuesta ya ha hecho. Pruébelas en una conversación.";
 "settings.dictation.group" = "DICTADO";
 "settings.dictation.allow_server" = "Permitir la transcripción de Apple";
-"settings.dictation.caption" = "El dictado se queda en este dispositivo siempre que el idioma tenga un modelo sin conexión. Si lo permites, los idiomas que no lo tengan los transcribirá Apple, lo que significa que el audio sale de tu dispositivo. Mientras ocurre, el micrófono muestra una nube.";
+"settings.dictation.caption" = "El dictado usa el reconocedor de este dispositivo o el servidor de tu hogar. Si ninguno puede y el idioma no tiene modelo sin conexión aquí, activar esto deja que Apple lo transcriba: el audio sale entonces de tu dispositivo. El micrófono muestra una nube mientras tanto.";
+"settings.dictation.prefer_household" = "Transcribir en el servidor del hogar";
+"settings.dictation.household_caption" = "El servidor de tu hogar escucha la grabación completa de una vez (Whisper) y acierta con la puntuación y los nombres más a menudo que el dispositivo. El texto aparece cuando paras, no mientras hablas. En un servidor en casa, el audio no sale de casa. Los dispositivos sin el reconocedor más reciente de Apple usan el servidor de todos modos.";
 
 /* App Shortcut (Action Button / Shortcuts list) */
 "Dictate to Maurice" = "Dictar a Maurice";
