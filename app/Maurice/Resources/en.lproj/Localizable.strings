@@ -911,3 +911,10 @@
 "suggest.kind.podcasts" = "Podcast";
 "suggest.kind.games" = "Game";
 "suggest.kind.people" = "Person";
+
+/* Snippets: code blocks and long pastes */
+"chat.copied" = "Copied";
+"pasted.title" = "Pasted text";
+"pasted.lines" = "%d lines";
+"pasted.one_line" = "1 line";
+"pasted.inline" = "Put back in message";

@@ -13,6 +13,7 @@ struct ChatView: View {
     @Environment(\.mauriceTheme) private var theme
     @State private var inputText = ""
     @State private var pendingImages: [Data] = []
+    @State private var pendingPastes: [String] = []
     @State private var showAddContext = false
     @State private var showAddParticipant = false
     @State private var showTools = false
@@ -413,7 +414,7 @@ struct ChatView: View {
                             onDone: { trayOpen = false },
                             onAddMore: { showAddContext = true })
             }
-            ComposerBar(inputText: $inputText, pendingImages: $pendingImages,
+            ComposerBar(inputText: $inputText, pendingImages: $pendingImages, pendingPastes: $pendingPastes,
                         isFocused: _isInputFocused,
                         onAddContext: { trayOpen = true; showAddContext = true },
                         onOpenTools: { showTools = true },
@@ -437,7 +438,7 @@ struct ChatView: View {
                             onDone: { trayOpen = false },
                             onAddMore: { showAddContext = true })
             }
-            ComposerBar(inputText: $inputText, pendingImages: $pendingImages,
+            ComposerBar(inputText: $inputText, pendingImages: $pendingImages, pendingPastes: $pendingPastes,
                         isFocused: _isInputFocused,
                         onAddContext: { trayOpen = true; showAddContext = true },
                         onOpenTools: { showTools = true },
@@ -453,11 +454,13 @@ struct ChatView: View {
     }
 
     private func sendMessage() {
-        let text = inputText.trimmingCharacters(in: .whitespacesAndNewlines)
+        let text = PastedText.compose(inputText.trimmingCharacters(in: .whitespacesAndNewlines),
+                                      pastes: pendingPastes)
         let images = pendingImages
         guard !text.isEmpty || !images.isEmpty else { return }
         inputText = ""
         pendingImages = []
+        pendingPastes = []
         trayOpen = false
         dismissKeyboard()
         Task { await chat.send(text, images: images) }
@@ -474,11 +477,13 @@ struct ChatView: View {
 
     /// 💬 — post a human-only turn (no Maurice summon).
     private func postBubbleMessage() {
-        let text = inputText.trimmingCharacters(in: .whitespacesAndNewlines)
+        let text = PastedText.compose(inputText.trimmingCharacters(in: .whitespacesAndNewlines),
+                                      pastes: pendingPastes)
         let images = pendingImages
         guard !text.isEmpty || !images.isEmpty else { return }
         inputText = ""
         pendingImages = []
+        pendingPastes = []
         trayOpen = false
         dismissKeyboard()
         Task { await chat.postBubble(text, images: images) }
@@ -2292,13 +2297,20 @@ private let kMathScheme = "maurice-math:"
 /// Photos one message may carry — the server refuses more.
 private let kMaxPhotosPerMessage = 10
 
+/// A pending paste, by its place in the composer's list.
+private struct PendingPaste: Identifiable {
+    let id: Int
+}
+
 /// Rewrite TeX spans to `![](maurice-math:<b64url>)` images, skipping code.
 /// Display spans are forced onto their own paragraph so markdown routes them
 /// through the block image provider. A cheap fast-path skips text with no math.
 func renderMathMarkup(_ text: String) -> String {
     guard text.contains("\\(") || text.contains("\\[") || text.contains("$$") else { return text }
-    // 1: fenced code · 2: inline code · 3: \[..\] · 4: $$..$$ · 5: \(..\)
-    let pattern = #"(```[\s\S]*?```)|(`[^`]*`)|\\\[([\s\S]*?)\\\]|\$\$([\s\S]*?)\$\$|\\\(([\s\S]*?)\\\)"#
+    // 1: fenced code (2: its fence — it closes only on as many backticks, so a
+    // pasted block may hold ``` of its own) · 3: inline code · 4: \[..\] ·
+    // 5: $$..$$ · 6: \(..\)
+    let pattern = #"((`{3,})[\s\S]*?\2)|(`[^`]*`)|\\\[([\s\S]*?)\\\]|\$\$([\s\S]*?)\$\$|\\\(([\s\S]*?)\\\)"#
     guard let re = try? NSRegularExpression(pattern: pattern) else { return text }
     let ns = text as NSString
     var out = ""
@@ -2310,11 +2322,11 @@ func renderMathMarkup(_ text: String) -> String {
             let r = m.range(at: i)
             return r.location == NSNotFound ? nil : ns.substring(with: r)
         }
-        if grp(1) != nil || grp(2) != nil {
+        if grp(1) != nil || grp(3) != nil {
             out += ns.substring(with: m.range)           // code — verbatim
-        } else if let b = grp(3) ?? grp(4) {
+        } else if let b = grp(4) ?? grp(5) {
             out += "\n\n" + mathImageTag(b) + "\n\n"      // display
-        } else if let i = grp(5) {
+        } else if let i = grp(6) {
             out += mathImageTag(i)                        // inline
         }
     }
@@ -2530,7 +2542,7 @@ private struct SelectTextSheet: View {
 
 /// Read-only, selectable, scrollable UITextView — selection can span the whole
 /// message (the thing a stack of swift-markdown-ui blocks can't do).
-private struct SelectableTextView: UIViewRepresentable {
+struct SelectableTextView: UIViewRepresentable {
     let text: String
     let textColor: UIColor
 
@@ -2573,16 +2585,13 @@ func mauriceMarkdownTheme(_ t: MauriceTheme) -> MarkdownUI.Theme {
             BackgroundColor(t.codeBg)
         }
         .codeBlock { configuration in
-            configuration.label
-                .markdownTextStyle {
-                    FontFamilyVariant(.monospaced)
-                    FontSize(13)
-                    ForegroundColor(t.codeInk)
-                }
-                .padding(10)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(t.codeBg)
-                .clipShape(RoundedRectangle(cornerRadius: 6))
+            // A long paste rides in the member's message as a `pasted` block
+            // (see PastedText): a card, not a wall of monospaced text.
+            if configuration.language == PastedText.fenceInfo {
+                PastedTextCard(text: configuration.content, theme: t)
+            } else {
+                CodeBlockView(configuration: configuration, theme: t)
+            }
         }
         .table { configuration in
             configuration.label
@@ -2616,7 +2625,13 @@ private struct ComposerBar: View {
     @Environment(\.mauriceTheme) private var theme
     @Binding var inputText: String
     @Binding var pendingImages: [Data]
+    /// Long pastes, taken out of the field (see PastedText).
+    @Binding var pendingPastes: [String]
     @State private var selectedPhotos: [PhotosPickerItem] = []
+    /// The paste open in its sheet.
+    @State private var openPaste: PendingPaste?
+    /// The next edit is a paste put back in the field on purpose: leave it there.
+    @State private var keepNextEdit = false
     @State private var showCamera = false
     @State private var showPhotoPicker = false
     @State private var showFileImporter = false
@@ -2709,7 +2724,7 @@ private struct ComposerBar: View {
     }
 
     private var canSend: Bool {
-        (!trimmed.isEmpty || !pendingImages.isEmpty || dictationDeliversLater) && !chat.isStreaming
+        (!trimmed.isEmpty || !pendingImages.isEmpty || !pendingPastes.isEmpty || dictationDeliversLater) && !chat.isStreaming
     }
 
     /// Dictation whose words reach the field only after it stops — a recording
@@ -2767,6 +2782,25 @@ private struct ComposerBar: View {
             attachPhoto(data)
         }
         #endif
+    }
+
+    private func removeButton(_ action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: "xmark.circle.fill")
+                .font(.system(size: 16))
+                .symbolRenderingMode(.palette)
+                .foregroundStyle(.white, theme.inkMute)
+        }
+        .buttonStyle(.plain)
+        .offset(x: 6, y: -6)
+    }
+
+    /// Put a paste back in the field as ordinary text, at the end.
+    private func inlinePaste(at index: Int) {
+        guard pendingPastes.indices.contains(index) else { return }
+        let paste = pendingPastes.remove(at: index)
+        keepNextEdit = true
+        inputText = trimmed.isEmpty ? paste : inputText + "\n\n" + paste
     }
 
     @ViewBuilder
@@ -3027,24 +3061,24 @@ private struct ComposerBar: View {
     var body: some View {
         VStack(spacing: 8) {
             VStack(spacing: 8) {
-                // Pending photos, in the order they were added; each can be
-                // taken back on its own.
-                if !pendingImages.isEmpty {
+                // Long pastes, then photos, in the order they were added; each
+                // can be taken back on its own, and a paste opened in full.
+                if !pendingPastes.isEmpty || !pendingImages.isEmpty {
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: 8) {
+                            ForEach(Array(pendingPastes.enumerated()), id: \.offset) { index, paste in
+                                Button { openPaste = PendingPaste(id: index) } label: {
+                                    PastedTextTile(text: paste)
+                                }
+                                .buttonStyle(.plain)
+                                .overlay(alignment: .topTrailing) {
+                                    removeButton { pendingPastes.remove(at: index) }
+                                }
+                            }
                             ForEach(Array(pendingImages.enumerated()), id: \.offset) { index, imageData in
                                 pendingThumbnail(imageData)
                                     .overlay(alignment: .topTrailing) {
-                                        Button {
-                                            pendingImages.remove(at: index)
-                                        } label: {
-                                            Image(systemName: "xmark.circle.fill")
-                                                .font(.system(size: 16))
-                                                .symbolRenderingMode(.palette)
-                                                .foregroundStyle(.white, theme.inkMute)
-                                        }
-                                        .buttonStyle(.plain)
-                                        .offset(x: 6, y: -6)
+                                        removeButton { pendingImages.remove(at: index) }
                                     }
                             }
                         }
@@ -3327,7 +3361,7 @@ private struct ComposerBar: View {
                 dictationAnchor = nil
                 if let send = pendingSubmit {
                     pendingSubmit = nil
-                    if !trimmed.isEmpty || !pendingImages.isEmpty { send() }
+                    if !trimmed.isEmpty || !pendingImages.isEmpty || !pendingPastes.isEmpty { send() }
                 }
                 // Only when the user chose to stop. Leaving the chat and
                 // backgrounding both route through here too, and re-focusing
@@ -3399,7 +3433,18 @@ private struct ComposerBar: View {
         .onChange(of: dictation.isListening) { _, listening in
             if listening { dictationAnchor = anchorAtSelection() }
         }
-        .onChange(of: inputText) { _, current in
+        .onChange(of: inputText) { old, current in
+            // A long run of text arriving at once — a paste, a drop — leaves
+            // the field for a card above it, as in Claude's app. Dictation's
+            // own writes are not pastes, however long a Whisper transcript is.
+            if keepNextEdit {
+                keepNextEdit = false
+            } else if current != lastDictatedText,
+                      let paste = PastedText.insertion(from: old, to: current) {
+                pendingPastes.append(paste.inserted)
+                inputText = paste.remaining
+                return
+            }
             // A recording for the household's server with no preview writes
             // nothing until it stops, so there is nothing to fight over:
             // typing alongside it is fine, and the words are joined at the end
@@ -3481,6 +3526,13 @@ private struct ComposerBar: View {
                         attachPhoto(data)
                     }
                 }
+            }
+        }
+        .sheet(item: $openPaste) { ref in
+            if pendingPastes.indices.contains(ref.id) {
+                PastedTextSheet(text: pendingPastes[ref.id],
+                                onInline: { inlinePaste(at: ref.id) })
+                    .environment(\.mauriceTheme, theme)
             }
         }
         .photosPicker(isPresented: $showPhotoPicker, selection: $selectedPhotos,

@@ -898,3 +898,10 @@
 "suggest.kind.podcasts" = "Podcast";
 "suggest.kind.games" = "Spel";
 "suggest.kind.people" = "Persoon";
+
+/* Snippets: code blocks and long pastes */
+"chat.copied" = "Gekopieerd";
+"pasted.title" = "Geplakte tekst";
+"pasted.lines" = "%d regels";
+"pasted.one_line" = "1 regel";
+"pasted.inline" = "Terugzetten in het bericht";

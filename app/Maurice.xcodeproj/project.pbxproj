@@ -40,6 +40,7 @@
 		773B899803CBAAF839CDE0C1 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E0D0DF979284275260F31D2 /* SettingsView.swift */; };
 		775815BED73706273BEE92F3 /* MauriceTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1ABC13222ECFAD2CFC3180B /* MauriceTheme.swift */; };
 		79A6D1DBFB049245E3D239D6 /* APIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 815355ED837E18AB9BEFDC83 /* APIClient.swift */; };
+		79D972E8244DCF5442DB6922 /* ChatSnippets.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0093E2B2C16E646EA2A8E856 /* ChatSnippets.swift */; };
 		7CB12254AF16A2499EAEA7D7 /* ComposerStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 70240FCC64F152DDCEC0F0E2 /* ComposerStore.swift */; };
 		7D338BE53D7A3CA7660BB1C5 /* SessionStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 405F9AA69C83E58A86FDD625 /* SessionStore.swift */; };
 		7D41CDDFD359570A173D9D72 /* ComposerStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 70240FCC64F152DDCEC0F0E2 /* ComposerStore.swift */; };
@@ -69,6 +70,7 @@
 		CC9F77433FFC0CCC7F8668EA /* UserPickerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB58402567AEED97404D604C /* UserPickerView.swift */; };
 		CCEF2532174820F615C4C61F /* ChatService.swift in Sources */ = {isa = PBXBuildFile; fileRef = EDFA39C22354B093CDDBB691 /* ChatService.swift */; };
 		D050F6CF74E2684FAF9E78A2 /* ChatService.swift in Sources */ = {isa = PBXBuildFile; fileRef = EDFA39C22354B093CDDBB691 /* ChatService.swift */; };
+		D0B48FA211BB0DB5BB28B7EA /* ChatSnippets.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0093E2B2C16E646EA2A8E856 /* ChatSnippets.swift */; };
 		D8646EEFDB175A13C908F420 /* MarkdownUI in Frameworks */ = {isa = PBXBuildFile; productRef = 452588EF4A59C7B3E4BE0156 /* MarkdownUI */; };
 		DE41C437D70BFE6F0A82015E /* Localizable.strings in Resources */ = {isa = PBXBuildFile; fileRef = 64254BB6519693E70459014E /* Localizable.strings */; };
 		E0931CFF7A305AC88466021B /* ImportConversationsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3B5F6F2E3C5F7D8FFDE02630 /* ImportConversationsView.swift */; };
@@ -84,6 +86,7 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		0093E2B2C16E646EA2A8E856 /* ChatSnippets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatSnippets.swift; sourceTree = "<group>"; };
 		00B700626149A3D1C0D6D5CB /* PairingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PairingView.swift; sourceTree = "<group>"; };
 		0CD335EB3BF542EDF13DA17D /* Maurice_iOS.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Maurice_iOS.entitlements; sourceTree = "<group>"; };
 		0D1A322B73BEA06F034F1718 /* DomainEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DomainEditorView.swift; sourceTree = "<group>"; };
@@ -200,6 +203,7 @@
 			children = (
 				EE3170FDE5751A81E295CF2E /* BoaterHat.swift */,
 				128CD9E8B27DD3AD93E49524 /* CarnetSuggestions.swift */,
+				0093E2B2C16E646EA2A8E856 /* ChatSnippets.swift */,
 				4E01BB325D88F4E74B3571BC /* ChatView.swift */,
 				7A157516CA9C98CE6FB4E293 /* ComposerViews.swift */,
 				462A7ECD4C83B5ADC43A81CB /* ContentView.swift */,
@@ -386,6 +390,7 @@
 				52B02D3D7EF2D7154BDB5FD8 /* BoaterHat.swift in Sources */,
 				B732DCB9E5F61EAEC2D7F191 /* CarnetSuggestions.swift in Sources */,
 				CCEF2532174820F615C4C61F /* ChatService.swift in Sources */,
+				D0B48FA211BB0DB5BB28B7EA /* ChatSnippets.swift in Sources */,
 				8D85F19C2F440203BAFC484F /* ChatView.swift in Sources */,
 				7D41CDDFD359570A173D9D72 /* ComposerStore.swift in Sources */,
 				AF3DE3F5A58AC486DD4036F1 /* ComposerViews.swift in Sources */,
@@ -423,6 +428,7 @@
 				B124B0C5C8B1A67C94E9A4FE /* BoaterHat.swift in Sources */,
 				3E96FF24D227953BEB5EA28F /* CarnetSuggestions.swift in Sources */,
 				D050F6CF74E2684FAF9E78A2 /* ChatService.swift in Sources */,
+				79D972E8244DCF5442DB6922 /* ChatSnippets.swift in Sources */,
 				CB71AD2912D05739932A2EB1 /* ChatView.swift in Sources */,
 				7CB12254AF16A2499EAEA7D7 /* ComposerStore.swift in Sources */,
 				E3C10DC76C2CF893DD4DF505 /* ComposerViews.swift in Sources */,

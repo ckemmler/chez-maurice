@@ -60,9 +60,14 @@ function mentionsMaurice(text: string): boolean {
 /** Photos one message may carry — the composer's picker stops at the same number. */
 const MAX_IMAGES_PER_MESSAGE = 10;
 
-/** A short, image-stripped preview for notifications. */
-function preview(content: string): string {
-  const t = content.replace(/!\[[^\]]*\]\([^)]*\)/g, "").replace(/\s+/g, " ").trim();
+/** A short, image-stripped preview for notifications. A long paste (the app
+ *  sends it as a ```pasted block) shows as its text, without the fences. */
+export function preview(content: string): string {
+  const t = content
+    .replace(/!\[[^\]]*\]\([^)]*\)/g, "")
+    .replace(/^`{3,}(pasted)?$/gm, "")
+    .replace(/\s+/g, " ")
+    .trim();
   return t.length > 140 ? t.slice(0, 140) + "…" : t;
 }
 
