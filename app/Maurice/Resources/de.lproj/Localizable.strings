@@ -337,6 +337,7 @@
 "dictation.error.interrupted" = "Diktat unterbrochen — das Mikrofon wurde anderweitig belegt. Das Gehörte bleibt erhalten.";
 "dictation.error.audio_engine" = "Die Aufnahme konnte nicht gestartet werden.";
 "dictation.error.transcription_failed" = "Das Diktat wurde beendet, aber die Aufnahme konnte nicht transkribiert werden – weder vom Server deines Haushalts noch auf diesem Gerät.";
+"dictation.downloading_model" = "Apple lädt das Diktiermodell — %d %%. Nur beim ersten Mal; es geht weiter, wenn du die App verlässt.";
 
 /* Dictation consent */
 "dictation.consent.title" = "Auf %@ diktieren?";

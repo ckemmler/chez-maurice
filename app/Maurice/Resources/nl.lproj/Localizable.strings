@@ -337,6 +337,7 @@
 "dictation.error.interrupted" = "Dictaat onderbroken — de microfoon ging naar iets anders. Wat gehoord is, blijft bewaard.";
 "dictation.error.audio_engine" = "De opname kon niet worden gestart.";
 "dictation.error.transcription_failed" = "Het dicteren is gestopt, maar de opname kon niet worden uitgeschreven — niet door de server van je huishouden en niet op dit apparaat.";
+"dictation.downloading_model" = "Apple downloadt het dicteermodel — %d %%. Alleen de eerste keer; het gaat door als je de app verlaat.";
 
 /* Dictation consent */
 "dictation.consent.title" = "Dicteren in het %@?";

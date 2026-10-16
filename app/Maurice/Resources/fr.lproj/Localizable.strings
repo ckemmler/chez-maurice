@@ -337,6 +337,7 @@
 "dictation.error.interrupted" = "Dictée interrompue — le micro est passé ailleurs. Ce qui a été entendu est conservé.";
 "dictation.error.audio_engine" = "Impossible de démarrer l'enregistrement.";
 "dictation.error.transcription_failed" = "La dictée s'est arrêtée, mais l'enregistrement n'a pu être transcrit — ni par le serveur du foyer, ni sur cet appareil.";
+"dictation.downloading_model" = "Apple télécharge le modèle de dictée — %d %%. Une seule fois ; il continue si vous quittez l'app.";
 
 /* Dictation consent */
 "dictation.consent.title" = "Dicter en %@ ?";

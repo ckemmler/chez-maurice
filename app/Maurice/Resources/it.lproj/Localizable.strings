@@ -337,6 +337,7 @@
 "dictation.error.interrupted" = "Dettatura interrotta — il microfono è passato ad altro. Ciò che è stato sentito è conservato.";
 "dictation.error.audio_engine" = "Non è stato possibile avviare la registrazione.";
 "dictation.error.transcription_failed" = "La dettatura si è fermata, ma la registrazione non è stata trascritta, né dal server della famiglia né su questo dispositivo.";
+"dictation.downloading_model" = "Apple sta scaricando il modello di dettatura — %d %%. Solo la prima volta; continua anche se esci dall'app.";
 
 /* Dictation consent */
 "dictation.consent.title" = "Dettare in %@?";

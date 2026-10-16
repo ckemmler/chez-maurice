@@ -3118,6 +3118,17 @@ private struct ComposerBar: View {
                             .frame(maxWidth: .infinity, minHeight: 24, maxHeight: 24)
                             .padding(.horizontal, 6)
                             .transition(.opacity)
+                    } else if let progress = dictation.modelDownloadProgress {
+                        // The first dictation in a language can wait minutes
+                        // on Apple's model; a spinner alone reads as broken.
+                        Text(session.localized("dictation.downloading_model", Int((progress * 100).rounded())))
+                            .font(.system(size: 11))
+                            .foregroundStyle(theme.inkMute)
+                            .lineLimit(2)
+                            .minimumScaleFactor(0.8)
+                            .frame(maxWidth: .infinity, alignment: .trailing)
+                            .padding(.horizontal, 6)
+                            .transition(.opacity)
                     } else {
                         Spacer()
                     }
@@ -3283,6 +3294,8 @@ private struct ComposerBar: View {
                 // their return from background, out of nowhere.
                 if userStopped { isFocused = true }
             }
+            // Have Apple's model fetched before the first dictation needs it.
+            if !preferHouseholdDictation { Dictation.prefetchModel(for: session.resolvedLocale) }
             startDictationIfRequested()
         }
         #if os(iOS)
@@ -3345,10 +3358,13 @@ private struct ComposerBar: View {
             if listening { dictationAnchor = anchorAtSelection() }
         }
         .onChange(of: inputText) { _, current in
-            // A recording for the household's server writes nothing until it
-            // stops, so there is nothing to fight over: typing alongside it is
-            // fine, and the words are joined at the end when they arrive.
-            guard dictation.isListening, dictation.engineInUse != .household,
+            // A recording for the household's server with no preview writes
+            // nothing until it stops, so there is nothing to fight over:
+            // typing alongside it is fine, and the words are joined at the end
+            // when they arrive. With a preview the words are in the field, and
+            // an edit wins over them as it does over any live transcript.
+            guard dictation.isListening,
+                  dictation.engineInUse != .household || dictation.previewing,
                   current != lastDictatedText else { return }
             dictationAnchor = nil
             dictation.stop(userStopped: true)

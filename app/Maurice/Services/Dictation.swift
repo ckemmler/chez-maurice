@@ -9,9 +9,10 @@ import Accelerate
 ///
 /// 1. **SpeechAnalyzer** (iOS and macOS 26) — Apple's long-form recogniser,
 ///    the one Notes and Voice Memos use, on the device. Words appear as they
-///    are spoken and a pause doesn't end anything. The model is downloaded on
-///    first use for the language, through the system, without asking the user
-///    to go find a setting.
+///    are spoken and a pause doesn't end anything. The language's model is
+///    fetched by the system ahead of the first dictation (`prefetchModel`);
+///    while it isn't there yet another engine listens instead, and only when
+///    none can does a start wait on the download, saying so.
 /// 2. **The household's server** — the clip is recorded here and sent whole to
 ///    `/api/dictation`, where Whisper transcribes it (whisper.cpp on the home
 ///    server, or the household's provider). Used where SpeechAnalyzer isn't —
@@ -50,6 +51,16 @@ private final class SinkBox: @unchecked Sendable {
     func consume(_ buffer: AVAudioPCMBuffer) {
         lock.lock(); defer { lock.unlock() }
         sink?.consume(buffer)
+    }
+}
+
+/// One microphone, several listeners: the recording for the household's
+/// server and the on-device recogniser that previews it.
+private final class FanOut: AudioSink {
+    private let sinks: [AudioSink]
+    init(_ sinks: [AudioSink]) { self.sinks = sinks }
+    func consume(_ buffer: AVAudioPCMBuffer) {
+        for sink in sinks { sink.consume(buffer) }
     }
 }
 
@@ -414,6 +425,15 @@ final class Dictation {
     private(set) var usingServer = false
     /// True while the running session records for the household's server.
     private(set) var usingHousehold = false
+    /// True while a recording for the household's server is also heard on the
+    /// device, its words written as a preview that the server's text replaces
+    /// at the end.
+    private(set) var previewing = false
+    /// While a start waits on the system downloading SpeechAnalyzer's model
+    /// for the language — the first use, with nothing else to dictate with —
+    /// how far along it is (0...1). The composer says what is happening: a
+    /// first download can take minutes, and a spinner alone reads as broken.
+    private(set) var modelDownloadProgress: Double?
     /// True between start() and the moment listening actually begins or fails.
     private var isStarting = false
     /// Bumped on every start() and every stop(). Each async continuation
@@ -546,7 +566,7 @@ final class Dictation {
                     await self.beginAnalyzer(locale: locale, vocabulary: vocabulary, attempt: attempt)
                 }
             case .household:
-                self.beginRecording()
+                await self.beginRecording(locale: locale, vocabulary: vocabulary, attempt: attempt)
             case .legacy:
                 self.beginListening(locale: locale, allowServer: allowServer, vocabulary: vocabulary)
             }
@@ -563,11 +583,13 @@ final class Dictation {
         if isStarting {
             generation &+= 1
             isStarting = false
+            // The download itself goes on, in the system; only the wait ends.
+            modelDownloadProgress = nil
             if let session = analyzerSession {
                 analyzerSession = nil
                 if #available(iOS 26.0, macOS 26.0, *) { (session as? AnalyzerSession)?.cancel() }
             }
-            teardown()
+            teardown()   // the preview too
             state = .idle
             return
         }
@@ -602,12 +624,44 @@ final class Dictation {
             return .household
         }
         if #available(iOS 26.0, macOS 26.0, *), await AnalyzerSession.supports(locale) {
+            if await AnalyzerAssets.isInstalled(locale) { return .analyzer }
+            // The model isn't here yet. The system fetches it on its own and
+            // keeps going if the app leaves — but that can take minutes, and
+            // nobody should wait on it while another engine can listen now.
+            AnalyzerAssets.ensure(locale)
+            if let server = await serverCapability(), server.available, server.local {
+                return .household
+            }
+            if legacyUsable(locale) { return .legacy }
+            // Nothing else hears this language: wait, and say so.
             return .analyzer
         }
         if let server = await serverCapability(), server.available, server.local {
             return .household
         }
         return .legacy
+    }
+
+    /// Whether the old recogniser can take this language without asking
+    /// anything of the user: a model on the device, or Apple's servers
+    /// already allowed.
+    private func legacyUsable(_ locale: Locale) -> Bool {
+        if onDeviceRecognizer(for: locale) != nil { return true }
+        return allowServer && anyRecognizer(for: locale)?.isAvailable == true
+    }
+
+    /// Have the system fetch SpeechAnalyzer's model for this language ahead
+    /// of the first dictation, so the first tap doesn't wait on a download.
+    /// The composer calls it when it appears; it does nothing before OS 26,
+    /// when the model is already there, or for a language the analyzer lacks.
+    static func prefetchModel(for locale: Locale) {
+        if #available(iOS 26.0, macOS 26.0, *) {
+            Task { @MainActor in
+                guard await AnalyzerSession.supports(locale),
+                      !(await AnalyzerAssets.isInstalled(locale)) else { return }
+                AnalyzerAssets.ensure(locale)
+            }
+        }
     }
 
     // MARK: - Permissions
@@ -780,7 +834,8 @@ final class Dictation {
         // request; the box holds the new audio meanwhile. Not endAudio(): an
         // utterance that had heard nothing yet ends in a "no speech" error,
         // which ends the whole session.
-        if engineInUse == .legacy, let previous, let now = tapFormat, previous != now, let rec = recognizer {
+        if engineInUse == .legacy || (engineInUse == .household && previewing && analyzerSession == nil),
+           let previous, let now = tapFormat, previous != now, let rec = recognizer {
             committed = transcript
             segment = ""
             requestBox.detach()
@@ -834,6 +889,10 @@ final class Dictation {
             let recorder = self.recorder
             self.recorder = nil
             stopMicrophone()
+            // The preview has done its work; what it heard stands in should
+            // the server not answer.
+            let preview = transcript.trimmingCharacters(in: .whitespacesAndNewlines)
+            stopPreview()
             let seconds = recorder?.close() ?? 0
             state = .transcribing
             let household = self.household
@@ -844,8 +903,10 @@ final class Dictation {
                 if let recorder, seconds > 0.3 {
                     text = await household?.transcribe(recorder.url, seconds: seconds,
                                                        language: locale.language.languageCode?.identifier)
-                    // The server couldn't: the device tries the same clip, so
-                    // what was said isn't lost to a dropped connection.
+                    // The server couldn't: the preview is the next best text,
+                    // then the device tries the same clip, so what was said
+                    // isn't lost to a dropped connection.
+                    if text == nil, !preview.isEmpty { text = preview }
                     if text == nil {
                         text = await self.recogniseFile(recorder.url, locale: locale)
                     }
@@ -902,6 +963,7 @@ final class Dictation {
 
     private func teardown() {
         stopMicrophone()
+        stopPreview()
         usingServer = false
         usingHousehold = false
         engineInUse = nil
@@ -924,6 +986,19 @@ final class Dictation {
 
     @available(iOS 26.0, macOS 26.0, *)
     private func beginAnalyzer(locale: Locale, vocabulary: [String], attempt: Int) async {
+        // The model may still be downloading: show how far along, for as long
+        // as this start is the current one.
+        let watch = Task { @MainActor [weak self] in
+            while !Task.isCancelled {
+                guard let self, attempt == self.generation else { return }
+                self.modelDownloadProgress = AnalyzerAssets.progress(for: locale)
+                try? await Task.sleep(nanoseconds: 250_000_000)
+            }
+        }
+        defer {
+            watch.cancel()
+            modelDownloadProgress = nil
+        }
         let session: AnalyzerSession
         do {
             session = try await AnalyzerSession.make(locale: locale, vocabulary: vocabulary) { [weak self] text in
@@ -956,7 +1031,7 @@ final class Dictation {
 
     // MARK: - The household's server
 
-    private func beginRecording() {
+    private func beginRecording(locale: Locale, vocabulary: [String], attempt: Int) async {
         let url = FileManager.default.temporaryDirectory
             .appendingPathComponent("dictation-\(UUID().uuidString).m4a")
         guard let recorder = ClipRecorder(url: url) else {
@@ -964,13 +1039,61 @@ final class Dictation {
             state = .failed(.audioEngine)
             return
         }
+
+        // A preview, so the words show as they are spoken: the server hears
+        // the clip whole only at the end. On the device only — SpeechAnalyzer
+        // if its model is here, else the old recogniser's local model — and
+        // nothing if neither: the recording alone still makes the text.
+        var sinks: [AudioSink] = [recorder]
+        var legacyPreview: SFSpeechRecognizer?
+        if await Self.speechAuthorized() {
+            guard attempt == generation else { return }
+            if #available(iOS 26.0, macOS 26.0, *),
+               await AnalyzerSession.supports(locale), await AnalyzerAssets.isInstalled(locale),
+               let session = try? await AnalyzerSession.make(locale: locale, vocabulary: vocabulary, onText: { [weak self] text in
+                   guard let self, attempt == self.generation, self.state == .listening, self.previewing else { return }
+                   self.transcript = text
+               }) {
+                guard attempt == generation else {
+                    session.cancel()
+                    return
+                }
+                analyzerSession = session
+                sinks.append(session.feed)
+            } else if let rec = onDeviceRecognizer(for: locale) {
+                legacyPreview = rec
+                self.recognizer = rec
+                self.vocabulary = vocabulary
+                sinks.append(requestBox)
+            }
+        }
+        guard attempt == generation else { return }
+
         self.recorder = recorder
         engineInUse = .household
         usingHousehold = true
-        sinkBox.set(recorder)
+        previewing = sinks.count > 1
+        sinkBox.set(sinks.count == 1 ? recorder : FanOut(sinks))
         guard openMicrophone() else { return }
         isStarting = false
         state = .listening
+        if let legacyPreview { listen(with: legacyPreview) }
+    }
+
+    /// End the on-device preview of a recording; the recording goes on.
+    private func stopPreview() {
+        previewing = false
+        if engineInUse == .household, let session = analyzerSession {
+            analyzerSession = nil
+            if #available(iOS 26.0, macOS 26.0, *) { (session as? AnalyzerSession)?.cancel() }
+        }
+        if engineInUse == .household {
+            request?.endAudio()
+            task?.cancel()
+            request = nil
+            task = nil
+            requestBox.clear()
+        }
     }
 
     /// Transcribe a recorded clip on the device — the household's server could
@@ -1172,6 +1295,12 @@ final class Dictation {
                 // which failed identically — an unbounded restart loop with the
                 // microphone open and nothing ever surfaced to the user.
                 if error != nil {
+                    // A preview that fails costs only the preview: the
+                    // recording for the server goes on.
+                    if self.engineInUse == .household {
+                        self.stopPreview()
+                        return
+                    }
                     // Whatever was heard is still worth keeping, so end rather
                     // than restart.
                     self.finish()
@@ -1247,6 +1376,62 @@ final class Dictation {
     }
 }
 
+// MARK: - The analyzer's models
+
+/// SpeechAnalyzer's per-language models, fetched by the system.
+///
+/// The download runs in the system, not in the app: measured on macOS 26
+/// (16 October 2026), a request whose process was killed at 0 % went on to
+/// `installed` by itself. So a fetch is started once per language and never
+/// cancelled — leaving the app, or the composer, does not lose it — and
+/// whoever needs the model awaits the same task.
+@available(iOS 26.0, macOS 26.0, *)
+@MainActor
+enum AnalyzerAssets {
+    private static var fetches: [String: Task<Bool, Never>] = [:]
+    private static var progresses: [String: Progress] = [:]
+
+    private static func module(for locale: Locale) async -> SpeechTranscriber? {
+        guard let supported = await SpeechTranscriber.supportedLocale(equivalentTo: locale) else { return nil }
+        return SpeechTranscriber(locale: supported, preset: .progressiveTranscription)
+    }
+
+    static func isInstalled(_ locale: Locale) async -> Bool {
+        guard let module = await module(for: locale) else { return false }
+        return await AssetInventory.status(forModules: [module]) == .installed
+    }
+
+    /// How far along this language's download is, while one is running.
+    static func progress(for locale: Locale) -> Double? {
+        progresses[locale.identifier]?.fractionCompleted
+    }
+
+    /// Fetch the model if it isn't here; true once it is.
+    @discardableResult
+    static func ensure(_ locale: Locale) -> Task<Bool, Never> {
+        let key = locale.identifier
+        if let running = fetches[key] { return running }
+        let task = Task { @MainActor () -> Bool in
+            defer {
+                fetches[key] = nil
+                progresses[key] = nil
+            }
+            guard let module = await module(for: locale) else { return false }
+            do {
+                if let request = try await AssetInventory.assetInstallationRequest(supporting: [module]) {
+                    progresses[key] = request.progress
+                    try await request.downloadAndInstall()
+                }
+                return true
+            } catch {
+                return false
+            }
+        }
+        fetches[key] = task
+        return task
+    }
+}
+
 // MARK: - The analyzer session
 
 /// One SpeechAnalyzer run: the transcriber, the stream the tap feeds, and the
@@ -1287,12 +1472,10 @@ private final class AnalyzerSession {
         guard let supported = await SpeechTranscriber.supportedLocale(equivalentTo: locale) else {
             throw CocoaError(.featureUnsupported)
         }
-        let transcriber = SpeechTranscriber(locale: supported, preset: .progressiveTranscription)
         // The model, the first time this language is used. The system
         // downloads it; nothing for the user to find in Settings.
-        if let install = try await AssetInventory.assetInstallationRequest(supporting: [transcriber]) {
-            try await install.downloadAndInstall()
-        }
+        guard await AnalyzerAssets.ensure(locale).value else { throw CocoaError(.featureUnsupported) }
+        let transcriber = SpeechTranscriber(locale: supported, preset: .progressiveTranscription)
         let analyzer = SpeechAnalyzer(modules: [transcriber])
         if !vocabulary.isEmpty {
             let context = AnalysisContext()

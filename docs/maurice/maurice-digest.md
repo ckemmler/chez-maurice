@@ -169,7 +169,7 @@ There is also a **browser clipper** that saves the page being read into the gard
 ## 10. The Maurice app
 
 - **Conversations:** a sidebar list with full-text **search** over one's own conversations (passages highlighted, blocked people excluded); a details sheet (title, model, people, costs, leaving a room).
-- **Writing:** one **+** (camera, photos, files, pasted image, context, the conversation's tools); **dictation** — on iOS/macOS 26 Apple's newest recogniser, on the device, with live text and punctuation; elsewhere, or for a member who chooses it in Settings, the recording goes to the household's server and **Whisper** transcribes it whole when you stop (better punctuation and the household's names spelled right, but no live text); the old recogniser last, using Apple's servers only for a language without a local model and only if allowed; the iPhone **Action Button** to start a dictated conversation.
+- **Writing:** one **+** (camera, photos, files, pasted image, context, the conversation's tools); **dictation** — on iOS/macOS 26 Apple's newest recogniser, on the device, with live text and punctuation; elsewhere, or for a member who chooses it in Settings, the recording goes to the household's server and **Whisper** transcribes it whole when you stop (better punctuation and the household's names spelled right), its text replacing a live preview the device writes as you speak; Apple's model downloads in the background the first time, and dictation does not wait on it when another engine can listen; the old recogniser last, using Apple's servers only for a language without a local model and only if allowed; the iPhone **Action Button** to start a dictated conversation.
 - **Replies:** Markdown, **LaTeX math**, Copy, **Regenerate** (last turn only, also after an error; switching model first replays on the new model).
 - **Images:** sent from camera, library or clipboard and read by a vision model; **generated** when an image provider key is set (a spinner, then the image).
 - **After a reply — "worth keeping":** in a private conversation, a light model names at most three works or people the exchange established, matched first against the member's garden, then a catalogue (someone from the member's own life is never looked up online). A Carnet mark in the header counts them; *Keep* files a dated note on the entry with a link back to the conversation; *Look again* and *Refine* correct a wrong match; a dismissed subject is never offered again. Never in rooms, for guests or for children.
@@ -178,7 +178,7 @@ There is also a **browser clipper** that saves the page being read into the gard
 - **Settings:** appearance and language, *Activity* (the progress pulse), the cost meter, *Budget*, *Mail*, the files library, *Import my conversations* (ChatGPT and Claude exports), *My data*, and for admins members and invitations.
 - **Platforms:** Liquid Glass on iOS/macOS 26 with a fallback to iOS 17 / macOS 14; iPad and Mac use the system toolbar; drag-and-drop and native text selection on the Mac.
 
-*Gaps:* no branching; no cost total across conversations; image generation shows no progress; dictation through the server shows its text only once the recording stops, and the new engines have not yet been dictated into on a phone.
+*Gaps:* no branching; no cost total across conversations; image generation shows no progress; the server dictation's live preview is not marked as provisional.
 
 *Detail:* `chat`.
 
@@ -344,7 +344,7 @@ Each member has folders and files (5 GB each), in **Settings**: text, images, PD
 - **…bring my ChatGPT or Claude history?** Settings → *Import my conversations*, with the export file from ChatGPT or Claude. The next night proposes domains from it.
 - **…use my notes from Claude Desktop or claude.ai?** Add your Maurice as a custom connector and sign in with a personal token; you get your garden and your search there.
 - **…report or block someone?** In a shared room, long-press their message. Private conversations cannot be reported.
-- **…get better dictation?** On iOS or macOS 26 it is Apple's newest recogniser, on the device. For the household's names and punctuation heard over the whole recording, turn on Settings → Dictation → *Transcribe on the household server* (the words then appear when you stop). Older systems use the server already.
+- **…get better dictation?** On iOS or macOS 26 it is Apple's newest recogniser, on the device. For the household's names and punctuation heard over the whole recording, turn on Settings → Dictation → *Transcribe on the household server* (a preview shows as you speak; Whisper's text replaces it when you stop). Older systems use the server already.
 - **…take my data with me, or leave?** Settings → *My data*: export an archive, erase your data, or delete your account (Carnet: member sheet → Privacy → *Delete my account*).
 - **…run Maurice myself?** Run the container on a machine of yours (Docker), make it reachable (Tailscale or Cloudflare Tunnel), and set the provider keys in the admin console. Or be hosted: a household on Maurice's own Scaleway machines, with models included.
 

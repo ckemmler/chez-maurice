@@ -337,6 +337,7 @@
 "dictation.error.interrupted" = "Dictation stopped — something else took the microphone. What was heard is kept.";
 "dictation.error.audio_engine" = "Couldn't start recording.";
 "dictation.error.transcription_failed" = "Dictation stopped, and the recording could not be transcribed — neither by your household's server nor on this device.";
+"dictation.downloading_model" = "Apple is downloading the dictation model — %d %%. First time only; it carries on if you leave the app.";
 
 /* Dictation consent */
 "dictation.consent.title" = "Dictate in %@?";

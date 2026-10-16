@@ -337,6 +337,7 @@
 "dictation.error.interrupted" = "Ditado interrompido — o microfone passou para outra coisa. O que foi ouvido fica guardado.";
 "dictation.error.audio_engine" = "Não foi possível iniciar a gravação.";
 "dictation.error.transcription_failed" = "O ditado parou, mas a gravação não pôde ser transcrita — nem pelo servidor da casa, nem neste dispositivo.";
+"dictation.downloading_model" = "A Apple está a descarregar o modelo de ditado — %d %%. Só da primeira vez; continua se sair da app.";
 
 /* Dictation consent */
 "dictation.consent.title" = "Ditar em %@?";
