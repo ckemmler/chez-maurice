@@ -12,7 +12,7 @@ struct ChatView: View {
     @Environment(MauriceStore.self) private var maurices
     @Environment(\.mauriceTheme) private var theme
     @State private var inputText = ""
-    @State private var pendingImageData: Data?
+    @State private var pendingImages: [Data] = []
     @State private var showAddContext = false
     @State private var showAddParticipant = false
     @State private var showTools = false
@@ -413,7 +413,7 @@ struct ChatView: View {
                             onDone: { trayOpen = false },
                             onAddMore: { showAddContext = true })
             }
-            ComposerBar(inputText: $inputText, pendingImageData: $pendingImageData,
+            ComposerBar(inputText: $inputText, pendingImages: $pendingImages,
                         isFocused: _isInputFocused,
                         onAddContext: { trayOpen = true; showAddContext = true },
                         onOpenTools: { showTools = true },
@@ -437,7 +437,7 @@ struct ChatView: View {
                             onDone: { trayOpen = false },
                             onAddMore: { showAddContext = true })
             }
-            ComposerBar(inputText: $inputText, pendingImageData: $pendingImageData,
+            ComposerBar(inputText: $inputText, pendingImages: $pendingImages,
                         isFocused: _isInputFocused,
                         onAddContext: { trayOpen = true; showAddContext = true },
                         onOpenTools: { showTools = true },
@@ -454,13 +454,13 @@ struct ChatView: View {
 
     private func sendMessage() {
         let text = inputText.trimmingCharacters(in: .whitespacesAndNewlines)
-        let imageData = pendingImageData
-        guard !text.isEmpty || imageData != nil else { return }
+        let images = pendingImages
+        guard !text.isEmpty || !images.isEmpty else { return }
         inputText = ""
-        pendingImageData = nil
+        pendingImages = []
         trayOpen = false
         dismissKeyboard()
-        Task { await chat.send(text, imageData: imageData) }
+        Task { await chat.send(text, images: images) }
     }
 
     /// The question is sent: the phone's keyboard goes, the answer gets the
@@ -475,13 +475,13 @@ struct ChatView: View {
     /// 💬 — post a human-only turn (no Maurice summon).
     private func postBubbleMessage() {
         let text = inputText.trimmingCharacters(in: .whitespacesAndNewlines)
-        let imageData = pendingImageData
-        guard !text.isEmpty || imageData != nil else { return }
+        let images = pendingImages
+        guard !text.isEmpty || !images.isEmpty else { return }
         inputText = ""
-        pendingImageData = nil
+        pendingImages = []
         trayOpen = false
         dismissKeyboard()
-        Task { await chat.postBubble(text, imageData: imageData) }
+        Task { await chat.postBubble(text, images: images) }
     }
 
     private func scrollToBottom(_ proxy: ScrollViewProxy, animated: Bool = true) {
@@ -1142,11 +1142,10 @@ private struct MessageRow: View {
         return chat.participantsById[aid]
     }
 
-    /// Extract first image markdown from content
-    private var imageInfo: (alt: String, path: String)? {
-        let pattern = /!\[(.+?)\]\((\/api\/images\/.+?)\)/
-        guard let match = message.content.firstMatch(of: pattern) else { return nil }
-        return (String(match.1), String(match.2))
+    /// The paths of the message's images, in order.
+    private var imagePaths: [String] {
+        let pattern = /!\[.+?\]\((\/api\/images\/.+?)\)/
+        return message.content.matches(of: pattern).map { String($0.1) }
     }
 
     /// Text content with image markdown stripped — and the "À vérifier"
@@ -1247,12 +1246,24 @@ private struct MessageRow: View {
         if TurnActivityRow.shows(trail, blocks: message.data ?? []) {
             TurnActivityRow(activity: trail, blocks: message.data ?? [])
         }
-        if let img = imageInfo, img.path != "pending", let baseURL = session.serverURL {
-            ChatImageView(url: baseURL + img.path)
+        let paths = imagePaths
+        if let baseURL = session.serverURL {
+            if paths.count == 1 {
+                ChatImageView(url: baseURL + paths[0])
+            } else if paths.count > 1 {
+                // Several photos: a row of smaller ones, scrolled sideways.
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 6) {
+                        ForEach(Array(paths.enumerated()), id: \.offset) { _, path in
+                            ChatImageView(url: baseURL + path, maxSide: 180)
+                        }
+                    }
+                }
+            }
         }
         if !textContent.isEmpty {
             SelectableMarkdown(text: textContent)
-        } else if imageInfo == nil {
+        } else if paths.isEmpty {
             SelectableMarkdown(text: message.content)
         }
         if let blocks = message.data, DataCardStack.hasCards(blocks) {
@@ -2032,6 +2043,7 @@ private struct StreamingRow: View {
 private struct ChatImageView: View {
     @Environment(\.mauriceTheme) private var theme
     let url: String
+    var maxSide: CGFloat = 300
 
     var body: some View {
         AsyncImage(url: URL(string: url)) { phase in
@@ -2040,7 +2052,7 @@ private struct ChatImageView: View {
                 image
                     .resizable()
                     .aspectRatio(contentMode: .fit)
-                    .frame(maxWidth: 300, maxHeight: 300)
+                    .frame(maxWidth: maxSide, maxHeight: maxSide)
                     .clipShape(RoundedRectangle(cornerRadius: 8))
             case .failure:
                 Label(L("chat.image_failed"), systemImage: "exclamationmark.triangle")
@@ -2276,6 +2288,9 @@ private struct MarkdownText: View {
 // paragraph (display) spans in display style. Code spans/fences are left alone.
 
 private let kMathScheme = "maurice-math:"
+
+/// Photos one message may carry — the server refuses more.
+private let kMaxPhotosPerMessage = 10
 
 /// Rewrite TeX spans to `![](maurice-math:<b64url>)` images, skipping code.
 /// Display spans are forced onto their own paragraph so markdown routes them
@@ -2600,8 +2615,8 @@ private struct ComposerBar: View {
     @Environment(MauriceStore.self) private var maurices
     @Environment(\.mauriceTheme) private var theme
     @Binding var inputText: String
-    @Binding var pendingImageData: Data?
-    @State private var selectedPhoto: PhotosPickerItem?
+    @Binding var pendingImages: [Data]
+    @State private var selectedPhotos: [PhotosPickerItem] = []
     @State private var showCamera = false
     @State private var showPhotoPicker = false
     @State private var showFileImporter = false
@@ -2694,7 +2709,7 @@ private struct ComposerBar: View {
     }
 
     private var canSend: Bool {
-        (!trimmed.isEmpty || pendingImageData != nil || dictationDeliversLater) && !chat.isStreaming
+        (!trimmed.isEmpty || !pendingImages.isEmpty || dictationDeliversLater) && !chat.isStreaming
     }
 
     /// Dictation whose words reach the field only after it stops — a recording
@@ -2734,24 +2749,52 @@ private struct ComposerBar: View {
         #endif
     }
 
-    /// Attach the clipboard's image as the pending photo, through the same
-    /// JPEG normalisation the picker and the camera use.
+    /// Attach the clipboard's image beside the pending photos, through the
+    /// same JPEG normalisation the picker and the camera use.
     private func pasteImageFromClipboard() {
         #if os(iOS)
         guard let image = UIPasteboard.general.image, let data = image.pngData() else { return }
-        pendingImageData = normalizeToJPEG(data) ?? data
+        attachPhoto(data)
         #else
         let pb = NSPasteboard.general
         if let image = pb.readObjects(forClasses: [NSImage.self], options: nil)?.first as? NSImage,
            let data = image.tiffRepresentation {
-            pendingImageData = normalizeToJPEG(data) ?? data
+            attachPhoto(data)
             return
         }
         if let url = (pb.readObjects(forClasses: [NSURL.self], options: [.urlReadingFileURLsOnly: true]) as? [URL])?
             .first(where: { isImageFile($0) }), let data = try? Data(contentsOf: url) {
-            pendingImageData = normalizeToJPEG(data) ?? data
+            attachPhoto(data)
         }
         #endif
+    }
+
+    @ViewBuilder
+    private func pendingThumbnail(_ imageData: Data) -> some View {
+        #if os(iOS)
+        if let uiImage = UIImage(data: imageData) {
+            Image(uiImage: uiImage)
+                .resizable()
+                .aspectRatio(contentMode: .fill)
+                .frame(width: 60, height: 60)
+                .clipShape(RoundedRectangle(cornerRadius: 6))
+        }
+        #else
+        if let nsImage = NSImage(data: imageData) {
+            Image(nsImage: nsImage)
+                .resizable()
+                .aspectRatio(contentMode: .fill)
+                .frame(width: 60, height: 60)
+                .clipShape(RoundedRectangle(cornerRadius: 6))
+        }
+        #endif
+    }
+
+    /// Add a photo to the pending ones, as JPEG, up to the most one message
+    /// may carry (the server refuses more).
+    private func attachPhoto(_ data: Data) {
+        guard pendingImages.count < kMaxPhotosPerMessage else { return }
+        pendingImages.append(normalizeToJPEG(data) ?? data)
     }
 
     #if os(macOS)
@@ -2768,13 +2811,13 @@ private struct ComposerBar: View {
         if provider.hasItemConformingToTypeIdentifier(UTType.image.identifier) {
             provider.loadDataRepresentation(forTypeIdentifier: UTType.image.identifier) { data, _ in
                 guard let data else { return }
-                Task { @MainActor in pendingImageData = normalizeToJPEG(data) ?? data }
+                Task { @MainActor in attachPhoto(data) }
             }
         } else {
             provider.loadDataRepresentation(forTypeIdentifier: UTType.fileURL.identifier) { data, _ in
                 guard let data, let url = URL(dataRepresentation: data, relativeTo: nil),
                       isImageFile(url), let bytes = try? Data(contentsOf: url) else { return }
-                Task { @MainActor in pendingImageData = normalizeToJPEG(bytes) ?? bytes }
+                Task { @MainActor in attachPhoto(bytes) }
             }
         }
     }
@@ -2818,6 +2861,8 @@ private struct ComposerBar: View {
         !composer.items.isEmpty || composer.lockedCount > 0
     }
 
+    private var photosFull: Bool { pendingImages.count >= kMaxPhotosPerMessage }
+
     /// The + menu: attachments first (camera, photos, files, a pasted image),
     /// then what shapes the conversation (context, tools).
     private var plusMenu: some View {
@@ -2826,9 +2871,11 @@ private struct ComposerBar: View {
                 Button { showCamera = true } label: {
                     Label(session.localized("composer.camera"), systemImage: "camera")
                 }
+                .disabled(photosFull)
                 Button { showPhotoPicker = true } label: {
                     Label(session.localized("composer.photo"), systemImage: "photo")
                 }
+                .disabled(photosFull)
                 Button { showFileImporter = true } label: {
                     Label(session.localized("composer.file"), systemImage: "folder")
                 }
@@ -2836,7 +2883,7 @@ private struct ComposerBar: View {
                 // never shows a paste that would do nothing. Read at menu-open
                 // time; a mere "has image" check doesn't trigger the system's
                 // paste banner.
-                if clipboardHasImage {
+                if clipboardHasImage && !photosFull {
                     Button { pasteImageFromClipboard() } label: {
                         Label(session.localized("composer.paste_image"), systemImage: "doc.on.clipboard")
                     }
@@ -2980,38 +3027,30 @@ private struct ComposerBar: View {
     var body: some View {
         VStack(spacing: 8) {
             VStack(spacing: 8) {
-                // Pending image preview
-                if let imageData = pendingImageData {
-                    HStack(alignment: .top, spacing: 8) {
-                        #if os(iOS)
-                        if let uiImage = UIImage(data: imageData) {
-                            Image(uiImage: uiImage)
-                                .resizable()
-                                .aspectRatio(contentMode: .fill)
-                                .frame(width: 60, height: 60)
-                                .clipShape(RoundedRectangle(cornerRadius: 6))
+                // Pending photos, in the order they were added; each can be
+                // taken back on its own.
+                if !pendingImages.isEmpty {
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 8) {
+                            ForEach(Array(pendingImages.enumerated()), id: \.offset) { index, imageData in
+                                pendingThumbnail(imageData)
+                                    .overlay(alignment: .topTrailing) {
+                                        Button {
+                                            pendingImages.remove(at: index)
+                                        } label: {
+                                            Image(systemName: "xmark.circle.fill")
+                                                .font(.system(size: 16))
+                                                .symbolRenderingMode(.palette)
+                                                .foregroundStyle(.white, theme.inkMute)
+                                        }
+                                        .buttonStyle(.plain)
+                                        .offset(x: 6, y: -6)
+                                    }
+                            }
                         }
-                        #else
-                        if let nsImage = NSImage(data: imageData) {
-                            Image(nsImage: nsImage)
-                                .resizable()
-                                .aspectRatio(contentMode: .fill)
-                                .frame(width: 60, height: 60)
-                                .clipShape(RoundedRectangle(cornerRadius: 6))
-                        }
-                        #endif
-
-                        Button {
-                            pendingImageData = nil
-                            selectedPhoto = nil
-                        } label: {
-                            Image(systemName: "xmark.circle.fill")
-                                .font(.system(size: 16))
-                                .foregroundStyle(theme.inkMute)
-                        }
-                        .buttonStyle(.plain)
-
-                        Spacer()
+                        // Room for the remove buttons, which sit over the edge.
+                        .padding(.top, 6)
+                        .padding(.trailing, 6)
                     }
                     .padding(.bottom, 4)
                 }
@@ -3288,7 +3327,7 @@ private struct ComposerBar: View {
                 dictationAnchor = nil
                 if let send = pendingSubmit {
                     pendingSubmit = nil
-                    if !trimmed.isEmpty || pendingImageData != nil { send() }
+                    if !trimmed.isEmpty || !pendingImages.isEmpty { send() }
                 }
                 // Only when the user chose to stop. Leaving the chat and
                 // backgrounding both route through here too, and re-focusing
@@ -3431,20 +3470,26 @@ private struct ComposerBar: View {
         } message: {
             Text(session.localized("dictation.consent.body", consentLanguage ?? ""))
         }
-        .onChange(of: selectedPhoto) {
+        .onChange(of: selectedPhotos) {
+            let items = selectedPhotos
+            guard !items.isEmpty else { return }
+            selectedPhotos = []
             Task {
-                guard let item = selectedPhoto else { return }
-                if let data = try? await item.loadTransferable(type: Data.self) {
-                    pendingImageData = normalizeToJPEG(data) ?? data
+                // In the order they were picked, whatever order they load in.
+                for item in items {
+                    if let data = try? await item.loadTransferable(type: Data.self) {
+                        attachPhoto(data)
+                    }
                 }
-                selectedPhoto = nil
             }
         }
-        .photosPicker(isPresented: $showPhotoPicker, selection: $selectedPhoto, matching: .images)
+        .photosPicker(isPresented: $showPhotoPicker, selection: $selectedPhotos,
+                      maxSelectionCount: max(1, kMaxPhotosPerMessage - pendingImages.count),
+                      selectionBehavior: .ordered, matching: .images)
         .sheet(isPresented: $showCamera) {
             CameraCaptureView { data in
                 showCamera = false
-                pendingImageData = normalizeToJPEG(data) ?? data
+                attachPhoto(data)
             }
         }
         // "Files" files the picked document into the library AND attaches it as

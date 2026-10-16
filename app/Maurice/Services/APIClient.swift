@@ -146,7 +146,7 @@ final class APIClient: Sendable {
     func streamMessage(
         conversationId: String,
         content: String,
-        image: String? = nil,
+        images: [String] = [],
         token: String,
         regenerate: Bool = false,
         summon: Bool = true,
@@ -158,7 +158,9 @@ final class APIClient: Sendable {
             token: token
         )
         var body: [String: Any] = ["content": content, "summon": summon]
-        if let image { body["image"] = image }
+        // One photo goes as `image`, which every server reads; several need
+        // a server that takes `images`.
+        if images.count == 1 { body["image"] = images[0] } else if !images.isEmpty { body["images"] = images }
         if regenerate { body["regenerate"] = true }
         // The armed Maurice (null = everyday) — arms the thread + is summoned by ➤.
         body["maurice_id"] = mauriceId ?? NSNull()
@@ -695,6 +697,15 @@ struct BubblePost: Encodable {
     let content: String
     let summon: Bool
     let image: String?
+    let images: [String]?
+
+    /// One photo as `image`, several as `images` — see `streamMessage`.
+    init(content: String, summon: Bool, images: [String]) {
+        self.content = content
+        self.summon = summon
+        self.image = images.count == 1 ? images[0] : nil
+        self.images = images.count > 1 ? images : nil
+    }
 }
 
 struct SetupResponse: Decodable {

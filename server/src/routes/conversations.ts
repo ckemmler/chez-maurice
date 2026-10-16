@@ -57,6 +57,9 @@ function mentionsMaurice(text: string): boolean {
   return SUMMON_RE.test(text);
 }
 
+/** Photos one message may carry — the composer's picker stops at the same number. */
+const MAX_IMAGES_PER_MESSAGE = 10;
+
 /** A short, image-stripped preview for notifications. */
 function preview(content: string): string {
   const t = content.replace(/!\[[^\]]*\]\([^)]*\)/g, "").replace(/\s+/g, " ").trim();
@@ -372,15 +375,26 @@ conversations.post("/:id/messages", async (c) => {
     if (running && !running.snapshot.finished) return c.json({ error: "A reply is already in progress" }, 409);
     deleteLastAssistantMessage(convoId);
   } else {
-    if (!content?.trim() && !image) {
+    // `images` carries several photos; `image` is the single one older clients send.
+    const uploads: string[] = Array.isArray(reqBody.images)
+      ? reqBody.images.filter((i: unknown) => typeof i === "string")
+      : image ? [image] : [];
+    if (uploads.length > MAX_IMAGES_PER_MESSAGE) {
+      return c.json({ error: `at most ${MAX_IMAGES_PER_MESSAGE} images per message` }, 400);
+    }
+    if (!content?.trim() && uploads.length === 0) {
       return c.json({ error: "content required" }, 400);
     }
 
-    // If an image was attached, save it and build markdown content
+    // Attached images are saved and lead the message as markdown, one per line.
     let messageContent = content?.trim() || "";
-    if (image) {
-      const { filename } = await saveUploadedImage(image);
-      const imageMarkdown = `![photo](/api/images/${filename})`;
+    if (uploads.length > 0) {
+      const markdown: string[] = [];
+      for (const upload of uploads) {
+        const { filename } = await saveUploadedImage(upload);
+        markdown.push(`![photo](/api/images/${filename})`);
+      }
+      const imageMarkdown = markdown.join("\n");
       messageContent = messageContent
         ? `${imageMarkdown}\n\n${messageContent}`
         : imageMarkdown;

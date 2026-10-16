@@ -983,7 +983,7 @@ final class ChatService {
 
     // MARK: - Send (Streaming)
 
-    func send(_ text: String, imageData: Data? = nil) async {
+    func send(_ text: String, images: [Data] = []) async {
         guard api != nil, token != nil else { return }
 
         if activeConversationId == nil {
@@ -996,11 +996,7 @@ final class ChatService {
         defaultMauriceId = currentMauriceId
 
         // Build display content for the local message
-        var displayContent = text
-        if imageData != nil {
-            // Placeholder — will be replaced by actual URL from server
-            displayContent = "![photo](pending)\(text.isEmpty ? "" : "\n\n\(text)")"
-        }
+        let displayContent = Self.displayContent(text, imageCount: images.count)
 
         let userMsg = ServerMessage(
             id: UUID().uuidString,
@@ -1012,35 +1008,37 @@ final class ChatService {
         )
         messages.append(userMsg)
 
-        // Convert image to base64 data URI
-        var imageDataUri: String?
-        if let imageData {
-            imageDataUri = "data:image/jpeg;base64," + imageData.base64EncodedString()
-        }
-
-        await runAssistantStream(convoId: convoId, content: text, imageDataUri: imageDataUri,
+        await runAssistantStream(convoId: convoId, content: text, imageDataUris: Self.dataUris(images),
                                  mauriceId: currentMauriceId)
     }
 
     /// 💬 — post a human-only turn to the room without summoning any Maurice.
-    func postBubble(_ text: String, imageData: Data? = nil) async {
+    func postBubble(_ text: String, images: [Data] = []) async {
         guard let api, let token else { return }
         if activeConversationId == nil { await createConversation() }
         guard let convoId = activeConversationId else { return }
 
-        var displayContent = text
-        if imageData != nil {
-            displayContent = "![photo](pending)\(text.isEmpty ? "" : "\n\n\(text)")"
-        }
         messages.append(ServerMessage(
-            id: UUID().uuidString, role: "user", content: displayContent,
+            id: UUID().uuidString, role: "user", content: Self.displayContent(text, imageCount: images.count),
             model: nil, author_id: session.activeUserId,
             created_at: ISO8601DateFormatter().string(from: Date())
         ))
-        let imageUri = imageData.map { "data:image/jpeg;base64," + $0.base64EncodedString() }
         let _: OkResponse? = try? await api.post(
             "/api/conversations/\(convoId)/messages",
-            body: BubblePost(content: text, summon: false, image: imageUri), token: token)
+            body: BubblePost(content: text, summon: false, images: Self.dataUris(images)), token: token)
+    }
+
+    /// The local message shown until the server's copy arrives: one placeholder
+    /// per photo — replaced by the stored URLs — then the text.
+    private static func displayContent(_ text: String, imageCount: Int) -> String {
+        let placeholders = Array(repeating: "![photo](pending)", count: imageCount).joined(separator: "\n")
+        if placeholders.isEmpty { return text }
+        return text.isEmpty ? placeholders : "\(placeholders)\n\n\(text)"
+    }
+
+    /// The composer's photos (already JPEG) as the data URIs the server takes.
+    private static func dataUris(_ images: [Data]) -> [String] {
+        images.map { "data:image/jpeg;base64," + $0.base64EncodedString() }
     }
 
     /// ⏹ — stop the in-flight generation. The server hears it first: a turn
@@ -1091,7 +1089,7 @@ final class ChatService {
     func regenerate() async {
         guard !isStreaming, let convoId = activeConversationId, let last = messages.last else { return }
         if last.role == "assistant" { messages.removeLast() }
-        await runAssistantStream(convoId: convoId, content: "", imageDataUri: nil, regenerate: true)
+        await runAssistantStream(convoId: convoId, content: "", imageDataUris: [], regenerate: true)
     }
 
     /// The thread ends on a member's message with no reply, and Maurice is not
@@ -1105,7 +1103,7 @@ final class ChatService {
     private func runAssistantStream(
         convoId: String,
         content: String,
-        imageDataUri: String?,
+        imageDataUris: [String],
         regenerate: Bool = false,
         mauriceId: String? = nil
     ) async {
@@ -1114,7 +1112,7 @@ final class ChatService {
             try api.streamMessage(
                 conversationId: convoId,
                 content: content,
-                image: imageDataUri,
+                images: imageDataUris,
                 token: token,
                 regenerate: regenerate,
                 summon: true,
