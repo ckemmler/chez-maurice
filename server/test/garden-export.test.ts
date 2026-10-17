@@ -220,6 +220,16 @@ describe("the export", () => {
     expect(git(ADA, "ls-files", "_maurice/conversations").stdout.trim()).toBe("");
   });
 
+  test("a garden that is not a repository of its own gets no export", async () => {
+    db.run(`INSERT INTO users (id, username, display_name, role) VALUES ('ge-cleo', 'gecleo', 'Cleo', 'standard')`);
+    const cleo = path.join(GARDENS, "gecleo");
+    fs.mkdirSync(cleo, { recursive: true });
+    fs.writeFileSync(path.join(cleo, "note.md"), "plain files\n");
+    expect(await run("ge-cleo")).toBeNull();
+    expect(fs.existsSync(path.join(cleo, "_maurice"))).toBe(false);
+    expect(fs.existsSync(path.join(cleo, ".gitignore"))).toBe(false);
+  });
+
   test("every member with a garden, from one snapshot", async () => {
     const results = await ex.exportAllGardens(deps, LIFE);
     const mine = results.filter((r) => r.member === "geada" || r.member === "geben");
@@ -274,6 +284,23 @@ describe("the night", () => {
     expect(ex.exportDue(d("2026-10-17T03:30:00"), null, at)).toBe(true);
     expect(ex.exportDue(d("2026-10-17T09:00:00"), d("2026-10-17T03:31:00").toISOString(), at)).toBe(false);
     expect(ex.exportDue(d("2026-10-18T03:45:00"), d("2026-10-17T03:31:00").toISOString(), at)).toBe(true);
+  });
+
+  test("only a nightly pass that got through marks the day as done", async () => {
+    const before = ex.loadState().last_run_at;
+    // An admin's run stands in for nothing: the 03:30 pass still runs.
+    expect(await ex.runGardenExportNow({ exportAll: async () => [] })).toBe(true);
+    expect(ex.loadState().last_run_at).toBe(before);
+    // A night that fails is tried again at the next tick.
+    expect(await ex.runGardenExportNow({ nightly: true, exportAll: async () => { throw new Error("disk full"); } })).toBe(false);
+    expect(ex.loadState().last_run_at).toBe(before);
+    expect(ex.loadState().last_error).toBe("disk full");
+    // A night that gets through marks its day.
+    expect(await ex.runGardenExportNow({ nightly: true, exportAll: async () => [] })).toBe(true);
+    const done = ex.loadState();
+    expect(done.last_run_at).not.toBeNull();
+    expect(done.last_error).toBeNull();
+    expect(ex.exportDue(new Date(), done.last_run_at, { hour: 0, minute: 0 })).toBe(false);
   });
 
   test("its time comes from MAURICE_GARDEN_EXPORT_AT", () => {

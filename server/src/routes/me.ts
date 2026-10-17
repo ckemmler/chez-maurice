@@ -1,6 +1,7 @@
 // /api/me — what the signed-in member may know about themselves that no
 // other route carries. (Their profile is /api/users/me.)
 import { Hono } from "hono";
+import { requestOrigin } from "../../lib/requestOrigin";
 import type { Context } from "hono";
 import { rmSync } from "node:fs";
 import { join } from "node:path";
@@ -125,15 +126,6 @@ me.post("/erase", async (c) => {
 
 const GIT_TOKEN_LABEL = "git-clone";
 
-/** The household's address as this request reached it — through the tunnel
- *  or the reverse proxy, the public one. */
-function publicOrigin(c: Context): string {
-  const url = new URL(c.req.url);
-  const proto = c.req.header("X-Forwarded-Proto")?.split(",")[0]?.trim() || url.protocol.replace(/:$/, "");
-  const host = c.req.header("X-Forwarded-Host")?.split(",")[0]?.trim() || c.req.header("Host") || url.host;
-  return `${proto}://${host}`;
-}
-
 async function gitAccess(c: Context, rotate: boolean) {
   const userId = c.get("userId");
   const user = getUser(userId);
@@ -145,7 +137,7 @@ async function gitAccess(c: Context, rotate: boolean) {
     token = (await createApiToken(userId, GIT_TOKEN_LABEL, "git", true)).rawToken;
   }
   return c.json({
-    url: `${publicOrigin(c)}/git/${user.username}.git`,
+    url: `${requestOrigin(c.req)}/git/${user.username}.git`,
     username: user.username,
     token,
     export_conversations: exportsConversations(userId),

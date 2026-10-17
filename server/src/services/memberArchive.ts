@@ -158,6 +158,34 @@ function exportMail(memberId: string, staging: string): number {
 
 type Prepared = { staging: string; manifest: MemberManifest; filename: string; tarArgs: string[]; cleanup: () => void };
 
+export type MemberConversation = Record<string, any> & { id: string; room: boolean; messages: Record<string, any>[] };
+
+/**
+ * The conversations a member takes away — theirs, and every room they sit in —
+ * each with its messages. The rule both ways out of the household follow (this
+ * archive, and the night's export into the garden, services/gardenExport.ts):
+ * in a room shared with other members, only the member's own messages travel,
+ * never another person's words. Read in one go, with no await in between, so
+ * the server's own writes cannot interleave.
+ */
+export function memberConversations(memberId: string): MemberConversation[] {
+  const convos = db.query(
+    `SELECT c.*, EXISTS (SELECT 1 FROM conversation_participants p
+                          WHERE p.conversation_id = c.id AND p.member_id != ?1) AS room
+       FROM conversations c
+      WHERE c.user_id = ?1
+         OR c.id IN (SELECT conversation_id FROM conversation_participants WHERE member_id = ?1)
+      ORDER BY c.created_at, c.id`,
+  ).all(memberId) as Record<string, any>[];
+  return convos.map((c) => {
+    const room = !!c.room;
+    const messages = db.query(
+      `SELECT * FROM messages WHERE conversation_id = ? ${room ? "AND author_id = ?" : ""} ORDER BY created_at, rowid`,
+    ).all(...(room ? [c.id, memberId] : [c.id])) as Record<string, any>[];
+    return { ...c, id: String(c.id), room, messages };
+  });
+}
+
 function prepare(memberId: string): Prepared {
   const user = db.query(`SELECT * FROM users WHERE id = ?`).get(memberId) as Record<string, any> | null;
   if (!user) throw new ArchiveError("no such member");
@@ -178,25 +206,14 @@ function prepare(memberId: string): Prepared {
 
     // Conversations, one file each. A room shared with other members carries
     // only what this member wrote there.
-    const convos = db.query(
-      `SELECT c.*, EXISTS (SELECT 1 FROM conversation_participants p
-                            WHERE p.conversation_id = c.id AND p.member_id != ?1) AS room
-         FROM conversations c
-        WHERE c.user_id = ?1
-           OR c.id IN (SELECT conversation_id FROM conversation_participants WHERE member_id = ?1)
-        ORDER BY c.created_at`,
-    ).all(memberId) as Record<string, any>[];
+    const convos = memberConversations(memberId);
     const images = new Set<string>();
     counts.conversations = convos.length;
     counts.messages = 0;
     for (const c of convos) {
-      const room = !!c.room;
-      const messages = db.query(
-        `SELECT * FROM messages WHERE conversation_id = ? ${room ? "AND author_id = ?" : ""} ORDER BY created_at, rowid`,
-      ).all(...(room ? [c.id, memberId] : [c.id])) as Record<string, any>[];
-      for (const m of messages) for (const name of imageRefs(m.content)) images.add(name);
-      counts.messages += messages.length;
-      json(join(staging, "conversations", `${c.id}.json`), { ...c, room, messages });
+      for (const m of c.messages) for (const name of imageRefs(m.content)) images.add(name);
+      counts.messages += c.messages.length;
+      json(join(staging, "conversations", `${c.id}.json`), c);
     }
 
     const present = new Set(tablesOf(db));

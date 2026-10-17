@@ -55,7 +55,7 @@ const local = (cwd: string, ...args: string[]) => spawnSync("git", args, { cwd, 
 
 let server: ReturnType<typeof Bun.serve>;
 let base = "";
-const A = "gc-ada", B = "gc-ben", C = "gc-cleo", D = "gc-dora";
+const A = "gc-ada", B = "gc-ben", C = "gc-cleo", D = "gc-dora", E = "gc-emil", F = "gc-faye";
 const tokens: Record<string, string> = {};
 
 function member(id: string, username: string) {
@@ -77,7 +77,7 @@ const url = (username: string, token?: string) =>
 
 beforeAll(async () => {
   db.run(`INSERT OR IGNORE INTO households (id, name) VALUES ('default', 'Home')`);
-  for (const [id, u] of [["u-a", A], ["u-b", B], ["u-c", C], ["u-d", D]]) member(id, u);
+  for (const [id, u] of [["u-a", A], ["u-b", B], ["u-c", C], ["u-d", D], ["u-e", E], ["u-f", F]] as const) member(id, u);
   const ada = gardenRepo(A, "ada's note\n");
   gardenRepo(B, "ben's private note\n");
   // Refs that must not travel: a remote-tracking branch, what a history
@@ -86,9 +86,22 @@ beforeAll(async () => {
   local(ada, "update-ref", "refs/remotes/origin/main", head);
   local(ada, "update-ref", "refs/original/refs/heads/main", head);
   local(ada, "tag", "v1");
+  // A stash: an object no ref that travels points to.
+  fs.writeFileSync(path.join(ada, "wip.md"), "stashed work in progress\n");
+  local(ada, "add", "wip.md");
+  local(ada, "stash", "-q");
   // Cleo's garden is plain files; Dora's sits inside a repository over all gardens.
   fs.mkdirSync(path.join(GARDENS, C, "notes"), { recursive: true });
   fs.writeFileSync(path.join(GARDENS, C, "notes", "hello.md"), "cleo\n");
+  // A database left in a garden: never committed.
+  fs.writeFileSync(path.join(GARDENS, C, "stray.db"), "SQLite format 3");
+  // Emil's garden: an init whose first commit never happened.
+  fs.mkdirSync(path.join(GARDENS, E, "notes"), { recursive: true });
+  fs.writeFileSync(path.join(GARDENS, E, "notes", "emil.md"), "emil\n");
+  local(path.join(GARDENS, E), "init", "-q", "--initial-branch=main");
+  // Faye's garden: plain files, two first clones at once.
+  fs.mkdirSync(path.join(GARDENS, F), { recursive: true });
+  fs.writeFileSync(path.join(GARDENS, F, "faye.md"), "faye\n");
 
   tokens.ada = (await createApiToken("u-a", "git-clone", "git", true)).rawToken;
   tokens.adaFull = (await createApiToken("u-a", "everything", "full")).rawToken;
@@ -96,6 +109,8 @@ beforeAll(async () => {
   tokens.ben = (await createApiToken("u-b", "git-clone", "git", true)).rawToken;
   tokens.cleo = (await createApiToken("u-c", "git-clone", "git", true)).rawToken;
   tokens.dora = (await createApiToken("u-d", "git-clone", "git", true)).rawToken;
+  tokens.emil = (await createApiToken("u-e", "git-clone", "git", true)).rawToken;
+  tokens.faye = (await createApiToken("u-f", "git-clone", "git", true)).rawToken;
 
   server = Bun.serve({ port: 0, hostname: "127.0.0.1", fetch: app.fetch });
   base = `http://127.0.0.1:${server.port}`;
@@ -108,7 +123,7 @@ afterAll(() => {
 
 describe("cloning", () => {
   for (const version of ["0", "2"]) {
-    test(`a member clones and fetches their own garden (protocol v${version})`, async () => {
+    test(`a member clones and fetches their own garden (client asking for protocol v${version})`, async () => {
       const dest = path.join(WORK, `ada-v${version}`);
       const r = await client(WORK, "-c", `protocol.version=${version}`, "clone", "-q", url(A, tokens.ada), dest);
       expect(r.code).toBe(0);
@@ -134,10 +149,23 @@ describe("cloning", () => {
   test("only branches and tags are advertised", async () => {
     const r = await client(WORK, "ls-remote", url(A, tokens.ada));
     expect(r.code).toBe(0);
-    const refs = r.out.split("\n").filter(Boolean).map((l) => l.split("\t")[1]);
+    const refs = r.out.split("\n").filter(Boolean).map((l) => l.split("\t")[1] ?? "");
     expect(refs).toContain("refs/heads/main");
     expect(refs).toContain("refs/tags/v1");
-    expect(refs.some((x) => x.startsWith("refs/remotes/") || x.startsWith("refs/original/"))).toBe(false);
+    expect(refs.some((x) => x.startsWith("refs/remotes/") || x.startsWith("refs/original/") || x === "refs/stash")).toBe(false);
+  });
+
+  test("an object no advertised ref points to cannot be fetched by its id, in either protocol", async () => {
+    const stash = local(path.join(GARDENS, A), "rev-parse", "refs/stash").stdout.trim();
+    expect(stash).toMatch(/^[0-9a-f]{40}$/);
+    const dest = path.join(WORK, "ada-stash");
+    expect((await client(WORK, "clone", "-q", url(A, tokens.ada), dest)).code).toBe(0);
+    for (const version of ["2", "0"]) {
+      const r = await client(dest, "-c", `protocol.version=${version}`, "fetch", "origin", stash);
+      expect(r.code).not.toBe(0);
+      expect(r.out).toContain("not allow request for unadvertised object");
+    }
+    expect(local(dest, "cat-file", "-e", stash).status).not.toBe(0);
   });
 });
 
@@ -217,8 +245,35 @@ describe("the garden's repository", () => {
     const r = await client(WORK, "clone", "-q", url(C, tokens.cleo), dest);
     expect(r.code).toBe(0);
     expect(fs.readFileSync(path.join(dest, "notes", "hello.md"), "utf8")).toBe("cleo\n");
-    expect(fs.readFileSync(path.join(GARDENS, C, ".gitignore"), "utf8")).toContain(".obsidian/");
+    const ignore = fs.readFileSync(path.join(GARDENS, C, ".gitignore"), "utf8");
+    expect(ignore).toContain(".obsidian/");
+    expect(ignore).toContain("*.db");
+    // The database left in it never entered the history.
+    expect(local(path.join(GARDENS, C), "ls-files").stdout).not.toContain("stray.db");
+    expect(fs.existsSync(path.join(dest, "stray.db"))).toBe(false);
+    // Its export was written before the first clone was served, and came with it.
+    expect(fs.existsSync(path.join(dest, "_maurice", "README.md"))).toBe(true);
+    expect(local(dest, "log", "-1", "--format=%an", "--", "_maurice").stdout.trim()).toBe("Maurice (export)");
     expect(local(path.join(GARDENS, C), "status", "--porcelain").stdout.trim()).toBe("");
+  });
+
+  test("a repository whose first commit never happened gets it, rather than being served empty", async () => {
+    const dest = path.join(WORK, "emil");
+    const r = await client(WORK, "clone", "-q", url(E, tokens.emil), dest);
+    expect(r.code).toBe(0);
+    expect(r.out).not.toContain("empty repository");
+    expect(fs.readFileSync(path.join(dest, "notes", "emil.md"), "utf8")).toBe("emil\n");
+  });
+
+  test("two first clones at once make one repository with one first commit", async () => {
+    const [x, y] = await Promise.all([
+      client(WORK, "clone", "-q", url(F, tokens.faye), path.join(WORK, "faye-1")),
+      client(WORK, "clone", "-q", url(F, tokens.faye), path.join(WORK, "faye-2")),
+    ]);
+    expect(x.code).toBe(0);
+    expect(y.code).toBe(0);
+    const subjects = local(path.join(GARDENS, F), "log", "--format=%s").stdout.trim().split("\n");
+    expect(subjects.filter((l) => l === "Garden under version control")).toHaveLength(1);
   });
 
   test("a garden inside another repository is never served", async () => {
@@ -244,7 +299,7 @@ describe("GET /api/me/git", () => {
     const first = await (await fetch(`${base}/api/me/git`, { headers })).json() as { url: string; username: string; token: string };
     expect(first.url).toBe(`https://maison.example/git/${B}.git`);
     expect(first.username).toBe(B);
-    expect(first.token).toBe(tokens.ben);
+    expect(first.token).toBe(tokens.ben!);
     const again = await (await fetch(`${base}/api/me/git`, { headers })).json() as { token: string };
     expect(again.token).toBe(first.token);
 

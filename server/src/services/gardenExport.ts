@@ -32,15 +32,14 @@ import { getLifeDbPath } from "../../data-api/lib/config";
 import { autoCommit, gardenFor, parseFiche, type GardenRef } from "../../data-api/services/gardenFiche";
 import db from "../db";
 import { snapshotDb } from "./archive";
+import { ensureIgnored } from "./gardenIgnore";
+import { isOwnRepo } from "./gitHttp";
+import { memberConversations } from "./memberArchive";
 import { userLocale } from "./i18n";
 import { listUsers } from "./users";
 
 export const EXPORT_DIR = "_maurice";
 export const EXPORT_AUTHOR = "Maurice (export) <export@maurice.local>";
-
-/** Lines the garden's .gitignore must hold: no database, raw or in WAL
- *  pieces, ever enters a garden's history. */
-const IGNORED = ["*.db", "*.db-wal", "*.db-shm", "*.sqlite", "*.sqlite3"];
 
 export interface BookInfo { title: string; authors: string[] }
 
@@ -246,39 +245,25 @@ async function reading(files: Files, life: Database, memberId: string, tables: S
   }
 }
 
-/** The member's conversations, one Markdown file each. Read in one go, with
- *  no await in between, so the server's own writes cannot interleave. */
+/** The member's conversations, one Markdown file each — with the member
+ *  archive's rule for rooms (memberConversations). */
 function conversations(files: Files, memberId: string, displayName: string) {
-  const convos = db.query(
-    `SELECT c.id, c.title, c.created_at, c.updated_at,
-            EXISTS (SELECT 1 FROM conversation_participants p
-                     WHERE p.conversation_id = c.id AND p.member_id != ?1) AS room
-       FROM conversations c
-      WHERE c.user_id = ?1
-         OR c.id IN (SELECT conversation_id FROM conversation_participants WHERE member_id = ?1)
-      ORDER BY c.created_at, c.id`,
-  ).all(memberId) as any[];
   const personas = new Map(
     (db.query(`SELECT id, name FROM maurices`).all() as { id: string; name: string }[]).map((m) => [m.id, m.name]),
   );
-  for (const c of convos) {
-    const room = !!c.room;
-    const messages = db.query(
-      `SELECT role, content, created_at, maurice_id FROM messages
-        WHERE conversation_id = ? AND role != 'system' ${room ? "AND author_id = ?" : ""}
-        ORDER BY created_at, rowid`,
-    ).all(...(room ? [c.id, memberId] : [c.id])) as any[];
+  for (const c of memberConversations(memberId)) {
+    const messages = c.messages.filter((m) => m.role !== "system");
     if (!messages.length) continue;
     const title = String(c.title ?? "").trim() || "Conversation";
     const day = iso(c.created_at)?.slice(0, 10) ?? "undated";
-    const name = [day, slugify(title).slice(0, 40), String(c.id).slice(0, 8)].filter(Boolean).join("-");
+    const name = [day, slugify(title).slice(0, 40), c.id.slice(0, 8)].filter(Boolean).join("-");
     const out = [
       "---",
       `title: ${yamlStr(title)}`,
       `conversation: ${yamlStr(c.id)}`,
       `created: ${yamlStr(iso(c.created_at) ?? "")}`,
       `updated: ${yamlStr(iso(c.updated_at) ?? "")}`,
-      ...(room ? ["room: true  # shared with other members: only your own messages are here"] : []),
+      ...(c.room ? ["room: true  # shared with other members: only your own messages are here"] : []),
       "---",
       "",
       `# ${title}`,
@@ -343,25 +328,20 @@ export function setExportsConversations(memberId: string, on: boolean): void {
   db.run(`UPDATE user_preferences SET export_conversations = ?, updated_at = datetime('now') WHERE user_id = ?`, [on ? 1 : 0, memberId]);
 }
 
-/** Make sure the garden's .gitignore keeps databases out. True if it changed. */
-function guardIgnore(garden: GardenRef): boolean {
-  const file = join(garden.root, ".gitignore");
-  const had = existsSync(file) ? readFileSync(file, "utf8") : "";
-  const lines = had.split("\n");
-  const missing = IGNORED.filter((l) => !lines.includes(l));
-  if (!missing.length) return false;
-  writeFileSync(file, (had && !had.endsWith("\n") ? had + "\n" : had) + missing.join("\n") + "\n");
-  return true;
-}
-
 /**
  * Write one member's export into their garden, from an open snapshot of
  * life.db (or null when the household has none), and commit what changed.
+ *
+ * Only into a garden that is a repository of its own: the folder exists for a
+ * clone, and a garden nobody has cloned would only hold a second copy of the
+ * member's conversations on the disk and in their archive. A garden becomes
+ * one at its first clone, which exports it then (routes/git.ts).
  */
 export async function exportMemberGarden(memberId: string, life: Database | null, deps: ExportDeps): Promise<ExportResult | null> {
   const user = db.query(`SELECT username, display_name FROM users WHERE id = ?`).get(memberId) as { username: string; display_name: string } | null;
   const garden = gardenFor(memberId);
   if (!user || !garden || !existsSync(garden.root) || !statSync(garden.root).isDirectory()) return null;
+  if (!isOwnRepo(garden.root)) return null;
 
   const locale = userLocale(memberId) === "fr" ? "fr" : "en";
   const convos = exportsConversations(memberId);
@@ -394,7 +374,7 @@ export async function exportMemberGarden(memberId: string, life: Database | null
     written++;
     changed.add(rel.split("/")[0]!);
   }
-  const ignoreChanged = guardIgnore(garden);
+  const ignoreChanged = ensureIgnored(garden.root);
 
   let committed = false;
   if (changed.size || ignoreChanged) {
@@ -442,6 +422,16 @@ async function calibreBook(id: number): Promise<BookInfo | null> {
   const { getBookMetadata } = await import("../../data-api/services/calibre");
   const meta = await getBookMetadata(id);
   return meta ? { title: meta.title, authors: meta.authors } : null;
+}
+
+/** One member's export, now: their garden has just become a repository. */
+export async function exportGardenNow(memberId: string, deps: ExportDeps = { book: calibreBook }, lifePath = getLifeDbPath()): Promise<ExportResult | null> {
+  const snap = snapshot(lifePath);
+  try {
+    return await exportMemberGarden(memberId, snap?.db ?? null, deps);
+  } finally {
+    snap?.done();
+  }
 }
 
 /** Export every member with a garden. One snapshot of life.db for the night. */
@@ -509,29 +499,45 @@ export function exportDue(now: Date, lastRunAt: string | null, at: { hour: numbe
 
 const stateFile = () => join(getAppDir(), "garden-export-nightly.json");
 
-function loadState(): ExportState {
+export function loadState(): ExportState {
   try { return JSON.parse(readFileSync(stateFile(), "utf8")); } catch {
     return { last_run_at: null, last_error: null, members: 0, commits: 0 };
   }
 }
 
-let running: Promise<void> | null = null;
+let running: Promise<boolean> | null = null;
 
-export function runGardenExportNow(): Promise<void> {
+/**
+ * Export every garden now. `nightly` is the scheduled pass: only it, and only
+ * when it got through, marks the day as done — a failed night (life.db could
+ * not be copied, the disk was full) is tried again at the next tick, and an
+ * admin's run at 01:00 does not stand in for the 03:30 one. True on success.
+ */
+export function runGardenExportNow(
+  opts: { nightly?: boolean; exportAll?: () => Promise<ExportResult[]> } = {},
+): Promise<boolean> {
   if (running) return running;
   running = (async () => {
     const started = Date.now();
-    const state: ExportState = { last_run_at: new Date().toISOString(), last_error: null, members: 0, commits: 0 };
+    const previous = loadState();
+    const state: ExportState = { ...previous, last_error: null };
+    let ok = true;
     try {
-      const results = await exportAllGardens();
+      const results = await (opts.exportAll ?? exportAllGardens)();
       state.members = results.length;
       state.commits = results.filter((r) => r.committed).length;
+      if (opts.nightly) state.last_run_at = new Date(started).toISOString();
       console.log(`[garden-export] ${state.members} garden(s), ${state.commits} commit(s) in ${((Date.now() - started) / 1000).toFixed(1)}s`);
     } catch (e) {
+      ok = false;
       state.last_error = (e as Error).message;
       console.error(`[garden-export] failed: ${state.last_error}`);
     }
-    try { writeFileSync(stateFile(), JSON.stringify(state, null, 2) + "\n"); } catch {}
+    try {
+      mkdirSync(dirname(stateFile()), { recursive: true });
+      writeFileSync(stateFile(), JSON.stringify(state, null, 2) + "\n");
+    } catch {}
+    return ok;
   })().finally(() => { running = null; });
   return running;
 }
@@ -545,7 +551,7 @@ export function scheduleGardenExport(): void {
   }
   const tick = () => {
     if (running || !exportDue(new Date(), loadState().last_run_at, at)) return;
-    runGardenExportNow().catch(() => {});
+    runGardenExportNow({ nightly: true }).catch(() => {});
   };
   setTimeout(() => {
     tick();

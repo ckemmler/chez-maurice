@@ -160,8 +160,7 @@ admin.patch("/settings", async (c) => {
 // POST /api/admin/garden-export/run — the night's garden export, now, for
 // every member (services/gardenExport.ts). Answers when it is done.
 admin.post("/garden-export/run", async (c) => {
-  await runGardenExportNow();
-  return c.json({ ok: true });
+  return c.json({ ok: await runGardenExportNow() });
 });
 
 admin.post("/pairing-token", (c) => {

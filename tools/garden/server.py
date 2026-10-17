@@ -439,6 +439,49 @@ def _git_has_remote(root: Path) -> bool:
         return False
 
 
+# Pauses between tries while another process holds the index lock: the Maurice
+# server commits into the same repository (gardenFiche.autoCommit), with no lock
+# between the two but git's own index.lock. Mirrors LOCK_WAITS_MS there.
+_LOCK_WAITS_S = (0.025, 0.05, 0.1, 0.15, 0.2)
+
+
+def _git_retrying(args: list[str], root: Path, check: bool = True) -> subprocess.CompletedProcess:
+    """`git <args>` in `root`, tried again while another process holds the
+    index lock. Raises CalledProcessError on a failure when `check`."""
+    for wait in (*_LOCK_WAITS_S, None):
+        r = subprocess.run(["git", *args], cwd=root, capture_output=True, text=True)
+        if r.returncode == 0 or wait is None or "index.lock" not in (r.stderr or ""):
+            break
+        time.sleep(wait)
+    if check and r.returncode != 0:
+        raise subprocess.CalledProcessError(r.returncode, ["git", *args], r.stdout, r.stderr)
+    return r
+
+
+def _commit_paths(root: Path, rel_paths: list[str], message: str) -> None:
+    """Stage `rel_paths` and commit them, and only them — never whatever else
+    the index holds: the server may have staged its own files a moment before
+    (the night's garden export) for a commit of its own. Pushes when the repo
+    has a remote. No-op when none of the paths changed."""
+    add = _git_retrying(["add", "--", *rel_paths], root, check=False)
+    if add.returncode != 0:
+        # It stages what it can and exits 1 on, e.g., one ignored path.
+        LOGGER.warning("git add: %s", (add.stderr or "").strip())
+    # Commit exactly the files staged under those paths: a path that matches
+    # nothing git knows (a directory holding only ignored files) would make
+    # `git commit -- <paths>` refuse the lot.
+    staged = subprocess.run(
+        ["git", "diff", "--cached", "--name-only", "-z", "--", *rel_paths],
+        cwd=root, capture_output=True, text=True,
+    ).stdout.split("\0")
+    files = [f for f in staged if f]
+    if not files:
+        return
+    _git_retrying(["commit", "--quiet", "-m", message, "--", *files], root)
+    if _git_has_remote(root):
+        subprocess.run(["git", "push", "--quiet"], cwd=root, check=False)
+
+
 def _auto_commit(paths: list[Path], message: str) -> None:
     """Commit (and push, if a remote exists) garden changes — only when the
     gardens dir lives in a git repo. Outside a repo this is a no-op: the files
@@ -452,12 +495,7 @@ def _auto_commit(paths: list[Path], message: str) -> None:
         rel_paths = [str(p.relative_to(root)) for p in paths if p.is_relative_to(root)]
         if not rel_paths:
             return
-        subprocess.run(["git", "add"] + rel_paths, cwd=root, check=True)
-        result = subprocess.run(["git", "diff", "--cached", "--quiet"], cwd=root)
-        if result.returncode != 0:  # there are staged changes
-            subprocess.run(["git", "commit", "-m", message], cwd=root, check=True)
-            if _git_has_remote(root):
-                subprocess.run(["git", "push"], cwd=root, check=False)
+        _commit_paths(root, rel_paths, message)
     except Exception as exc:
         LOGGER.warning("auto-commit failed: %s", exc)
 
@@ -486,10 +524,10 @@ def _remove_paths(paths: list[Path], message: str) -> bool:
         rel = [str(p.relative_to(root)) for p in paths if p.is_relative_to(root)]
         if not rel:
             return False
-        subprocess.run(["git", "rm", "-r"] + rel, cwd=root, check=True)
-        subprocess.run(["git", "commit", "-m", message], cwd=root, check=True)
+        _git_retrying(["rm", "-r", "--quiet", "--", *rel], root)
+        _git_retrying(["commit", "--quiet", "-m", message, "--", *rel], root)
         if _git_has_remote(root):
-            subprocess.run(["git", "push"], cwd=root, check=False)
+            subprocess.run(["git", "push", "--quiet"], cwd=root, check=False)
         return True
     except Exception as exc:
         LOGGER.warning("git rm/commit failed (%s); caller will delete directly", exc)
@@ -4047,12 +4085,7 @@ def _auto_commit_with_images(paths: list[Path], message: str) -> None:
         rel_paths = [str(p.relative_to(root)) for p in targets if p.exists() and p.is_relative_to(root)]
         if not rel_paths:
             return
-        subprocess.run(["git", "add"] + rel_paths, cwd=root, check=True)
-        result = subprocess.run(["git", "diff", "--cached", "--quiet"], cwd=root)
-        if result.returncode != 0:
-            subprocess.run(["git", "commit", "-m", message], cwd=root, check=True)
-            if _git_has_remote(root):
-                subprocess.run(["git", "push"], cwd=root, check=False)
+        _commit_paths(root, rel_paths, message)
     except Exception as exc:
         LOGGER.warning("auto-commit failed: %s", exc)
 

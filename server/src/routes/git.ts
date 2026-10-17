@@ -11,6 +11,7 @@
 import { Hono } from "hono";
 import { join } from "node:path";
 import { validateGitToken } from "../middleware/auth";
+import { exportGardenNow } from "../services/gardenExport";
 import { ensureGardenRepo, isGardenDir, serveGitHttp, text } from "../services/gitHttp";
 import { gardensRoot } from "../services/gardensRoot";
 import { getUser } from "../services/users";
@@ -52,12 +53,18 @@ git.all("/*", async (c) => {
 
   const root = join(gardensRoot(), member);
   if (!isGardenDir(root)) return text(404, "You have no garden on this household.");
-  const repo = ensureGardenRepo(root);
+  const repo = await ensureGardenRepo(root);
   if (!repo.ok) {
     console.error(`[git] ${member}: ${repo.reason}`);
     return text(409, `This garden cannot be served: ${repo.reason}.`);
   }
-  if (repo.created) console.log(`[git] ${member}: garden put under version control`);
+  if (repo.created) {
+    // The night's export skips a garden that is not a repository; this one has
+    // just become one, so it gets its export now, before this first clone is
+    // served. A failed export does not hold the clone back.
+    console.log(`[git] ${member}: garden put under version control`);
+    await exportGardenNow(userId).catch((e) => console.error(`[garden-export] ${member}: ${(e as Error).message}`));
+  }
 
   return serveGitHttp(c.req.raw, root, sub, member);
 });

@@ -78,6 +78,7 @@ import { imagesDir } from "./src/services/images";
 import { avatarsDir } from "./src/services/avatars";
 import { proxyAuth, validateApiTokenRaw, validateHealthToken } from "./src/middleware/auth";
 import gitRoutes from "./src/routes/git";
+import { requestOrigin } from "./lib/requestOrigin";
 import { scheduleGardenExport } from "./src/services/gardenExport";
 import { fullHealth, hookConsoleErrors, publicHealth, recordError } from "./src/services/health";
 import { validateSession, normalizeInviteCode, formatInviteCode } from "./src/services/auth";
@@ -738,10 +739,7 @@ app.all("/calibre/*", async (c) => {
 app.get("/join", (c) => {
   const lang = langOf(c);
   const code = normalizeInviteCode(c.req.query("code") ?? "");
-  const url = new URL(c.req.url);
-  const proto = c.req.header("x-forwarded-proto") ?? url.protocol.replace(":", "");
-  const host = c.req.header("x-forwarded-host") ?? c.req.header("host") ?? url.host;
-  const server = `${proto}://${host}`;
+  const server = requestOrigin(c.req);
   const open = `maurice://join?server=${encodeURIComponent(server)}&code=${encodeURIComponent(code)}`;
   const esc = (s: string) =>
     s.replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[ch]!);

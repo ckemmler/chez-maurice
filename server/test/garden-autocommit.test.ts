@@ -23,3 +23,33 @@ test("a path gone and never tracked is left out; the rest is committed, deletion
   expect(git("status", "--short").stdout.trim()).toBe("");
   fs.rmSync(root, { recursive: true, force: true });
 });
+
+test("a path git ignores does not leave the others staged without a commit", () => {
+  const root = fs.mkdtempSync(path.join(fs.realpathSync(os.tmpdir()), "maurice-commit-"));
+  const git = (...a: string[]) => spawnSync("git", a, { cwd: root, encoding: "utf8" });
+  git("init", "-q"); git("config", "user.email", "t@t"); git("config", "user.name", "t");
+  fs.writeFileSync(path.join(root, ".gitignore"), "*.sqlite\n");
+  git("add", ".gitignore"); git("commit", "-qm", "init");
+  fs.writeFileSync(path.join(root, "note.md"), "a note\n");
+  fs.writeFileSync(path.join(root, "cache.sqlite"), "x");
+  // `git add` stages note.md and exits 1 on the ignored path: the commit still happens.
+  expect(autoCommit({ root, username: "t" }, [path.join(root, "note.md"), path.join(root, "cache.sqlite")], "work")).toBe(true);
+  expect(git("show", "--name-only", "--format=", "HEAD").stdout.trim()).toBe("note.md");
+  expect(git("diff", "--cached", "--name-only").stdout.trim()).toBe("");
+  fs.rmSync(root, { recursive: true, force: true });
+});
+
+test("`only` commits its own paths and leaves what someone else staged", () => {
+  const root = fs.mkdtempSync(path.join(fs.realpathSync(os.tmpdir()), "maurice-commit-"));
+  const git = (...a: string[]) => spawnSync("git", a, { cwd: root, encoding: "utf8" });
+  git("init", "-q"); git("config", "user.email", "t@t"); git("config", "user.name", "t");
+  fs.writeFileSync(path.join(root, "a.md"), "a\n");
+  git("add", "a.md"); git("commit", "-qm", "init");
+  fs.writeFileSync(path.join(root, "theirs.md"), "staged by the garden tool\n");
+  git("add", "theirs.md");
+  fs.writeFileSync(path.join(root, "mine.md"), "mine\n");
+  expect(autoCommit({ root, username: "t" }, [path.join(root, "mine.md")], "mine", { only: true, author: "X <x@x>" })).toBe(true);
+  expect(git("show", "--name-only", "--format=%an", "HEAD").stdout.trim().split("\n")).toEqual(["X", "", "mine.md"]);
+  expect(git("diff", "--cached", "--name-only").stdout.trim()).toBe("theirs.md");
+  fs.rmSync(root, { recursive: true, force: true });
+});

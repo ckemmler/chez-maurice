@@ -296,6 +296,12 @@ export interface CommitOptions {
   only?: boolean;
 }
 
+/** Pauses between tries while another process holds the index lock: half a
+ *  second in all. The wait holds the server's event loop — autoCommit is
+ *  synchronous for all its callers — so it stays short; a commit (and its
+ *  push) by the garden tool usually lets go well within it. */
+const LOCK_WAITS_MS = [25, 50, 100, 150, 200];
+
 /** `git` in `root`, tried again while another process holds the index lock:
  *  the garden tool commits into the same repository, with no lock between the
  *  two but git's own `index.lock`, and one losing that race used to fail
@@ -303,8 +309,8 @@ export interface CommitOptions {
 function gitRetrying(root: string, args: string[]) {
   for (let attempt = 0; ; attempt++) {
     const r = spawnSync("git", args, { cwd: root, encoding: "utf-8" });
-    if (r.status === 0 || attempt >= 6 || !/index\.lock/.test(r.stderr ?? "")) return r;
-    Bun.sleepSync(100 * (attempt + 1));
+    if (r.status === 0 || attempt >= LOCK_WAITS_MS.length || !/index\.lock/.test(r.stderr ?? "")) return r;
+    Bun.sleepSync(LOCK_WAITS_MS[attempt]!);
   }
 }
 
@@ -334,10 +340,23 @@ export function autoCommit(garden: GardenRef, paths: string[], message: string, 
       rel = rel.filter((p) => fs.existsSync(path.join(root, p)) || known.has(p));
     }
     if (!rel.length) return false;
+    // `git add` stages what it can and still exits 1 when one named path is
+    // ignored: go on to the commit, or what it did stage would wait in the
+    // index for someone else's commit.
     const add = gitRetrying(root, ["add", "--", ...rel]);
-    if (add.status !== 0) throw new Error(`git add: ${(add.stderr ?? "").trim()}`);
-    const scope = opts.only ? ["--", ...rel] : [];
-    if (spawnSync("git", ["diff", "--cached", "--quiet", ...scope], { cwd: root }).status === 0) return false;
+    if (add.status !== 0) console.warn(`[garden] git add: ${(add.stderr ?? "").trim()}`);
+    // With `only`, commit exactly the files staged under those paths: a path
+    // matching nothing git knows (a directory of ignored files) would make
+    // `git commit -- <paths>` refuse the lot.
+    let scope: string[] = [];
+    if (opts.only) {
+      const staged = String(spawnSync("git", ["diff", "--cached", "--name-only", "-z", "--", ...rel], { cwd: root }).stdout ?? "")
+        .split("\0").filter(Boolean);
+      if (!staged.length) return false;
+      scope = ["--", ...staged];
+    } else if (spawnSync("git", ["diff", "--cached", "--quiet"], { cwd: root }).status === 0) {
+      return false;
+    }
     const args = ["commit", "--quiet", "-m", message];
     if (opts.author) args.push(`--author=${opts.author}`);
     const commit = gitRetrying(root, [...args, ...scope]);

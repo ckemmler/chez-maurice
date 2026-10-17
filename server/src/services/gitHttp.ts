@@ -10,14 +10,16 @@
  * notes, not the bare remote some gardens push to: it is always current, and
  * a hosted household has no bare remote at all. Upload-pack only — receive-pack
  * is refused before this file is reached, and disabled here as well. Only
- * branches and tags are advertised: `refs/remotes/*`, `refs/stash`, and the
- * `refs/original/*` a history rewrite leaves behind (services/mailForget.ts)
+ * branches and tags are advertised, and in protocol v0 — the only one served —
+ * only what is advertised can be fetched: `refs/remotes/*`, `refs/stash`, and
+ * the `refs/original/*` a history rewrite leaves behind (services/mailForget.ts)
  * stay on the server.
  */
 
-import { existsSync, readFileSync, realpathSync, statSync, writeFileSync } from "node:fs";
+import { realpathSync, statSync } from "node:fs";
 import { spawnSync } from "node:child_process";
-import { join, resolve } from "node:path";
+import { resolve } from "node:path";
+import { ensureIgnored } from "./gardenIgnore";
 
 /** The request body git sends for a fetch is its list of wants and haves:
  *  kilobytes. Anything near this is not a git client. */
@@ -34,51 +36,77 @@ const SERVE_CONFIG: [string, string][] = [
   ["uploadpack.hiderefs", "!refs/tags/"],
 ];
 
-/** Lines a new garden repository ignores: the system's litter and a vault's
- *  own settings, which belong to each device that opens the clone. */
-const NEW_REPO_IGNORES = [".DS_Store", ".obsidian/", ".trash/"];
+/** `git` in `root`, without holding the server's event loop: making a large
+ *  garden a repository (`git add -A` over gigabytes of images) takes minutes. */
+async function git(cwd: string, ...args: string[]): Promise<{ status: number; stdout: string; stderr: string }> {
+  const p = Bun.spawn(["git", ...args], { cwd, stdout: "pipe", stderr: "pipe" });
+  const [stdout, stderr] = await Promise.all([new Response(p.stdout).text(), new Response(p.stderr).text()]);
+  return { status: await p.exited, stdout, stderr };
+}
 
-const git = (cwd: string, ...args: string[]) =>
-  spawnSync("git", args, { cwd, encoding: "utf8" });
+const real = (p: string) => { try { return realpathSync(p); } catch { return resolve(p); } };
+
+/** Is `root` the top of a repository of its own — not a plain directory, and
+ *  not a directory inside some other repository? */
+export function isOwnRepo(root: string): boolean {
+  const top = spawnSync("git", ["rev-parse", "--show-toplevel"], { cwd: root, encoding: "utf8" });
+  return top.status === 0 && real(top.stdout.trim()) === real(root);
+}
+
+/** One preparation per garden at a time: two first clones arriving together
+ *  share the same `git init` rather than racing two. */
+const preparing = new Map<string, Promise<RepoState>>();
+
+type RepoState = { ok: true; created: boolean } | { ok: false; reason: string };
 
 /**
- * Make sure `root` is a repository of its own, creating it the first time a
- * clone is asked for. From then on every write to the garden is committed
- * there (gardenFiche.autoCommit, the garden tool's _auto_commit), as at home.
+ * Make sure `root` is a repository of its own with at least one commit,
+ * making it so the first time a clone is asked for. From then on every write
+ * to the garden is committed there (gardenFiche.autoCommit, the garden tool's
+ * _auto_commit), as at home. `created` is true when this call made the first
+ * commit.
  *
  * Refused, with the reason, when the garden sits inside another repository —
  * a development checkout with one repository over every garden: serving it
  * would hand out everyone's notes, and nesting a new one would hide this
  * garden from it.
  */
-export function ensureGardenRepo(root: string): { ok: true; created: boolean } | { ok: false; reason: string } {
-  const top = git(root, "rev-parse", "--show-toplevel");
-  if (top.status === 0) {
-    const real = (p: string) => { try { return realpathSync(p); } catch { return resolve(p); } };
-    if (real(top.stdout.trim()) === real(root)) return { ok: true, created: false };
+export function ensureGardenRepo(root: string): Promise<RepoState> {
+  const key = real(root);
+  const going = preparing.get(key);
+  if (going) return going;
+  const run = prepare(root).finally(() => preparing.delete(key));
+  preparing.set(key, run);
+  return run;
+}
+
+async function prepare(root: string): Promise<RepoState> {
+  const top = await git(root, "rev-parse", "--show-toplevel");
+  if (top.status === 0 && real(top.stdout.trim()) !== real(root)) {
     return { ok: false, reason: "this garden is inside another repository" };
   }
+  // A repository with a commit is ready. One without — an init whose first
+  // commit failed — is finished now rather than served empty for ever.
+  if (top.status === 0 && (await git(root, "rev-parse", "--verify", "--quiet", "HEAD")).status === 0) {
+    return { ok: true, created: false };
+  }
+  if (top.status !== 0) {
+    const init = await git(root, "init", "--quiet", "--initial-branch=main");
+    if (init.status !== 0) return { ok: false, reason: `git init failed: ${init.stderr.trim()}` };
+  }
 
-  const init = git(root, "init", "--quiet", "--initial-branch=main");
-  if (init.status !== 0) return { ok: false, reason: `git init failed: ${init.stderr.trim()}` };
-
-  const ignore = join(root, ".gitignore");
-  const had = existsSync(ignore) ? readFileSync(ignore, "utf8") : "";
-  const missing = NEW_REPO_IGNORES.filter((l) => !had.split("\n").includes(l));
-  if (missing.length) writeFileSync(ignore, (had && !had.endsWith("\n") ? had + "\n" : had) + missing.join("\n") + "\n");
-
+  ensureIgnored(root);
   // A server with no git identity (a fresh container) could not commit at all:
   // give this repository one rather than let every later write fail silently.
-  if (git(root, "var", "GIT_AUTHOR_IDENT").status !== 0) {
-    git(root, "config", "user.name", "Maurice");
-    git(root, "config", "user.email", "maurice@localhost");
+  if ((await git(root, "var", "GIT_AUTHOR_IDENT")).status !== 0) {
+    await git(root, "config", "user.name", "Maurice");
+    await git(root, "config", "user.email", "maurice@localhost");
   }
 
-  git(root, "add", "-A");
-  const commit = git(root, "commit", "--quiet", "-m", "Garden under version control");
-  if (commit.status !== 0 && !/nothing to commit/.test(commit.stdout + commit.stderr)) {
-    return { ok: false, reason: `first commit failed: ${commit.stderr.trim()}` };
-  }
+  const add = await git(root, "add", "-A");
+  if (add.status !== 0) return { ok: false, reason: `first commit failed: ${add.stderr.trim()}` };
+  const commit = await git(root, "commit", "--quiet", "--allow-empty", "-m", "Garden under version control");
+  if (commit.status !== 0) return { ok: false, reason: `first commit failed: ${commit.stderr.trim()}` };
   return { ok: true, created: true };
 }
 
@@ -121,9 +149,11 @@ export async function serveGitHttp(req: Request, root: string, pathInfo: string,
   // A large fetch request arrives gzipped; http-backend inflates it itself.
   const encoding = req.headers.get("content-encoding");
   if (encoding) env.HTTP_CONTENT_ENCODING = encoding;
-  // Protocol v2, which git asks for by this header.
-  const proto = req.headers.get("git-protocol");
-  if (proto) env.HTTP_GIT_PROTOCOL = proto;
+  // The `Git-Protocol: version=2` header a client sends is deliberately NOT
+  // passed on (HTTP_GIT_PROTOCOL): in protocol v2, upload-pack hands out any
+  // object a client names by its id, hidden refs included — a stash, or what
+  // a history rewrite took out. Protocol v0 sends only what it advertised.
+  // Every client falls back to it; Obsidian Git on a phone speaks nothing else.
 
   const proc = Bun.spawn(["git", "http-backend"], {
     env,

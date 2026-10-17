@@ -1,3 +1,4 @@
+import { requestOrigin } from "../../lib/requestOrigin";
 import { Hono } from "hono";
 import { requireAuth } from "../middleware/auth";
 import {
@@ -457,9 +458,7 @@ conversations.post("/:id/messages", async (c) => {
   const attached = () => !c.req.raw.signal.aborted;
   // Where the member reached us, for the footer's links: the app opens only
   // absolute ones.
-  const host = c.req.header("x-forwarded-host") || c.req.header("host") || "";
-  const proto = c.req.header("x-forwarded-proto") || new URL(c.req.url).protocol.replace(":", "");
-  const origin = host ? `${proto}://${host}` : "";
+  const origin = requestOrigin(c.req);
 
   // Stream with throttled flushing — accumulate text and emit every ~30ms
   // so the client sees a smooth streaming effect even when Anthropic is fast
