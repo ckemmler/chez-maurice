@@ -1,6 +1,6 @@
 ---
 title: Maurice — the digest
-date: '2026-10-16'
+date: '2026-10-17'
 flags: []
 locale: en
 description: 'The system documentation condensed to what a user needs: everything
@@ -20,7 +20,7 @@ covers:
   maurice-carnet: '2026-10-16'
   maurice-chat: '2026-10-17'
   maurice-composer: '2026-09-22'
-  maurice-data-model: '2026-10-14'
+  maurice-data-model: '2026-10-17'
   maurice-docs: '2026-10-15'
   maurice-domains: '2026-10-10'
   maurice-files: '2026-06-19'
@@ -31,7 +31,7 @@ covers:
   maurice-server: '2026-10-17'
   maurice-shared-gardens: '2026-10-15'
   maurice-tools: '2026-10-10'
-  maurice-web-garden: '2026-10-10'
+  maurice-web-garden: '2026-10-17'
 ---
 
 # Maurice — the digest
@@ -122,6 +122,7 @@ There is also a **browser clipper** that saves the page being read into the gard
 - **Mail passwords** are sealed with the household key, never returned by any route, readable only by the email tool through a local route.
 - **The operator** (whoever runs the server) can see the admin console from the machine itself — provider keys, member settings, per-member spend, reports filed in shared rooms, health counters, logs of model rounds and tool calls. They cannot see mail passwords, reports on private one-to-one conversations (those cannot be reported), or names and content through the health probe. This is policy and plumbing, not encryption against the operator: whoever runs the server runs its storage.
 - **Your data, your copy:** *My data* in the app exports a member archive (conversations, rows, garden with history, files, mail store — no credentials), imports one, and **erases** — the member's data, or the whole account — everywhere the server reaches, including nightly local snapshots. The answer lists what it cannot reach: a garden remote elsewhere, a published site, archives an admin already exported, and a hosted household's off-site backups (kept up to 12 months; restoring one would bring the member back). Carnet offers the same *Delete my account*.
+- **Your garden as a git clone:** each member can clone their own garden (Settings → *My data* → *Clone my garden*), read-only, with a key that opens nothing else. The clone holds the notes, fiches and their history, and every night Maurice writes into it, under `_maurice/`, the member's highlights, reading positions and archived entries, and their conversations if they turn that on. It is **not encrypted**: notes marked encrypted are in clear text in it, as they are on the server's disk.
 - **Household archive:** the admin can export the whole household (databases, gardens with history, files, configuration, the household key) to move it elsewhere. It contains provider keys and is a secret.
 
 *Detail:* `data-model`, `server`, `architecture`.
@@ -311,15 +312,16 @@ Each member has folders and files (5 GB each), in **Settings**: text, images, PD
 - **Public, private, encrypted:** a note is published **only with the `public` flag**. An `encrypted` note is encrypted in the page (AES-256-GCM, the password typed in the browser) or withheld. Fiches, drafts, unopened articles, person fiches and other members' content never enter a published build — checked by an automated leak test.
 - **A member's site:** the household's public pages at `/@<member>/`, a static build behind a household switch; or a domain of one's own (today only at home, through Cloudflare Pages).
 - **Themes:** manuscript (default), botanical, newsprint, terminal, chosen in the app.
+- **The garden as a git address:** `https://<household>/git/<member>.git`, for `git clone`, Obsidian (the *Git* plugin) or Working Copy. HTTP Basic: any username, the member's git key as the password; a member clones only their own garden; a push is refused. A garden not yet versioned becomes a repository at its first clone. The clone is a vault and a near-complete backup (see §6); flashcards, mail and the search index are not in it.
 - **Shared gardens:** sharing is a property of a note — its audience. A shared garden is simply the notes sharing an audience; members can see who reads a note, share it, or leave its audience. A shared note is read inside its owner's garden, in the owner's theme.
 
-*Gaps:* English-only site search; translation and social sharing unavailable in the container; shared gardens have no roles (read-only vs co-editor), and a theme set for a shared audience is stored but not used; a public host's duties (reporting, takedown) are not defined.
+*Gaps:* the git clone is read-only (writing back from Obsidian is not built), and untested so far on an iPad with Obsidian Git or Working Copy; English-only site search; translation and social sharing unavailable in the container; shared gardens have no roles (read-only vs co-editor), and a theme set for a shared audience is stored but not used; a public host's duties (reporting, takedown) are not defined.
 
 *Detail:* `web-garden`, `shared-gardens`.
 
 ## 22. The night and the operator's tools
 
-- **Night jobs** run inside the server, at home and hosted alike, each catching up if the server was down and each switchable off: 03:00 search reconcile and the mail header walk; 04:00 domain briefs; 05:00 domain mapping and filing. The night spends from its own allowance.
+- **Night jobs** run inside the server, at home and hosted alike, each catching up if the server was down and each switchable off: 03:00 search reconcile and the mail header walk; 03:30 the garden export (highlights, reading, and conversations if asked, written into each member's garden and committed only when something changed); 04:00 domain briefs; 05:00 domain mapping and filing. The night spends from its own allowance.
 - **Admin console** (`/admin`, only from the machine itself; the operator of a hosted household reaches it through an ssh tunnel): members, PINs and invitations, models and their windows, the access grid, provider keys, the Calibre library, caps and budget shares, the night's allowance, background model pins, the public-pages switch, cards for the night's jobs with *run now*, the household export.
 - **Health:** `/healthz` answers status and version publicly, and build, database, disk and error counts (never names or content) to a health token.
 - **Documentation refresh:** each server fetches the latest documentation from the public repository once a day.
@@ -345,12 +347,13 @@ Each member has folders and files (5 GB each), in **Settings**: text, images, PD
 - **…use my notes from Claude Desktop or claude.ai?** Add your Maurice as a custom connector and sign in with a personal token; you get your garden and your search there.
 - **…report or block someone?** In a shared room, long-press their message. Private conversations cannot be reported.
 - **…keep my dictation on the device?** By default the household's server transcribes it (Whisper, the better text; a preview shows as you speak). Turn off Settings → Dictation → *Transcribe on the household server* and it stays on the device — Apple's newest recogniser on iOS or macOS 26.
+- **…open my garden in Obsidian?** Settings → *My data* → *Clone my garden*: copy the address, username and key. In Obsidian, install the community plugin *Git* and run *Clone an existing remote repo*; on an iPad, Working Copy clones it too; on a computer, `git clone` the address and open the folder as a vault. It stays read-only: edit in Maurice, the clone follows.
 - **…take my data with me, or leave?** Settings → *My data*: export an archive, erase your data, or delete your account (Carnet: member sheet → Privacy → *Delete my account*).
 - **…run Maurice myself?** Run the container on a machine of yours (Docker), make it reachable (Tailscale or Cloudflare Tunnel), and set the provider keys in the admin console. Or be hosted: a household on Maurice's own Scaleway machines, with models included.
 
 ## 24. Not built, and known gaps
 
-- **Not built:** payment and top-ups; a web chat client; OAuth for mail (Outlook.com, Google contacts); mail in the corpus; flashcard review in Carnet; demo servers for trying the apps without a household (designed, deferred); a hosted member's own domain; on-device inference.
+- **Not built:** payment and top-ups; writing back to the garden from an Obsidian clone (push); a web chat client; OAuth for mail (Outlook.com, Google contacts); mail in the corpus; flashcard review in Carnet; demo servers for trying the apps without a household (designed, deferred); a hosted member's own domain; on-device inference.
 - **Not intended:** Maurice proposing notes from patterns he notices; automatic periodic reviews.
 - **Rough edges:** sessions never expire; a reply in progress is lost on a server restart; no provider failover; external MCP clients see every mounted tool; some member-triggered background calls are not on the ledger; erasure cannot reach off-site backups or exported archives; the databases are snapshot, not versioned (the gardens are); after a household import the search index and git remotes are fixed by hand; the experimental tools are partly documented and absent from hosted households.
 

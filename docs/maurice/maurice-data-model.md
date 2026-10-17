@@ -1,6 +1,6 @@
 ---
 title: The data model
-date: '2026-10-14'
+date: '2026-10-17'
 flags: []
 locale: en
 description: 'The SQLite schema behind the chat engine: identity, conversations, files,
@@ -25,7 +25,7 @@ One **SQLite** file (`maurice.db`, WAL mode, in the Maurice home `~/.maurice/`) 
 |---|---|---|
 | `households` | one row `id='default'`; `api_key`, `openai_api_key`, `mistral_api_key`, `zai_api_key`, `fal_api_key`, `default_model`, `max_tokens`, `everyday_thinking` (nullable 0/1, seeded 0), `ollama_host`, `default_tool_families`, `color`, `icon`, `providers_seeded`, `zai_seeded`, `scaleway_seeded`, `vision_seeded`, `thinking_seeded`, `spend_cap_daily_usd`, `spend_cap_system_daily_usd`, `budget_monthly_eur` | **A server is one household.** `everyday_thinking` is the everyday Maurice's reasoning choice — the conversation with no persona has no place in the apps to set anything, so its settings come "from the factory" and are corrected in the admin console only. Multiple households is a multi-*server* feature (the app's foyer switcher, and at home one launchd agent per extra household), not multiple rows. `color`/`icon` give the foyer its identity; the `*_seeded` flags guard the one-time model seeds so a deleted model stays deleted. `public_pages` (1 by default, since 8 October 2026): whether the members may publish to the household's public pages, `/@<member>/` — see [[maurice-server]]. |
 | `users` | `id`, `username` (unique), `display_name`, `role ∈ {admin,standard,guest}`, `password_hash`, `pin_hash`, `avatar_color`, `avatar_url`, `profile_text`, `notes_domain`, `experimental_tools`, `everyday_model` | `everyday_model` = the member's preferred model for the unspecialized Maurice (null → household default). `username` is also the member's garden directory. |
-| `user_preferences` | `user_id` (PK), `theme`, `serif_font`, `density`, `palette`, `locale` | Per-member app appearance and language. |
+| `user_preferences` | `user_id` (PK), `theme`, `serif_font`, `density`, `palette`, `locale`, `export_conversations` | Per-member app appearance and language; whether the night's garden export writes the member's conversations (off by default, 17 October 2026). |
 
 Anthropic's key stays in `households.api_key`; the other providers got their own columns as they were added (`openai_api_key`, `mistral_api_key`, `zai_api_key`).
 
@@ -34,7 +34,7 @@ Anthropic's key stays in `households.api_key`; the other providers got their own
 | Table | Key columns | Purpose |
 |---|---|---|
 | `sessions` | `id`, `user_id`, `device_id`, `expires_at` | Opaque session tokens. |
-| `api_tokens` | `id`, `user_id`, `token_hash` (unique), `token_plain` (self-service only), `label`, `scope ∈ {mcp,health,full}` | `maur_*` bearer tokens; the self-service MCP token is recoverable so all of a member's devices show the same one. |
+| `api_tokens` | `id`, `user_id`, `token_hash` (unique), `token_plain` (self-service only), `label`, `scope ∈ {mcp,health,full,git}` | `maur_*` bearer tokens; the self-service MCP token is recoverable so all of a member's devices show the same one, and so is the `git` token (label `git-clone`, 17 October 2026), which opens the member's garden clone and nothing else. |
 | `invite_codes` | `code` (PK), `user_id`, `expires_at` | Admin hands one to a member to enroll a device; reusable within the window, revocable by deleting the row. |
 | `household_invites` | `code` (PK), `created_by`, `expires_at`, `used_by`, `used_at` | An open invitation: brings someone who isn't a member yet, who names themselves on arrival. Single use; the row stays as the record of who came in by it. |
 | `mail_accounts` | `id`, `member_id` (cascade), `address` (unique per member), `name`, `provider`, `host`, `port`, `security`, `username` (all optional — the `email` tool guesses them from the domain), `secret`, `state` ∈ `unchecked`/`ok`/`error`, `last_error`, `checked_at`, `created_at`, `updated_at` | A member's mailbox, added by the member themselves (25 September 2026, `services/mailAccounts.ts`). `secret` is the password sealed with AES-256-GCM (`v1:` + base64 of IV, tag, ciphertext) under the **household key**: `MAURICE_SECRET_KEY` (32 bytes, hex or base64) when set, else `secret.key` in the app dir, created on first use, mode 0600. A copy of `maurice.db` without the key carries no usable password; the household archive carries the key. No route returns `secret`; only the loopback route the tool reads decrypts it. |
