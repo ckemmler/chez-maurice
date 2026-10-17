@@ -31,6 +31,8 @@ struct DomainEditor: View {
     @State private var showAddContext = false
     @State private var showIcons = false
     @State private var saving = false
+    /// Why the last save did not go through, shown under the name.
+    @State private var saveProblem: String?
     @State private var confirmDelete = false
 
     /// Tracks which text field holds the keyboard, so the keyboard accessory
@@ -230,7 +232,15 @@ struct DomainEditor: View {
                 }
                 .padding(12)
                 .background(RoundedRectangle(cornerRadius: 10).fill(theme.bg))
-                .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(theme.rule, lineWidth: 0.5))
+                .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(saveProblem == nil ? theme.rule : Color.red.opacity(0.7), lineWidth: 0.5))
+                .onChange(of: draft.name) { saveProblem = nil }
+
+                if let saveProblem {
+                    Text(saveProblem)
+                        .font(.system(size: 12))
+                        .foregroundStyle(.red)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
 
                 if showIcons && draft.kind == "domain" {
                     fieldLabel(session.localized("persona.field.icon"))
@@ -446,11 +456,21 @@ struct DomainEditor: View {
 
     private func save() {
         saving = true
+        saveProblem = nil
         draft.contextItems = ctx.items
         Task {
-            _ = await store.save(draft)
+            let outcome = await store.save(draft)
             saving = false
-            domains.closeEditor()
+            switch outcome {
+            case .saved:
+                domains.closeEditor()
+            case .nameTaken(let name):
+                // One domain per name: say which, and stay on the name.
+                saveProblem = session.localized("persona.error.name_taken", name)
+                focus = .name
+            case .failed:
+                saveProblem = session.localized("persona.error.save_failed")
+            }
         }
     }
 

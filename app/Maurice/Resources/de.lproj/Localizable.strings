@@ -65,6 +65,8 @@
 "persona.section.tools" = "Werkzeuge";
 "persona.section.access" = "Wer ihn nutzen darf";
 "persona.field.name" = "Name";
+"persona.error.name_taken" = "Du hast bereits einen Bereich „%@“. Gib diesem einen anderen Namen oder öffne den vorhandenen.";
+"persona.error.save_failed" = "Speichern fehlgeschlagen. Versuche es erneut.";
 "persona.field.tagline" = "Slogan in einer Zeile";
 "persona.field.creativity" = "KREATIVITÄT";
 "persona.instructions.placeholder" = "Was dieser Bereich umfasst, in wenigen Sätzen. Maurice liest es als Beschreibung des Bereichs, und das nächtliche Heft hält sich daran.";
@@ -861,7 +863,7 @@
 "mydata.delete.button" = "Mein Konto löschen…";
 "mydata.backups" = "Die lokalen Sicherungen der Nacht werden beim Löschen ohne dich neu geschrieben. Wird dieser Haushalt gehostet, laufen die externen Sicherungen des Hosters von selbst ab, nach dessen Zeitplan.";
 "mydata.clone.title" = "Meinen Garten klonen";
-"mydata.clone.text" = "Ihr Garten hat eine Git-Adresse: Klonen Sie ihn in Obsidian, Working Copy oder ein Terminal und halten Sie eine aktuelle Kopie. Vorerst nur lesend: Was Sie dort ändern, kommt nicht hierher zurück.";
+"mydata.clone.text" = "Dein Garten hat eine Git-Adresse: Klone ihn in Obsidian, Working Copy oder ein Terminal und halte eine aktuelle Kopie. Vorerst nur lesend: Was du dort änderst, kommt nicht hierher zurück.";
 "mydata.clone.button" = "Adresse anzeigen";
 "mydata.clone.address" = "Adresse";
 "mydata.clone.username" = "Benutzername";
@@ -869,12 +871,12 @@
 "mydata.clone.copy" = "Kopieren";
 "mydata.clone.copied" = "Kopiert.";
 "mydata.clone.rotate" = "Schlüssel ändern";
-"mydata.clone.rotated" = "Neuer Schlüssel: Der alte funktioniert nicht mehr. Aktualisieren Sie ihn auf Ihren Geräten.";
-"mydata.clone.howto" = "Obsidian: Installieren Sie das Community-Plugin „Git“, führen Sie „Git: Clone an existing remote repo“ aus, fügen Sie die Adresse ein und geben Sie auf Nachfrage Benutzername und Schlüssel an. Working Copy: „Clone repository“, dieselbe Adresse, derselbe Schlüssel. Auf einem Computer: git clone gefolgt von der Adresse, dann den Ordner in Obsidian als Vault öffnen.";
-"mydata.clone.warning" = "Die Kopie ist nicht verschlüsselt: Als privat markierte Notizen liegen darin im Klartext. Schützen Sie das Gerät, auf dem sie liegt. Sie enthält Ihre Notizen, Ihre Fiches und deren Verlauf sowie, jede Nacht im Ordner _maurice neu geschrieben, Ihre Markierungen, Lesepositionen, archivierten Einträge und Bereiche. Nicht Ihre Post und nicht den Suchindex.";
+"mydata.clone.rotated" = "Neuer Schlüssel: Der alte funktioniert nicht mehr. Aktualisiere ihn auf deinen Geräten.";
+"mydata.clone.howto" = "Obsidian: Installiere das Community-Plugin „Git“, führe „Git: Clone an existing remote repo“ aus, füge die Adresse ein und gib auf Nachfrage Benutzername und Schlüssel an. Working Copy: „Clone repository“, dieselbe Adresse, derselbe Schlüssel. Auf einem Computer: git clone gefolgt von der Adresse, dann den Ordner in Obsidian als Vault öffnen.";
+"mydata.clone.warning" = "Die Kopie ist nicht verschlüsselt: Als privat markierte Notizen liegen darin im Klartext. Schütze das Gerät, auf dem sie liegt. Sie enthält deine Notizen, deine Fiches und deren Verlauf sowie, jede Nacht im Ordner _maurice neu geschrieben, deine Markierungen, Lesepositionen, archivierten Einträge und Bereiche. Nicht deine Post und nicht den Suchindex.";
 "mydata.clone.conversations" = "Meine Gespräche einbeziehen";
-"mydata.clone.conversations_note" = "Jede Nacht werden Ihre Gespräche in den Garten geschrieben, eines pro Datei, unter _maurice/conversations. In einem geteilten Raum nur Ihre eigenen Nachrichten.";
-"mydata.clone.no_garden" = "Sie haben in diesem Haushalt noch keinen Garten.";
+"mydata.clone.conversations_note" = "Jede Nacht werden deine Gespräche in den Garten geschrieben, eines pro Datei, unter _maurice/conversations. In einem geteilten Raum nur deine eigenen Nachrichten.";
+"mydata.clone.no_garden" = "Du hast in diesem Haushalt noch keinen Garten.";
 "mydata.failed" = "Fehlgeschlagen: %@";
 "mydata.residual.corpus" = "Der Suchindex war nicht erreichbar; er wird beim nächsten Start des Servers geleert.";
 "mydata.residual.remote" = "Eine Kopie deines Gartens liegt anderswo, außerhalb der Reichweite dieses Servers: %@";

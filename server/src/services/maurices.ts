@@ -265,10 +265,43 @@ function thinkingColumn(v: unknown): number | null {
   return v === true ? 1 : v === false ? 0 : null;
 }
 
+// ── One domain per name ─────────────────────────────────────────
+//
+// A member has one domain of a given name (17 October 2026). Two "Maurice"
+// made 28 seconds apart in the editor split one subject in two — two briefs,
+// the conversations shared out between them — and nothing stopped it. The
+// name is compared without case, accents, spacing or punctuation, so
+// "Santé", "sante" and "Santé !" are one. Companions are not concerned: one
+// follows a book, and two may follow two editions of it.
+
+/** A domain name as it is compared. */
+export function domainNameKey(name: string): string {
+  return name.normalize("NFKD").replace(/[\u0300-\u036f]/g, "").toLowerCase()
+    .replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+}
+
+/** The member's domain of that name, other than `exceptId`, or null. */
+export function domainNamed(memberId: string, name: string, exceptId?: string): Maurice | null {
+  const key = domainNameKey(name);
+  if (!key) return null;
+  const rows = db.query(
+    `SELECT id, name FROM maurices WHERE created_by = ? AND COALESCE(kind, 'domain') = 'domain' ORDER BY created_at, id`,
+  ).all(memberId) as { id: string; name: string }[];
+  const hit = rows.find((r) => r.id !== exceptId && domainNameKey(r.name) === key);
+  return hit ? getMaurice(hit.id) : null;
+}
+
+/** What creating or renaming answers when the name is the member's already. */
+export interface NameTaken { taken: Maurice }
+
 export function createMaurice(
   memberId: string,
   input: MauriceInput,
-): Maurice | { errors: ItemValidationError[] } {
+): Maurice | { errors: ItemValidationError[] } | NameTaken {
+  if ((parseKind(input.kind) ?? "domain") === "domain") {
+    const taken = domainNamed(memberId, input.name);
+    if (taken) return { taken };
+  }
   const frozen = freezeItems(memberId, input.context ?? []);
   if ("errors" in frozen) return frozen;
 
@@ -300,9 +333,15 @@ export function updateMaurice(
   id: string,
   memberId: string,
   input: MauriceInput,
-): Maurice | { errors: ItemValidationError[] } | null {
+): Maurice | { errors: ItemValidationError[] } | NameTaken | null {
   const row = getRow(id);
   if (!row) return null;
+  // A rename, or a companion re-sorted as a domain, must not make a second
+  // domain of a name the member has already.
+  if ((parseKind(input.kind) ?? row.kind ?? "domain") === "domain" && row.created_by) {
+    const taken = domainNamed(row.created_by, input.name ?? row.name, id);
+    if (taken) return { taken };
+  }
 
   // Re-freeze context only when the caller actually sends a context array.
   let contextJson = row.context_json;

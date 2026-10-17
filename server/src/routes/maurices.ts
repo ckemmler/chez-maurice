@@ -1,4 +1,6 @@
 import { Hono } from "hono";
+import type { Context } from "hono";
+import { mergeDomains } from "../services/domainMerge";
 import { requireAuth } from "../middleware/auth";
 import {
   reachableMaurices,
@@ -49,6 +51,7 @@ maurices.post("/", async (c) => {
   const body = (await c.req.json().catch(() => ({}))) as MauriceInput;
   if (!body.name?.trim()) return c.json({ error: "name required" }, 400);
   const res = createMaurice(c.get("userId"), body);
+  if ("taken" in res) return nameTaken(c, res.taken);
   if ("errors" in res) return c.json({ error: "invalid context", details: res.errors }, 400);
   return c.json(res, 201);
 });
@@ -67,9 +70,27 @@ maurices.patch("/:id", async (c) => {
   }
   const res = updateMaurice(c.req.param("id"), c.get("userId"), body);
   if (res === null) return c.json({ error: "Not found" }, 404);
+  if ("taken" in res) return nameTaken(c, res.taken);
   if ("errors" in res) return c.json({ error: "invalid context", details: res.errors }, 400);
   return c.json(res);
 });
+
+// POST /api/maurices/:id/merge { into } — fold the domain :id into the domain
+// `into`, both the caller's: its conversations, context, briefs, mail and
+// seeded notes move over, and :id is gone (services/domainMerge.ts).
+maurices.post("/:id/merge", async (c) => {
+  const body = (await c.req.json().catch(() => ({}))) as { into?: string };
+  if (!body.into) return c.json({ error: "into required" }, 400);
+  const res = mergeDomains(c.get("userId"), c.req.param("id"), body.into);
+  if ("error" in res) return c.json({ error: res.error }, res.error === "not_found" ? 404 : 400);
+  return c.json({ domain: res.into, moved: res.moved });
+});
+
+/** 409 for a domain name the member has already, naming the one that has it
+ *  so the client can offer to open it. */
+function nameTaken(c: Context, taken: { id: string; name: string }) {
+  return c.json({ error: "domain_name_taken", existing: { id: taken.id, name: taken.name } }, 409);
+}
 
 // DELETE /api/maurices/:id — only the creator may delete.
 maurices.delete("/:id", (c) => {

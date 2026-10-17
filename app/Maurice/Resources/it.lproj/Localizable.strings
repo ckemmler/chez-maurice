@@ -65,6 +65,8 @@
 "persona.section.tools" = "Strumenti";
 "persona.section.access" = "Chi può usarlo";
 "persona.field.name" = "Nome";
+"persona.error.name_taken" = "Hai già un dominio «%@». Dai a questo un altro nome, oppure apri quello che esiste.";
+"persona.error.save_failed" = "Salvataggio non riuscito. Riprova.";
 "persona.field.tagline" = "Motto in una riga";
 "persona.field.creativity" = "CREATIVITÀ";
 "persona.instructions.placeholder" = "Cosa copre questo dominio, in poche frasi. Maurice lo legge come l’enunciato del dominio, e il quaderno notturno lo segue.";

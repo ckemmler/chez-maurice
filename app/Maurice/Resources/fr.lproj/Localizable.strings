@@ -65,6 +65,8 @@
 "persona.section.tools" = "Outils";
 "persona.section.access" = "Qui peut l'utiliser";
 "persona.field.name" = "Nom";
+"persona.error.name_taken" = "Vous avez déjà un domaine « %@ ». Donnez-lui un autre nom, ou ouvrez celui qui existe.";
+"persona.error.save_failed" = "L’enregistrement a échoué. Réessayez.";
 "persona.field.tagline" = "Accroche en une ligne";
 "persona.field.creativity" = "CRÉATIVITÉ";
 "persona.instructions.placeholder" = "Ce que couvre ce domaine, en quelques phrases. Maurice le lit comme l’énoncé du domaine, et le cahier de la nuit s’y tient.";

@@ -80,6 +80,7 @@ import { proxyAuth, validateApiTokenRaw, validateHealthToken } from "./src/middl
 import gitRoutes from "./src/routes/git";
 import { requestOrigin } from "./lib/requestOrigin";
 import { scheduleGardenExport } from "./src/services/gardenExport";
+import { mergeDuplicateDomains } from "./src/services/domainMerge";
 import { fullHealth, hookConsoleErrors, publicHealth, recordError } from "./src/services/health";
 import { validateSession, normalizeInviteCode, formatInviteCode } from "./src/services/auth";
 import { t, langOf } from "./src/services/i18n";
@@ -249,6 +250,12 @@ scheduleDomainMappingNightly();
 // conversations if they asked — into it as text, and commit (see
 // services/gardenExport.ts).
 scheduleGardenExport();
+// One domain per name (services/domainMerge.ts): whatever same-named domains
+// a household made before the rule are folded into the oldest of each, once.
+{
+  const folded = mergeDuplicateDomains();
+  if (folded) console.log(`[domains] ${folded} duplicate domain(s) merged`);
+}
 
 /** Is this a member whose garden the household serves? */
 function gardenExists(member: string): boolean {

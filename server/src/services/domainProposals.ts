@@ -1,6 +1,6 @@
 import db from "../db";
 import { refreshBrief, type RefreshResult } from "./domainBriefs";
-import { createMaurice, getMaurice, type Maurice } from "./maurices";
+import { createMaurice, domainNamed, getMaurice, type Maurice } from "./maurices";
 import type { McpTool } from "./mcpClient";
 import { describeSeeding, seedDomain, type SeedResult } from "./domainSeeding";
 import { attachMail, mailOfDomains, readMailThread } from "./domainMail";
@@ -801,24 +801,39 @@ export function adoptProposal(p: Proposal, opts: { name?: string; summary?: stri
   const summary = (opts.summary ?? p.summary).trim();
   if (!name) return { error: "a domain needs a name" };
   const owned = p.conversation_ids.filter((id) => ownsConversation(p.member_id, id));
-  const baked = owned.slice(0, BAKED_CONVERSATIONS).map((id) => ({ type: "conversation", id }));
-  let created = createMaurice(p.member_id, { name, kind: "domain", tagline: "", prompt: summary, context: baked, users: [p.member_id] });
-  if ("errors" in created) {
-    // A conversation the composer refuses (deleted meanwhile, say) should
-    // not stop the adoption: bind without baking.
-    created = createMaurice(p.member_id, { name, kind: "domain", tagline: "", prompt: summary, context: [], users: [p.member_id] });
+  // A proposal named like a domain the member has already joins it rather
+  // than making a second of the same name (maurices.domainNamed): its
+  // conversations and mail go to that domain, marked as bound now so the
+  // next brief reads them whole.
+  const existing = domainNamed(p.member_id, name);
+  let domain: Maurice;
+  if (existing) {
+    domain = existing;
+  } else {
+    const baked = owned.slice(0, BAKED_CONVERSATIONS).map((id) => ({ type: "conversation", id }));
+    let created = createMaurice(p.member_id, { name, kind: "domain", tagline: "", prompt: summary, context: baked, users: [p.member_id] });
+    if ("errors" in created) {
+      // A conversation the composer refuses (deleted meanwhile, say) should
+      // not stop the adoption: bind without baking.
+      created = createMaurice(p.member_id, { name, kind: "domain", tagline: "", prompt: summary, context: [], users: [p.member_id] });
+    }
     if ("errors" in created) return { error: created.errors.map((e) => e.message ?? String(e)).join("; ") };
+    if ("taken" in created) return { error: "a domain of that name exists already" };
+    domain = created;
   }
-  const domain = created;
   let bound = 0;
   for (const id of owned) {
-    const r = db.run(`UPDATE conversations SET maurice_id = ? WHERE id = ? AND user_id = ? AND maurice_id IS NULL`, [domain.id, id, p.member_id]);
+    const r = db.run(
+      `UPDATE conversations SET maurice_id = ?${existing ? ", maurice_bound_at = datetime('now')" : ""}
+        WHERE id = ? AND user_id = ? AND maurice_id IS NULL`,
+      [domain.id, id, p.member_id],
+    );
     bound += Number(r.changes ?? 0);
   }
   // Its mail threads become the domain's, for the brief to read.
   const mail = attachMail(domain.id, p.member_id, p.mail);
   updateProposal(p.id, { state: "adopted", maurice_id: domain.id, name, summary });
-  console.log(`[proposals] "${name}" adopted by ${p.member_id}: domain ${domain.id}, ${bound} conversation(s) bound${mail ? `, ${mail} mail thread(s)` : ""}`);
+  console.log(`[proposals] "${name}" adopted by ${p.member_id}: ${existing ? "joined existing" : ""} domain ${domain.id}, ${bound} conversation(s) bound${mail ? `, ${mail} mail thread(s)` : ""}`);
   const brief = refreshBrief(getMaurice(domain.id) ?? domain, p.member_id).catch((err) => {
     console.warn(`[proposals] first brief of "${name}" failed: ${(err as Error).message}`);
     return { outcome: "failed", brief: null, sources: 0, cost_usd: null, error: String(err) } as RefreshResult;

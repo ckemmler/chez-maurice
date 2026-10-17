@@ -65,6 +65,8 @@
 "persona.section.tools" = "Hulpmiddelen";
 "persona.section.access" = "Wie het mag gebruiken";
 "persona.field.name" = "Naam";
+"persona.error.name_taken" = "Je hebt al een domein ‘%@’. Geef dit een andere naam, of open het bestaande.";
+"persona.error.save_failed" = "Opslaan is mislukt. Probeer het opnieuw.";
 "persona.field.tagline" = "Eenregelige slogan";
 "persona.field.creativity" = "CREATIVITEIT";
 "persona.instructions.placeholder" = "Wat dit domein omvat, in een paar zinnen. Maurice leest het als de omschrijving van het domein, en het nachtelijke schrift houdt zich eraan.";

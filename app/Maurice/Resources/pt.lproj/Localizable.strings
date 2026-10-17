@@ -65,6 +65,8 @@
 "persona.section.tools" = "Ferramentas";
 "persona.section.access" = "Quem pode usar";
 "persona.field.name" = "Nome";
+"persona.error.name_taken" = "Já tens um domínio «%@». Dá outro nome a este, ou abre o que já existe.";
+"persona.error.save_failed" = "Não foi possível guardar. Tenta de novo.";
 "persona.field.tagline" = "Lema numa linha";
 "persona.field.creativity" = "CRIATIVIDADE";
 "persona.instructions.placeholder" = "O que este domínio abrange, em poucas frases. O Maurice lê-o como o enunciado do domínio, e o caderno da noite segue-o.";

@@ -65,6 +65,8 @@
 "persona.section.tools" = "Tools";
 "persona.section.access" = "Who can use it";
 "persona.field.name" = "Name";
+"persona.error.name_taken" = "You already have a domain called “%@”. Give this one another name, or open the one you have.";
+"persona.error.save_failed" = "Saving failed. Try again.";
 "persona.field.tagline" = "One-line tagline";
 "persona.field.creativity" = "CREATIVITY";
 "persona.instructions.placeholder" = "What this domain covers, in a few sentences. Maurice reads it as the statement of the domain, and the night’s brief follows it.";

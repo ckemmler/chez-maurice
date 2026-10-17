@@ -358,13 +358,25 @@ final class MauriceStore {
 
     // MARK: CRUD
 
+    /// What saving a draft came to. The server keeps one domain per name for a
+    /// member: `nameTaken` carries the name of the domain that has it already.
+    enum SaveOutcome {
+        case saved(Maurice)
+        case nameTaken(String)
+        case failed
+    }
+
     @discardableResult
-    func save(_ draft: Maurice) async -> Maurice? {
+    func save(_ draft: Maurice) async -> SaveOutcome {
         let body = Self.body(from: draft)
         let isEdit = draft.rawId != nil
         let path = isEdit ? "/api/maurices/\(draft.rawId!)" : "/api/maurices"
-        guard let json = await request(isEdit ? "PATCH" : "POST", path, body: body) as? [String: Any],
-              let saved = Maurice.parse(json) else { return nil }
+        let (status, answer) = await requestStatus(isEdit ? "PATCH" : "POST", path, body: body)
+        if status == 409, let d = answer as? [String: Any], let existing = d["existing"] as? [String: Any] {
+            return .nameTaken(existing["name"] as? String ?? draft.name)
+        }
+        guard (200..<300).contains(status), let json = answer as? [String: Any],
+              let saved = Maurice.parse(json) else { return .failed }
         if let i = maurices.firstIndex(where: { $0.rawId == saved.rawId }) {
             maurices[i] = saved
         } else {
@@ -372,7 +384,7 @@ final class MauriceStore {
         }
         maurices.sort { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
         await loadOverview()
-        return saved
+        return .saved(saved)
     }
 
     /// Re-sort a row by hand: a companion the migration took for a domain, or
