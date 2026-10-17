@@ -427,7 +427,7 @@ db.run(`
     user_id     TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     token_hash  TEXT NOT NULL UNIQUE,
     label       TEXT NOT NULL,
-    scope       TEXT NOT NULL DEFAULT 'full' CHECK (scope IN ('mcp', 'health', 'full')),
+    scope       TEXT NOT NULL DEFAULT 'full' CHECK (scope IN ('mcp', 'health', 'full', 'git')),
     -- Recoverable raw token for self-service 'mcp-settings' tokens. Declared here
     -- so a fresh DB has it; the ALTER above backfills pre-existing databases.
     token_plain TEXT,
@@ -435,6 +435,40 @@ db.run(`
     created_at  TEXT NOT NULL DEFAULT (datetime('now'))
   )
 `);
+
+// Add 'git' to the scope enum (17 October 2026): the token a member pastes into
+// Obsidian or Working Copy opens their garden's clone address and nothing else
+// (routes/git.ts). SQLite can't alter a CHECK in place, so the table is rebuilt
+// once, when 'git' isn't allowed yet. Nothing references api_tokens.
+try {
+  const cur = db.query(`SELECT sql FROM sqlite_master WHERE type='table' AND name='api_tokens'`).get() as { sql: string } | undefined;
+  if (cur && !cur.sql.includes("'git'")) {
+    const cols = "id, user_id, token_hash, label, scope, token_plain, last_used_at, created_at";
+    const before = (db.query(`SELECT COUNT(*) AS n FROM api_tokens`).get() as { n: number }).n;
+    db.transaction(() => {
+      db.run(`
+        CREATE TABLE api_tokens_new (
+          id          TEXT PRIMARY KEY,
+          user_id     TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+          token_hash  TEXT NOT NULL UNIQUE,
+          label       TEXT NOT NULL,
+          scope       TEXT NOT NULL DEFAULT 'full' CHECK (scope IN ('mcp', 'health', 'full', 'git')),
+          token_plain TEXT,
+          last_used_at TEXT,
+          created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+      `);
+      db.run(`INSERT INTO api_tokens_new (${cols}) SELECT ${cols} FROM api_tokens`);
+      const after = (db.query(`SELECT COUNT(*) AS n FROM api_tokens_new`).get() as { n: number }).n;
+      if (after !== before) throw new Error(`row count mismatch ${before} → ${after}`);
+      db.run(`DROP TABLE api_tokens`);
+      db.run(`ALTER TABLE api_tokens_new RENAME TO api_tokens`);
+    })();
+    console.log(`[db] api_tokens migrated to allow the 'git' scope (${before} rows preserved)`);
+  }
+} catch (e) {
+  console.error("[db] git-scope migration failed:", (e as Error).message);
+}
 
 db.run(`
   CREATE TABLE IF NOT EXISTS devices (

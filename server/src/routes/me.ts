@@ -4,10 +4,12 @@ import { Hono } from "hono";
 import type { Context } from "hono";
 import { rmSync } from "node:fs";
 import { join } from "node:path";
-import { requireAuth } from "../middleware/auth";
+import { createApiToken, getRawApiToken, listApiTokens, requireAuth, revokeApiToken } from "../middleware/auth";
 import { ArchiveError } from "../services/archive";
 import { verifyPassword, verifyPin } from "../services/auth";
 import { usageFor } from "../services/budget";
+import { gardensRoot } from "../services/gardensRoot";
+import { isGardenDir } from "../services/gitHttp";
 import { uploadsDir } from "../services/chatImport";
 import { importMember, memberExportResponse } from "../services/memberArchive";
 import { EraseError, eraseMember, type EraseScope } from "../services/memberErase";
@@ -113,5 +115,38 @@ me.post("/erase", async (c) => {
     return c.json({ error: "Erase failed" }, 500);
   }
 });
+
+// ── The garden as a git address (routes/git.ts) ─────────────────
+// GET /api/me/git — { url, username, token }: where to clone the member's
+// garden from and the password to give. The token is scope `git`, opens the
+// clone and nothing else, and is kept recoverable so every device shows the
+// same one. POST /api/me/git/rotate replaces it (the old one stops working).
+
+const GIT_TOKEN_LABEL = "git-clone";
+
+/** The household's address as this request reached it — through the tunnel
+ *  or the reverse proxy, the public one. */
+function publicOrigin(c: Context): string {
+  const url = new URL(c.req.url);
+  const proto = c.req.header("X-Forwarded-Proto")?.split(",")[0]?.trim() || url.protocol.replace(/:$/, "");
+  const host = c.req.header("X-Forwarded-Host")?.split(",")[0]?.trim() || c.req.header("Host") || url.host;
+  return `${proto}://${host}`;
+}
+
+async function gitAccess(c: Context, rotate: boolean) {
+  const userId = c.get("userId");
+  const user = getUser(userId);
+  if (!user) return c.json({ error: "no_user" }, 404);
+  if (!isGardenDir(join(gardensRoot(), user.username))) return c.json({ error: "no_garden" }, 404);
+  let token = rotate ? null : getRawApiToken(userId, GIT_TOKEN_LABEL);
+  if (!token) {
+    for (const t of listApiTokens(userId)) if (t.label === GIT_TOKEN_LABEL) revokeApiToken(t.id, userId);
+    token = (await createApiToken(userId, GIT_TOKEN_LABEL, "git", true)).rawToken;
+  }
+  return c.json({ url: `${publicOrigin(c)}/git/${user.username}.git`, username: user.username, token });
+}
+
+me.get("/git", (c) => gitAccess(c, false));
+me.post("/git/rotate", (c) => gitAccess(c, true));
 
 export default me;

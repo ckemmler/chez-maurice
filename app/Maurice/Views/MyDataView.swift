@@ -30,6 +30,15 @@ private struct EraseAnswer: Decodable {
     let residual: Residual
 }
 
+/// GET /api/me/git — where the garden clones from, and the git key to give.
+private struct GitAccess: Decodable {
+    let url: String
+    let username: String
+    let token: String
+}
+
+private struct NoBody: Encodable {}
+
 private struct EraseRequest: Encodable {
     let scope: String
     let confirm: String
@@ -51,6 +60,7 @@ struct MyDataView: View {
 
     private enum ExportPhase: Equatable { case idle, preparing, ready, failed(String) }
     private enum ImportPhase: Equatable { case idle, uploading, done(String), failed(String) }
+    private enum ClonePhase: Equatable { case idle, loading, noGarden, failed(String) }
 
     @State private var exportPhase: ExportPhase = .idle
     @State private var exported: URL?
@@ -59,6 +69,10 @@ struct MyDataView: View {
     @State private var showPicker = false
     @State private var erasing: EraseScope?
     @State private var erased: EraseAnswer?
+    @State private var clonePhase: ClonePhase = .idle
+    @State private var git: GitAccess?
+    @State private var copied: String?
+    @State private var rotated = false
 
     private var api: APIClient? { session.serverURL.map { APIClient(baseURL: $0) } }
     private var token: String? { session.tokenForActiveUser }
@@ -81,6 +95,31 @@ struct MyDataView: View {
             .fileMover(isPresented: $showMover, file: exported) { result in
                 if case .success = result { exportPhase = .ready } else { exportPhase = .idle }
                 exported = nil
+            }
+
+            card(title: session.localized("mydata.clone.title"), text: session.localized("mydata.clone.text")) {
+                if let git {
+                    cloneField(session.localized("mydata.clone.address"), git.url)
+                    cloneField(session.localized("mydata.clone.username"), git.username)
+                    cloneField(session.localized("mydata.clone.token"), git.token, shown: String(git.token.prefix(9)) + "…")
+                    if rotated { line(session.localized("mydata.clone.rotated"), ok: true) }
+                    Text(session.localized("mydata.clone.howto"))
+                        .font(.system(size: 11.5)).foregroundStyle(theme.inkSoft).lineSpacing(1)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Text(session.localized("mydata.clone.warning"))
+                        .font(.system(size: 11.5, weight: .medium)).foregroundStyle(theme.ink).lineSpacing(1)
+                        .fixedSize(horizontal: false, vertical: true)
+                    action(icon: "arrow.triangle.2.circlepath", label: session.localized("mydata.clone.rotate"),
+                           busy: clonePhase == .loading) { Task { await loadGit(rotate: true) } }
+                } else {
+                    action(icon: "arrow.down.doc", label: session.localized("mydata.clone.button"),
+                           busy: clonePhase == .loading) { Task { await loadGit(rotate: false) } }
+                }
+                switch clonePhase {
+                case .failed(let why): line(session.localized("mydata.failed", why), bad: true)
+                case .noGarden: line(session.localized("mydata.clone.no_garden"))
+                case .idle, .loading: EmptyView()
+                }
             }
 
             card(title: session.localized("mydata.import.title"), text: session.localized("mydata.import.text")) {
@@ -157,6 +196,27 @@ struct MyDataView: View {
         Text(text).font(.system(size: 11.5)).foregroundStyle(bad ? .red : ok ? .green : theme.inkSoft)
     }
 
+    /// One line of the clone card: a label, the value (or a shortened form of
+    /// it), and a button copying the whole value.
+    private func cloneField(_ label: String, _ value: String, shown: String? = nil) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            Text(label).font(.system(size: 11.5)).foregroundStyle(theme.inkSoft)
+                .frame(minWidth: 70, alignment: .leading)
+            Text(shown ?? value).font(.system(size: 11.5, design: .monospaced)).foregroundStyle(theme.ink)
+                .lineLimit(1).truncationMode(.middle).textSelection(.enabled)
+            Spacer(minLength: 4)
+            Button {
+                copyToPasteboard(value)
+                copied = value
+            } label: {
+                Text(session.localized(copied == value ? "mydata.clone.copied" : "mydata.clone.copy"))
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(accent.legible(onDark: theme.isDark))
+            }
+            .buttonStyle(.plain)
+        }
+    }
+
     /// What the server could not reach, said plainly.
     @ViewBuilder private func residual(_ a: EraseAnswer) -> some View {
         VStack(alignment: .leading, spacing: 4) {
@@ -181,6 +241,23 @@ struct MyDataView: View {
             showMover = true
         } catch {
             exportPhase = .failed(error.localizedDescription)
+        }
+    }
+
+    private func loadGit(rotate: Bool) async {
+        guard let api, let token else { return }
+        clonePhase = .loading
+        do {
+            git = rotate
+                ? try await api.post("/api/me/git/rotate", body: NoBody(), token: token)
+                : try await api.get("/api/me/git", token: token)
+            rotated = rotate
+            copied = nil
+            clonePhase = .idle
+        } catch APIError.server(404, _) {
+            clonePhase = .noGarden
+        } catch {
+            clonePhase = .failed(error.localizedDescription)
         }
     }
 

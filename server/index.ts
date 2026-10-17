@@ -77,6 +77,7 @@ import { dataDir } from "./src/db";
 import { imagesDir } from "./src/services/images";
 import { avatarsDir } from "./src/services/avatars";
 import { proxyAuth, validateApiTokenRaw, validateHealthToken } from "./src/middleware/auth";
+import gitRoutes from "./src/routes/git";
 import { fullHealth, hookConsoleErrors, publicHealth, recordError } from "./src/services/health";
 import { validateSession, normalizeInviteCode, formatInviteCode } from "./src/services/auth";
 import { t, langOf } from "./src/services/i18n";
@@ -275,6 +276,7 @@ app.use("/*", async (c, next) => {
     path.startsWith("/api/") ||
     path === "/healthz" ||
     path === "/join" ||
+    path.startsWith("/git/") ||
     path.startsWith("/login") ||
     path.startsWith("/admin") ||
     path.startsWith("/mcp") ||
@@ -368,6 +370,8 @@ app.get("/admin/", (c) => c.redirect("/admin"));
 app.route("/admin", webAdmin);
 app.route("/login", webLogin);
 app.route("/api/v1/gardens", gardens);
+// A member's garden as a git address: its own Basic auth (routes/git.ts).
+app.route("/git", gitRoutes);
 // Loopback-only: the turn endpoint the Python tools use instead of holding a
 // provider key of their own (src/routes/ancillary.ts). Mounted outside
 // /api/v1/* on purpose — that prefix requires an authenticated member, and a

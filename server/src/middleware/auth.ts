@@ -85,17 +85,18 @@ async function hashToken(raw: string): Promise<string> {
   return Array.from(new Uint8Array(hash), (b) => b.toString(16).padStart(2, "0")).join("");
 }
 
-export type ApiTokenScope = "mcp" | "health" | "full";
+export type ApiTokenScope = "mcp" | "health" | "full" | "git";
 
 /** Look a token hash up. A `health`-scoped token is an operator's probe, not a
  *  member's credential: it never authenticates as the user, so it is refused
- *  here and only honoured by validateHealthToken. */
+ *  here and only honoured by validateHealthToken. A `git` token opens the
+ *  member's garden clone and nothing else (validateGitToken). */
 function validateApiToken(tokenHash: string): { userId: string; scope: ApiTokenScope } | null {
   const row = db
     .query(`SELECT user_id, scope FROM api_tokens WHERE token_hash = ?`)
     .get(tokenHash) as { user_id: string; scope: ApiTokenScope } | undefined;
   if (!row) return null;
-  if (row.scope === "health") return null;
+  if (row.scope === "health" || row.scope === "git") return null;
   // Touch last_used_at (fire-and-forget)
   db.run(`UPDATE api_tokens SET last_used_at = datetime('now') WHERE token_hash = ?`, [tokenHash]);
   return { userId: row.user_id, scope: row.scope };
@@ -112,6 +113,19 @@ export async function validateHealthToken(raw: string): Promise<boolean> {
   if (!row || (row.scope !== "health" && row.scope !== "full")) return false;
   db.run(`UPDATE api_tokens SET last_used_at = datetime('now') WHERE token_hash = ?`, [hash]);
   return true;
+}
+
+/** The member a raw maur_* token may clone the garden of: scope `git`, or
+ *  `full`, which opens everything already. Null for anything else. */
+export async function validateGitToken(raw: string): Promise<string | null> {
+  if (!raw.startsWith("maur_")) return null;
+  const hash = await hashToken(raw);
+  const row = db
+    .query(`SELECT user_id, scope FROM api_tokens WHERE token_hash = ?`)
+    .get(hash) as { user_id: string; scope: ApiTokenScope } | undefined;
+  if (!row || (row.scope !== "git" && row.scope !== "full")) return null;
+  db.run(`UPDATE api_tokens SET last_used_at = datetime('now') WHERE token_hash = ?`, [hash]);
+  return row.user_id;
 }
 
 /**
