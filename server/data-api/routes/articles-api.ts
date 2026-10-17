@@ -1,6 +1,7 @@
 /**
  * POST /api/v1/articles/scrape       — legacy alias
  * PUT  /api/v1/articles/scrape/:slug/status
+ * POST /api/v1/articles/read         — an article's text, for a conversation; nothing saved
  *
  * Kept for the Carnet builds already on people's phones, which call this path.
  * It now delegates to the garden article service instead of carrying its own
@@ -20,6 +21,7 @@ import {
   type ArticleStatus,
 } from "../services/gardenArticles";
 import { scheduleArticleSummary } from "../services/articleSummary";
+import { ArticleReadError, readSharedArticle, type ArticleReadInput } from "../services/articleRead";
 
 const app = new Hono();
 
@@ -91,6 +93,23 @@ app.put("/scrape/:slug/status", async (c) => {
     if (e instanceof ArticleSaveError) return c.json({ error: e.message }, e.status);
     console.error("[articles/scrape] status update failed:", e);
     return c.json({ error: "Failed to update the article status" }, 500);
+  }
+});
+
+// An article shared with Maurice: read, not saved (see services/articleRead).
+app.post("/read", async (c) => {
+  let body: ArticleReadInput;
+  try {
+    body = await c.req.json<ArticleReadInput>();
+  } catch {
+    return c.json({ error: "Body must be JSON" }, 400);
+  }
+  try {
+    return c.json(await readSharedArticle(body));
+  } catch (e) {
+    if (e instanceof ArticleReadError) return c.json({ error: e.message }, e.status);
+    console.error("[articles/read] failed:", e);
+    return c.json({ error: "Failed to read the article" }, 500);
   }
 });
 

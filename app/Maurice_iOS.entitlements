@@ -4,5 +4,10 @@
 <dict>
 	<key>aps-environment</key>
 	<string>development</string>
+	<!-- The share extension's inbox (Shared/ShareInbox.swift). -->
+	<key>com.apple.security.application-groups</key>
+	<array>
+		<string>group.eu.chezmaurice.maurice</string>
+	</array>
 </dict>
 </plist>

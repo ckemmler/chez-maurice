@@ -80,6 +80,10 @@ targets:
         buildPhase: none
       - path: Maurice_iOS.entitlements
         buildPhase: none
+      # What the share extension and the app both read (ShareInbox).
+      - path: Shared
+    dependencies:
+      - target: MauriceShareExtension
     settings:
       base:
         PRODUCT_NAME: Maurice
@@ -119,3 +123,44 @@ targets:
         RUNTIME_EXCEPTION_DEBUGGING_TOOL: NO
         RUNTIME_EXCEPTION_DISABLE_EXECUTABLE_PAGE_PROTECTION: NO
         RUNTIME_EXCEPTION_DISABLE_LIBRARY_VALIDATION: NO
+
+  # "Maurice" in the share sheet: carries a page to the app, which opens a new
+  # conversation with the article as a card in the composer (ShareInbox).
+  MauriceShareExtension:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: MauriceShareExtension
+        excludes:
+          - ShareExtensionPreprocessor.js
+          - "*.entitlements"
+      # Copied into the bundle, never compiled: Safari runs it inside the page.
+      - path: MauriceShareExtension/ShareExtensionPreprocessor.js
+        buildPhase: resources
+      - path: Shared
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: eu.chezmaurice.maurice.share
+        DEVELOPMENT_TEAM: F5B4ZC8LEU
+        CODE_SIGN_ENTITLEMENTS: MauriceShareExtension/MauriceShareExtension.entitlements
+        CODE_SIGN_IDENTITY: iPhone Developer
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_KEY_CFBundleDisplayName: Maurice
+        MARKETING_VERSION: "0.1"
+        CURRENT_PROJECT_VERSION: "1"
+        TARGETED_DEVICE_FAMILY: "1,2"
+        SKIP_INSTALL: YES
+    info:
+      path: MauriceShareExtension/Info-Generated.plist
+      properties:
+        NSExtension:
+          NSExtensionAttributes:
+            # Runs in the Safari page before the sheet opens and hands back the
+            # rendered DOM, so the server reads what you actually read instead
+            # of fetching the URL and meeting a paywall.
+            NSExtensionJavaScriptPreprocessingFile: ShareExtensionPreprocessor
+            NSExtensionActivationRule:
+              NSExtensionActivationSupportsWebURLWithMaxCount: 1
+              NSExtensionActivationSupportsWebPageWithMaxCount: 1
+          NSExtensionPointIdentifier: com.apple.share-services
+          NSExtensionPrincipalClass: "$(PRODUCT_MODULE_NAME).ShareViewController"

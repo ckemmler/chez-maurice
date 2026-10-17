@@ -14,6 +14,7 @@
 		159E0D9DFBCB74432ABCE781 /* DomainEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0D1A322B73BEA06F034F1718 /* DomainEditorView.swift */; };
 		1C9935AA1A0250C77FB2DD24 /* LifeFactCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = FD148722F24F06001FE66540 /* LifeFactCard.swift */; };
 		22273DE6923544F195C76CAD /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 462A7ECD4C83B5ADC43A81CB /* ContentView.swift */; };
+		2340BD7CC5C127A91D4E04CF /* ShareInbox.swift in Sources */ = {isa = PBXBuildFile; fileRef = F6819EDCDB3EE127E1D35CAB /* ShareInbox.swift */; };
 		2A90B07E5E28A6BBC4C8F40B /* SourcesCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 988F2B4726342A3066B8B593 /* SourcesCard.swift */; };
 		2B268BBE8FAF1C5EE355B1D4 /* Localizable.strings in Resources */ = {isa = PBXBuildFile; fileRef = 64254BB6519693E70459014E /* Localizable.strings */; };
 		32D68A2ACC7ECFB3E37DE97F /* ScopePickerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 68242686E76201D100B8C3A9 /* ScopePickerView.swift */; };
@@ -31,12 +32,15 @@
 		5B4288B9598CBE20AE92F4D9 /* YoungSerif-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 723F14E6AB7B2EAB08CC94EF /* YoungSerif-Regular.ttf */; };
 		5B7821ABC8358319D3368DF8 /* ImportConversationsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3B5F6F2E3C5F7D8FFDE02630 /* ImportConversationsView.swift */; };
 		5DF005A2A1E5A2B26E0DBCF4 /* MauriceTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1ABC13222ECFAD2CFC3180B /* MauriceTheme.swift */; };
+		64D0DD327596E3D664637693 /* SharedArticles.swift in Sources */ = {isa = PBXBuildFile; fileRef = E76EA458EBA05810D312BA7F /* SharedArticles.swift */; };
 		6E245195E6CD90C3C83CB1BD /* SwiftMath in Frameworks */ = {isa = PBXBuildFile; productRef = D1B845FF866B55501A5D0C68 /* SwiftMath */; };
 		6E60BACFAEB5A57C921B21BE /* Glass.swift in Sources */ = {isa = PBXBuildFile; fileRef = C5ABD3D073D2DB74064F5A13 /* Glass.swift */; };
 		707E1F5D159DC0ED0841E5D0 /* UserPickerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB58402567AEED97404D604C /* UserPickerView.swift */; };
 		7085533CD7B70C78BF91892F /* PersonReviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E787764ABF2A58E353CC45C2 /* PersonReviewView.swift */; };
 		72B46D7608456B22303FB423 /* MauriceStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8C96937F0554878BAF247D3F /* MauriceStore.swift */; };
+		7303D09FAC7F9EC16F45847B /* ShareInbox.swift in Sources */ = {isa = PBXBuildFile; fileRef = F6819EDCDB3EE127E1D35CAB /* ShareInbox.swift */; };
 		7416ECF23A6705C449F95A51 /* MauriceApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A0683126686701347E9871B /* MauriceApp.swift */; };
+		76F5A3E479E78CF38F358EE3 /* SharedPageLoader.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2E6BA859F6B8FDD533D6143 /* SharedPageLoader.swift */; };
 		773B899803CBAAF839CDE0C1 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E0D0DF979284275260F31D2 /* SettingsView.swift */; };
 		775815BED73706273BEE92F3 /* MauriceTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1ABC13222ECFAD2CFC3180B /* MauriceTheme.swift */; };
 		79A6D1DBFB049245E3D239D6 /* APIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 815355ED837E18AB9BEFDC83 /* APIClient.swift */; };
@@ -53,6 +57,7 @@
 		91817BB3A32C4F1FE886B982 /* OFL.txt in Resources */ = {isa = PBXBuildFile; fileRef = 51780E1D57A085038F7AB3A4 /* OFL.txt */; };
 		98920F5C7DB20F4AF25B7C78 /* SortMenu.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC55EBC69472BBED58BC1614 /* SortMenu.swift */; };
 		9BCAFB3EF7CD1C5F4BB61912 /* DomainsViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = F2BCD320C3B31E341073ED84 /* DomainsViews.swift */; };
+		A648F12DC28F799D60455067 /* Localizable.strings in Resources */ = {isa = PBXBuildFile; fileRef = EF5A62D451E946B594365B33 /* Localizable.strings */; };
 		A6490C4406B6EA6D2FA33CBF /* SourcesCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 988F2B4726342A3066B8B593 /* SourcesCard.swift */; };
 		A6ADC54545F72E5329A2D0D9 /* DomainBriefView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5C3DB8955BF008783D2F7399 /* DomainBriefView.swift */; };
 		A8A26FAE2A930D83368AA035 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = C5F7A16D701B0F743DEDA0E9 /* PrivacyInfo.xcprivacy */; };
@@ -72,18 +77,47 @@
 		D050F6CF74E2684FAF9E78A2 /* ChatService.swift in Sources */ = {isa = PBXBuildFile; fileRef = EDFA39C22354B093CDDBB691 /* ChatService.swift */; };
 		D0B48FA211BB0DB5BB28B7EA /* ChatSnippets.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0093E2B2C16E646EA2A8E856 /* ChatSnippets.swift */; };
 		D8646EEFDB175A13C908F420 /* MarkdownUI in Frameworks */ = {isa = PBXBuildFile; productRef = 452588EF4A59C7B3E4BE0156 /* MarkdownUI */; };
+		DC9818E7C55A314BA0092CA4 /* ShareViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = ABE5F5AA1F13BF97D9A67BDD /* ShareViewController.swift */; };
 		DE41C437D70BFE6F0A82015E /* Localizable.strings in Resources */ = {isa = PBXBuildFile; fileRef = 64254BB6519693E70459014E /* Localizable.strings */; };
 		E0931CFF7A305AC88466021B /* ImportConversationsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3B5F6F2E3C5F7D8FFDE02630 /* ImportConversationsView.swift */; };
 		E18185D700DE1B1EB0B18AA0 /* Dictation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8DD6FC0052BD394074159538 /* Dictation.swift */; };
 		E3C10DC76C2CF893DD4DF505 /* ComposerViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A157516CA9C98CE6FB4E293 /* ComposerViews.swift */; };
+		EB4C28812634CBBFFA2D4B02 /* MauriceShareExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = FFEC5DA17CABDEC1BF693557 /* MauriceShareExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		EC5E8D139CC03275DE8A1A9F /* ShareExtensionPreprocessor.js in Resources */ = {isa = PBXBuildFile; fileRef = 1471437CC5C770C8DECCD439 /* ShareExtensionPreprocessor.js */; };
+		ED50C0B176EE6BC4F5861734 /* SharedArticles.swift in Sources */ = {isa = PBXBuildFile; fileRef = E76EA458EBA05810D312BA7F /* SharedArticles.swift */; };
 		EE60CB5C6953EB6207373CBA /* MauriceStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8C96937F0554878BAF247D3F /* MauriceStore.swift */; };
 		EEF2722A0817C78F1649422B /* Glass.swift in Sources */ = {isa = PBXBuildFile; fileRef = C5ABD3D073D2DB74064F5A13 /* Glass.swift */; };
 		F48AE829445AE2B014A9A7B4 /* ThinkingPulse.swift in Sources */ = {isa = PBXBuildFile; fileRef = 60C505B6E7E7122F0D8C38C4 /* ThinkingPulse.swift */; };
+		F6BC32800FA70AEE6D0B42FA /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 2FF2F9C47247C82E89055A04 /* PrivacyInfo.xcprivacy */; };
 		F8D5EA6FB79DA0781074F0DA /* ScopePickerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 68242686E76201D100B8C3A9 /* ScopePickerView.swift */; };
 		F96C2B2D974F15AC97AFC477 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = C5F7A16D701B0F743DEDA0E9 /* PrivacyInfo.xcprivacy */; };
 		FEA11BEC64D6D78DD1F6145E /* SwiftMath in Frameworks */ = {isa = PBXBuildFile; productRef = BF74ECA03676D1736856AEB2 /* SwiftMath */; };
 		FF9F6DF88F721A8C74CFAEF4 /* PairingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00B700626149A3D1C0D6D5CB /* PairingView.swift */; };
 /* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		11282DE8466FFEDCF3C04AD9 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 4CA168FEE059EC3395A91EE1 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 09AB478A423671404897F4A7;
+			remoteInfo = MauriceShareExtension;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		11702BE18F8B9785DFA995C8 /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				EB4C28812634CBBFFA2D4B02 /* MauriceShareExtension.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
 		0093E2B2C16E646EA2A8E856 /* ChatSnippets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatSnippets.swift; sourceTree = "<group>"; };
@@ -92,17 +126,24 @@
 		0D1A322B73BEA06F034F1718 /* DomainEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DomainEditorView.swift; sourceTree = "<group>"; };
 		1033DD525DBD3D990DEF6484 /* es */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = es; path = es.lproj/Localizable.strings; sourceTree = "<group>"; };
 		128CD9E8B27DD3AD93E49524 /* CarnetSuggestions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CarnetSuggestions.swift; sourceTree = "<group>"; };
+		1471437CC5C770C8DECCD439 /* ShareExtensionPreprocessor.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = ShareExtensionPreprocessor.js; sourceTree = "<group>"; };
 		1A0683126686701347E9871B /* MauriceApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MauriceApp.swift; sourceTree = "<group>"; };
 		1E096709042498D4C525711C /* Maurice-iOS-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = "Maurice-iOS-Info.plist"; sourceTree = "<group>"; };
 		20D9492CD169800719A16C6D /* MyDataView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MyDataView.swift; sourceTree = "<group>"; };
 		2CAFCB68E681C9F8D796C959 /* it */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = it; path = it.lproj/Localizable.strings; sourceTree = "<group>"; };
 		2E85AEEB530CF3C1C5C3E79F /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		2F85B4FE86B5EFB938BF6E72 /* fr */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = fr; path = fr.lproj/Localizable.strings; sourceTree = "<group>"; };
+		2FF2F9C47247C82E89055A04 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		3B5F6F2E3C5F7D8FFDE02630 /* ImportConversationsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImportConversationsView.swift; sourceTree = "<group>"; };
+		3D819685EF797FBCDD411BFC /* pt */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = pt; path = pt.lproj/Localizable.strings; sourceTree = "<group>"; };
 		405F9AA69C83E58A86FDD625 /* SessionStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionStore.swift; sourceTree = "<group>"; };
+		40C3C59BAE8DC75C09105B63 /* it */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = it; path = it.lproj/Localizable.strings; sourceTree = "<group>"; };
 		462A7ECD4C83B5ADC43A81CB /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		4E01BB325D88F4E74B3571BC /* ChatView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatView.swift; sourceTree = "<group>"; };
 		4E0D0DF979284275260F31D2 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		51780E1D57A085038F7AB3A4 /* OFL.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = OFL.txt; sourceTree = "<group>"; };
+		5380BCF670116D20669BCFF4 /* de */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = de; path = de.lproj/Localizable.strings; sourceTree = "<group>"; };
+		598F07F376B493DAA0EB8EB8 /* en */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = en; path = en.lproj/Localizable.strings; sourceTree = "<group>"; };
 		5C3DB8955BF008783D2F7399 /* DomainBriefView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DomainBriefView.swift; sourceTree = "<group>"; };
 		60C505B6E7E7122F0D8C38C4 /* ThinkingPulse.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThinkingPulse.swift; sourceTree = "<group>"; };
 		68242686E76201D100B8C3A9 /* ScopePickerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScopePickerView.swift; sourceTree = "<group>"; };
@@ -117,22 +158,30 @@
 		9BF26FE82F8A718D32D2FDBA /* en */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = en; path = en.lproj/Localizable.strings; sourceTree = "<group>"; };
 		A3DD0A7E56E944D68EF56A0E /* Maurice_macOS.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Maurice_macOS.entitlements; sourceTree = "<group>"; };
 		AB58402567AEED97404D604C /* UserPickerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserPickerView.swift; sourceTree = "<group>"; };
+		ABE5F5AA1F13BF97D9A67BDD /* ShareViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareViewController.swift; sourceTree = "<group>"; };
 		BFCE6C747A2189EC6AA13782 /* pt */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = pt; path = pt.lproj/Localizable.strings; sourceTree = "<group>"; };
 		C1ABC13222ECFAD2CFC3180B /* MauriceTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MauriceTheme.swift; sourceTree = "<group>"; };
+		C2828A04796C4FC1EBB89784 /* es */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = es; path = es.lproj/Localizable.strings; sourceTree = "<group>"; };
+		C2E6BA859F6B8FDD533D6143 /* SharedPageLoader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedPageLoader.swift; sourceTree = "<group>"; };
 		C51DFC4112740952D536AA5F /* Maurice_macOS.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Maurice_macOS.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		C5ABD3D073D2DB74064F5A13 /* Glass.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Glass.swift; sourceTree = "<group>"; };
 		C5F7A16D701B0F743DEDA0E9 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		C8A017A327701D19D5C660E2 /* nl */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = nl; path = nl.lproj/Localizable.strings; sourceTree = "<group>"; };
 		CC55EBC69472BBED58BC1614 /* SortMenu.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SortMenu.swift; sourceTree = "<group>"; };
 		CCF7CFD4DA400C3D744B7A69 /* fr */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = fr; path = fr.lproj/Localizable.strings; sourceTree = "<group>"; };
 		CEB5E21AE21611A0C6FC115B /* DictateIntent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DictateIntent.swift; sourceTree = "<group>"; };
 		D8EA76446DB39E558173EA2A /* de */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = de; path = de.lproj/Localizable.strings; sourceTree = "<group>"; };
 		D91B47992093B9201D94B7D7 /* Maurice_iOS.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Maurice_iOS.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		DCDEAA0E48CC14C7C18BE8FD /* Hats.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Hats.swift; sourceTree = "<group>"; };
+		E76EA458EBA05810D312BA7F /* SharedArticles.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedArticles.swift; sourceTree = "<group>"; };
 		E787764ABF2A58E353CC45C2 /* PersonReviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PersonReviewView.swift; sourceTree = "<group>"; };
+		EC8F39C1E181257A07AA5B05 /* Info-Generated.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = "Info-Generated.plist"; sourceTree = "<group>"; };
 		EDFA39C22354B093CDDBB691 /* ChatService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatService.swift; sourceTree = "<group>"; };
 		EE3170FDE5751A81E295CF2E /* BoaterHat.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BoaterHat.swift; sourceTree = "<group>"; };
 		F2BCD320C3B31E341073ED84 /* DomainsViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DomainsViews.swift; sourceTree = "<group>"; };
+		F6819EDCDB3EE127E1D35CAB /* ShareInbox.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareInbox.swift; sourceTree = "<group>"; };
 		FD148722F24F06001FE66540 /* LifeFactCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LifeFactCard.swift; sourceTree = "<group>"; };
+		FFEC5DA17CABDEC1BF693557 /* MauriceShareExtension.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = MauriceShareExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -157,6 +206,19 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		05D3B4FD63AA39F6811A4102 /* MauriceShareExtension */ = {
+			isa = PBXGroup;
+			children = (
+				EC8F39C1E181257A07AA5B05 /* Info-Generated.plist */,
+				2FF2F9C47247C82E89055A04 /* PrivacyInfo.xcprivacy */,
+				C2E6BA859F6B8FDD533D6143 /* SharedPageLoader.swift */,
+				1471437CC5C770C8DECCD439 /* ShareExtensionPreprocessor.js */,
+				ABE5F5AA1F13BF97D9A67BDD /* ShareViewController.swift */,
+				34E33DC4E15C934C26CA0589 /* Resources */,
+			);
+			path = MauriceShareExtension;
+			sourceTree = "<group>";
+		};
 		1494F6FE9E62E4610A005B68 /* Maurice */ = {
 			isa = PBXGroup;
 			children = (
@@ -176,8 +238,17 @@
 			children = (
 				D91B47992093B9201D94B7D7 /* Maurice_iOS.app */,
 				C51DFC4112740952D536AA5F /* Maurice_macOS.app */,
+				FFEC5DA17CABDEC1BF693557 /* MauriceShareExtension.appex */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		34E33DC4E15C934C26CA0589 /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+				EF5A62D451E946B594365B33 /* Localizable.strings */,
+			);
+			path = Resources;
 			sourceTree = "<group>";
 		};
 		48657A49CCB0C964BD5B7F06 /* Fonts */ = {
@@ -187,6 +258,14 @@
 				723F14E6AB7B2EAB08CC94EF /* YoungSerif-Regular.ttf */,
 			);
 			path = Fonts;
+			sourceTree = "<group>";
+		};
+		62DBEB69F0C83895AB9B0920 /* Shared */ = {
+			isa = PBXGroup;
+			children = (
+				F6819EDCDB3EE127E1D35CAB /* ShareInbox.swift */,
+			);
+			path = Shared;
 			sourceTree = "<group>";
 		};
 		6E4D158A05D27EBC8AF8AB9C /* Resources */ = {
@@ -245,6 +324,7 @@
 				8DD6FC0052BD394074159538 /* Dictation.swift */,
 				8C96937F0554878BAF247D3F /* MauriceStore.swift */,
 				405F9AA69C83E58A86FDD625 /* SessionStore.swift */,
+				E76EA458EBA05810D312BA7F /* SharedArticles.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -256,6 +336,8 @@
 				A3DD0A7E56E944D68EF56A0E /* Maurice_macOS.entitlements */,
 				1E096709042498D4C525711C /* Maurice-iOS-Info.plist */,
 				1494F6FE9E62E4610A005B68 /* Maurice */,
+				05D3B4FD63AA39F6811A4102 /* MauriceShareExtension */,
+				62DBEB69F0C83895AB9B0920 /* Shared */,
 				1BB583D8B7C5D14E61393EB3 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -284,6 +366,24 @@
 			productReference = C51DFC4112740952D536AA5F /* Maurice_macOS.app */;
 			productType = "com.apple.product-type.application";
 		};
+		09AB478A423671404897F4A7 /* MauriceShareExtension */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 765206C46A7FE73F517DACB5 /* Build configuration list for PBXNativeTarget "MauriceShareExtension" */;
+			buildPhases = (
+				0DF949DD427BB6CFD32C5BB8 /* Sources */,
+				01717EE2DB34BC05D492BA6A /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = MauriceShareExtension;
+			packageProductDependencies = (
+			);
+			productName = MauriceShareExtension;
+			productReference = FFEC5DA17CABDEC1BF693557 /* MauriceShareExtension.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
 		BE41AFBA15F7E24D1881B207 /* Maurice_iOS */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = 454A5511F4EE23F0366A8E0F /* Build configuration list for PBXNativeTarget "Maurice_iOS" */;
@@ -291,10 +391,12 @@
 				0D154FDD86B16C9939E8AFCA /* Sources */,
 				9F52C5D4B7366328A249BC6E /* Resources */,
 				B8E486ECD271A0FA42BAA661 /* Frameworks */,
+				11702BE18F8B9785DFA995C8 /* Embed Foundation Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				DA93368D191482DA86BAD731 /* PBXTargetDependency */,
 			);
 			name = Maurice_iOS;
 			packageProductDependencies = (
@@ -315,6 +417,10 @@
 				LastUpgradeCheck = 1430;
 				TargetAttributes = {
 					047472439A78AABB86703D1F = {
+						DevelopmentTeam = F5B4ZC8LEU;
+						ProvisioningStyle = Automatic;
+					};
+					09AB478A423671404897F4A7 = {
 						DevelopmentTeam = F5B4ZC8LEU;
 						ProvisioningStyle = Automatic;
 					};
@@ -348,6 +454,7 @@
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
+				09AB478A423671404897F4A7 /* MauriceShareExtension */,
 				BE41AFBA15F7E24D1881B207 /* Maurice_iOS */,
 				047472439A78AABB86703D1F /* Maurice_macOS */,
 			);
@@ -355,6 +462,16 @@
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
+		01717EE2DB34BC05D492BA6A /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A648F12DC28F799D60455067 /* Localizable.strings in Resources */,
+				F6BC32800FA70AEE6D0B42FA /* PrivacyInfo.xcprivacy in Resources */,
+				EC5E8D139CC03275DE8A1A9F /* ShareExtensionPreprocessor.js in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		8E226A47710180AEB5CE1BEC /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -413,10 +530,22 @@
 				32D68A2ACC7ECFB3E37DE97F /* ScopePickerView.swift in Sources */,
 				48A8B2E348C99992B23AA7DF /* SessionStore.swift in Sources */,
 				B5655384F94390632B3335BB /* SettingsView.swift in Sources */,
+				7303D09FAC7F9EC16F45847B /* ShareInbox.swift in Sources */,
+				ED50C0B176EE6BC4F5861734 /* SharedArticles.swift in Sources */,
 				98920F5C7DB20F4AF25B7C78 /* SortMenu.swift in Sources */,
 				2A90B07E5E28A6BBC4C8F40B /* SourcesCard.swift in Sources */,
 				F48AE829445AE2B014A9A7B4 /* ThinkingPulse.swift in Sources */,
 				CC9F77433FFC0CCC7F8668EA /* UserPickerView.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		0DF949DD427BB6CFD32C5BB8 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				2340BD7CC5C127A91D4E04CF /* ShareInbox.swift in Sources */,
+				DC9818E7C55A314BA0092CA4 /* ShareViewController.swift in Sources */,
+				76F5A3E479E78CF38F358EE3 /* SharedPageLoader.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -451,6 +580,7 @@
 				F8D5EA6FB79DA0781074F0DA /* ScopePickerView.swift in Sources */,
 				7D338BE53D7A3CA7660BB1C5 /* SessionStore.swift in Sources */,
 				773B899803CBAAF839CDE0C1 /* SettingsView.swift in Sources */,
+				64D0DD327596E3D664637693 /* SharedArticles.swift in Sources */,
 				13534AB1DC9B63D211D638DA /* SortMenu.swift in Sources */,
 				A6490C4406B6EA6D2FA33CBF /* SourcesCard.swift in Sources */,
 				BA51E568256E682B32B4FD40 /* ThinkingPulse.swift in Sources */,
@@ -459,6 +589,14 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		DA93368D191482DA86BAD731 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 09AB478A423671404897F4A7 /* MauriceShareExtension */;
+			targetProxy = 11282DE8466FFEDCF3C04AD9 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin PBXVariantGroup section */
 		64254BB6519693E70459014E /* Localizable.strings */ = {
@@ -471,6 +609,20 @@
 				2CAFCB68E681C9F8D796C959 /* it */,
 				70ED879F4FDF2E7978D56133 /* nl */,
 				BFCE6C747A2189EC6AA13782 /* pt */,
+			);
+			name = Localizable.strings;
+			sourceTree = "<group>";
+		};
+		EF5A62D451E946B594365B33 /* Localizable.strings */ = {
+			isa = PBXVariantGroup;
+			children = (
+				5380BCF670116D20669BCFF4 /* de */,
+				598F07F376B493DAA0EB8EB8 /* en */,
+				C2828A04796C4FC1EBB89784 /* es */,
+				2F85B4FE86B5EFB938BF6E72 /* fr */,
+				40C3C59BAE8DC75C09105B63 /* it */,
+				C8A017A327701D19D5C660E2 /* nl */,
+				3D819685EF797FBCDD411BFC /* pt */,
 			);
 			name = Localizable.strings;
 			sourceTree = "<group>";
@@ -521,6 +673,29 @@
 				SUPPORTS_MACCATALYST = NO;
 			};
 			name = Release;
+		};
+		22164B7AC109EFCA7C3A85DA /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = MauriceShareExtension/MauriceShareExtension.entitlements;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = F5B4ZC8LEU;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "MauriceShareExtension/Info-Generated.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = Maurice;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 0.1;
+				PRODUCT_BUNDLE_IDENTIFIER = eu.chezmaurice.maurice.share;
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
 		};
 		2DD984319C043F5E23E7D146 /* Release */ = {
 			isa = XCBuildConfiguration;
@@ -751,6 +926,29 @@
 			};
 			name = Debug;
 		};
+		F7806D5A17D0A118B0DB9B91 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = MauriceShareExtension/MauriceShareExtension.entitlements;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = F5B4ZC8LEU;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "MauriceShareExtension/Info-Generated.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = Maurice;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 0.1;
+				PRODUCT_BUNDLE_IDENTIFIER = eu.chezmaurice.maurice.share;
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -768,6 +966,15 @@
 			buildConfigurations = (
 				D3E7F15843D7C089B52B3AFB /* Debug */,
 				8A0DE2AE50748267E848AC6D /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		765206C46A7FE73F517DACB5 /* Build configuration list for PBXNativeTarget "MauriceShareExtension" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				22164B7AC109EFCA7C3A85DA /* Debug */,
+				F7806D5A17D0A118B0DB9B91 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Debug;

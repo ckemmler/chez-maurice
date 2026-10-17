@@ -37,10 +37,16 @@ struct MauriceApp: App {
                 // maurice://conversations/<id> — the link a note kept from a
                 // conversation carries in the garden, and Carnet's "Reply in
                 // Maurice": opened the way a tapped notification is.
+                // maurice://share — the share extension, with a page waiting
+                // in its inbox for a new conversation.
                 .onOpenURL { url in
                     if url.scheme == "maurice", url.host == "conversations",
                        let id = url.pathComponents.last, id != "/" {
                         NotificationManager.shared.onTap?(id, nil)
+                    } else if url.scheme == "maurice", url.host == "share" {
+                        #if os(iOS)
+                        ShareArrivals.shared.arrived()
+                        #endif
                     } else if let invitation = Invitation(url.absoluteString) {
                         session.receive(invitation)
                     }

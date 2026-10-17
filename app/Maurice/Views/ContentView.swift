@@ -145,7 +145,24 @@ struct ContentView: View {
         .onChange(of: session.currentHouseholdId) {
             if session.hasActiveSession { isLoading = true }
         }
-        .onChange(of: scenePhase) { chat.appActive = (scenePhase == .active) }
+        .onChange(of: scenePhase) {
+            chat.appActive = (scenePhase == .active)
+            if scenePhase == .active { showChatForSharedPage() }
+        }
+        #if os(iOS)
+        .onChange(of: ShareArrivals.shared.token) { showChatForSharedPage() }
+        #endif
+    }
+
+    /// A page shared from another app waits for the composer, which takes it
+    /// when it appears: bring the chat forward — out of an open garden, or
+    /// from behind the list on a phone.
+    private func showChatForSharedPage() {
+        #if os(iOS)
+        guard ShareInbox.hasPending else { return }
+        gardens.openGardenId = nil
+        preferredColumn = .detail
+        #endif
     }
 
     /// The toolbar's sidebar toggle. When collapsed (compact — a narrow/tiled

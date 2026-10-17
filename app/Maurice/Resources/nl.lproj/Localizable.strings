@@ -905,3 +905,8 @@
 "pasted.lines" = "%d regels";
 "pasted.one_line" = "1 regel";
 "pasted.inline" = "Terugzetten in het bericht";
+"article.title" = "Artikel";
+"article.words" = "%d woorden";
+"article.link_only" = "Alleen de link";
+"article.open" = "Pagina openen";
+"article.reading" = "Bezig met lezen…";

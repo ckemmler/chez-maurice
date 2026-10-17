@@ -13,7 +13,7 @@ struct ChatView: View {
     @Environment(\.mauriceTheme) private var theme
     @State private var inputText = ""
     @State private var pendingImages: [Data] = []
-    @State private var pendingPastes: [String] = []
+    @State private var pendingPastes: [Snippet] = []
     @State private var showAddContext = false
     @State private var showAddParticipant = false
     @State private var showTools = false
@@ -2587,8 +2587,11 @@ func mauriceMarkdownTheme(_ t: MauriceTheme) -> MarkdownUI.Theme {
         .codeBlock { configuration in
             // A long paste rides in the member's message as a `pasted` block
             // (see PastedText): a card, not a wall of monospaced text.
+            // A shared article rides the same way, as an `article` block.
             if configuration.language == PastedText.fenceInfo {
-                PastedTextCard(text: configuration.content, theme: t)
+                PastedTextCard(snippet: .paste(configuration.content), theme: t)
+            } else if configuration.language == SharedArticle.fenceInfo {
+                PastedTextCard(snippet: .article(SharedArticle(block: configuration.content)), theme: t)
             } else {
                 CodeBlockView(configuration: configuration, theme: t)
             }
@@ -2625,13 +2628,17 @@ private struct ComposerBar: View {
     @Environment(\.mauriceTheme) private var theme
     @Binding var inputText: String
     @Binding var pendingImages: [Data]
-    /// Long pastes, taken out of the field (see PastedText).
-    @Binding var pendingPastes: [String]
+    /// Long pastes, taken out of the field (see PastedText), and articles
+    /// shared from another app.
+    @Binding var pendingPastes: [Snippet]
     @State private var selectedPhotos: [PhotosPickerItem] = []
     /// The paste open in its sheet.
     @State private var openPaste: PendingPaste?
     /// The next edit is a paste put back in the field on purpose: leave it there.
     @State private var keepNextEdit = false
+    /// A shared article the server is reading — its title or host — before
+    /// it becomes a card.
+    @State private var readingArticle: String?
     @State private var showCamera = false
     @State private var showPhotoPicker = false
     @State private var showFileImporter = false
@@ -2707,6 +2714,32 @@ private struct ComposerBar: View {
         #endif
     }
 
+    /// Lay an article shared from another app (ShareInbox) in the composer of
+    /// a new conversation, as a card the way a long paste is: the share is a
+    /// fresh start, like the Action Button's, so the field is cleared too. The
+    /// passage highlighted in Safari goes in the field as a quote — it is
+    /// usually what the question will be about.
+    private func takeSharedArticle() {
+        #if os(iOS)
+        guard readingArticle == nil, let page = ShareInbox.take() else { return }
+        readingArticle = page.title.isEmpty ? (URL(string: page.url)?.host ?? page.url) : page.title
+        inputText = ""
+        pendingPastes = []
+        pendingImages = []
+        Task {
+            await chat.startNewConversation()
+            let article = await chat.readSharedArticle(page)
+            readingArticle = nil
+            pendingPastes.append(.article(article))
+            let quote = page.selection.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !quote.isEmpty, !PastedText.isLong(quote) {
+                inputText = quote.components(separatedBy: "\n").map { "> \($0)" }.joined(separator: "\n") + "\n\n"
+            }
+            isFocused = true
+        }
+        #endif
+    }
+
     /// Start listening, with what the engines need from the session: the
     /// household's server and the names it should expect to hear.
     private func startDictation(allowServer: Bool? = nil) {
@@ -2724,7 +2757,10 @@ private struct ComposerBar: View {
     }
 
     private var canSend: Bool {
-        (!trimmed.isEmpty || !pendingImages.isEmpty || !pendingPastes.isEmpty || dictationDeliversLater) && !chat.isStreaming
+        (!trimmed.isEmpty || !pendingImages.isEmpty || !pendingPastes.isEmpty || dictationDeliversLater)
+            && !chat.isStreaming
+            // The question is about the article: it must not leave without it.
+            && readingArticle == nil
     }
 
     /// Dictation whose words reach the field only after it stops — a recording
@@ -2797,8 +2833,9 @@ private struct ComposerBar: View {
 
     /// Put a paste back in the field as ordinary text, at the end.
     private func inlinePaste(at index: Int) {
-        guard pendingPastes.indices.contains(index) else { return }
-        let paste = pendingPastes.remove(at: index)
+        guard pendingPastes.indices.contains(index),
+              case .paste(let paste) = pendingPastes[index] else { return }
+        pendingPastes.remove(at: index)
         keepNextEdit = true
         inputText = trimmed.isEmpty ? paste : inputText + "\n\n" + paste
     }
@@ -3061,14 +3098,18 @@ private struct ComposerBar: View {
     var body: some View {
         VStack(spacing: 8) {
             VStack(spacing: 8) {
-                // Long pastes, then photos, in the order they were added; each
-                // can be taken back on its own, and a paste opened in full.
-                if !pendingPastes.isEmpty || !pendingImages.isEmpty {
+                // Long pastes and shared articles, then photos, in the order
+                // they were added; each can be taken back on its own, and a
+                // paste opened in full.
+                if !pendingPastes.isEmpty || !pendingImages.isEmpty || readingArticle != nil {
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: 8) {
+                            if let readingArticle {
+                                ReadingArticleTile(label: readingArticle)
+                            }
                             ForEach(Array(pendingPastes.enumerated()), id: \.offset) { index, paste in
                                 Button { openPaste = PendingPaste(id: index) } label: {
-                                    PastedTextTile(text: paste)
+                                    PastedTextTile(snippet: paste)
                                 }
                                 .buttonStyle(.plain)
                                 .overlay(alignment: .topTrailing) {
@@ -3373,6 +3414,7 @@ private struct ComposerBar: View {
             // it listens on its own, or previews what the server will hear.
             Dictation.prefetchModel(for: session.resolvedLocale)
             startDictationIfRequested()
+            takeSharedArticle()
         }
         #if os(iOS)
         // A hardware keyboard still reports a frame — the shortcut bar at the
@@ -3392,6 +3434,7 @@ private struct ComposerBar: View {
         .onChange(of: scenePhase) { _, phase in
             if phase == .active {
                 startDictationIfRequested()
+                takeSharedArticle()
             } else if phase == .background {
                 // The audio session has no background mode, so leaving the app
                 // suspends the engine while the state still says "listening" —
@@ -3409,6 +3452,10 @@ private struct ComposerBar: View {
         // catches the first.
         .onChange(of: DictationRequest.shared.token) { _, _ in
             startDictationIfRequested()
+        }
+        // An article shared from another app, on the same three hooks.
+        .onChange(of: ShareArrivals.shared.token) { _, _ in
+            takeSharedArticle()
         }
         #endif
         // The recogniser revises as it goes, so the tail is rewritten on every
@@ -3441,7 +3488,7 @@ private struct ComposerBar: View {
                 keepNextEdit = false
             } else if current != lastDictatedText,
                       let paste = PastedText.insertion(from: old, to: current) {
-                pendingPastes.append(paste.inserted)
+                pendingPastes.append(.paste(paste.inserted))
                 inputText = paste.remaining
                 return
             }
@@ -3530,7 +3577,7 @@ private struct ComposerBar: View {
         }
         .sheet(item: $openPaste) { ref in
             if pendingPastes.indices.contains(ref.id) {
-                PastedTextSheet(text: pendingPastes[ref.id],
+                PastedTextSheet(snippet: pendingPastes[ref.id],
                                 onInline: { inlinePaste(at: ref.id) })
                     .environment(\.mauriceTheme, theme)
             }

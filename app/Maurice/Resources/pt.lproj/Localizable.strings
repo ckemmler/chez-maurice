@@ -905,3 +905,8 @@
 "pasted.lines" = "%d linhas";
 "pasted.one_line" = "1 linha";
 "pasted.inline" = "Voltar a pôr na mensagem";
+"article.title" = "Artigo";
+"article.words" = "%d palavras";
+"article.link_only" = "Só a ligação";
+"article.open" = "Abrir a página";
+"article.reading" = "A ler…";

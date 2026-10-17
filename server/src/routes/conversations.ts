@@ -61,10 +61,13 @@ function mentionsMaurice(text: string): boolean {
 const MAX_IMAGES_PER_MESSAGE = 10;
 
 /** A short, image-stripped preview for notifications. A long paste (the app
- *  sends it as a ```pasted block) shows as its text, without the fences. */
+ *  sends it as a ```pasted block) shows as its text, without the fences; a
+ *  shared article (an ```article block) as its title. */
 export function preview(content: string): string {
   const t = content
     .replace(/!\[[^\]]*\]\([^)]*\)/g, "")
+    .replace(/^(`{3,})article\n([\s\S]*?)\n\1$/gm, (_, _fence, body: string) =>
+      body.match(/^title: (.+)$/m)?.[1] ?? "")
     .replace(/^`{3,}(pasted)?$/gm, "")
     .replace(/\s+/g, " ")
     .trim();

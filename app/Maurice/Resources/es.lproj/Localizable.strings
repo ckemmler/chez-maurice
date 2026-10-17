@@ -918,3 +918,8 @@
 "pasted.lines" = "%d líneas";
 "pasted.one_line" = "1 línea";
 "pasted.inline" = "Volver a ponerlo en el mensaje";
+"article.title" = "Artículo";
+"article.words" = "%d palabras";
+"article.link_only" = "Solo el enlace";
+"article.open" = "Abrir la página";
+"article.reading" = "Leyendo…";
