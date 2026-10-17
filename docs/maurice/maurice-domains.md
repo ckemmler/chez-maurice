@@ -1,6 +1,6 @@
 ---
 title: Domains and their briefs
-date: '2026-10-10'
+date: '2026-10-17'
 flags: []
 locale: en
 description: A domain is a part of a member's life Maurice follows, with a brief
@@ -97,6 +97,12 @@ Until 3 October 2026 every domain wore the same closed book, and nothing in a co
 
 **A conversation wears the domains it mobilised.** Beside the back button — a glass capsule on the iPhone, a leading toolbar item on the iPad and the Mac — the app draws one round mark per domain (`DomainPastilles` in `DomainsViews.swift`): the domain the conversation is bound to, then each one whose brief Maurice read, in the order they came. Nothing new is stored for this: the `domain_brief` tool's result already travels on the `tool_data` channel and is kept on the reply ([[maurice-chat]]), and its payload now says which domain it was (`domain_id`, `icon`, beside the name — an empty brief included, since Maurice went and looked). So the pastille appears while the turn is still running and is there again when the conversation is reopened; replies older than the change carry the name only and are matched on it. Three marks on the phone, four elsewhere, the rest behind a *+N* menu. **A tap opens the domain's page** — the brief sheet described below, with its text, its date and its actions. Only the member's own domains show: the brief is the creator's, and so is the page.
 
+## In the garden's clone
+
+Since 17 October 2026 the night's garden export (`services/gardenExport.ts`, [[maurice-server]]) writes each domain a member made into their garden, `_maurice/domains/<slug>.md`, so a clone of the garden ([[maurice-web-garden]]) carries the domains too. One file per domain (`maurices.kind = 'domain'`, `created_by` the member): in the frontmatter its name, id, icon, palette, hat, tagline, model, dates, the hub note when the garden was seeded (`meta.role: hub`, `meta.domain`) and the number of conversations filed; then the member's own **brief** with its summary and date, the **instructions** (`prompt`), the **context** in readable form (notes and fiches as wiki-links, a book by its Calibre title, a conversation by its title, a file or folder by its name, each with its representation and scope), the **conversations** filed in it, dated, and the **mail** documents filed in it, as wiki-links into the garden. Headings are in the member's language.
+
+What it holds is what the member may take away: their own brief, never another member's of the same domain; among the conversations, only theirs and the rooms they sit in (`memberConversationList`, the member archive's rule); a conversation in the context that is not theirs is named as such, without its title. A conversation links to its own file when the member exports their conversations. The file is a readable copy, not one to import: the *My data* archive is what restores a domain.
+
 ## Ships vs. exists
 
 The briefs — the data, the night, the prompt section, the routes, the page — the domains themselves — the kind, the sort, the list, the editor — the proposals — the mapping, the opened conversation, the three tools, the adoption — the seeding — the fourth tool, the notes with their mark and provenance, the review in the web garden, the counts in the app — and the drawer (the rendered opening, the proposal routes, the button and the sheet) are in the server, the web garden and the Maurice app; nothing depends on the private tools: the corpus ships, and the mapping's arithmetic is in it. A hosted household without Ollama maps on its Scaleway-embedded store the same way (the tool reads whatever vectors the store holds). The hosted households run the same image and the same one-time sort at first start.
@@ -105,6 +111,7 @@ The briefs — the data, the night, the prompt section, the routes, the page —
 
 ## Gaps
 
+- **The clone's brief is the previous day's.** The export runs at 03:30, the briefs are rewritten at 04:00 and the night files conversations at 05:00: what the garden holds is the state at the close of the day before, by design. Proposals, and the domains another member made that this member uses, are not exported.
 - **The pastilles are the Maurice app's.** Carnet lists the domains but draws neither the icon nor the marks, and the web garden knows nothing of either. They also say *read*, not *used*: a brief Maurice loaded and then ignored leaves its mark like any other, and a domain he spoke from on the index line alone, without loading the brief, leaves none.
 - **The icon list lives twice**, in `services/domainIcons.ts` and in the app's `DomainIcons` — the editor needs it offline and the night needs it in the prompt. A symbol added to one and not the other is only a missing choice, not a fault. The keyword fallback speaks French and English only.
 - **Seen in simulators, not on a device** (10 October 2026): the pastilles — bound, brief read — their menu, binding from it, the badge, the Proposals section and a proposal's page were run on an iPhone and an iPad simulator against a copy of the home database; the dashed ring of a recognition that reads no brief, merge and cut on screen, the Mac, and a paired device were not looked at.

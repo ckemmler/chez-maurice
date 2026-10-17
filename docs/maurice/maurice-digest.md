@@ -22,7 +22,7 @@ covers:
   maurice-composer: '2026-09-22'
   maurice-data-model: '2026-10-17'
   maurice-docs: '2026-10-15'
-  maurice-domains: '2026-10-10'
+  maurice-domains: '2026-10-17'
   maurice-files: '2026-06-19'
   maurice-households-rooms: '2026-10-15'
   maurice-knowledge: '2026-10-14'
@@ -122,7 +122,7 @@ There is also a **browser clipper** that saves the page being read into the gard
 - **Mail passwords** are sealed with the household key, never returned by any route, readable only by the email tool through a local route.
 - **The operator** (whoever runs the server) can see the admin console from the machine itself — provider keys, member settings, per-member spend, reports filed in shared rooms, health counters, logs of model rounds and tool calls. They cannot see mail passwords, reports on private one-to-one conversations (those cannot be reported), or names and content through the health probe. This is policy and plumbing, not encryption against the operator: whoever runs the server runs its storage.
 - **Your data, your copy:** *My data* in the app exports a member archive (conversations, rows, garden with history, files, mail store — no credentials), imports one, and **erases** — the member's data, or the whole account — everywhere the server reaches, including nightly local snapshots. The answer lists what it cannot reach: a garden remote elsewhere, a published site, archives an admin already exported, and a hosted household's off-site backups (kept up to 12 months; restoring one would bring the member back). Carnet offers the same *Delete my account*.
-- **Your garden as a git clone:** each member can clone their own garden (Settings → *My data* → *Clone my garden*), read-only, with a key that opens nothing else. The clone holds the notes, fiches and their history, and every night Maurice writes into it, under `_maurice/`, the member's highlights, reading positions and archived entries, and their conversations if they turn that on. It is **not encrypted**: notes marked encrypted are in clear text in it, as they are on the server's disk.
+- **Your garden as a git clone:** each member can clone their own garden (Settings → *My data* → *Clone my garden*), read-only, with a key that opens nothing else. The clone holds the notes, fiches and their history, and every night Maurice writes into it, under `_maurice/`, the member's highlights, reading positions, archived entries and domains (brief, instructions, context, what is filed in each), and their conversations if they turn that on. It is **not encrypted**: notes marked encrypted are in clear text in it, as they are on the server's disk.
 - **Household archive:** the admin can export the whole household (databases, gardens with history, files, configuration, the household key) to move it elsewhere. It contains provider keys and is a secret.
 
 *Detail:* `data-model`, `server`, `architecture`.
@@ -221,6 +221,7 @@ Each member has folders and files (5 GB each), in **Settings**: text, images, PD
 - **Filing:** each night, an unbound conversation whose nearest neighbours mostly belong to one adopted domain is filed there — marked, listed on the domain's page, reversible with *Detach*. During a turn, a recognised domain shows as a mark on the conversation and, when the match is strong, Maurice reads its brief first.
 - **Seeding the garden** needs its own yes: one hub note and up to three topic notes, written from the domain's conversations, marked *written by Maurice, not reviewed yet* until the member keeps, corrects or throws them away.
 - **Bringing a history in:** *Import my conversations* takes ChatGPT and Claude export files; the next night maps them, so domains can appear at once.
+- **In the garden's clone:** each domain the member made is written there every night as a readable file — the brief, the instructions, the context, the conversations and mail filed in it — as it stood at the close of the previous day.
 - In Carnet, the *Maurice* screen lists domains (with the brief's age and author) and companions; a domain's brief can be edited, rewritten or erased there.
 
 *Gaps:* the marks exist only in the Maurice app; a large mixed subject (over about 80 conversations) is never proposed; members with few conversations get no filing; the grouping is not deterministic; seeded notes can carry personal details from conversations; shared domains have no shared brief; a reading companion's conversation cannot yet be opened from the book's page.
@@ -321,7 +322,7 @@ Each member has folders and files (5 GB each), in **Settings**: text, images, PD
 
 ## 22. The night and the operator's tools
 
-- **Night jobs** run inside the server, at home and hosted alike, each catching up if the server was down and each switchable off: 03:00 search reconcile and the mail header walk; 03:30 the garden export (highlights, reading, and conversations if asked, written into each garden that has been cloned and committed only when something changed); 04:00 domain briefs; 05:00 domain mapping and filing. The night spends from its own allowance.
+- **Night jobs** run inside the server, at home and hosted alike, each catching up if the server was down and each switchable off: 03:00 search reconcile and the mail header walk; 03:30 the garden export (highlights, reading, domains, and conversations if asked, written into each garden that has been cloned and committed only when something changed); 04:00 domain briefs; 05:00 domain mapping and filing. The night spends from its own allowance.
 - **Admin console** (`/admin`, only from the machine itself; the operator of a hosted household reaches it through an ssh tunnel): members, PINs and invitations, models and their windows, the access grid, provider keys, the Calibre library, caps and budget shares, the night's allowance, background model pins, the public-pages switch, cards for the night's jobs with *run now*, the household export.
 - **Health:** `/healthz` answers status and version publicly, and build, database, disk and error counts (never names or content) to a health token.
 - **Documentation refresh:** each server fetches the latest documentation from the public repository once a day.
