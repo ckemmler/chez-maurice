@@ -1,6 +1,6 @@
 ---
 title: The server
-date: '2026-10-16'
+date: '2026-10-17'
 flags: []
 locale: en
 description: 'The Hono/Bun engine: API surface, the streaming agentic loop, prompt
@@ -69,6 +69,7 @@ The **data-api** mounts under `/api/v1/*`:
 | `garden/links` | Résonances — `[[wiki-links]]` written into the target's markdown |
 | `garden/cards` | Flashcards — generate, list, review, edit |
 | `articles/scrape` | Legacy alias of `garden/articles`, kept for older Carnet builds |
+| `articles/read` | An article's text and card metadata for a conversation, from the DOM the share sheet sent or else fetched behind the SSRF guard; nothing saved (`data-api/services/articleRead.ts`, 17 October 2026). 400 for a non-http(s) address, 413 past 8 MB of HTML, 422 when the page yields no text or the site refuses |
 
 The garden-media routes are documented from the feature side in [[maurice-knowledge]].
 

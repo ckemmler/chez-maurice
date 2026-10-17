@@ -1,6 +1,6 @@
 ---
 title: The chat experience
-date: '2026-10-16'
+date: '2026-10-17'
 flags: []
 locale: en
 description: Streaming render, tool-result data cards, math, markdown, images, dictation,
@@ -119,6 +119,8 @@ Prose is **MarkdownUI** themed to the Maurice palette (code spans and blocks in 
 
 **Long pastes become a card, as in Claude's app** (16 October 2026). A run of text that arrives in the field at once — a paste or a drop — of 1 000 characters or 20 lines or more leaves the field for a tile above it, beside the pending photos: its first lines and "Pasted text · N lines", a remove button, and a tap that opens it in full with Copy and *Put back in message*. Detection compares the field before and after each edit, so it works the same on iOS and macOS; dictation's own writes, a long Whisper transcript included, are never taken for a paste. On send each paste leads the message as a fenced block whose info string is `pasted` (the fence one backtick longer than any run inside, so a paste may hold fences of its own): the model reads it as quoted material, a client that does not know the convention shows a plain code block, and the app draws a card that opens the full text. Notification previews show the paste's text without the fences.
 
+**An article shared from another app arrives the same way** (17 October 2026). On iOS, *Chez Maurice* is in the share sheet: from Safari it carries the page as Safari rendered it — the same in-page script as Carnet's, so a paywalled article you are reading comes across whole — and from any other app the address alone. The extension asks nothing; it leaves the page in the app group's inbox (`app/Shared/ShareInbox.swift`, `group.eu.chezmaurice.maurice`) and opens the app with `maurice://share`. The app starts a **new conversation**, clears the field, and shows a tile reading the article while the server extracts it (`POST /api/v1/articles/read`, the garden's Readability pipeline — nothing is saved; keeping the article is Carnet's gesture). The tile then shows the publication, the title and "Article · N words"; a passage highlighted in Safari goes in the field as a quote; send waits until the article is read. On send it leads the message as a fenced `article` block — `title:`, `site:`, `author:`, `date:`, `url:` lines, a blank line, the text — which the model reads as a labelled document and the app draws as a card opening the full text with *Open the page*. A page the server cannot read (offline, a bot wall, a server not yet updated) still goes as its title and address, marked "Link only", and Maurice can follow the link with his own tools. Notification previews show the article's title.
+
 ## Dictation
 
 The composer takes **dictation** in the member's language (any regional variant), into the field at the caret; nothing is ever sent on their behalf. Since 16 October 2026 three engines stand behind the mic, and each start picks the best one available (`app/Maurice/Services/Dictation.swift`). **The household's server comes first by default** — the same day, the device's recognisers alone proved clearly worse than Whisper in use — and the member can turn it off in Settings (*Transcribe on the household server*), which keeps dictation on the device:
@@ -154,6 +156,7 @@ The chat surface — streaming, data cards, math, markdown, images, dictation, m
 ## Gaps & notes
 
 - **The suggestions were never measured.** The pass shipped on 9 October 2026 without a bench: what it names on real conversations, and how often it names something not worth an entry, is being found out in use. The pipe is a bitmap cut from the icon, not yet a vector; someone named by what they are ("my accountant") is not resolved, only a full name; the link to Carnet does not say which household it is for, so it opens in the one Carnet has on screen; the note cannot be edited in the drawer. Design and as-built in `specs/carnet-suggestions.md`.
+- **Sharing an article is iOS only.** The Mac app has no share extension yet. The extension opens the app through the application object on the responder chain — `UIApplication.open` is closed to extensions — which works on iOS 26 but is the kind of thing App Review can object to. A long article is sent whole: a Wikipedia page is some 19 000 words, about 30k tokens re-read on every turn of that conversation; nothing caps it, as nothing caps a long paste.
 - **Image generation has no progress** — a spinner and label, not a percentage.
 - **Files reach a chat only through the composer's omnibox**, not a drag onto the transcript (see [[maurice-files]]).
 - **Regenerate is single-step** — it re-runs the last turn; there's no branch/alternatives history.

@@ -18,7 +18,7 @@ covers:
   maurice-applications: '2026-10-10'
   maurice-architecture: '2026-10-16'
   maurice-carnet: '2026-10-16'
-  maurice-chat: '2026-10-16'
+  maurice-chat: '2026-10-17'
   maurice-composer: '2026-09-22'
   maurice-data-model: '2026-10-14'
   maurice-docs: '2026-10-15'
@@ -28,7 +28,7 @@ covers:
   maurice-knowledge: '2026-10-14'
   maurice-life: '2026-09-18'
   maurice-personas-hats: '2026-09-19'
-  maurice-server: '2026-10-16'
+  maurice-server: '2026-10-17'
   maurice-shared-gardens: '2026-10-15'
   maurice-tools: '2026-10-10'
   maurice-web-garden: '2026-10-10'
@@ -169,7 +169,7 @@ There is also a **browser clipper** that saves the page being read into the gard
 ## 10. The Maurice app
 
 - **Conversations:** a sidebar list with full-text **search** over one's own conversations (passages highlighted, blocked people excluded); a details sheet (title, model, people, costs, leaving a room).
-- **Writing:** one **+** (camera, photos, files, pasted image, context, the conversation's tools); a **long paste** (1 000 characters or 20 lines) becomes a card above the field instead of a wall of text — removable, opened in full, or put back in the field — and shows as a card in the conversation too; **dictation** — by default the recording goes to the household's server and **Whisper** transcribes it whole when you stop (better punctuation and the household's names spelled right), its text replacing a live preview the device writes as you speak; turned off in Settings, dictation stays on the device, with Apple's newest recogniser on iOS/macOS 26; Apple's model downloads in the background the first time, and dictation does not wait on it when another engine can listen; the old recogniser last, using Apple's servers only for a language without a local model and only if allowed; the iPhone **Action Button** to start a dictated conversation.
+- **Writing:** one **+** (camera, photos, files, pasted image, context, the conversation's tools); a **long paste** (1 000 characters or 20 lines) becomes a card above the field instead of a wall of text — removable, opened in full, or put back in the field — and shows as a card in the conversation too; an **article shared from another app** on iOS (*Chez Maurice* in the share sheet) opens a new conversation with the article as such a card — read by the household's server from the page as Safari showed it, so a paywalled article you are reading comes whole, nothing saved to the garden — ready for your question; **dictation** — by default the recording goes to the household's server and **Whisper** transcribes it whole when you stop (better punctuation and the household's names spelled right), its text replacing a live preview the device writes as you speak; turned off in Settings, dictation stays on the device, with Apple's newest recogniser on iOS/macOS 26; Apple's model downloads in the background the first time, and dictation does not wait on it when another engine can listen; the old recogniser last, using Apple's servers only for a language without a local model and only if allowed; the iPhone **Action Button** to start a dictated conversation.
 - **Replies:** Markdown, **LaTeX math**, code blocks with their language and a **Copy** button, Copy, **Regenerate** (last turn only, also after an error; switching model first replays on the new model).
 - **Images:** sent from camera, library or clipboard — up to ten in one message, several picked at once — and read by a vision model; **generated** when an image provider key is set (a spinner, then the image).
 - **After a reply — "worth keeping":** in a private conversation, a light model names at most three works or people the exchange established, matched first against the member's garden, then a catalogue (someone from the member's own life is never looked up online). A Carnet mark in the header counts them; *Keep* files a dated note on the entry with a link back to the conversation; *Look again* and *Refine* correct a wrong match; a dismissed subject is never offered again. Never in rooms, for guests or for children.
@@ -178,7 +178,7 @@ There is also a **browser clipper** that saves the page being read into the gard
 - **Settings:** appearance and language, *Activity* (the progress pulse), the cost meter, *Budget*, *Mail*, the files library, *Import my conversations* (ChatGPT and Claude exports), *My data*, and for admins members and invitations.
 - **Platforms:** Liquid Glass on iOS/macOS 26 with a fallback to iOS 17 / macOS 14; iPad and Mac use the system toolbar; drag-and-drop and native text selection on the Mac.
 
-*Gaps:* no branching; no cost total across conversations; image generation shows no progress; the server dictation's live preview is not marked as provisional.
+*Gaps:* no branching; no cost total across conversations; image generation shows no progress; the server dictation's live preview is not marked as provisional; sharing an article is iOS only, and a long article goes whole into the conversation (a Wikipedia page is about 30k tokens, read again on every turn).
 
 *Detail:* `chat`.
 
