@@ -871,7 +871,7 @@
 "mydata.clone.rotate" = "Change the key";
 "mydata.clone.rotated" = "New key: the old one no longer works. Update it on your devices.";
 "mydata.clone.howto" = "Obsidian: install the “Git” community plugin, run “Git: Clone an existing remote repo”, paste the address, then give the username and the key when asked. Working Copy: “Clone repository”, the same address, the same key. On a computer: git clone followed by the address, then open the folder as a vault in Obsidian.";
-"mydata.clone.warning" = "The copy is not encrypted: notes marked private are in clear text there. Protect the device that holds it. It contains your notes, your fiches and their history and, rewritten every night in the _maurice folder, your highlights, reading positions and archived entries. Not your mail, nor the search index.";
+"mydata.clone.warning" = "The copy is not encrypted: notes marked private are in clear text there. Protect the device that holds it. It contains your notes, your fiches and their history and, rewritten every night in the _maurice folder, your highlights, reading positions, archived entries and domains. Not your mail, nor the search index.";
 "mydata.clone.conversations" = "Include my conversations";
 "mydata.clone.conversations_note" = "Every night your conversations are written into the garden, one per file, under _maurice/conversations. In a shared room, only your own messages.";
 "mydata.clone.no_garden" = "You have no garden on this household yet.";

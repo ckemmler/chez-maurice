@@ -871,7 +871,7 @@
 "mydata.clone.rotate" = "Sleutel wijzigen";
 "mydata.clone.rotated" = "Nieuwe sleutel: de oude werkt niet meer. Werk hem bij op je apparaten.";
 "mydata.clone.howto" = "Obsidian: installeer de community-plug-in ‘Git’, voer ‘Git: Clone an existing remote repo’ uit, plak het adres en geef gebruikersnaam en sleutel wanneer daarom gevraagd wordt. Working Copy: ‘Clone repository’, hetzelfde adres, dezelfde sleutel. Op een computer: git clone gevolgd door het adres, en open de map daarna als kluis in Obsidian.";
-"mydata.clone.warning" = "De kopie is niet versleuteld: als privé gemarkeerde notities staan er leesbaar in. Bescherm het apparaat dat hem bewaart. Hij bevat je notities, je fiches en hun geschiedenis en, elke nacht opnieuw geschreven in de map _maurice, je markeringen, leesposities en gearchiveerde items. Niet je post, en niet de zoekindex.";
+"mydata.clone.warning" = "De kopie is niet versleuteld: als privé gemarkeerde notities staan er leesbaar in. Bescherm het apparaat dat hem bewaart. Hij bevat je notities, je fiches en hun geschiedenis en, elke nacht opnieuw geschreven in de map _maurice, je markeringen, leesposities, gearchiveerde items en domeinen. Niet je post, en niet de zoekindex.";
 "mydata.clone.conversations" = "Mijn gesprekken opnemen";
 "mydata.clone.conversations_note" = "Elke nacht worden je gesprekken in de tuin geschreven, één per bestand, onder _maurice/conversations. In een gedeelde ruimte alleen je eigen berichten.";
 "mydata.clone.no_garden" = "Je hebt nog geen tuin in dit huishouden.";

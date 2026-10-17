@@ -8,6 +8,9 @@
  *   _maurice/highlights/articles/<slug>.md  an article's highlights, likewise
  *   _maurice/reading/progress.jsonl         where each book was left
  *   _maurice/reading/archived.jsonl         the entries taken off the shelf
+ *   _maurice/domains/<slug>.md              a domain the member made: Maurice's
+ *                                           brief, its instructions, its context,
+ *                                           the conversations and mail filed in it
  *   _maurice/conversations/<…>.md           one per conversation — only when
  *                                           the member asked for it
  *
@@ -34,7 +37,7 @@ import db from "../db";
 import { snapshotDb } from "./archive";
 import { ensureIgnored } from "./gardenIgnore";
 import { isOwnRepo } from "./gitHttp";
-import { memberConversations } from "./memberArchive";
+import { memberConversationList, memberConversations } from "./memberArchive";
 import { userLocale } from "./i18n";
 import { listUsers } from "./users";
 
@@ -245,6 +248,14 @@ async function reading(files: Files, life: Database, memberId: string, tables: S
   }
 }
 
+const conversationTitle = (c: Record<string, any>) => String(c.title ?? "").trim() || "Conversation";
+
+/** A conversation's file name in the export: its day, its title, its id. */
+function conversationName(c: Record<string, any> & { id: string }): string {
+  const day = iso(c.created_at)?.slice(0, 10) ?? "undated";
+  return [day, slugify(conversationTitle(c)).slice(0, 40), c.id.slice(0, 8)].filter(Boolean).join("-");
+}
+
 /** The member's conversations, one Markdown file each — with the member
  *  archive's rule for rooms (memberConversations). */
 function conversations(files: Files, memberId: string, displayName: string) {
@@ -254,9 +265,8 @@ function conversations(files: Files, memberId: string, displayName: string) {
   for (const c of memberConversations(memberId)) {
     const messages = c.messages.filter((m) => m.role !== "system");
     if (!messages.length) continue;
-    const title = String(c.title ?? "").trim() || "Conversation";
-    const day = iso(c.created_at)?.slice(0, 10) ?? "undated";
-    const name = [day, slugify(title).slice(0, 40), c.id.slice(0, 8)].filter(Boolean).join("-");
+    const title = conversationTitle(c);
+    const name = conversationName(c);
     const out = [
       "---",
       `title: ${yamlStr(title)}`,
@@ -277,6 +287,149 @@ function conversations(files: Files, memberId: string, displayName: string) {
   }
 }
 
+// ── Domains ─────────────────────────────────────────────────────
+
+const DOMAIN_WORDS = {
+  fr: {
+    brief: "Ce que Maurice en a compris", noBrief: "Pas encore de brief.", updated: "Mis à jour le",
+    prompt: "Consignes", context: "Contexte", conversations: "Conversations", mail: "Courrier",
+    book: "livre", notYours: "une conversation qui n’est pas la vôtre", missing: "introuvable",
+  },
+  en: {
+    brief: "What Maurice understood", noBrief: "No brief yet.", updated: "Updated",
+    prompt: "Instructions", context: "Context", conversations: "Conversations", mail: "Mail",
+    book: "book", notYours: "a conversation that is not yours", missing: "missing",
+  },
+};
+
+/** The garden's hub notes, by the domain they were seeded for
+ *  (services/domainSeeding.ts: `meta.domain`, `meta.role: hub`). */
+function hubNotes(garden: GardenRef): Map<string, string> {
+  const hubs = new Map<string, string>();
+  const notes = join(garden.root, "notes");
+  if (!existsSync(notes)) return hubs;
+  for (const loc of readdirSync(notes).sort()) {
+    const dir = join(notes, loc);
+    if (!statSync(dir).isDirectory()) continue;
+    for (const f of readdirSync(dir).filter((x) => x.endsWith(".md")).sort()) {
+      let meta: any;
+      try { meta = parseFiche(readFileSync(join(dir, f), "utf8"))?.frontmatter?.meta; } catch { continue; }
+      if (meta?.role === "hub" && typeof meta.domain === "string" && !hubs.has(meta.domain)) {
+        hubs.set(meta.domain, `notes/${loc}/${f.slice(0, -3)}`);
+      }
+    }
+  }
+  return hubs;
+}
+
+/**
+ * The domains the member made, one Markdown file each: what defines it (name,
+ * look, instructions, the context it carries), the member's own brief of it,
+ * and what is filed in it — the conversations that are the member's to take
+ * away (memberConversationList, linked to their file when those are exported)
+ * and the mail documents, which are in the garden already. The brief is the
+ * one the night wrote last: at 03:30 that is the previous day's.
+ */
+async function domains(files: Files, memberId: string, garden: GardenRef, locale: "fr" | "en", deps: ExportDeps) {
+  const rows = db.query(
+    `SELECT * FROM maurices WHERE kind = 'domain' AND created_by = ? ORDER BY created_at, id`,
+  ).all(memberId) as Record<string, any>[];
+  if (!rows.length) return;
+  const w = DOMAIN_WORDS[locale];
+  const mine = memberConversationList(memberId);
+  const byId = new Map(mine.map((c) => [c.id, c]));
+  const filed = new Map<string, typeof mine>();
+  for (const c of mine) if (c.maurice_id) (filed.get(c.maurice_id) ?? filed.set(c.maurice_id, []).get(c.maurice_id)!).push(c);
+  const hubs = hubNotes(garden);
+  const convoLink = (c: Record<string, any> & { id: string }) => {
+    const name = conversationName(c);
+    return files.has(`conversations/${name}.md`) ? `[[${EXPORT_DIR}/conversations/${name}|${conversationTitle(c)}]]` : conversationTitle(c);
+  };
+  const ownName = (table: "files" | "folders", id: string) =>
+    (db.query(`SELECT name FROM ${table} WHERE id = ? AND user_id = ?`).get(id, memberId) as { name: string } | null)?.name ?? null;
+
+  const taken = new Set<string>();
+  for (const d of rows) {
+    const id = String(d.id);
+    const name = String(d.name ?? "").trim() || "Domain";
+    const file = claim(taken, slugify(name), id.slice(0, 8));
+    const hub = hubs.get(id) ?? null;
+    const convos = filed.get(id) ?? [];
+    const brief = db.query(
+      `SELECT text, summary, updated_at FROM domain_briefs WHERE maurice_id = ? AND member_id = ?`,
+    ).get(id, memberId) as { text: string; summary: string | null; updated_at: string } | null;
+    const mail = db.query(
+      `SELECT path FROM domain_mail WHERE maurice_id = ? AND member_id = ? ORDER BY path`,
+    ).all(id, memberId) as { path: string }[];
+
+    const out = [
+      "---",
+      `title: ${yamlStr(name)}`,
+      `domain: ${yamlStr(id)}`,
+      ...(d.icon ? [`icon: ${yamlStr(String(d.icon))}`] : []),
+      `palette: ${yamlStr(String(d.palette ?? ""))}`,
+      `hat: ${yamlStr(String(d.hat ?? ""))}`,
+      ...(d.tagline ? [`tagline: ${yamlStr(String(d.tagline))}`] : []),
+      ...(d.model ? [`model: ${yamlStr(String(d.model))}`] : []),
+      `created: ${yamlStr(iso(d.created_at) ?? "")}`,
+      `updated: ${yamlStr(iso(d.updated_at) ?? "")}`,
+      ...(hub ? [`hub: ${yamlStr(`[[${hub}]]`)}`] : []),
+      `conversations: ${convos.length}`,
+      "---",
+      "",
+      `# ${name}`,
+      "",
+      ...(d.tagline ? [`*${String(d.tagline).trim()}*`, ""] : []),
+      ...(hub ? [`[[${hub}|${name}]]`, ""] : []),
+      `## ${w.brief}`,
+      "",
+    ];
+    if (brief?.text?.trim()) {
+      if (brief.summary?.trim()) out.push(`*${brief.summary.trim()}*`, "");
+      out.push(brief.text.trim(), "", `*${w.updated} ${iso(brief.updated_at)?.slice(0, 10)}*`, "");
+    } else {
+      out.push(w.noBrief, "");
+    }
+    if (String(d.prompt ?? "").trim()) out.push(`## ${w.prompt}`, "", String(d.prompt).trim(), "");
+
+    let items: any[] = [];
+    try { items = JSON.parse(String(d.context_json ?? "{}"))?.items ?? []; } catch {}
+    if (items.length) {
+      out.push(`## ${w.context}`, "");
+      for (const it of items) {
+        const kind = String(it?.type ?? "");
+        let label: string;
+        if (kind === "note") label = `[[${it.id}]]`;
+        else if (kind === "fiche") label = `[[${it.id}-fiche]]`;
+        else if (kind === "book") {
+          const info = await deps.book(Number(it.id)).catch(() => null);
+          label = `${info?.title ?? `${w.book} ${it.id}`}${info?.authors.length ? ` — ${info.authors.join(", ")}` : ""}`;
+        } else if (kind === "conversation") {
+          const c = byId.get(String(it.id));
+          label = c ? `${convoLink(c)} (${iso(c.created_at)?.slice(0, 10)})` : w.notYours;
+        } else if (kind === "file" || kind === "folder") {
+          label = ownName(kind === "file" ? "files" : "folders", String(it.id)) ?? w.missing;
+        } else continue;
+        const how = [it.representation, it.scope?.mode].filter((x) => typeof x === "string" && x).join(", ");
+        out.push(`- ${kind}: ${label}${how ? ` · ${how}` : ""}`);
+      }
+      out.push("");
+    }
+
+    if (convos.length) {
+      out.push(`## ${w.conversations}`, "");
+      for (const c of convos) out.push(`- ${iso(c.created_at)?.slice(0, 10)} · ${convoLink(c)}`);
+      out.push("");
+    }
+    if (mail.length) {
+      out.push(`## ${w.mail}`, "");
+      for (const m of mail) out.push(`- [[${m.path.replace(/\.md$/, "")}]]`);
+      out.push("");
+    }
+    files.set(`domains/${file}.md`, out.join("\n").trimEnd() + "\n");
+  }
+}
+
 const README: Record<"fr" | "en", (convos: boolean) => string> = {
   fr: (convos) => `# _maurice
 
@@ -288,6 +441,9 @@ ses commits sont signés « Maurice (export) ».
   par livre ou par article, liés à sa fiche quand elle existe ;
 - \`reading/progress.jsonl\` : où vous en êtes dans chaque livre ;
 - \`reading/archived.jsonl\` : les entrées que vous avez archivées ;
+- \`domains/\` : vos domaines, un fichier chacun — le brief de Maurice, les
+  consignes, le contexte, les conversations et le courrier qui y sont rangés.
+  Le brief est celui de la veille : il est réécrit après cet export ;
 ${convos
     ? "- `conversations/` : vos conversations, une par fichier ; dans un salon partagé, seulement vos messages."
     : "- vos conversations n'y sont pas : activez-les dans l'app, Réglages → Mes données."}
@@ -306,6 +462,9 @@ commits are signed "Maurice (export)".
   book or article, linked to its entry when there is one;
 - \`reading/progress.jsonl\`: where you are in each book;
 - \`reading/archived.jsonl\`: the entries you archived;
+- \`domains/\`: your domains, one file each — Maurice's brief, the
+  instructions, the context, the conversations and mail filed in them. The
+  brief is the previous day's: it is rewritten after this export;
 ${convos
     ? "- `conversations/`: your conversations, one per file; in a room shared with others, only your own messages."
     : "- your conversations are not here: turn them on in the app, Settings → My data."}
@@ -354,6 +513,7 @@ export async function exportMemberGarden(memberId: string, life: Database | null
     await reading(files, life, memberId, tables, deps);
   }
   if (convos) conversations(files, memberId, user.display_name || user.username);
+  await domains(files, memberId, garden, locale, deps);
 
   const dir = join(garden.root, EXPORT_DIR);
   const changed = new Set<string>();

@@ -220,6 +220,65 @@ describe("the export", () => {
     expect(git(ADA, "ls-files", "_maurice/conversations").stdout.trim()).toBe("");
   });
 
+  test("a domain: its brief, instructions, context, conversations and mail — the member's only", async () => {
+    db.run(`INSERT INTO maurices (id, name, kind, icon, tagline, prompt, model, created_by, context_json, created_at)
+            VALUES ('ge-dom', 'Conscience', 'domain', 'brain', 'Ce que je lis sur la conscience', 'Réponds en citant Seth.', 'deepseek-v4-flash', ?, ?, '2026-09-20 08:00:00')`,
+      [A, JSON.stringify({ items: [
+        { type: "note", id: "reves" },
+        { type: "fiche", id: "books/fr/being-you" },
+        { type: "book", id: 7, representation: "summary", scope: { mode: "progress" } },
+        { type: "conversation", id: "ge-c-ada" },
+        { type: "conversation", id: "ge-c-ben" },
+      ] })]);
+    db.run(`INSERT INTO maurices (id, name, kind, created_by) VALUES ('ge-dom-ben', 'Ben domain secret', 'domain', ?)`, [B]);
+    db.run(`UPDATE conversations SET maurice_id = 'ge-dom' WHERE id IN ('ge-c-ada', 'ge-c-room')`);
+    db.run(`UPDATE conversations SET maurice_id = 'ge-dom' WHERE id = 'ge-c-ben'`);
+    db.run(`INSERT INTO domain_briefs (maurice_id, member_id, text, summary, updated_at) VALUES ('ge-dom', ?, 'Ada lit Seth et Tononi.', 'La conscience comme prédiction.', '2026-10-16 04:00:00')`, [A]);
+    db.run(`INSERT INTO domain_briefs (maurice_id, member_id, text) VALUES ('ge-dom', ?, 'ben-brief-secret')`, [B]);
+    db.run(`INSERT INTO domain_mail (maurice_id, member_id, path) VALUES ('ge-dom', ?, 'notes/fr/lettre-du-labo.md')`, [A]);
+    fs.mkdirSync(path.join(ADA, "notes", "fr"), { recursive: true });
+    fs.writeFileSync(path.join(ADA, "notes", "fr", "conscience.md"), "---\ntitle: Conscience\nmeta:\n  domain: ge-dom\n  role: hub\n---\n\nLe hub.\n");
+    git(ADA, "add", "notes/fr/conscience.md");
+    git(ADA, "commit", "-qm", "hub");
+    // Ada reads Maurice in French: the domain's headings follow.
+    db.run(`INSERT INTO user_preferences (user_id, locale) VALUES (?, 'fr') ON CONFLICT(user_id) DO UPDATE SET locale = 'fr'`, [A]);
+
+    const r = await run(A);
+    expect(r.committed).toBe(true);
+    const dom = fs.readFileSync(path.join(ADA, "_maurice", "domains", "conscience.md"), "utf8");
+    expect(dom).toContain("title: \"Conscience\"");
+    expect(dom).toContain("icon: \"brain\"");
+    expect(dom).toContain("hub: \"[[notes/fr/conscience]]\"");
+    expect(dom).toContain("## Ce que Maurice en a compris\n\n*La conscience comme prédiction.*\n\nAda lit Seth et Tononi.\n\n*Mis à jour le 2026-10-16*");
+    expect(dom).toContain("## Consignes\n\nRéponds en citant Seth.");
+    expect(dom).toContain("- note: [[reves]]");
+    expect(dom).toContain("- fiche: [[books/fr/being-you-fiche]]");
+    expect(dom).toContain("- book: Being You — Anil Seth · summary, progress");
+    expect(dom).toContain("- conversation: Sur la conscience (2026-10-01)");
+    expect(dom).toContain("- conversation: une conversation qui n’est pas la vôtre");
+    // Filed in it: Ada's conversation and the room she sits in, not Ben's own.
+    expect(dom).toContain("conversations: 2");
+    expect(dom).toContain("- 2026-10-01 · Sur la conscience");
+    expect(dom).toContain("- 2026-10-02 · Salon");
+    expect(dom).toContain("## Courrier\n\n- [[notes/fr/lettre-du-labo]]");
+    for (const leak of ["ben-brief-secret", "Ben seul", "Ben domain secret"]) expect(everything(ADA)).not.toContain(leak);
+
+    // With the conversations exported, the domain links to their files.
+    ex.setExportsConversations(A, true);
+    await run(A);
+    expect(fs.readFileSync(path.join(ADA, "_maurice", "domains", "conscience.md"), "utf8"))
+      .toContain("- 2026-10-01 · [[_maurice/conversations/2026-10-01-sur-la-conscience-ge-c-ada|Sur la conscience]]");
+    ex.setExportsConversations(A, false);
+    await run(A);
+    // And a night with nothing new still commits nothing.
+    const before = commits(ADA);
+    expect((await run(A)).committed).toBe(false);
+    expect(commits(ADA)).toBe(before);
+    // Ben's own domain is his export's, not Ada's.
+    await run(B);
+    expect(everything(BEN)).toContain("Ben domain secret");
+  });
+
   test("a garden that is not a repository of its own gets no export", async () => {
     db.run(`INSERT INTO users (id, username, display_name, role) VALUES ('ge-cleo', 'gecleo', 'Cleo', 'standard')`);
     const cleo = path.join(GARDENS, "gecleo");

@@ -160,6 +160,21 @@ type Prepared = { staging: string; manifest: MemberManifest; filename: string; t
 
 export type MemberConversation = Record<string, any> & { id: string; room: boolean; messages: Record<string, any>[] };
 
+/** Which conversations are a member's to take away — theirs and every room
+ *  they sit in — without their messages: each row of `conversations`, and
+ *  `room`, whether other members sit in it too. */
+export function memberConversationList(memberId: string): (Record<string, any> & { id: string; room: boolean })[] {
+  const convos = db.query(
+    `SELECT c.*, EXISTS (SELECT 1 FROM conversation_participants p
+                          WHERE p.conversation_id = c.id AND p.member_id != ?1) AS room
+       FROM conversations c
+      WHERE c.user_id = ?1
+         OR c.id IN (SELECT conversation_id FROM conversation_participants WHERE member_id = ?1)
+      ORDER BY c.created_at, c.id`,
+  ).all(memberId) as Record<string, any>[];
+  return convos.map((c) => ({ ...c, id: String(c.id), room: !!c.room }));
+}
+
 /**
  * The conversations a member takes away — theirs, and every room they sit in —
  * each with its messages. The rule both ways out of the household follow (this
@@ -169,16 +184,8 @@ export type MemberConversation = Record<string, any> & { id: string; room: boole
  * the server's own writes cannot interleave.
  */
 export function memberConversations(memberId: string): MemberConversation[] {
-  const convos = db.query(
-    `SELECT c.*, EXISTS (SELECT 1 FROM conversation_participants p
-                          WHERE p.conversation_id = c.id AND p.member_id != ?1) AS room
-       FROM conversations c
-      WHERE c.user_id = ?1
-         OR c.id IN (SELECT conversation_id FROM conversation_participants WHERE member_id = ?1)
-      ORDER BY c.created_at, c.id`,
-  ).all(memberId) as Record<string, any>[];
-  return convos.map((c) => {
-    const room = !!c.room;
+  return memberConversationList(memberId).map((c) => {
+    const room = c.room;
     const messages = db.query(
       `SELECT * FROM messages WHERE conversation_id = ? ${room ? "AND author_id = ?" : ""} ORDER BY created_at, rowid`,
     ).all(...(room ? [c.id, memberId] : [c.id])) as Record<string, any>[];
