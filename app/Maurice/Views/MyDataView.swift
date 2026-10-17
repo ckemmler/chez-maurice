@@ -35,6 +35,13 @@ private struct GitAccess: Decodable {
     let url: String
     let username: String
     let token: String
+    let export_conversations: Bool
+}
+
+/// PUT /api/me/git/export — whether the night writes the conversations into the garden.
+private struct GitExportSetting: Codable {
+    var conversations: Bool?
+    var export_conversations: Bool?
 }
 
 private struct NoBody: Encodable {}
@@ -73,6 +80,7 @@ struct MyDataView: View {
     @State private var git: GitAccess?
     @State private var copied: String?
     @State private var rotated = false
+    @State private var exportConversations = false
 
     private var api: APIClient? { session.serverURL.map { APIClient(baseURL: $0) } }
     private var token: String? { session.tokenForActiveUser }
@@ -103,6 +111,18 @@ struct MyDataView: View {
                     cloneField(session.localized("mydata.clone.username"), git.username)
                     cloneField(session.localized("mydata.clone.token"), git.token, shown: String(git.token.prefix(9)) + "…")
                     if rotated { line(session.localized("mydata.clone.rotated"), ok: true) }
+                    Toggle(isOn: Binding(get: { exportConversations }, set: { on in Task { await setExportConversations(on) } })) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(session.localized("mydata.clone.conversations"))
+                                .font(.system(size: 12, weight: .medium)).foregroundStyle(theme.ink)
+                            Text(session.localized("mydata.clone.conversations_note"))
+                                .font(.system(size: 11)).foregroundStyle(theme.inkSoft)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+                    .toggleStyle(.switch)
+                    .controlSize(.small)
+                    .tint(accent)
                     Text(session.localized("mydata.clone.howto"))
                         .font(.system(size: 11.5)).foregroundStyle(theme.inkSoft).lineSpacing(1)
                         .fixedSize(horizontal: false, vertical: true)
@@ -253,10 +273,24 @@ struct MyDataView: View {
                 : try await api.get("/api/me/git", token: token)
             rotated = rotate
             copied = nil
+            exportConversations = git?.export_conversations ?? false
             clonePhase = .idle
         } catch APIError.server(404, _) {
             clonePhase = .noGarden
         } catch {
+            clonePhase = .failed(error.localizedDescription)
+        }
+    }
+
+    private func setExportConversations(_ on: Bool) async {
+        guard let api, let token else { return }
+        let before = exportConversations
+        exportConversations = on
+        do {
+            let answer: GitExportSetting = try await api.put("/api/me/git/export", body: GitExportSetting(conversations: on), token: token)
+            exportConversations = answer.export_conversations ?? on
+        } catch {
+            exportConversations = before
             clonePhase = .failed(error.localizedDescription)
         }
     }

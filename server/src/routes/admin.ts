@@ -15,6 +15,7 @@ import { mailReadingStatus, startMailReading } from "../services/mailReading";
 import { forgetMailbox } from "../services/mailForget";
 import { memberLocale } from "../services/domainBriefs";
 import { eraseMailDocuments, indexMailFiles, mailDocumentsStatus, previewPeople, startMailDocuments } from "../services/mailDocuments";
+import { runGardenExportNow } from "../services/gardenExport";
 import db from "../db";
 
 const admin = new Hono();
@@ -155,6 +156,13 @@ admin.patch("/settings", async (c) => {
 
 // ── POST /api/admin/pairing-token ───────────────────────────────
 // Generate a QR-code-friendly pairing token for a new device
+
+// POST /api/admin/garden-export/run — the night's garden export, now, for
+// every member (services/gardenExport.ts). Answers when it is done.
+admin.post("/garden-export/run", async (c) => {
+  await runGardenExportNow();
+  return c.json({ ok: true });
+});
 
 admin.post("/pairing-token", (c) => {
   const { deviceId, pairingToken } = createPairingToken();

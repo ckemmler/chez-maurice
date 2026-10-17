@@ -215,6 +215,9 @@ async def main() -> int:
     write(f"{MEMBER}/notes/fr/reves.md", NOTE)
     write(f"{MEMBER}/books/fr/being-you-fiche/_fragments/001.frag",
           '---\nsummary: "Texte intégral — Dutton"\n---\nLe texte complet du livre.\n')
+    # The night's export, at the depths the cards source claims: never indexed.
+    write(f"{MEMBER}/_maurice/conversations/2026-10-01-reves-abcd1234.md", "---\ntitle: Rêves\n---\n\nUne conversation.\n")
+    write(f"{MEMBER}/_maurice/highlights/books/being-you.md", "---\ntitle: Being You\n---\n\n> Un passage.\n")
 
     await orch.initial_index()
 
@@ -228,6 +231,8 @@ async def main() -> int:
     eq("the exclude keeps fiches out of cards", len(fiche_as_card), 0)
     note_as_card = [p for p in payloads(orch, source_type="card") if "/notes/" in p["file_path"]]
     eq("the exclude keeps notes out of cards", len(note_as_card), 0)
+    exported = [p for p in payloads(orch) if "/_maurice/" in p["file_path"]]
+    eq("the night's export is not indexed", len(exported), 0)
 
     print("\n── a document cannot overwrite the corpus's own vocabulary ──")
     # The card names its publication `source`, which used to replace the name of

@@ -78,6 +78,7 @@ import { imagesDir } from "./src/services/images";
 import { avatarsDir } from "./src/services/avatars";
 import { proxyAuth, validateApiTokenRaw, validateHealthToken } from "./src/middleware/auth";
 import gitRoutes from "./src/routes/git";
+import { scheduleGardenExport } from "./src/services/gardenExport";
 import { fullHealth, hookConsoleErrors, publicHealth, recordError } from "./src/services/health";
 import { validateSession, normalizeInviteCode, formatInviteCode } from "./src/services/auth";
 import { t, langOf } from "./src/services/i18n";
@@ -242,6 +243,11 @@ scheduleDomainBriefsNightly();
 // the app's list, and file what belongs to a domain they already have (see
 // services/domainMapping.ts).
 scheduleDomainMappingNightly();
+// The garden export: at 03:30 local (MAURICE_GARDEN_EXPORT_AT), write what
+// each member has outside their garden — highlights, reading, and their
+// conversations if they asked — into it as text, and commit (see
+// services/gardenExport.ts).
+scheduleGardenExport();
 
 /** Is this a member whose garden the household serves? */
 function gardenExists(member: string): boolean {

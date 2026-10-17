@@ -10,6 +10,7 @@ import { verifyPassword, verifyPin } from "../services/auth";
 import { usageFor } from "../services/budget";
 import { gardensRoot } from "../services/gardensRoot";
 import { isGardenDir } from "../services/gitHttp";
+import { exportsConversations, setExportsConversations } from "../services/gardenExport";
 import { uploadsDir } from "../services/chatImport";
 import { importMember, memberExportResponse } from "../services/memberArchive";
 import { EraseError, eraseMember, type EraseScope } from "../services/memberErase";
@@ -143,10 +144,24 @@ async function gitAccess(c: Context, rotate: boolean) {
     for (const t of listApiTokens(userId)) if (t.label === GIT_TOKEN_LABEL) revokeApiToken(t.id, userId);
     token = (await createApiToken(userId, GIT_TOKEN_LABEL, "git", true)).rawToken;
   }
-  return c.json({ url: `${publicOrigin(c)}/git/${user.username}.git`, username: user.username, token });
+  return c.json({
+    url: `${publicOrigin(c)}/git/${user.username}.git`,
+    username: user.username,
+    token,
+    export_conversations: exportsConversations(userId),
+  });
 }
 
 me.get("/git", (c) => gitAccess(c, false));
 me.post("/git/rotate", (c) => gitAccess(c, true));
+
+// PUT /api/me/git/export { conversations: boolean } — whether the night's
+// export writes the member's conversations into their garden.
+me.put("/git/export", async (c) => {
+  const body = await c.req.json().catch(() => ({}));
+  if (typeof body?.conversations !== "boolean") return c.json({ error: "conversations_boolean" }, 400);
+  setExportsConversations(c.get("userId"), body.conversations);
+  return c.json({ export_conversations: exportsConversations(c.get("userId")) });
+});
 
 export default me;

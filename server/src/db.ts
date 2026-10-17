@@ -210,6 +210,9 @@ db.run(`
 // Migrations
 try { db.run(`ALTER TABLE user_preferences ADD COLUMN palette TEXT`); } catch {}
 try { db.run(`ALTER TABLE user_preferences ADD COLUMN locale TEXT`); } catch {}
+// Whether the night's export writes the member's conversations into their
+// garden (services/gardenExport.ts). Off unless the member turns it on.
+try { db.run(`ALTER TABLE user_preferences ADD COLUMN export_conversations INTEGER NOT NULL DEFAULT 0`); } catch {}
 // A conversation may be bound to a specialized Maurice (persona). Null = the
 // everyday, unspecialized Maurice. Kept as a plain id (no FK) so this migration
 // doesn't depend on table-creation order; deleting a Maurice nulls it explicitly

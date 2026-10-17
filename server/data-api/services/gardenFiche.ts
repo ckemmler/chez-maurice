@@ -284,14 +284,38 @@ function hasRemote(root: string): boolean {
   return out.status === 0 && !!out.stdout.trim();
 }
 
+/** How a commit is made. The defaults are every writer's since the start. */
+export interface CommitOptions {
+  /** `Name <email>` — a writer whose commits must be recognisable (the night's
+   *  export, services/gardenExport.ts). The committer stays the repo's own. */
+  author?: string;
+  /** Commit these paths only, not whatever else the index holds. Two processes
+   *  write this repository — the server and the garden tool in the MCP gateway —
+   *  and a plain `git commit` takes everything staged, including what the other
+   *  one has just added for its own commit. */
+  only?: boolean;
+}
+
+/** `git` in `root`, tried again while another process holds the index lock:
+ *  the garden tool commits into the same repository, with no lock between the
+ *  two but git's own `index.lock`, and one losing that race used to fail
+ *  silently and leave its files staged for someone else's commit. */
+function gitRetrying(root: string, args: string[]) {
+  for (let attempt = 0; ; attempt++) {
+    const r = spawnSync("git", args, { cwd: root, encoding: "utf-8" });
+    if (r.status === 0 || attempt >= 6 || !/index\.lock/.test(r.stderr ?? "")) return r;
+    Bun.sleepSync(100 * (attempt + 1));
+  }
+}
+
 /**
  * Commit (and push, when a remote exists) garden changes — only when the
  * gardens dir is a git repo. Outside one this is a no-op: the files are already
- * on disk, which is what matters.
+ * on disk, which is what matters. True when a commit was made.
  */
-export function autoCommit(garden: GardenRef, paths: string[], message: string): void {
+export function autoCommit(garden: GardenRef, paths: string[], message: string, opts: CommitOptions = {}): boolean {
   const root = gitRoot(garden.root);
-  if (!root) return;
+  if (!root) return false;
   try {
     // Skip stray paths rather than aborting the whole commit on one of them.
     // Through the real path: git answers with symlinks resolved (/private/var
@@ -309,14 +333,20 @@ export function autoCommit(garden: GardenRef, paths: string[], message: string):
       const known = new Set(String(spawnSync("git", ["ls-files", "-z", "--", ...gone], { cwd: root }).stdout ?? "").split("\0").filter(Boolean));
       rel = rel.filter((p) => fs.existsSync(path.join(root, p)) || known.has(p));
     }
-    if (!rel.length) return;
-    spawnSync("git", ["add", "--", ...rel], { cwd: root });
-    if (spawnSync("git", ["diff", "--cached", "--quiet"], { cwd: root }).status !== 0) {
-      spawnSync("git", ["commit", "-m", message], { cwd: root });
-      if (hasRemote(root)) spawnSync("git", ["push"], { cwd: root });
-    }
+    if (!rel.length) return false;
+    const add = gitRetrying(root, ["add", "--", ...rel]);
+    if (add.status !== 0) throw new Error(`git add: ${(add.stderr ?? "").trim()}`);
+    const scope = opts.only ? ["--", ...rel] : [];
+    if (spawnSync("git", ["diff", "--cached", "--quiet", ...scope], { cwd: root }).status === 0) return false;
+    const args = ["commit", "--quiet", "-m", message];
+    if (opts.author) args.push(`--author=${opts.author}`);
+    const commit = gitRetrying(root, [...args, ...scope]);
+    if (commit.status !== 0) throw new Error(`git commit: ${(commit.stderr ?? "").trim()}`);
+    if (hasRemote(root)) spawnSync("git", ["push", "--quiet"], { cwd: root });
+    return true;
   } catch (err) {
     console.warn("[garden] auto-commit failed:", (err as Error).message);
+    return false;
   }
 }
 

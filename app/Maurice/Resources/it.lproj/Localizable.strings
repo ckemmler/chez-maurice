@@ -871,7 +871,9 @@
 "mydata.clone.rotate" = "Cambia la chiave";
 "mydata.clone.rotated" = "Nuova chiave: la vecchia non funziona più. Aggiornala sui tuoi dispositivi.";
 "mydata.clone.howto" = "Obsidian: installa il plugin della comunità «Git», esegui «Git: Clone an existing remote repo», incolla l’indirizzo, poi inserisci nome utente e chiave quando richiesti. Working Copy: «Clone repository», lo stesso indirizzo, la stessa chiave. Su un computer: git clone seguito dall’indirizzo, poi apri la cartella come vault in Obsidian.";
-"mydata.clone.warning" = "La copia non è cifrata: le note segnate come private vi sono in chiaro. Proteggi il dispositivo che la conserva. Contiene le tue note, le tue schede e la loro cronologia; non le tue conversazioni, la tua posta o l’indice di ricerca.";
+"mydata.clone.warning" = "La copia non è cifrata: le note segnate come private vi sono in chiaro. Proteggi il dispositivo che la conserva. Contiene le tue note, le tue schede e la loro cronologia e, riscritti ogni notte nella cartella _maurice, i tuoi evidenziati, le posizioni di lettura e le voci archiviate. Non la tua posta, né l’indice di ricerca.";
+"mydata.clone.conversations" = "Includi le mie conversazioni";
+"mydata.clone.conversations_note" = "Ogni notte le tue conversazioni vengono scritte nel giardino, una per file, in _maurice/conversations. In una stanza condivisa, solo i tuoi messaggi.";
 "mydata.clone.no_garden" = "Non hai ancora un giardino in questa casa.";
 "mydata.failed" = "Non riuscito: %@";
 "mydata.residual.corpus" = "L’indice di ricerca non era raggiungibile; verrà svuotato al prossimo avvio del server.";

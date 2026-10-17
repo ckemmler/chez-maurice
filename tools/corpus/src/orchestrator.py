@@ -417,6 +417,12 @@ class CorpusOrchestrator:
         # without that prefix so "*.md" also matches root-level files.
         if any(rel.match(ex) for ex in cfg.exclude):
             return False
+        # The night's export (<member>/_maurice/, server/src/services/gardenExport.ts)
+        # copies into the garden, as text for a clone, what the corpus already holds
+        # from its own sources — conversations, highlights. Indexing it too would
+        # return every one of them twice.
+        if "_maurice" in rel.parts:
+            return False
         if rel.match(pattern):
             return True
         if pattern.startswith("**/"):
