@@ -321,7 +321,7 @@ Each member has folders and files (5 GB each), in **Settings**: text, images, PD
 
 ## 22. The night and the operator's tools
 
-- **Night jobs** run inside the server, at home and hosted alike, each catching up if the server was down and each switchable off: 03:00 search reconcile and the mail header walk; 03:30 the garden export (highlights, reading, and conversations if asked, written into each member's garden and committed only when something changed); 04:00 domain briefs; 05:00 domain mapping and filing. The night spends from its own allowance.
+- **Night jobs** run inside the server, at home and hosted alike, each catching up if the server was down and each switchable off: 03:00 search reconcile and the mail header walk; 03:30 the garden export (highlights, reading, and conversations if asked, written into each garden that has been cloned and committed only when something changed); 04:00 domain briefs; 05:00 domain mapping and filing. The night spends from its own allowance.
 - **Admin console** (`/admin`, only from the machine itself; the operator of a hosted household reaches it through an ssh tunnel): members, PINs and invitations, models and their windows, the access grid, provider keys, the Calibre library, caps and budget shares, the night's allowance, background model pins, the public-pages switch, cards for the night's jobs with *run now*, the household export.
 - **Health:** `/healthz` answers status and version publicly, and build, database, disk and error counts (never names or content) to a health token.
 - **Documentation refresh:** each server fetches the latest documentation from the public repository once a day.
