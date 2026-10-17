@@ -221,6 +221,7 @@ Each member has folders and files (5 GB each), in **Settings**: text, images, PD
 - **Filing:** each night, an unbound conversation whose nearest neighbours mostly belong to one adopted domain is filed there — marked, listed on the domain's page, reversible with *Detach*. During a turn, a recognised domain shows as a mark on the conversation and, when the match is strong, Maurice reads its brief first.
 - **Seeding the garden** needs its own yes: one hub note and up to three topic notes, written from the domain's conversations, marked *written by Maurice, not reviewed yet* until the member keeps, corrects or throws them away.
 - **Bringing a history in:** *Import my conversations* takes ChatGPT and Claude export files; the next night maps them, so domains can appear at once.
+- **One domain per name:** a member cannot make two domains of the same name (case and accents aside); the editor says which one has it, a proposal of that name joins it, and duplicates made before the rule were merged into one, conversations, briefs and context together.
 - **In the garden's clone:** each domain the member made is written there every night as a readable file — the brief, the instructions, the context, the conversations and mail filed in it — as it stood at the close of the previous day.
 - In Carnet, the *Maurice* screen lists domains (with the brief's age and author) and companions; a domain's brief can be edited, rewritten or erased there.
 
