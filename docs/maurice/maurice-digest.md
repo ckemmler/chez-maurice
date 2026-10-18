@@ -17,8 +17,8 @@ digest: true
 covers:
   maurice-applications: '2026-10-10'
   maurice-architecture: '2026-10-16'
-  maurice-carnet: '2026-10-16'
-  maurice-chat: '2026-10-17'
+  maurice-carnet: '2026-10-18'
+  maurice-chat: '2026-10-18'
   maurice-composer: '2026-09-22'
   maurice-data-model: '2026-10-17'
   maurice-docs: '2026-10-15'
@@ -28,7 +28,7 @@ covers:
   maurice-knowledge: '2026-10-14'
   maurice-life: '2026-09-18'
   maurice-personas-hats: '2026-09-19'
-  maurice-server: '2026-10-17'
+  maurice-server: '2026-10-18'
   maurice-shared-gardens: '2026-10-15'
   maurice-tools: '2026-10-10'
   maurice-web-garden: '2026-10-17'
@@ -170,7 +170,7 @@ There is also a **browser clipper** that saves the page being read into the gard
 ## 10. The Maurice app
 
 - **Conversations:** a sidebar list with full-text **search** over one's own conversations (passages highlighted, blocked people excluded); a details sheet (title, model, people, costs, leaving a room).
-- **Writing:** one **+** (camera, photos, files, pasted image, context, the conversation's tools); a **long paste** (1 000 characters or 20 lines) becomes a card above the field instead of a wall of text — removable, opened in full, or put back in the field — and shows as a card in the conversation too; an **article shared from another app** on iOS (*Chez Maurice* in the share sheet) opens a new conversation with the article as such a card — read by the household's server from the page as Safari showed it, so a paywalled article you are reading comes whole, nothing saved to the garden — ready for your question; **dictation** — by default the recording goes to the household's server and **Whisper** transcribes it whole when you stop (better punctuation and the household's names spelled right), its text replacing a live preview the device writes as you speak; turned off in Settings, dictation stays on the device, with Apple's newest recogniser on iOS/macOS 26; Apple's model downloads in the background the first time, and dictation does not wait on it when another engine can listen; the old recogniser last, using Apple's servers only for a language without a local model and only if allowed; the iPhone **Action Button** to start a dictated conversation.
+- **Writing:** one **+** (camera, photos, files, pasted image, context, the conversation's tools); a **long paste** (1 000 characters or 20 lines) becomes a card above the field instead of a wall of text — removable, opened in full, or put back in the field — and shows as a card in the conversation too; an **article shared from another app** on iOS (*Chez Maurice* in the share sheet) opens a new conversation with the article as such a card — read by the household's server from the page as Safari showed it, so a paywalled article you are reading comes whole, nothing saved to the garden — ready for your question; **dictation** — by default the recording goes to the household's server and **Whisper** transcribes it whole when you stop (better punctuation, the household's names spelled right, and the language you spoke recognised on its own, whatever the phone's is), its text replacing a live preview the device writes as you speak; turned off in Settings, dictation stays on the device, with Apple's newest recogniser on iOS/macOS 26; Apple's model downloads in the background the first time, and dictation does not wait on it when another engine can listen; the old recogniser last, using Apple's servers only for a language without a local model and only if allowed; the iPhone **Action Button** to start a dictated conversation.
 - **Replies:** Markdown, **LaTeX math**, code blocks with their language and a **Copy** button, Copy, **Regenerate** (last turn only, also after an error; switching model first replays on the new model).
 - **Images:** sent from camera, library or clipboard — up to ten in one message, several picked at once — and read by a vision model; **generated** when an image provider key is set (a spinner, then the image).
 - **After a reply — "worth keeping":** in a private conversation, a light model names at most three works or people the exchange established, matched first against the member's garden, then a catalogue (someone from the member's own life is never looked up online). A Carnet mark in the header counts them; *Keep* files a dated note on the entry with a link back to the conversation; *Look again* and *Refine* correct a wrong match; a dismissed subject is never offered again. Never in rooms, for guests or for children.
@@ -296,7 +296,7 @@ Each member has folders and files (5 GB each), in **Settings**: text, images, PD
 
 - **Joining:** the same household and identity as the Maurice app — an invite code on a fresh device, then a PIN; several households on one device. The member sheet holds households, members, *Disconnect*, and a **Privacy** section (privacy policy, terms, **Delete my account**).
 - **Home: one list of entries** of every kind — books, articles, films, series, music, podcasts, games, posts — each row saying what the member has on it (notes, *Draft*, *Published*, *Not opened*) and where they are in it. Filters by kind, search and sort, an offline copy of the list. Swipe right to archive, left to delete (with a confirmation saying what leaves the garden).
-- **An entry's page:** identity and cover, the source (read, resume, chapters, original), and **one sheet with two faces** — the member's side (dated notes and quotes, with a page) and the shared side (write, publish, unpublish; publishing takes about 15 s). Dictation beside every field, in the entry's language.
+- **An entry's page:** identity and cover, the source (read, resume, chapters, original), and **one sheet with two faces** — the member's side (dated notes and quotes, with a page) and the shared side (write, publish, unpublish; publishing takes about 15 s). Dictation beside every field, in the entry's language on the device; Whisper recognises the language spoken.
 - **Reading:** books from the household's library with chapters, summaries, highlights, the exact position synced per member and offline; *pause tracking* to look ahead without it counting. Articles with their styles, a Text/Summary switch, cached on the device.
 - **Sharing an entry** with other members: nothing is copied; they read it and may add signed notes. A first cut.
 - **Maurice from an entry:** a new conversation each time, with the entry as context; under each reply, what is worth keeping — a note for this entry, other works and people (linked by a résonance). Text only.
