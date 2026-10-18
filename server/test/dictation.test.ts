@@ -13,7 +13,7 @@ const db = (await import("../src/db")).default;
 const route = (await import("../src/routes/dictation")).default;
 const { createSession } = await import("../src/services/auth");
 const {
-  billedSeconds, cleanTranscript, dictationEngine, normaliseLanguage, vocabularyPrompt,
+  billedSeconds, cleanTranscript, dictationEngine, vocabularyPrompt,
 } = await import("../src/services/dictation");
 
 const auth = { Authorization: `Bearer ${createSession(MEMBER.id).token}` };
@@ -86,15 +86,6 @@ test("Whisper's lines and spacing come back as one clean paragraph", () => {
   expect(cleanTranscript(" Bonjour Maurice,\n  peux-tu rappeler à Aline\n\n le rendez-vous ? ")).toBe(
     "Bonjour Maurice, peux-tu rappeler à Aline le rendez-vous ?",
   );
-});
-
-test("the language is the bare code Whisper takes, or nothing", () => {
-  expect(normaliseLanguage("fr")).toBe("fr");
-  expect(normaliseLanguage("fr-BE")).toBe("fr");
-  expect(normaliseLanguage("en_GB")).toBe("en");
-  expect(normaliseLanguage("")).toBeNull();
-  expect(normaliseLanguage("français")).toBeNull();
-  expect(normaliseLanguage(undefined)).toBeNull();
 });
 
 test("the vocabulary carries the household's names", () => {

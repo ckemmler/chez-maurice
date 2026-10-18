@@ -321,11 +321,12 @@ struct HouseholdTranscription: Sendable, Equatable {
     }
 
     /// Send a recorded clip; the text Whisper heard, or nil on any failure.
-    func transcribe(_ file: URL, seconds: TimeInterval, language: String?) async -> String? {
+    /// No language goes with it: Whisper hears which one was spoken, where the
+    /// app's would be the language its interface is read in — a phone set to
+    /// English had French dictations translated into English.
+    func transcribe(_ file: URL, seconds: TimeInterval) async -> String? {
         var components = URLComponents(string: endpoint)
-        var query = [URLQueryItem(name: "duration", value: String(format: "%.1f", seconds))]
-        if let language { query.append(URLQueryItem(name: "language", value: language)) }
-        components?.queryItems = query
+        components?.queryItems = [URLQueryItem(name: "duration", value: String(format: "%.1f", seconds))]
         guard let url = components?.url else { return nil }
         // Longer than the server may take on its own (conversion, then up to
         // two minutes of Whisper), so a long clip is not abandoned here while
@@ -901,8 +902,7 @@ final class Dictation {
                 defer { if let url = recorder?.url { try? FileManager.default.removeItem(at: url) } }
                 var text: String?
                 if let recorder, seconds > 0.3 {
-                    text = await household?.transcribe(recorder.url, seconds: seconds,
-                                                       language: locale.language.languageCode?.identifier)
+                    text = await household?.transcribe(recorder.url, seconds: seconds)
                     // The server couldn't: the preview is the next best text,
                     // then the device tries the same clip, so what was said
                     // isn't lost to a dropped connection.

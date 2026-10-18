@@ -3,7 +3,7 @@
 import { Hono } from "hono";
 import { requireAuth } from "../middleware/auth";
 import {
-  DictationError, MAX_BYTES, MAX_SECONDS, dictationEngine, normaliseLanguage, transcribe,
+  DictationError, MAX_BYTES, MAX_SECONDS, dictationEngine, transcribe,
 } from "../services/dictation";
 
 const dictation = new Hono();
@@ -19,9 +19,11 @@ dictation.get("/", (c) => {
   return c.json({ available: engine != null, engine, max_seconds: MAX_SECONDS });
 });
 
-// ── POST /api/dictation?language=fr&duration=12.4 ───────────────
+// ── POST /api/dictation?duration=12.4 ───────────────────────────
 // The body is the clip itself (AAC in an .m4a from the apps; WAV, MP3, WebM
-// and the rest are read too). Answers { text, engine, seconds }.
+// and the rest are read too). Answers { text, engine, seconds }. Builds before
+// 18 October 2026 also send `language`, their interface's; it is ignored, and
+// Whisper hears the language for itself.
 dictation.post("/", async (c) => {
   const declared = Number(c.req.header("Content-Length") ?? 0);
   if (declared > MAX_BYTES) return c.json({ error: "too_long" }, 413);
@@ -32,7 +34,6 @@ dictation.post("/", async (c) => {
     const result = await transcribe({
       audio,
       mediaType: c.req.header("Content-Type") ?? "audio/mp4",
-      language: normaliseLanguage(c.req.query("language")),
       clientSeconds: Number.isFinite(duration) && duration > 0 ? duration : null,
       memberId: c.get("userId"),
     });

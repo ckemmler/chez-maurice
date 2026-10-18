@@ -21,6 +21,12 @@
  * `MAURICE_WHISPER_BIN` and `MAURICE_WHISPER_MODEL` point at a binary or a
  * model elsewhere than where Homebrew and ~/.maurice/models/whisper put them.
  *
+ * Whisper hears the language for itself. The apps used to send the language
+ * of their interface, and a member who set their phone to English and went on
+ * speaking French got their French translated, badly, into English (18 October
+ * 2026): the language a member reads in is not the one they speak in, nor the
+ * same from one message to the next. Detection gets even "Oui, merci." right.
+ *
  * Nothing heard is kept: the clip lives in a temporary directory for the
  * length of the request, and the log line records the engine and the
  * duration, never the words.
@@ -165,13 +171,6 @@ export function vocabularyPrompt(): string {
   return out ? `${out}.` : "";
 }
 
-/** A two-letter language code, or null when the client sent none usable — in
- *  which case Whisper detects the language itself. */
-export function normaliseLanguage(raw: string | null | undefined): string | null {
-  const code = raw?.trim().toLowerCase().split(/[-_]/)[0] ?? "";
-  return /^[a-z]{2,3}$/.test(code) ? code : null;
-}
-
 /**
  * What Whisper writes when there was nothing to write.
  *
@@ -263,7 +262,6 @@ export interface TranscribeInput {
   /** As sent: `audio/mp4`, `audio/m4a`, `audio/wav`… Used for the file name
    *  the engines see, which is how ffmpeg and Scaleway tell formats apart. */
   mediaType: string;
-  language: string | null;
   /** The client's own measure of the clip, in seconds. Used to meter a
    *  Scaleway transcription when the provider reports no duration. */
   clientSeconds: number | null;
@@ -346,8 +344,7 @@ async function transcribeLocally(input: TranscribeInput): Promise<TranscribeResu
     const seconds = Math.max(0, (Bun.file(wav).size - 44) / 32_000);
     if (seconds > MAX_SECONDS + 5) throw new DictationError("The recording is too long.", 413);
 
-    const args = [whisper, "-m", model, "-f", wav, "-nt", "-np", "-sns",
-                  "-l", input.language ?? "auto"];
+    const args = [whisper, "-m", model, "-f", wav, "-nt", "-np", "-sns", "-l", "auto"];
     const vad = vadModel();
     if (vad) args.push("--vad", "-vm", vad);
     const prompt = vocabularyPrompt();
@@ -379,7 +376,6 @@ async function transcribeWithScaleway(input: TranscribeInput): Promise<Transcrib
               `clip.${extensionFor(input.mediaType)}`);
   form.append("model", SCALEWAY_MODEL);
   form.append("response_format", "verbose_json");
-  if (input.language) form.append("language", input.language);
   const prompt = vocabularyPrompt();
   if (prompt) form.append("prompt", prompt);
 
