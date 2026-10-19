@@ -92,7 +92,9 @@ struct CarnetSuggestionsButton: View {
     private var pulse: Int { reduceMotion ? 0 : (chat.suggestionPulse[conversation.id] ?? 0) }
 
     var body: some View {
-        if !count.isEmpty {
+        // Held from an entry, the drawer has it from the start, before
+        // anything was offered.
+        if !count.isEmpty || conversation.entry_ref != nil {
             Button { showDrawer = true } label: { label }
                 .buttonStyle(.plain)
                 .help(L("suggest.help"))
@@ -158,11 +160,19 @@ struct SuggestionsDrawer: View {
 
     private var pending: [EntrySuggestion] { rows.filter { !$0.isKept } }
     private var kept: [EntrySuggestion] { rows.filter(\.isKept) }
+    /// The entry the conversation is held from, when it is: the drawer's
+    /// first row.
+    private var held: ConversationEntry? {
+        chat.activeConversationId == conversationId ? chat.activeEntry : nil
+    }
 
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 22) {
+                    if let held {
+                        section(L("suggest.section_entry")) { HeldEntryRow(entry: held) }
+                    }
                     if !pending.isEmpty {
                         section(L("suggest.section_pending")) {
                             ForEach(pending) { row in
@@ -177,7 +187,7 @@ struct SuggestionsDrawer: View {
                             ForEach(kept) { row in KeptRow(row: row) }
                         }
                     }
-                    if loaded && rows.isEmpty {
+                    if loaded && rows.isEmpty && held == nil {
                         Text(L("suggest.empty"))
                             .font(.system(size: 14))
                             .foregroundStyle(theme.inkMute)
@@ -299,6 +309,7 @@ private enum SuggestionKind {
         case "podcasts": return "mic"
         case "games": return "gamecontroller"
         case "people": return "person"
+        case "articles": return "doc.text"
         default: return "doc"
         }
     }
@@ -690,6 +701,44 @@ private struct EpisodePicker: View {
         f.allowedUnits = seconds >= 3600 ? [.hour, .minute] : [.minute]
         f.unitsStyle = .short
         return f.string(from: TimeInterval(seconds))
+    }
+}
+
+/// The entry the conversation is held from: its cover and title, opening it
+/// in Carnet — or, where Carnet is not, its page in the garden.
+private struct HeldEntryRow: View {
+    @Environment(SessionStore.self) private var session
+    @Environment(\.mauriceTheme) private var theme
+    let entry: ConversationEntry
+
+    var body: some View {
+        Button {
+            Task { await open() }
+        } label: {
+            HStack(spacing: 12) {
+                SuggestionCover(image: entry.image, kind: entry.collection, width: 32)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(entry.title).font(.system(size: 14, weight: .medium)).foregroundStyle(theme.ink)
+                        .lineLimit(2)
+                    Text(SuggestionKind.label(entry.collection))
+                        .font(.system(size: 11))
+                        .foregroundStyle(theme.inkSoft)
+                }
+                Spacer(minLength: 4)
+                Image(systemName: "arrow.up.right").font(.system(size: 11, weight: .medium)).foregroundStyle(theme.inkMute)
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
+    @MainActor
+    private func open() async {
+        #if os(iOS)
+        if let url = URL(string: "carnet://entry/\(entry.ref)"), await UIApplication.shared.open(url) { return }
+        #endif
+        guard let path = entry.web_path else { return }
+        await openInGarden(path, session: session)
     }
 }
 

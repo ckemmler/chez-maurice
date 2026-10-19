@@ -30,8 +30,6 @@
 "chat.greeting" = "Hallo, %@.";
 "chat.new_conversation_hint" = "nieuw gesprek";
 "chat.composer.placeholder" = "Vraag Maurice iets...";
-"chat.entry.about" = "Over";
-"chat.entry.open_in_carnet" = "Openen in Carnet";
 "chat.composer.hint" = "⏎ om te versturen · ⇧⏎ voor nieuwe regel";
 "chat.composer.hint_room" = "⏎ naar de kamer · ⌘⏎ voor Maurice · ⇧⏎ nieuwe regel";
 "chat.fallback_name" = "Jij";
@@ -902,6 +900,7 @@
 "suggest.a11y_pending" = "%d om te bewaren in je notitieboek";
 "suggest.section_pending" = "Te bewaren";
 "suggest.section_kept" = "Bewaard";
+"suggest.section_entry" = "Dit gesprek gaat over";
 "suggest.empty" = "Niets te bewaren uit dit gesprek.";
 "suggest.failed" = "Dat is niet gelukt.";
 "suggest.state_existing" = "In je notitieboek";
@@ -917,6 +916,8 @@
 "suggest.kind.podcasts" = "Podcast";
 "suggest.kind.games" = "Spel";
 "suggest.kind.people" = "Persoon";
+"suggest.kind.articles" = "Artikel";
+"suggest.kind.posts" = "Bericht";
 
 /* Snippets: code blocks and long pastes */
 "chat.copied" = "Gekopieerd";

@@ -6,7 +6,9 @@
  * in the Maurice app with the entry's fiche loaded into the composer. Both
  * count; a conversation that merely mentions the work does not.
  *
- * What a conversation came to lives in the fiche, as a fragment of its own —
+ * A conversation held from the entry is written into its fiche as a fragment
+ * of its own once it has a first question and a first answer: at first only
+ * its title and the link to it. What it came to fills that fragment —
  * written only when the member asks to see it, and keyed on the hash of the
  * transcript it read. Asked again after the conversation went on, the hash has
  * moved and the fragment is rewritten in place; asked again without, it is
@@ -130,7 +132,8 @@ export function conversationsAbout(memberId: string, ref: EntryRef): EntryConver
         message_count: r.message_count,
         via: r.entry_ref === entry ? "entry" : "context",
         maurice: r.maurice_id && r.maurice_name ? { id: r.maurice_id, name: r.maurice_name } : null,
-        summary: stored ? describe(stored, currentHash(r.id)) : null,
+        // A fragment holding the link alone has no summary yet.
+        summary: stored && stored.hash ? describe(stored, currentHash(r.id)) : null,
       };
     });
 }
@@ -311,11 +314,12 @@ async function writeSummary(
   });
   recordSpend(made.usage, memberId);
 
-  // Where it goes: over its own previous version, so a conversation keeps one
-  // fragment however often it is summarised; otherwise after the last one.
+  // Where it goes: over its own previous version — the link written after the
+  // first exchange, or an older summary — so a conversation keeps one fragment
+  // however often it is summarised; otherwise after the last one.
   const target = existing?.file ?? nextFragmentFile(fiche, ref.collection);
   const writtenAt = new Date().toISOString().slice(0, 10);
-  const link = `*([Conversation avec Maurice : « ${conversationTitle.replace(/[\[\]]/g, "")} »](maurice://conversations/${conversationId}))*`;
+  const link = linkLine(conversationTitle, conversationId);
   writeFiche(target, {
     summary: `Conversation avec Maurice — ${conversationTitle}`,
     conversation: conversationId,
@@ -340,6 +344,59 @@ async function writeSummary(
 
 /** An article's first fragment is its text — kept free even on a bookmark,
  *  which has none yet: a summary filed as 001 would be read as the article. */
+function linkLine(title: string, conversationId: string): string {
+  return `*([Conversation avec Maurice : « ${title.replace(/[\[\]]/g, "")} »](maurice://conversations/${conversationId}))*`;
+}
+
+// ── The link, after the first exchange ──
+
+/**
+ * File a conversation held from an entry on that entry's fiche, as soon as it
+ * has a question and an answer: a fragment with its title and the link to it,
+ * which a summary fills later. Once per conversation; a conversation with the
+ * fiche merely in context gets none — loading a fiche is not talking about it.
+ */
+export function linkOnFiche(memberId: string, conversationId: string): string | null {
+  const convo = getConversation(conversationId, memberId);
+  if (!convo?.entry_ref || convo.user_id !== memberId) return null;
+  const [collection, locale, slug] = convo.entry_ref.split("/");
+  if (!collection || !locale || !slug) return null;
+  const garden = gardenFor(memberId);
+  const fiche = garden ? ficheFile(garden, { collection, locale, slug }) : null;
+  if (!garden || !fiche) return null;
+  if (summaryFragments(fiche).has(conversationId)) return null;
+  const rows = transcriptRows(conversationId);
+  if (!rows.some((r) => r.role === "user") || !rows.some((r) => r.role === "assistant")) return null;
+
+  const title = convo.title?.trim() || "Conversation";
+  const target = nextFragmentFile(fiche, collection);
+  writeFiche(target, {
+    summary: `Conversation avec Maurice — ${title}`,
+    conversation: conversationId,
+    written_at: new Date().toISOString().slice(0, 10),
+  }, linkLine(title, conversationId));
+  const paths = [target];
+  const fresh = parseFiche(fs.readFileSync(fiche, "utf-8"));
+  if (fresh && markOpened(fresh.frontmatter)) {
+    writeFiche(fiche, fresh.frontmatter, fresh.body);
+    paths.push(fiche);
+  }
+  autoCommit(garden, paths, `Link conversation: ${convo.entry_ref}`);
+  indexGardenPaths(memberId, paths);
+  return target;
+}
+
+/** After a reply, off its path, never throwing into it. */
+export function linkOnFicheInBackground(memberId: string, conversationId: string): void {
+  setTimeout(() => {
+    try {
+      linkOnFiche(memberId, conversationId);
+    } catch (err) {
+      console.warn(`[entry-conversations] link on fiche failed (${(err as Error).message})`);
+    }
+  }, 0);
+}
+
 function nextFragmentFile(ficheFile: string, collection: string): string {
   const dir = fragmentsDir(ficheFile);
   fs.mkdirSync(dir, { recursive: true });

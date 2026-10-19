@@ -728,6 +728,9 @@ struct ServerUser: Decodable, Identifiable {
 
 struct ServerConversation: Decodable, Identifiable {
     let id: String
+    /// The garden entry it is held from (`<collection>/<locale>/<slug>`) —
+    /// Carnet's Maurice button: its Carnet drawer is there from the start.
+    var entry_ref: String?
     /// Mutable: a rename updates the cached row in place.
     var title: String?
     /// The specialized Maurice this conversation uses; nil = everyday Maurice.
@@ -899,10 +902,15 @@ struct ServerConversationDetail: Decodable {
 }
 
 /// A garden entry a conversation is about: `ref` is `<collection>/<locale>/<slug>`.
+/// The first row of the conversation's Carnet drawer, which opens it in Carnet.
 struct ConversationEntry: Decodable, Equatable {
     let ref: String
     let collection: String
     let title: String
+    /// Its cover, as the server serves garden images.
+    let image: String?
+    /// Its page in the garden — the way to it where Carnet is not (the Mac).
+    let web_path: String?
 }
 
 struct ServerMessage: Decodable, Identifiable {

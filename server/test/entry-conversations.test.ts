@@ -20,7 +20,7 @@ const {
   readFullText, storedSummaryOf, summaryWordBudget, summarizeAndStore, setArticleSummaryGenerator, SUMMARY_VERSION,
 } = await import("../data-api/services/articleSummary");
 const { scanArticleFiches } = await import("../data-api/services/gardenArticles");
-const { conversationsAbout, conversationWordBudget, summaryFor, setEntryConversationSummarizer } = await import("../data-api/services/entryConversations");
+const { conversationsAbout, conversationWordBudget, linkOnFiche, summaryFor, setEntryConversationSummarizer } = await import("../data-api/services/entryConversations");
 const { getShelfEntry } = await import("../data-api/services/gardenShelf");
 
 const garden = { root: path.join(process.env.MAURICE_GARDENS_DIR!, MEMBER.username), username: MEMBER.username };
@@ -147,6 +147,23 @@ describe("the conversations about it", () => {
     expect(list.every((c) => c.summary === null)).toBe(true);
   });
 
+  test("after the first exchange, the fiche gets the link alone — once, and only for a conversation held from it", () => {
+    const fresh = createConversation(MEMBER.id, null, { entryRef: "articles/fr/sols-vivants" }).id;
+    addMessage(fresh, "user", "Une question sans réponse", { authorId: MEMBER.id });
+    expect(linkOnFiche(MEMBER.id, fresh)).toBeNull();
+
+    const file = linkOnFiche(MEMBER.id, held)!;
+    expect(path.basename(file)).toBe("002.frag");
+    const raw = fs.readFileSync(file, "utf-8");
+    expect(raw).toContain(`conversation: ${held}`);
+    expect(raw).toContain(`maurice://conversations/${held}`);
+    expect(raw).not.toContain("transcript_hash");
+    expect(linkOnFiche(MEMBER.id, held)).toBeNull();
+    expect(linkOnFiche(MEMBER.id, composed)).toBeNull();
+    // Listed with no summary yet: the link is not one.
+    expect(conversationsAbout(MEMBER.id, REF).find((c) => c.id === held)?.summary).toBeNull();
+  });
+
   test("a summary is written as a fragment of its own, after the article's text", async () => {
     const seen: string[] = [];
     setEntryConversationSummarizer(async (input) => {
@@ -154,8 +171,10 @@ describe("the conversations about it", () => {
       return { text: `Résumé ${seen.length}`, usage: null };
     });
 
+    // It fills the fragment the first exchange left.
     const s = await summaryFor(MEMBER.id, REF, held);
     expect(s).toMatchObject({ id: "f:002", text: "Résumé 1", stale: false });
+    expect(fs.readdirSync(FRAGS).sort()).toEqual(["001.frag", "002.frag"]);
     const raw = fs.readFileSync(path.join(FRAGS, "002.frag"), "utf-8");
     expect(raw).toContain(`conversation: ${held}`);
     expect(raw).toContain(`maurice://conversations/${held}`);

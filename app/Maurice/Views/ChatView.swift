@@ -108,6 +108,9 @@ struct ChatView: View {
                 #endif
             }
         }
+        // A new conversation held from a garden entry (Carnet's Maurice
+        // button) opens with its context tray up: the entry is what it holds.
+        .onChange(of: chat.contextTrayRequests) { trayOpen = true }
         .task(id: chat.activeConversationId) {
             isNearBottom = true // a freshly opened thread follows to the latest
             let m = maurices.maurice(for: chat.activeConversation?.maurice_id)
@@ -239,11 +242,6 @@ struct ChatView: View {
     @ViewBuilder
     private var streamView: some View {
         VStack(spacing: 0) {
-            // Held from a garden entry (Carnet's Maurice button): what it is
-            // about, and the way back to it.
-            if let entry = chat.activeEntry {
-                EntryAboutLine(entry: entry)
-            }
             if !chat.messages.isEmpty {
                 GeometryReader { outer in
                   ScrollViewReader { proxy in
@@ -3918,63 +3916,4 @@ struct ReportsReviewView: View {
         Task { await chat.actionReport(r.id, removeMessage: remove, ejectMember: eject); await load() }
     }
     private func reasonLabel(_ raw: String) -> String { ReportReason(rawValue: raw)?.label ?? raw }
-}
-
-/// The line above a conversation held from a garden entry: "About · <title>",
-/// opening the entry in Carnet on a phone or a tablet. The Mac has no Carnet;
-/// there it only says what the conversation is about.
-private struct EntryAboutLine: View {
-    let entry: ConversationEntry
-    @Environment(SessionStore.self) private var session
-    @Environment(\.mauriceTheme) private var theme
-
-    var body: some View {
-        #if os(iOS)
-        Button {
-            if let url = URL(string: "carnet://entry/\(entry.ref)") { UIApplication.shared.open(url) }
-        } label: { line(arrow: true) }
-        .buttonStyle(.plain)
-        .accessibilityHint(session.localized("chat.entry.open_in_carnet"))
-        #else
-        line(arrow: false)
-        #endif
-    }
-
-    private func line(arrow: Bool) -> some View {
-        HStack(spacing: 6) {
-            Image(systemName: symbol)
-                .font(.system(size: 12, weight: .medium))
-            Text(session.localized("chat.entry.about"))
-                .foregroundStyle(theme.inkMute)
-            Text(entry.title)
-                .foregroundStyle(theme.inkSoft)
-                .lineLimit(1)
-                .truncationMode(.tail)
-            if arrow {
-                Image(systemName: "arrow.up.right")
-                    .font(.system(size: 10, weight: .semibold))
-            }
-        }
-        .font(.system(size: 13))
-        .foregroundStyle(theme.inkMute)
-        .padding(.horizontal, 12)
-        .padding(.vertical, 6)
-        .background(Capsule().fill(theme.inkMute.opacity(0.08)))
-        .frame(maxWidth: .infinity)
-        .padding(.top, 8)
-        .padding(.horizontal, 16)
-    }
-
-    private var symbol: String {
-        switch entry.collection {
-        case "articles": return "doc.text"
-        case "books": return "book.closed"
-        case "movies": return "film"
-        case "series": return "tv"
-        case "podcasts": return "mic"
-        case "music": return "music.note"
-        case "games": return "gamecontroller"
-        default: return "bookmark"
-        }
-    }
 }

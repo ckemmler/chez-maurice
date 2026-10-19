@@ -35,7 +35,8 @@ import { pushToUser } from "../services/push";
 import { indexConversationInBackground } from "../services/mcpClient";
 import { searchConversations } from "../services/conversationSearch";
 import { takeReview } from "../services/reviewFooter";
-import { boundEntry, ownEntryRef, suggestInBackground } from "../services/entrySuggestions";
+import { heldEntry, ownEntryRef, suggestInBackground } from "../services/entrySuggestions";
+import { linkOnFicheInBackground } from "../../data-api/services/entryConversations";
 import { saveSpec } from "../services/composer/specs";
 import { memberLocale } from "../services/domainBriefs";
 import {
@@ -167,10 +168,10 @@ conversations.get("/:id", (c) => {
     (m) => !m.author_id || !blocked.has(m.author_id),
   );
   const participants = getParticipants(convo.id);
-  // Held from a garden entry: what it is, for the header that leads back to it
-  // in Carnet. The entry is in its owner's garden, so only the owner sees it.
-  const held = convo.entry_ref && convo.user_id === c.get("userId") ? boundEntry(convo.user_id, convo.id) : null;
-  const entry = held ? { ref: convo.entry_ref, collection: held.collection, title: held.title } : null;
+  // Held from a garden entry: what it is — the first row of the app's Carnet
+  // drawer, which leads back to it. The entry is in its owner's garden, so
+  // only the owner sees it.
+  const entry = convo.entry_ref && convo.user_id === c.get("userId") ? heldEntry(convo.user_id, convo.id) : null;
   return c.json({ ...convo, messages, participants, entry });
 });
 
@@ -529,6 +530,9 @@ conversations.post("/:id/messages", async (c) => {
           // What this exchange named that is worth an entry in their garden
           // (services/entrySuggestions.ts) — after the reply, never before it.
           if (!isRoom) suggestInBackground(userId, convoId, msg.id, questionText, fullResponse);
+          // Held from a garden entry: its fiche gets the link to this
+          // conversation after the first exchange (entryConversations.ts).
+          linkOnFicheInBackground(userId, convoId);
           publishToRoom(convoId, { type: "message", message: msg });
           const convo = getConversation(convoId, userId);
           notifyActivity(convoId, userId, { title: convo?.title ?? "", author: "Maurice", preview: preview(fullResponse) });

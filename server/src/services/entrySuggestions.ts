@@ -115,6 +115,21 @@ export function ownEntryRef(memberId: string, ref: string): string | null {
   return entry ? `${entry.collection}/${entry.locale}/${entry.slug}` : null;
 }
 
+/** What the Maurice app shows of the entry a conversation is held from: the
+ *  first row of its Carnet drawer, which opens the entry in Carnet. */
+export function heldEntry(memberId: string, conversationId: string): {
+  ref: string; collection: string; title: string; image: string | null; web_path: string | null;
+} | null {
+  const entry = boundEntry(memberId, conversationId);
+  const garden = entry ? gardenFor(memberId) : null;
+  if (!entry || !garden) return null;
+  return {
+    ref: refOf(entry), collection: entry.collection, title: entry.title,
+    image: openImage(garden, entry.image),
+    web_path: entry.card?.web_path ?? entry.fiche?.web_path ?? null,
+  };
+}
+
 /** The entry a conversation is held from, when it is and the entry is still there. */
 export function boundEntry(memberId: string, conversationId: string): GardenEntry | null {
   const ref = getConversation(conversationId, memberId)?.entry_ref;

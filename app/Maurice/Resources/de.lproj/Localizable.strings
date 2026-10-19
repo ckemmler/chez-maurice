@@ -30,8 +30,6 @@
 "chat.greeting" = "Hallo, %@.";
 "chat.new_conversation_hint" = "neue Unterhaltung";
 "chat.composer.placeholder" = "Frag Maurice etwas …";
-"chat.entry.about" = "Über";
-"chat.entry.open_in_carnet" = "In Carnet öffnen";
 "chat.composer.hint" = "⏎ zum Senden · ⇧⏎ für neue Zeile";
 "chat.composer.hint_room" = "⏎ an den Raum · ⌘⏎ für Maurice · ⇧⏎ neue Zeile";
 "chat.fallback_name" = "Du";
@@ -902,6 +900,7 @@
 "suggest.a11y_pending" = "%d für dein Notizbuch";
 "suggest.section_pending" = "Aufheben";
 "suggest.section_kept" = "Aufgehoben";
+"suggest.section_entry" = "Dieses Gespräch handelt von";
 "suggest.empty" = "Nichts aus diesem Gespräch aufzuheben.";
 "suggest.failed" = "Das hat nicht geklappt.";
 "suggest.state_existing" = "In deinem Notizbuch";
@@ -930,6 +929,8 @@
 "suggest.kind.podcasts" = "Podcast";
 "suggest.kind.games" = "Spiel";
 "suggest.kind.people" = "Person";
+"suggest.kind.articles" = "Artikel";
+"suggest.kind.posts" = "Beitrag";
 
 /* Snippets: code blocks and long pastes */
 "chat.copied" = "Kopiert";
