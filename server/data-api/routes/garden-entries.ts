@@ -123,8 +123,9 @@ app.get("/entries/:collection/:locale/:slug/conversations", (c) => {
 app.post("/entries/:collection/:locale/:slug/conversations/:id/summary", async (c) => {
   const memberId = c.get("userId") as string;
   const { collection, locale, slug, id } = c.req.param();
+  const body = (await c.req.json().catch(() => ({}))) as { force?: boolean };
   try {
-    const summary = await summaryFor(memberId, { collection, locale, slug }, id);
+    const summary = await summaryFor(memberId, { collection, locale, slug }, id, { force: body.force === true });
     return c.json({ summary });
   } catch (e) {
     if (e instanceof EntryConversationError) return c.json({ error: e.message }, e.status);

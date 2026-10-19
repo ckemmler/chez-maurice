@@ -220,6 +220,9 @@ describe("the conversations about it", () => {
     expect(again).toMatchObject({ id: "f:002", text: "Résumé 2", stale: false });
     expect(seen[1]).toContain("champignons");
 
+    // Asked to write it again — the member found it wrong — it is, in place.
+    expect(await summaryFor(MEMBER.id, REF, held, { force: true })).toMatchObject({ id: "f:002", text: "Résumé 3" });
+
     // A second conversation gets a fragment of its own.
     expect((await summaryFor(MEMBER.id, REF, composed)).id).toBe("f:003");
   });

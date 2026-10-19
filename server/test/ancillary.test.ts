@@ -66,3 +66,14 @@ test("a household ancillary model that is not in the roster falls through to the
   expect(ancillaryModel("signal_parse")).toBe("anc-pin");
   setHouseholdAncillaryModel("anc-default");
 });
+
+test("a dropped connection or a busy provider is tried again; a refusal or a payment failure is not", async () => {
+  const { isTransient, AncillaryError } = await import("../src/services/ancillary");
+  const err = (m: string, status = 502) => new AncillaryError(m, status);
+  expect(isTransient(err("scaleway error: https://api.scaleway.ai/x/v1 stream failed: The socket connection was closed unexpectedly."))).toBe(true);
+  expect(isTransient(err("scaleway error: https://api.scaleway.ai/x/v1 gave no answer for 180s"))).toBe(true);
+  expect(isTransient(err("Anthropic API error: 529 overloaded"))).toBe(true);
+  expect(isTransient(err('mistral error: Provider error 402: {"message":"Please resolve your last payment failure"}'))).toBe(false);
+  expect(isTransient(err("no scaleway API key configured for this household", 422))).toBe(false);
+  expect(isTransient(new Error("socket closed"))).toBe(false);
+});

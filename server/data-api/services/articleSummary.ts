@@ -16,7 +16,7 @@
 
 import fs from "node:fs";
 import path from "node:path";
-import { ancillaryComplete, ancillaryModel } from "../../src/services/ancillary";
+import { ancillaryCompleteRetrying, ancillaryModel } from "../../src/services/ancillary";
 import { recordSpend } from "../../src/services/budget";
 import { userLocale } from "../../src/services/i18n";
 import type { TurnUsage } from "../../src/services/pricing";
@@ -164,7 +164,7 @@ export type ArticleSummaryGenerator = (input: SummaryInput) => Promise<string | 
  *  whichever provider it belongs to. Room for adaptive thinking plus up to
  *  600 words — on a thinking model those tokens count against max_tokens. */
 const modelGenerator: ArticleSummaryGenerator = async (input) => {
-  const result = await ancillaryComplete({
+  const result = await ancillaryCompleteRetrying({
     invocation: "article_summary",
     prompt: buildPrompt(input),
     maxTokens: 8000,

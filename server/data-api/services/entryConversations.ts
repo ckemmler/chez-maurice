@@ -36,7 +36,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import db from "../../src/db";
-import { ancillaryComplete } from "../../src/services/ancillary";
+import { ancillaryCompleteRetrying } from "../../src/services/ancillary";
 import { recordSpend } from "../../src/services/budget";
 import { getConversation, isParticipant } from "../../src/services/conversations";
 import { transcriptHash, transcriptRows, transcriptText } from "../../src/services/composer/conversationSummary";
@@ -247,7 +247,7 @@ export function entryConversationPrompt(input: EntryConversationSummaryInput): s
 }
 
 const modelSummarizer: EntryConversationSummarizer = async (input) => {
-  const r = await ancillaryComplete({
+  const r = await ancillaryCompleteRetrying({
     invocation: "entry_conversation_summary",
     prompt: entryConversationPrompt(input),
     maxTokens: 6000,
@@ -273,21 +273,22 @@ const inFlight = new Map<string, Promise<ConversationSummaryFragment>>();
 
 /**
  * The summary of one of the entry's conversations, as the fiche holds it —
- * written now when it is missing or the conversation went on since.
+ * written now when it is missing or the conversation went on since; with
+ * `force`, written again whatever it says (the member found it wrong).
  */
 export function summaryFor(
-  memberId: string, ref: EntryRef, conversationId: string,
+  memberId: string, ref: EntryRef, conversationId: string, opts: { force?: boolean } = {},
 ): Promise<ConversationSummaryFragment> {
   const key = `${memberId}:${refString(ref)}:${conversationId}`;
   const running = inFlight.get(key);
   if (running) return running;
-  const task = writeSummary(memberId, ref, conversationId).finally(() => inFlight.delete(key));
+  const task = writeSummary(memberId, ref, conversationId, !!opts.force).finally(() => inFlight.delete(key));
   inFlight.set(key, task);
   return task;
 }
 
 async function writeSummary(
-  memberId: string, ref: EntryRef, conversationId: string,
+  memberId: string, ref: EntryRef, conversationId: string, force = false,
 ): Promise<ConversationSummaryFragment> {
   const garden = gardenFor(memberId);
   if (!garden) throw new EntryConversationError("No garden for this member");
@@ -301,7 +302,7 @@ async function writeSummary(
   const transcript = transcriptText(rows);
   const hash = transcriptHash(transcript);
   const existing = summaryFragments(fiche).get(conversationId);
-  if (existing && existing.hash === hash) return describe(existing, hash);
+  if (existing && existing.hash === hash && !force) return describe(existing, hash);
   if (transcript.length > MAX_TRANSCRIPT_CHARS) {
     throw new EntryConversationError("This conversation is too long to summarise in one pass", 422);
   }

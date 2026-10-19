@@ -592,6 +592,39 @@ function requestedModel(req: AncillaryRequest): string {
   return req.model;
 }
 
+/**
+ * A failure worth trying again a little later: the provider did not answer,
+ * dropped the connection mid-stream, or said it was busy. Not a refusal, a
+ * missing key, a payment failure or a bad request — those would fail again.
+ * Scaleway did both kinds of the first on 19 October 2026, on an article's
+ * summary and a conversation's.
+ */
+export function isTransient(err: unknown): boolean {
+  if (!(err instanceof AncillaryError) || err.status !== 502) return false;
+  return /no answer|stream failed|socket|ECONNRESET|ETIMEDOUT|timed out|timeout|overloaded|\b(429|500|502|503|504|529)\b/i
+    .test(err.message);
+}
+
+/**
+ * `ancillaryComplete`, tried again on a transient failure — three tries in
+ * all, a few seconds apart. For the passes a member waits on or reads later
+ * (summaries), where a dropped connection should not leave a hole.
+ */
+export async function ancillaryCompleteRetrying(
+  req: AncillaryRequest,
+  delaysMs: number[] = [3_000, 10_000],
+): Promise<AncillaryResult> {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await ancillaryComplete(req);
+    } catch (err) {
+      if (attempt >= delaysMs.length || !isTransient(err)) throw err;
+      console.warn(`[ancillary] ${req.invocation}: ${(err as Error).message.slice(0, 160)} — trying again`);
+      await new Promise((r) => setTimeout(r, delaysMs[attempt]));
+    }
+  }
+}
+
 export class AncillaryError extends Error {
   constructor(message: string, public readonly status: number = 502) {
     super(message);
