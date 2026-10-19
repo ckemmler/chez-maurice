@@ -108,9 +108,6 @@ struct ChatView: View {
                 #endif
             }
         }
-        // A new conversation held from a garden entry (Carnet's Maurice
-        // button) opens with its context tray up: the entry is what it holds.
-        .onChange(of: chat.contextTrayRequests) { trayOpen = true }
         .task(id: chat.activeConversationId) {
             isNearBottom = true // a freshly opened thread follows to the latest
             let m = maurices.maurice(for: chat.activeConversation?.maurice_id)
@@ -3098,15 +3095,29 @@ private struct ComposerBar: View {
             )
     }
 
+    /// The entry a new conversation is held from, until the first message:
+    /// shown in the bubble the way a paste is.
+    private var heldEntry: ConversationEntry? {
+        chat.messages.isEmpty ? chat.activeEntry : nil
+    }
+
     var body: some View {
         VStack(spacing: 8) {
             VStack(spacing: 8) {
                 // Long pastes and shared articles, then photos, in the order
                 // they were added; each can be taken back on its own, and a
                 // paste opened in full.
-                if !pendingPastes.isEmpty || !pendingImages.isEmpty || readingArticle != nil {
+                if !pendingPastes.isEmpty || !pendingImages.isEmpty || readingArticle != nil || heldEntry != nil {
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: 8) {
+                            // A new conversation held from a garden entry
+                            // (Carnet's Maurice button): the entry, in the
+                            // bubble as a paste would be — it is in the
+                            // context; a tap shows the tray that holds it.
+                            if let heldEntry {
+                                Button(action: onToggleTray) { HeldEntryTile(entry: heldEntry) }
+                                    .buttonStyle(.plain)
+                            }
                             if let readingArticle {
                                 ReadingArticleTile(label: readingArticle)
                             }
@@ -3916,4 +3927,34 @@ struct ReportsReviewView: View {
         Task { await chat.actionReport(r.id, removeMessage: remove, ejectMember: eject); await load() }
     }
     private func reasonLabel(_ raw: String) -> String { ReportReason(rawValue: raw)?.label ?? raw }
+}
+
+/// The garden entry a new conversation is held from, in the composer's bubble
+/// beside what is pasted: its kind, its title, and that it is in the context.
+private struct HeldEntryTile: View {
+    @Environment(\.mauriceTheme) private var theme
+    let entry: ConversationEntry
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(L("suggest.kind.\(entry.collection)"))
+                .font(.system(size: 8, weight: .medium))
+                .foregroundStyle(theme.inkMute)
+                .lineLimit(1)
+            Text(entry.title)
+                .font(.system(size: 9, weight: .semibold))
+                .foregroundStyle(theme.ink)
+                .lineLimit(2)
+                .multilineTextAlignment(.leading)
+            Spacer(minLength: 0)
+            Label(L("chat.entry.in_context"), systemImage: "suitcase")
+                .font(.system(size: 9, weight: .medium))
+                .foregroundStyle(theme.inkMute)
+                .lineLimit(1)
+        }
+        .padding(6)
+        .frame(width: 128, height: 60, alignment: .topLeading)
+        .background(RoundedRectangle(cornerRadius: 6).fill(theme.codeBg))
+        .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(theme.rule, lineWidth: 0.5))
+    }
 }

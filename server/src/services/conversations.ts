@@ -482,10 +482,18 @@ export function autoTitle(conversationId: string): void {
     .get(conversationId) as any;
 
   if (firstMsg) {
+    // A shared article or a long paste rides in a fenced block: the title is
+    // what the member asked beside it, else the article's own title — never
+    // the block's first line ("```article title: …", until 19 October 2026).
+    let articleTitle = "";
     const stripped = firstMsg.content
       .replace(/!\[.*?\]\(\/api\/images\/.+?\)\s*/g, "")
+      .replace(/^(`{3,})(article|pasted)\n([\s\S]*?)\n\1$/gm, (_: string, _f: string, info: string, body: string) => {
+        if (info === "article" && !articleTitle) articleTitle = body.match(/^title: (.+)$/m)?.[1]?.trim() ?? "";
+        return "";
+      })
       .trim();
-    const title = (stripped || "Photo").slice(0, 80).replace(/\n/g, " ");
+    const title = (stripped || articleTitle || "Photo").slice(0, 80).replace(/\n/g, " ");
     db.run(`UPDATE conversations SET title = ? WHERE id = ?`, [
       title,
       conversationId,

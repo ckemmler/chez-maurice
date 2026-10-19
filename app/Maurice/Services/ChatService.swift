@@ -718,9 +718,18 @@ final class ChatService {
     /// The garden entry the open conversation is held from (Carnet's Maurice
     /// button), for the line above the thread that leads back to it.
     private(set) var activeEntry: ConversationEntry?
-    /// Bumped when a new conversation held from an entry has loaded: the chat
-    /// opens its context tray, the entry being what it holds.
-    private(set) var contextTrayRequests = 0
+    /// Read the open conversation's entry again — a shared article kept from
+    /// its Carnet drawer makes it one held from that entry.
+    func refreshActiveEntry() async {
+        guard let api, let token, let id = activeConversationId else { return }
+        if let detail: ServerConversationDetail = try? await api.get("/api/conversations/\(id)", token: token),
+           activeConversationId == id {
+            activeEntry = detail.entry
+            if let i = conversations.firstIndex(where: { $0.id == id }) {
+                conversations[i].entry_ref = detail.entry?.ref
+            }
+        }
+    }
 
     func startNewConversation() async {
         // A reply still streaming belongs to the thread being left. Left running
@@ -763,7 +772,6 @@ final class ChatService {
             notice = nil
             participants = detail.participants ?? []
             activeEntry = detail.entry
-            if detail.entry != nil, detail.messages.isEmpty { contextTrayRequests += 1 }
             knownIds = Set(messages.map { $0.id })
             messagesLoadedFor = conversationId
             pendingSummon = false

@@ -35,7 +35,7 @@ import { pushToUser } from "../services/push";
 import { indexConversationInBackground } from "../services/mcpClient";
 import { searchConversations } from "../services/conversationSearch";
 import { takeReview } from "../services/reviewFooter";
-import { heldEntry, ownEntryRef, suggestInBackground } from "../services/entrySuggestions";
+import { heldEntry, offerSharedArticle, ownEntryRef, suggestInBackground } from "../services/entrySuggestions";
 import { linkOnFicheInBackground } from "../../data-api/services/entryConversations";
 import { saveSpec } from "../services/composer/specs";
 import { memberLocale } from "../services/domainBriefs";
@@ -424,6 +424,10 @@ conversations.post("/:id/messages", async (c) => {
     // every other participant's socket.
     const stored = addMessage(convoId, "user", messageContent, { authorId: userId });
     autoTitle(convoId);
+    // An article shared from the app's share sheet is offered at once, behind
+    // the Carnet mark, as an entry of the member's garden (entrySuggestions.ts).
+    offerSharedArticle(userId, convoId, stored.id, messageContent)
+      .catch((err) => console.warn(`[suggest] shared article offer failed (${(err as Error).message})`));
     publishToRoom(convoId, { type: "message", message: stored });
     // Notify the other participants (global socket → unread + system alert).
     const sender = getUser(userId)?.display_name ?? "Someone";

@@ -8,9 +8,10 @@
  *
  * A conversation held from the entry is written into its fiche as a fragment
  * of its own once it has a first question and a first answer: at first only
- * its title and the link to it. What it came to fills that fragment —
- * written only when the member asks to see it, and keyed on the hash of the
- * transcript it read. Asked again after the conversation went on, the hash has
+ * its title and the link to it. What it came to fills that fragment once the
+ * conversation has settled — twenty minutes without a message — so the fiche
+ * shows it without anyone asking (19 October 2026); it is keyed on the hash
+ * of the transcript it read. Asked again after the conversation went on, the hash has
  * moved and the fragment is rewritten in place; asked again without, it is
  * read back as it is. One fragment per conversation, so an entry discussed
  * three times carries three.
@@ -408,4 +409,81 @@ function nextFragmentFile(ficheFile: string, collection: string): string {
   const floor = collection === "articles" ? 2 : 1;
   const next = String(Math.max(floor, (nums.length ? Math.max(...nums) : 0) + 1)).padStart(3, "0");
   return path.join(dir, `${next}.frag`);
+}
+
+// ── Written once the conversation has settled ──
+
+/** How long after its last message a conversation counts as settled. */
+export const SETTLED_MS = 20 * 60_000;
+const SWEEP_MS = 5 * 60_000;
+/** A sweep's ceiling: a backlog is worked through over several. */
+const PER_SWEEP = 5;
+
+/** A summary that failed, by conversation, with the transcript it failed on:
+ *  not tried again until the conversation moves. */
+const failedOn = new Map<string, string>();
+
+/**
+ * Write the summary of every conversation held from an entry that has settled
+ * since it last moved: its fragment holds the link alone, or a summary of an
+ * earlier transcript. Returns how many were written.
+ */
+export async function summariseSettledConversations(now = Date.now()): Promise<number> {
+  const rows = db
+    .query(
+      `SELECT c.id, c.user_id, c.entry_ref, MAX(m.created_at) AS last_at
+       FROM conversations c JOIN messages m ON m.conversation_id = c.id
+       WHERE c.entry_ref IS NOT NULL
+       GROUP BY c.id
+       ORDER BY last_at DESC`,
+    )
+    .all() as Array<{ id: string; user_id: string; entry_ref: string; last_at: string }>;
+  let written = 0;
+  for (const r of rows) {
+    if (written >= PER_SWEEP) break;
+    // SQLite's naive datetime('now') is UTC.
+    const last = Date.parse(`${r.last_at.replace(" ", "T")}Z`);
+    if (!Number.isFinite(last) || now - last < SETTLED_MS) continue;
+    const [collection, locale, slug] = r.entry_ref.split("/");
+    if (!collection || !locale || !slug) continue;
+    const ref = { collection, locale, slug };
+    const garden = gardenFor(r.user_id);
+    const fiche = garden ? ficheFile(garden, ref) : null;
+    if (!fiche) continue;
+    let stored = summaryFragments(fiche).get(r.id);
+    if (!stored) {
+      if (!linkOnFiche(r.user_id, r.id)) continue;
+      stored = summaryFragments(fiche).get(r.id);
+      if (!stored) continue;
+    }
+    const hash = currentHash(r.id);
+    if (stored.hash === hash || failedOn.get(r.id) === hash) continue;
+    try {
+      await summaryFor(r.user_id, ref, r.id);
+      failedOn.delete(r.id);
+      written++;
+    } catch (err) {
+      failedOn.set(r.id, hash);
+      console.warn(`[entry-conversations] summary of ${r.id} failed (${(err as Error).message})`);
+    }
+  }
+  return written;
+}
+
+/** Sweep every five minutes, from a minute after the start. */
+export function scheduleConversationSummaries(): void {
+  if (process.env.NODE_ENV === "test") return;
+  let running = false;
+  const tick = () => {
+    if (running) return;
+    running = true;
+    summariseSettledConversations()
+      .then((n) => { if (n) console.log(`[entry-conversations] ${n} conversation summar${n === 1 ? "y" : "ies"} written`); })
+      .catch((err) => console.warn(`[entry-conversations] sweep failed (${(err as Error).message})`))
+      .finally(() => { running = false; });
+  };
+  setTimeout(() => {
+    tick();
+    setInterval(tick, SWEEP_MS).unref();
+  }, 60_000).unref();
 }

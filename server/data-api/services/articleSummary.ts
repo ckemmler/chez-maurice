@@ -18,6 +18,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { ancillaryComplete, ancillaryModel } from "../../src/services/ancillary";
 import { recordSpend } from "../../src/services/budget";
+import { userLocale } from "../../src/services/i18n";
 import type { TurnUsage } from "../../src/services/pricing";
 import { autoCommit, fragmentsDir, gardenFor, parseFiche, writeFiche } from "./gardenFiche";
 import { extractArticleFromUrl } from "./articleExtract";
@@ -42,7 +43,14 @@ export interface SummaryInput {
   lang?: string;
   /** The essence in a paragraph, or the substance at length. Long when unsaid. */
   length?: SummaryLength;
+  /** The member's language (`fr`, `en`…): the short summary is written in it —
+   *  it is read at a glance, in the language they read everything else in. */
+  readerLang?: string;
 }
+
+const LANGUAGE_NAMES: Record<string, string> = {
+  fr: "français", en: "English", de: "Deutsch", es: "español", it: "italiano", nl: "Nederlands", pt: "português",
+};
 
 /**
  * Two summaries, read one after the other (19 October 2026). The **short**
@@ -56,12 +64,14 @@ export type SummaryLength = "short" | "long";
 /**
  * Which summaries a fiche holds. Version 1 was the paragraph alone; version 2
  * (one day, 19 October 2026) the long summary alone, in `summary`; version 3
- * both — the paragraph in `summary`, the long one in `summary_long`. A fiche
- * of an older version gets what it lacks the next time the article is opened
- * in Carnet, keeping what it has: a version 1 paragraph stays the short one, a
- * version 2 text becomes the long one.
+ * both — the paragraph in `summary`, the long one in `summary_long`; version 4
+ * (the same evening) the paragraph in the member's language (`summary_lang`),
+ * the long one still in the article's. A fiche of an older version gets what
+ * it lacks the next time the article is opened in Carnet, keeping what still
+ * holds: a version 2 or 3 long text stays the long one; the paragraph is
+ * written again in the member's language.
  */
-export const SUMMARY_VERSION = 3;
+export const SUMMARY_VERSION = 4;
 
 /**
  * How long the summary may run, in words: about an eighth of the article,
@@ -79,7 +89,9 @@ function buildPrompt(input: SummaryInput): string {
     : input.lang?.startsWith("en")
       ? "English"
       : "the language the article itself is written in";
-  if (input.length === "short") return buildShortPrompt(input, language);
+  if (input.length === "short") {
+    return buildShortPrompt(input, LANGUAGE_NAMES[input.readerLang ?? ""] ?? language);
+  }
   const budget = summaryWordBudget(input.text);
 
   return [
@@ -247,7 +259,8 @@ async function summarize(
   const garden = gardenFor(memberId);
   if (!garden) throw new ArticleSaveError("No garden for this member", 404);
 
-  const existing = readStoredSummary(ref);
+  const readerLang = userLocale(memberId);
+  const existing = readStoredSummary(ref, readerLang);
   if (existing.current && !opts.force) {
     return { summary: existing.summary, summaryLong: existing.long, regenerated: false };
   }
@@ -269,10 +282,12 @@ async function summarize(
   }
 
   // What an older version left is kept, unless asked to start over: a
-  // version 1 paragraph is the short summary, a version 2 text the long one.
-  const keptShort = opts.force ? "" : existing.version >= 3 || existing.version < 2 ? existing.summary : "";
+  // version 2 text is the long summary, a version 3 long one too. The
+  // paragraph stays only when it is in the member's language already.
+  const keptShort = opts.force ? "" : existing.version >= 4 && existing.lang === readerLang ? existing.summary : "";
   const keptLong = opts.force ? "" : existing.version === 2 ? existing.summary : existing.long;
   const input = {
+    readerLang,
     title: String(fm.title ?? ref.title),
     publication: String(meta.publication ?? fm.source ?? "") || undefined,
     text,
@@ -299,6 +314,7 @@ async function summarize(
   const stamp = {
     summary,
     summary_long: summaryLong,
+    summary_lang: readerLang,
     summary_model: ancillaryModel("article_summary"),
     summary_at: new Date().toISOString().slice(0, 10),
     summary_version: SUMMARY_VERSION,
@@ -317,11 +333,11 @@ async function summarize(
   return { summary, summaryLong, regenerated: !!existing.summary };
 }
 
-function readStoredSummary(ref: ArticleFicheRef): StoredSummary {
+function readStoredSummary(ref: ArticleFicheRef, readerLang: string): StoredSummary {
   const parsed = parseFiche(fs.readFileSync(ref.file, "utf-8"));
-  if (!parsed) return { summary: "", long: "", version: 0, current: false };
+  if (!parsed) return { summary: "", long: "", version: 0, lang: null, current: false };
   const fm = parsed.frontmatter;
-  return storedSummaryOf(ref.kind === "fiche" ? (fm.meta ?? {}) : fm);
+  return storedSummaryOf(ref.kind === "fiche" ? (fm.meta ?? {}) : fm, readerLang);
 }
 
 export interface StoredSummary {
@@ -329,16 +345,21 @@ export interface StoredSummary {
   summary: string;
   long: string;
   version: number;
-  /** Both are there, of the current version. */
+  /** The language the paragraph is written in, from version 4. */
+  lang: string | null;
+  /** Both are there, of the current version, the paragraph in the reader's language. */
   current: boolean;
 }
 
-/** The summaries a fiche's meta (or a card's frontmatter) carries. */
-export function storedSummaryOf(meta: Record<string, any>): StoredSummary {
+/** The summaries a fiche's meta (or a card's frontmatter) carries, as read by
+ *  a member whose language is `readerLang`. */
+export function storedSummaryOf(meta: Record<string, any>, readerLang?: string): StoredSummary {
   const summary = String(meta.summary ?? "");
   const long = String(meta.summary_long ?? "");
   const version = summary ? Number(meta.summary_version ?? 1) : 0;
-  return { summary, long, version, current: !!summary && !!long && version >= SUMMARY_VERSION };
+  const lang = meta.summary_lang ? String(meta.summary_lang) : null;
+  const current = !!summary && !!long && version >= SUMMARY_VERSION && (!readerLang || lang === readerLang);
+  return { summary, long, version, lang, current };
 }
 
 /** Look one up by slug, for the on-demand route. */

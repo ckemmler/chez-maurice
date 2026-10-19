@@ -30,6 +30,7 @@
 "chat.greeting" = "Hello, %@.";
 "chat.new_conversation_hint" = "new conversation";
 "chat.composer.placeholder" = "Ask Maurice something...";
+"chat.entry.in_context" = "In context";
 "chat.composer.hint" = "⏎ to send · ⇧⏎ for newline";
 "chat.composer.hint_room" = "⏎ to the room · ⌘⏎ for Maurice · ⇧⏎ for newline";
 "chat.fallback_name" = "You";
@@ -908,6 +909,8 @@
 "suggest.state_pick" = "%d possibilities";
 "suggest.keep" = "Keep";
 "suggest.add_note" = "Add the note";
+"suggest.add_to_carnet" = "Add to Carnet";
+"suggest.link_entry" = "Link";
 "suggest.dismiss" = "Not this one";
 "suggest.search_again" = "Search again";
 "suggest.search_refine" = "Refine";

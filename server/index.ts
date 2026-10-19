@@ -80,6 +80,7 @@ import { proxyAuth, validateApiTokenRaw, validateHealthToken } from "./src/middl
 import gitRoutes from "./src/routes/git";
 import { requestOrigin } from "./lib/requestOrigin";
 import { scheduleGardenExport } from "./src/services/gardenExport";
+import { scheduleConversationSummaries } from "./data-api/services/entryConversations";
 import { mergeDuplicateDomains } from "./src/services/domainMerge";
 import { fullHealth, hookConsoleErrors, publicHealth, recordError } from "./src/services/health";
 import { validateSession, normalizeInviteCode, formatInviteCode } from "./src/services/auth";
@@ -250,6 +251,10 @@ scheduleDomainMappingNightly();
 // conversations if they asked — into it as text, and commit (see
 // services/gardenExport.ts).
 scheduleGardenExport();
+// What a conversation held from a garden entry came to: written into the
+// entry's fiche once the conversation has settled, twenty minutes after its
+// last message (see data-api/services/entryConversations.ts).
+scheduleConversationSummaries();
 // One domain per name (services/domainMerge.ts): whatever same-named domains
 // a household made before the rule are folded into the oldest of each, once.
 {

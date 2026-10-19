@@ -33,6 +33,7 @@ import { fragmentsDir, isOpened, parseFiche, publicUrl, type GardenRef } from ".
 import { listGardenEntries, type GardenEntry } from "./gardenEntries";
 import { NEEDS_CAPTURE } from "./gardenArticles";
 import { storedSummaryOf } from "./articleSummary";
+import { userLocale } from "../../src/services/i18n";
 import { isConversationFragment } from "./entryConversations";
 import { archivedIds } from "./shelfArchive";
 import { gardenFor } from "./gardenFiche";
@@ -781,7 +782,7 @@ export async function getShelfEntry(
   const counts: Counts = { books: countHighlights(memberId), articles: countArticleHighlights(memberId) };
   const { row, card, fiche, book, subject } = await describe(memberId, garden, e, lib, counts);
   if (row.source?.type === "article") {
-    const stored = storedSummaryOf(fiche ? fiche.meta : (card?.fm ?? {}));
+    const stored = storedSummaryOf(fiche ? fiche.meta : (card?.fm ?? {}), userLocale(memberId));
     // A version 2 fiche holds the long text alone, in `summary`.
     const [short, long] = stored.version === 2 ? ["", stored.summary] : [stored.summary, stored.long];
     row.source = {

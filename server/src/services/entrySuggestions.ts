@@ -33,6 +33,12 @@ import { indexGardenPaths } from "../../data-api/services/gardenIndex";
 import { noteBlock, withNote } from "../../data-api/services/gardenNote";
 import { appendResonance } from "../../data-api/services/gardenLinks";
 import { userLocale } from "./i18n";
+import { linkOnFiche } from "../../data-api/services/entryConversations";
+// The articles pipeline (gardenArticles, articleSummary, articleCleanup) is
+// loaded where it is used, not here: through the cleanup it reaches
+// highlights.ts, which fixes life.db's path when first loaded — and this file
+// is loaded by every conversation route, long before.
+const articles = () => import("../../data-api/services/gardenArticles");
 
 // ── Shapes ───────────────────────────────────────────────────────────────────
 
@@ -601,6 +607,124 @@ function aboutRefs(memberId: string, conversationId: string, bound: GardenEntry 
   return refs;
 }
 
+// ── An article shared in the conversation ───────────────────────────────────
+//
+// The Maurice app's share sheet lays an article in a conversation as an
+// ```article block: the member wants to understand something the article
+// speaks of, not to read it — and may forget it after. So nothing is filed;
+// but the article is offered at once behind the Carnet mark, and one gesture
+// makes it an entry of their garden (19 October 2026).
+
+/** The shared article an ```article block holds: its header lines, then its text. */
+export function sharedArticleIn(content: string): { title: string; site: string; author: string; date: string; url: string; text: string } | null {
+  const m = content.match(/^(`{3,})article\n([\s\S]*?)\n\1$/m);
+  if (!m) return null;
+  const [head, ...rest] = m[2]!.replace(/^\n+/, "").split("\n\n");
+  const fields: Record<string, string> = {};
+  for (const line of (head ?? "").split("\n")) {
+    const at = line.indexOf(":");
+    if (at > 0) fields[line.slice(0, at).trim()] = line.slice(at + 1).trim();
+  }
+  if (!fields.url || !/^https?:\/\//.test(fields.url)) return null;
+  return {
+    title: fields.title || fields.url, site: fields.site ?? "", author: fields.author ?? "",
+    date: fields.date ?? "", url: fields.url, text: rest.join("\n\n").trim(),
+  };
+}
+
+/**
+ * Offer the article a message carries as an entry of the member's garden —
+ * or, when it is one already, as the entry this conversation is about.
+ * Returns whether the conversation's list changed.
+ */
+export async function offerSharedArticle(
+  memberId: string, conversationId: string, messageId: string, content: string,
+): Promise<boolean> {
+  const article = sharedArticleIn(content);
+  if (!article || !eligible(memberId, conversationId)) return false;
+  const garden = gardenFor(memberId)!;
+  const found = (await articles()).findArticleFiche(garden, article.url);
+  const named: Named = { kind: "articles", title: article.title, year: null, note: "", creator: article.site, public: true };
+  const changed = record(memberId, conversationId, messageId, named, {
+    key: `url:${article.url}`, title: found?.title || article.title, year: null, subtitle: article.site || null,
+    image: null, existing: found ? `articles/${found.locale}/${found.slug}` : null, candidates: [],
+  });
+  if (changed) announce(memberId, conversationId);
+  return changed;
+}
+
+/** The text of a shared article, as a page the save can read: what the app
+ *  took from the rendered page — past a paywall — rather than a fetch the
+ *  site may refuse. */
+function articleHtml(a: NonNullable<ReturnType<typeof sharedArticleIn>>): string {
+  const esc = (t: string) => t.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  const meta = [
+    `<meta property="og:title" content="${esc(a.title)}">`,
+    a.site ? `<meta property="og:site_name" content="${esc(a.site)}">` : "",
+    a.author ? `<meta name="author" content="${esc(a.author)}">` : "",
+    a.date ? `<meta property="article:published_time" content="${esc(a.date)}">` : "",
+    `<link rel="canonical" href="${esc(a.url)}">`,
+  ].join("");
+  const body = a.text.split(/\n{2,}/).map((p) => `<p>${esc(p.trim())}</p>`).join("\n");
+  return `<!doctype html><html><head><title>${esc(a.title)}</title>${meta}</head><body><article><h1>${esc(a.title)}</h1>\n${body}</article></body></html>`;
+}
+
+type SavedArticle = Awaited<ReturnType<Awaited<ReturnType<typeof articles>>["saveArticleFiche"]>>;
+const cleanThenSummarise = async (memberId: string, saved: SavedArticle): Promise<void> => {
+  const { cleanAndStore } = await import("../../data-api/services/articleCleanup");
+  const { scheduleArticleSummary } = await import("../../data-api/services/articleSummary");
+  scheduleArticleSummary(memberId, saved, { first: () => cleanAndStore(memberId, saved) });
+};
+let afterArticleSave = cleanThenSummarise;
+/** Tests leave the cleanup and the summary out: both call a model. */
+export function setAfterArticleSave(fn: ((memberId: string, saved: SavedArticle) => Promise<void>) | null): void {
+  afterArticleSave = fn ?? cleanThenSummarise;
+}
+
+/**
+ * Keep a shared article: save it into the garden (or take the entry it
+ * already is), and make the conversation one held from it — its fiche gets
+ * the link to the conversation, and later what it came to.
+ */
+async function keepSharedArticle(memberId: string, s: EntrySuggestion): Promise<EntrySuggestion> {
+  const garden = gardenFor(memberId);
+  if (!garden) throw new SuggestionError("No garden for this member", 404);
+  let ref = s.existing;
+  if (!ref) {
+    const message = s.message_id
+      ? (db.query(`SELECT content FROM messages WHERE id = ?`).get(s.message_id) as { content: string } | null)
+      : null;
+    const article = message ? sharedArticleIn(message.content) : null;
+    if (!article) throw new SuggestionError("the shared article is no longer in the conversation", 409);
+    let saved;
+    try {
+      saved = await (await articles()).saveArticleFiche(memberId, {
+        url: article.url, title: article.title, locale: gardenLocale(memberId), source_client: "maurice-share",
+        ...(article.text ? { html: articleHtml(article) } : {}),
+      });
+    } catch (err) {
+      throw new SuggestionError(`The article could not be saved: ${(err as Error).message}`, 502);
+    }
+    ref = `articles/${saved.locale}/${saved.slug}`;
+    // As the share sheet's save does: cleaned, then summarised, after.
+    if (!saved.duplicate && !saved.needs_capture) await afterArticleSave(memberId, saved);
+  }
+  // The conversation is about it from now on — unless it already was about
+  // another entry, which stays its own.
+  db.run(`UPDATE conversations SET entry_ref = ? WHERE id = ? AND entry_ref IS NULL`, [ref, s.conversation_id]);
+  try {
+    linkOnFiche(memberId, s.conversation_id);
+  } catch (err) {
+    console.warn(`[suggest] link on the article's fiche failed (${(err as Error).message})`);
+  }
+  db.run(
+    `UPDATE entry_suggestions SET state = 'kept', kept_path = ?, existing = ?, decided_at = datetime('now'), updated_at = datetime('now') WHERE id = ?`,
+    [ref, ref, s.id],
+  );
+  announce(memberId, s.conversation_id);
+  return own(memberId, s.id)!;
+}
+
 /** Never on the reply's path, never throwing into it. */
 export function suggestInBackground(
   memberId: string, conversationId: string, messageId: string | null, question: string, reply: string,
@@ -684,6 +808,7 @@ export async function keepSuggestion(
   const s = own(memberId, id);
   if (!s) throw new SuggestionError("not found", 404);
   if (s.state === "kept") return s;
+  if (s.kind === "articles") return keepSharedArticle(memberId, s);
   const garden = gardenFor(memberId);
   if (!garden) throw new SuggestionError("No garden for this member", 404);
   const episodes = [...new Set(episodeIds.map(String).filter(Boolean))];

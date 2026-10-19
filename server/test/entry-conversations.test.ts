@@ -14,13 +14,14 @@ const TMP = fs.mkdtempSync(path.join(os.tmpdir(), "maurice-entry-convos-"));
 process.env.MAURICE_GARDENS_DIR = path.join(TMP, "gardens");
 
 const { MEMBER } = await import("./_member");
+const { default: db } = await import("../src/db");
 const { createConversation, addMessage, emptyEntryConversation } = await import("../src/services/conversations");
 const { saveSpec } = await import("../src/services/composer/specs");
 const {
   readFullText, storedSummaryOf, summaryWordBudget, summarizeAndStore, setArticleSummaryGenerator, SUMMARY_VERSION,
 } = await import("../data-api/services/articleSummary");
 const { scanArticleFiches } = await import("../data-api/services/gardenArticles");
-const { conversationsAbout, conversationWordBudget, linkOnFiche, summaryFor, setEntryConversationSummarizer } = await import("../data-api/services/entryConversations");
+const { conversationsAbout, conversationWordBudget, linkOnFiche, summaryFor, setEntryConversationSummarizer, summariseSettledConversations, SETTLED_MS } = await import("../data-api/services/entryConversations");
 const { getShelfEntry } = await import("../data-api/services/gardenShelf");
 
 const garden = { root: path.join(process.env.MAURICE_GARDENS_DIR!, MEMBER.username), username: MEMBER.username };
@@ -41,14 +42,19 @@ beforeAll(() => {
   write("articles/fr/sols-vivants-fiche.md",
     `---\ntitle: Sols vivants\nresource_collection: articles\nresource_id: sols-vivants\ndate: '2026-10-18'\ntags: []\nlocale: fr\nmeta:\n  url: https://example.org/sols\n  word_count: 2800\n  lang: fr\n  summary: Un sol, des vers.\n  opened: false\n---\n\n> Le sol vit.\n`);
   write("articles/fr/sols-vivants-fiche/_fragments/001.frag", `---\nsummary: "Texte intégral — Le Monde"\n---\n${ARTICLE}`);
+  // The reader reads French: the paragraph is written in it.
+  db.run(`INSERT INTO user_preferences (user_id, locale) VALUES (?, 'fr')
+          ON CONFLICT(user_id) DO UPDATE SET locale = 'fr'`, [MEMBER.id]);
   setArticleSummaryGenerator(async (input) => {
     expect(input.text).toBe(ARTICLE);
     made.push(input.length!);
-    return { text: `${input.length}: Le sol est vivant.`, usage: null };
+    const lang = input.length === "short" ? ` ${input.readerLang}` : "";
+    return { text: `${input.length}${lang}: Le sol est vivant.`, usage: null };
   });
 });
 
 afterAll(() => {
+  db.run(`DELETE FROM user_preferences WHERE user_id = ?`, [MEMBER.id]);
   setArticleSummaryGenerator(null);
   setEntryConversationSummarizer(null);
   fs.rmSync(TMP, { recursive: true, force: true });
@@ -69,10 +75,13 @@ describe("the article's summary", () => {
     expect(summaryWordBudget("mot ".repeat(20000))).toBe(600);
   });
 
-  test("a fiche holding only one of the two summaries reads as not current", () => {
+  test("a fiche reads as current only with both, of version 4, the paragraph in the reader's language", () => {
     expect(storedSummaryOf({ summary: "Court." })).toMatchObject({ summary: "Court.", version: 1, current: false });
     expect(storedSummaryOf({ summary: "Long.", summary_version: 2 }).current).toBe(false);
-    expect(storedSummaryOf({ summary: "Court.", summary_long: "Long.", summary_version: SUMMARY_VERSION }).current).toBe(true);
+    expect(storedSummaryOf({ summary: "Court.", summary_long: "Long.", summary_version: 3 }, "fr").current).toBe(false);
+    const v4 = { summary: "Court.", summary_long: "Long.", summary_version: SUMMARY_VERSION, summary_lang: "fr" };
+    expect(storedSummaryOf(v4, "fr").current).toBe(true);
+    expect(storedSummaryOf(v4, "en").current).toBe(false);
     expect(storedSummaryOf({}).summary).toBe("");
   });
 
@@ -81,15 +90,16 @@ describe("the article's summary", () => {
     expect(page?.source).toMatchObject({ type: "article", summary: { text: "Un sol, des vers.", long: "", current: false } });
   });
 
-  test("an old paragraph is kept as the short one and the long one is written; then both are left alone", async () => {
+  test("a version 1 paragraph is written again, in the reader's language, with the long one; then both are left alone", async () => {
     const first = await summarizeAndStore(MEMBER.id, articleRef());
-    expect(first).toEqual({ summary: "Un sol, des vers.", summaryLong: "long: Le sol est vivant.", regenerated: true });
-    expect(made).toEqual(["long"]);
+    expect(first).toEqual({ summary: "short fr: Le sol est vivant.", summaryLong: "long: Le sol est vivant.", regenerated: true });
+    expect(made.sort()).toEqual(["long", "short"]);
+    expect(fs.readFileSync(FICHE, "utf-8")).toContain("summary_lang: fr");
     const again = await summarizeAndStore(MEMBER.id, articleRef());
     expect(again.regenerated).toBe(false);
-    expect(made).toHaveLength(1);
+    expect(made).toHaveLength(2);
     const page = await getShelfEntry(MEMBER.id, garden, REF.collection, REF.locale, REF.slug);
-    expect(page?.source).toMatchObject({ summary: { text: "Un sol, des vers.", long: "long: Le sol est vivant.", current: true } });
+    expect(page?.source).toMatchObject({ summary: { current: true } });
   });
 
   test("a version 2 text becomes the long one, and only the paragraph is written", async () => {
@@ -100,7 +110,16 @@ describe("the article's summary", () => {
       .replace(/  summary_long: .*\n/, "")
       .replace(/  summary_version: .*\n/, "  summary_version: 2\n"));
     const r = await summarizeAndStore(MEMBER.id, articleRef());
-    expect(r).toMatchObject({ summary: "short: Le sol est vivant.", summaryLong: "Le texte long d'hier." });
+    expect(r).toMatchObject({ summary: "short fr: Le sol est vivant.", summaryLong: "Le texte long d'hier." });
+    expect(made).toEqual(["short"]);
+  });
+
+  test("a version 3 fiche keeps its long summary; only the paragraph is written again", async () => {
+    made.length = 0;
+    const fiche = fs.readFileSync(FICHE, "utf-8");
+    fs.writeFileSync(FICHE, fiche.replace(/  summary_version: .*\n/, "  summary_version: 3\n").replace(/  summary_lang: .*\n/, ""));
+    const r = await summarizeAndStore(MEMBER.id, articleRef());
+    expect(r.summaryLong).toBe("Le texte long d'hier.");
     expect(made).toEqual(["short"]);
   });
 
@@ -200,6 +219,20 @@ describe("the conversations about it", () => {
 
     // A second conversation gets a fragment of its own.
     expect((await summaryFor(MEMBER.id, REF, composed)).id).toBe("f:003");
+  });
+
+  test("a settled conversation gets its summary without being asked; one still going does not", async () => {
+    setEntryConversationSummarizer(async () => ({ text: "Ce qui en est sorti.", usage: null }));
+    const later = createConversation(MEMBER.id, null, { entryRef: "articles/fr/sols-vivants" }).id;
+    addMessage(later, "user", "Et les racines ?", { authorId: MEMBER.id });
+    addMessage(later, "assistant", "Elles tiennent le sol.", {});
+    const mine = () => conversationsAbout(MEMBER.id, REF).find((c) => c.id === later);
+
+    await summariseSettledConversations(Date.now());
+    expect(mine()?.summary).toBeNull();
+
+    await summariseSettledConversations(Date.now() + SETTLED_MS + 60_000);
+    expect(mine()?.summary).toMatchObject({ text: "Ce qui en est sorti.", stale: false });
   });
 
   test("a conversation that is not about the entry is refused", async () => {

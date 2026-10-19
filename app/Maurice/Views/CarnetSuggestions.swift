@@ -159,7 +159,9 @@ struct SuggestionsDrawer: View {
     @State private var failed = false
 
     private var pending: [EntrySuggestion] { rows.filter { !$0.isKept } }
-    private var kept: [EntrySuggestion] { rows.filter(\.isKept) }
+    /// What was kept — but the entry the conversation is held from, which has
+    /// its own row above.
+    private var kept: [EntrySuggestion] { rows.filter { $0.isKept && $0.entry != held?.ref } }
     /// The entry the conversation is held from, when it is: the drawer's
     /// first row.
     private var held: ConversationEntry? {
@@ -249,6 +251,8 @@ struct SuggestionsDrawer: View {
         do {
             let _: EntrySuggestion = try await api.client.post(
                 "/api/suggestions/\(row.id)/keep", body: KeepBody(candidate: candidate, episodes: episodes), token: api.token, timeout: 40)
+            // A shared article kept: the conversation is held from it now.
+            if row.kind == "articles" { await chat.refreshActiveEntry() }
             await load()
             return true
         } catch {
@@ -421,14 +425,17 @@ private struct SuggestionRow: View {
                 .accessibilityLabel(L("suggest.dismiss"))
             }
 
-            // The note, as it will read on the entry.
-            Text(row.note)
-                .font(.system(size: 14))
-                .foregroundStyle(theme.ink)
-                .fixedSize(horizontal: false, vertical: true)
-                .padding(10)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(RoundedRectangle(cornerRadius: 8).fill(theme.inkMute.opacity(0.07)))
+            // The note, as it will read on the entry. A shared article has
+            // none: keeping it saves the article.
+            if !row.note.isEmpty {
+                Text(row.note)
+                    .font(.system(size: 14))
+                    .foregroundStyle(theme.ink)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(10)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(RoundedRectangle(cornerRadius: 8).fill(theme.inkMute.opacity(0.07)))
+            }
 
             if needsPick { candidates }
 
@@ -449,6 +456,7 @@ private struct SuggestionRow: View {
                 } label: {
                     Text(episodes.count > 1 ? L("suggest.keep_episodes", episodes.count)
                          : episodes.count == 1 ? L("suggest.keep_episode")
+                         : row.kind == "articles" ? (row.existing ? L("suggest.link_entry") : L("suggest.add_to_carnet"))
                          : row.existing ? L("suggest.add_note") : L("suggest.keep"))
                         .font(.system(size: 13, weight: .medium))
                         .foregroundStyle(theme.bg)
