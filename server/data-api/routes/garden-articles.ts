@@ -135,8 +135,8 @@ app.post("/:slug/summary", async (c) => {
 
   try {
     const ref = findArticleBySlug(memberId, slug, body.locale);
-    const { summary, regenerated } = await summarizeAndStore(memberId, ref, { force: body.force });
-    return c.json({ slug: ref.slug, locale: ref.locale, summary, regenerated });
+    const { summary, summaryLong, regenerated } = await summarizeAndStore(memberId, ref, { force: body.force });
+    return c.json({ slug: ref.slug, locale: ref.locale, summary, summary_long: summaryLong, regenerated });
   } catch (e) {
     if (e instanceof ArticleSaveError) return c.json({ error: e.message }, e.status);
     console.error("[garden-articles] summary failed:", e);

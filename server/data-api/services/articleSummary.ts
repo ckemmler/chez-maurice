@@ -40,15 +40,28 @@ export interface SummaryInput {
   text: string;
   /** Article language (BCP-47-ish, from <html lang>). Steers the output language. */
   lang?: string;
+  /** The essence in a paragraph, or the substance at length. Long when unsaid. */
+  length?: SummaryLength;
 }
 
 /**
- * Which summary a fiche holds. A summary stamped with an older version (or
- * none) is rewritten the next time the article is opened in Carnet: version 1
- * was the 110-word paragraph, which gave a vague idea of the article; version 2
- * is meant to be read *instead* of it (19 October 2026).
+ * Two summaries, read one after the other (19 October 2026). The **short**
+ * one is the essence, a paragraph: what the page shows first. The **long**
+ * one is meant to be read instead of the article — its arguments, figures and
+ * conclusion — behind "See more…": the step between the essence and the whole
+ * text, which was missing.
  */
-export const SUMMARY_VERSION = 2;
+export type SummaryLength = "short" | "long";
+
+/**
+ * Which summaries a fiche holds. Version 1 was the paragraph alone; version 2
+ * (one day, 19 October 2026) the long summary alone, in `summary`; version 3
+ * both — the paragraph in `summary`, the long one in `summary_long`. A fiche
+ * of an older version gets what it lacks the next time the article is opened
+ * in Carnet, keeping what it has: a version 1 paragraph stays the short one, a
+ * version 2 text becomes the long one.
+ */
+export const SUMMARY_VERSION = 3;
 
 /**
  * How long the summary may run, in words: about an eighth of the article,
@@ -66,6 +79,7 @@ function buildPrompt(input: SummaryInput): string {
     : input.lang?.startsWith("en")
       ? "English"
       : "the language the article itself is written in";
+  if (input.length === "short") return buildShortPrompt(input, language);
   const budget = summaryWordBudget(input.text);
 
   return [
@@ -96,6 +110,29 @@ function buildPrompt(input: SummaryInput): string {
   ].join("\n");
 }
 
+function buildShortPrompt(input: SummaryInput, language: string): string {
+  return [
+    `Here is an article${input.publication ? ` from ${input.publication}` : ""}, titled "${input.title}".`,
+    "",
+    // The word ceiling carries the weight here. Asked only for "3 to 5
+    // sentences", the model obliges with three sentences of eighty words each.
+    "Write a short summary of it: 3 to 5 sentences, at most 110 words, as a single paragraph.",
+    "It is the essence, read first: what the article argues or reports and what it concludes, so that",
+    "one knows at once what it is about and whether to read more.",
+    "",
+    `Write it in ${language}.`,
+    "Say what the article actually argues or reports — the substance, the specific claims, the",
+    "conclusion it reaches. Do not describe the article from the outside: no \"this article",
+    "explains…\", no \"the author discusses…\". Start straight in on the content.",
+    "Do not add a title, a preamble, bullet points, or any closing remark.",
+    "Return the paragraph and nothing else.",
+    "",
+    "---",
+    "",
+    input.text,
+  ].join("\n");
+}
+
 export async function summarizeArticleText(input: SummaryInput): Promise<string | SummaryResult> {
   const text = input.text.trim();
   if (!text) throw new Error("no article text to summarise");
@@ -105,7 +142,7 @@ export async function summarizeArticleText(input: SummaryInput): Promise<string 
     );
   }
 
-  return generator({ ...input, text });
+  return generator({ ...input, text, length: input.length ?? "long" });
 }
 
 export interface SummaryResult { text: string; usage: TurnUsage | null }
@@ -179,7 +216,7 @@ export function summarizeAndStore(
   memberId: string,
   ref: ArticleFicheRef,
   opts: { force?: boolean } = {},
-): Promise<{ summary: string; regenerated: boolean }> {
+): Promise<StoredSummaries> {
   const running = passes.get(ref.file);
   if (running) {
     // Whatever it came to: a failed pass leaves the next to try for itself,
@@ -188,6 +225,8 @@ export function summarizeAndStore(
   }
   return single(ref.file, () => summarize(memberId, ref, opts));
 }
+
+export interface StoredSummaries { summary: string; summaryLong: string; regenerated: boolean }
 
 /** What each fiche's running pass is, so the next one waits on it. */
 const passes = new Map<string, Promise<unknown>>();
@@ -204,13 +243,13 @@ async function summarize(
   memberId: string,
   ref: ArticleFicheRef,
   opts: { force?: boolean },
-): Promise<{ summary: string; regenerated: boolean }> {
+): Promise<StoredSummaries> {
   const garden = gardenFor(memberId);
   if (!garden) throw new ArticleSaveError("No garden for this member", 404);
 
   const existing = readStoredSummary(ref);
-  if (existing.summary && existing.current && !opts.force) {
-    return { summary: existing.summary, regenerated: false };
+  if (existing.current && !opts.force) {
+    return { summary: existing.summary, summaryLong: existing.long, regenerated: false };
   }
 
   const parsed = parseFiche(fs.readFileSync(ref.file, "utf-8"));
@@ -229,16 +268,28 @@ async function summarize(
     text = (await extractArticleFromUrl(url)).content;
   }
 
-  const made = await summarizeArticleText({
+  // What an older version left is kept, unless asked to start over: a
+  // version 1 paragraph is the short summary, a version 2 text the long one.
+  const keptShort = opts.force ? "" : existing.version >= 3 || existing.version < 2 ? existing.summary : "";
+  const keptLong = opts.force ? "" : existing.version === 2 ? existing.summary : existing.long;
+  const input = {
     title: String(fm.title ?? ref.title),
     publication: String(meta.publication ?? fm.source ?? "") || undefined,
     text,
     lang: String(meta.lang ?? "") || undefined,
-  });
-  const summary = typeof made === "string" ? made : made.text;
+  };
   // Asked for by the member — by sharing the article, or by opening it — so
   // charged to them, as the other passes run on their behalf are.
-  if (typeof made !== "string") recordSpend(made.usage, memberId);
+  const make = async (length: SummaryLength): Promise<string> => {
+    const made = await summarizeArticleText({ ...input, length });
+    if (typeof made === "string") return made;
+    recordSpend(made.usage, memberId);
+    return made.text;
+  };
+  const [summary, summaryLong] = await Promise.all([
+    keptShort || make("short"),
+    keptLong || make("long"),
+  ]);
 
   // Re-read: this runs seconds to minutes after the save, and the fiche may
   // have picked up a second comment or a hand edit in the meantime.
@@ -247,6 +298,7 @@ async function summarize(
 
   const stamp = {
     summary,
+    summary_long: summaryLong,
     summary_model: ancillaryModel("article_summary"),
     summary_at: new Date().toISOString().slice(0, 10),
     summary_version: SUMMARY_VERSION,
@@ -262,21 +314,31 @@ async function summarize(
   // The summary is now part of the fiche's searchable metadata preamble.
   indexGardenPaths(memberId, [ref.file]);
 
-  return { summary, regenerated: !!existing.summary };
+  return { summary, summaryLong, regenerated: !!existing.summary };
 }
 
-function readStoredSummary(ref: ArticleFicheRef): { summary: string; current: boolean } {
+function readStoredSummary(ref: ArticleFicheRef): StoredSummary {
   const parsed = parseFiche(fs.readFileSync(ref.file, "utf-8"));
-  if (!parsed) return { summary: "", current: false };
+  if (!parsed) return { summary: "", long: "", version: 0, current: false };
   const fm = parsed.frontmatter;
   return storedSummaryOf(ref.kind === "fiche" ? (fm.meta ?? {}) : fm);
 }
 
-/** The summary a fiche's meta (or a card's frontmatter) carries, and whether
- *  it is of the current version. */
-export function storedSummaryOf(meta: Record<string, any>): { summary: string; current: boolean } {
+export interface StoredSummary {
+  /** The paragraph — or, on a version 2 fiche, the long text. */
+  summary: string;
+  long: string;
+  version: number;
+  /** Both are there, of the current version. */
+  current: boolean;
+}
+
+/** The summaries a fiche's meta (or a card's frontmatter) carries. */
+export function storedSummaryOf(meta: Record<string, any>): StoredSummary {
   const summary = String(meta.summary ?? "");
-  return { summary, current: !!summary && Number(meta.summary_version ?? 1) >= SUMMARY_VERSION };
+  const long = String(meta.summary_long ?? "");
+  const version = summary ? Number(meta.summary_version ?? 1) : 0;
+  return { summary, long, version, current: !!summary && !!long && version >= SUMMARY_VERSION };
 }
 
 /** Look one up by slug, for the on-demand route. */

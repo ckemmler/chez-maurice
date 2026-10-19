@@ -638,6 +638,8 @@ export interface ArticleDescription extends ArticleFicheRef {
   tags: string[];
   word_count: number;
   summary: string | null;
+  /** The long summary, read in the article's place (articleSummary.ts). */
+  summary_long: string | null;
   has_text: boolean;
   /** Changes when the stored text does, so a reader knows its copy is stale. */
   text_rev: string | null;
@@ -692,6 +694,7 @@ export function describeArticle(garden: GardenRef, ref: ArticleFicheRef): Articl
     tags: Array.isArray(fm.tags) ? fm.tags.map(String) : [],
     word_count: Number(meta.word_count ?? 0),
     summary: meta.summary ?? null,
+    summary_long: meta.summary_long ?? null,
     has_text: ref.kind === "fiche" && hasFullText(ref.file),
     text_rev: ref.kind === "fiche" ? textRevision(ref.file) : null,
     capture_error: meta.capture_error ?? null,

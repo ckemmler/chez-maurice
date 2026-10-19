@@ -42,8 +42,9 @@ beforeAll(() => {
     `---\ntitle: Sols vivants\nresource_collection: articles\nresource_id: sols-vivants\ndate: '2026-10-18'\ntags: []\nlocale: fr\nmeta:\n  url: https://example.org/sols\n  word_count: 2800\n  lang: fr\n  summary: Un sol, des vers.\n  opened: false\n---\n\n> Le sol vit.\n`);
   write("articles/fr/sols-vivants-fiche/_fragments/001.frag", `---\nsummary: "Texte intégral — Le Monde"\n---\n${ARTICLE}`);
   setArticleSummaryGenerator(async (input) => {
-    made.push(input.text);
-    return { text: "Le sol est vivant.\n\nLes vers le retournent.", usage: null };
+    expect(input.text).toBe(ARTICLE);
+    made.push(input.length!);
+    return { text: `${input.length}: Le sol est vivant.`, usage: null };
   });
 });
 
@@ -68,35 +69,49 @@ describe("the article's summary", () => {
     expect(summaryWordBudget("mot ".repeat(20000))).toBe(600);
   });
 
-  test("a summary written before version 2 reads as not current", () => {
-    expect(storedSummaryOf({ summary: "Court." })).toEqual({ summary: "Court.", current: false });
-    expect(storedSummaryOf({ summary: "Long.", summary_version: SUMMARY_VERSION }).current).toBe(true);
+  test("a fiche holding only one of the two summaries reads as not current", () => {
+    expect(storedSummaryOf({ summary: "Court." })).toMatchObject({ summary: "Court.", version: 1, current: false });
+    expect(storedSummaryOf({ summary: "Long.", summary_version: 2 }).current).toBe(false);
+    expect(storedSummaryOf({ summary: "Court.", summary_long: "Long.", summary_version: SUMMARY_VERSION }).current).toBe(true);
     expect(storedSummaryOf({}).summary).toBe("");
   });
 
   test("the page carries it, and says it is an old one", async () => {
     const page = await getShelfEntry(MEMBER.id, garden, REF.collection, REF.locale, REF.slug);
-    expect(page?.source).toMatchObject({ type: "article", summary: { text: "Un sol, des vers.", current: false } });
+    expect(page?.source).toMatchObject({ type: "article", summary: { text: "Un sol, des vers.", long: "", current: false } });
   });
 
-  test("an old summary is rewritten without force; a current one is left alone", async () => {
+  test("an old paragraph is kept as the short one and the long one is written; then both are left alone", async () => {
     const first = await summarizeAndStore(MEMBER.id, articleRef());
-    expect(first).toEqual({ summary: "Le sol est vivant.\n\nLes vers le retournent.", regenerated: true });
+    expect(first).toEqual({ summary: "Un sol, des vers.", summaryLong: "long: Le sol est vivant.", regenerated: true });
+    expect(made).toEqual(["long"]);
     const again = await summarizeAndStore(MEMBER.id, articleRef());
     expect(again.regenerated).toBe(false);
     expect(made).toHaveLength(1);
     const page = await getShelfEntry(MEMBER.id, garden, REF.collection, REF.locale, REF.slug);
-    expect(page?.source).toMatchObject({ summary: { current: true } });
+    expect(page?.source).toMatchObject({ summary: { text: "Un sol, des vers.", long: "long: Le sol est vivant.", current: true } });
   });
 
-  test("two asks at once make one summary", async () => {
+  test("a version 2 text becomes the long one, and only the paragraph is written", async () => {
+    made.length = 0;
+    const fiche = fs.readFileSync(FICHE, "utf-8");
+    fs.writeFileSync(FICHE, fiche
+      .replace(/  summary: .*\n/, "  summary: Le texte long d'hier.\n")
+      .replace(/  summary_long: .*\n/, "")
+      .replace(/  summary_version: .*\n/, "  summary_version: 2\n"));
+    const r = await summarizeAndStore(MEMBER.id, articleRef());
+    expect(r).toMatchObject({ summary: "short: Le sol est vivant.", summaryLong: "Le texte long d'hier." });
+    expect(made).toEqual(["short"]);
+  });
+
+  test("forced, both are written again — and two asks at once make one pass", async () => {
     made.length = 0;
     const [a, b] = await Promise.all([
       summarizeAndStore(MEMBER.id, articleRef(), { force: true }),
       summarizeAndStore(MEMBER.id, articleRef(), { force: true }),
     ]);
-    expect(a.summary).toBe(b.summary);
-    expect(made).toHaveLength(1);
+    expect(a.summaryLong).toBe(b.summaryLong);
+    expect(made.sort()).toEqual(["long", "short"]);
   });
 });
 

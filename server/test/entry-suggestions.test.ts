@@ -640,22 +640,23 @@ describe("a conversation held from an entry", () => {
     expect(sug.ownEntryRef(BEN, "series/fr/sugar")).toBeNull();
   });
 
-  test("the pass is told which entry; its note is the result, the rest will be linked", async () => {
+  test("the pass is told which entry and not to name it; what else it touched will be linked", async () => {
     held();
     searchResults.search_movie = [{ id: 7, title: "The Lobster", year: 2015, subtitle: "", image: "" }];
+    // Named anyway: the entry's own note is dropped — its result is the
+    // conversation's summary, on its fiche (19 October 2026).
     modelSays = { subjects: [
       { kind: "series", title: "Sugar", note: "La série rend hommage au film noir." },
       { kind: "movies", title: "The Lobster", year: 2015, note: "Colin Farrell y joue David." },
     ] };
-    expect(await turn()).toBe(2);
+    expect(await turn()).toBe(1);
     expect(lastPrompt).toContain('held from the person\'s notebook entry "Sugar" (kind: series)');
+    expect(lastPrompt).toContain("Do NOT name that entry itself");
 
     const body = (await (await req(annaAuth, `/?conversation=${convo}&settle=1`)).json()) as any;
     expect(body.entry).toBe("series/fr/sugar");
-    const sugar = body.suggestions.find((r: any) => r.title === "Sugar");
-    const lobster = body.suggestions.find((r: any) => r.title === "The Lobster");
-    expect([sugar.bound, sugar.links]).toEqual([true, false]);
-    expect([lobster.bound, lobster.links]).toEqual([false, true]);
+    expect(body.suggestions.map((r: any) => r.title)).toEqual(["The Lobster"]);
+    expect([body.suggestions[0].bound, body.suggestions[0].links]).toEqual([false, true]);
   });
 
   test("keeping another entry links it to the one the conversation is held from", async () => {
@@ -673,15 +674,12 @@ describe("a conversation held from an entry", () => {
     expect(res).toContain(`(maurice://conversations/${convo})`);
   });
 
-  test("keeping the entry's own note links nothing", async () => {
-    held();
+  test("an entry whose fiche is loaded in the composer gets no note either", async () => {
+    const { saveSpec } = await import("../src/services/composer/specs");
+    convo = createConversation(ANNA, null).id;
+    saveSpec(ANNA, convo, [{ type: "fiche", id: "series/fr/sugar-fiche" }]);
     modelSays = { subjects: [{ kind: "series", title: "Sugar", note: "Huit épisodes." }] };
-    await turn();
-    const before = fs.readFileSync(path.join(root, "series/fr/sugar-fiche.md"), "utf-8");
-    await sug.keepSuggestion(ANNA, sug.suggestionsFor(ANNA, convo)[0]!.id);
-    const after = fs.readFileSync(path.join(root, "series/fr/sugar-fiche.md"), "utf-8");
-    expect(after).toContain("Huit épisodes.");
-    expect(after.split("[[").length).toBe(before.split("[[").length);
+    expect(await turn()).toBe(0);
   });
 
   test("an entry of a kind the pass does not name on its own can still get its result", () => {

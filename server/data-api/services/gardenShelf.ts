@@ -78,12 +78,13 @@ export interface ArticleSource {
   word_count: number;
   reading_minutes: number;
   /**
-   * Page only, not the list: what the article says, written to be read in its
-   * place (articleSummary.ts). Null until it has been written; `current` false
-   * for one written before the summaries carried the substance — Carnet asks
-   * for it again.
+   * Page only, not the list: the article's summaries (articleSummary.ts) — the
+   * essence in a paragraph (`text`), and the long one meant to be read in the
+   * article's place (`long`, "" until written). Null until there is one;
+   * `current` false while one is missing or of an older kind — Carnet asks
+   * for them again.
    */
-  summary?: { text: string; current: boolean } | null;
+  summary?: { text: string; long: string; current: boolean } | null;
 }
 
 export interface ShelfEntry {
@@ -781,7 +782,12 @@ export async function getShelfEntry(
   const { row, card, fiche, book, subject } = await describe(memberId, garden, e, lib, counts);
   if (row.source?.type === "article") {
     const stored = storedSummaryOf(fiche ? fiche.meta : (card?.fm ?? {}));
-    row.source = { ...row.source, summary: stored.summary ? { text: stored.summary, current: stored.current } : null };
+    // A version 2 fiche holds the long text alone, in `summary`.
+    const [short, long] = stored.version === 2 ? ["", stored.summary] : [stored.summary, stored.long];
+    row.source = {
+      ...row.source,
+      summary: short || long ? { text: short, long, current: stored.current } : null,
+    };
   }
   const site = siteFor(ownerId);
   const foreign = ownerId !== memberId;

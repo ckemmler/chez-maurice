@@ -203,14 +203,15 @@ async function nameSubjects(
   const already = (db
     .query(`SELECT title FROM entry_suggestions WHERE conversation_id = ? ORDER BY created_at`)
     .all(conversationId) as Array<{ title: string }>).map((r) => r.title);
-  // Held from an entry of their notebook: what the exchange establishes about
-  // it is the first thing worth keeping — the result that goes back on it.
+  // Held from an entry of their notebook: what the exchange came to for that
+  // entry is kept apart — the conversation's summary, in its fiche, asked for
+  // from there (data-api/services/entryConversations.ts) — so it is not named
+  // here (19 October 2026: the note "for this entry" said the same thing
+  // shorter, one reply at a time). What else it touched still is.
   const about = bound
     ? `This exchange is held from the person's notebook entry "${bound.title}" (kind: ${bound.collection}). ` +
-      `Name it FIRST, under exactly that title and kind, even if a note on it was already suggested. ` +
-      `Its note is the result of the exchange for that entry: the answer to what the person asked, in substance, ` +
-      `as they would want to find it on that entry later — not a restatement of what the entry already is. ` +
-      `Leave it out only when the exchange taught nothing about it.\n\n`
+      `Do NOT name that entry itself: what the exchange says about it is kept elsewhere. ` +
+      `Name only the other works and people it gives something on.\n\n`
     : "";
   const prompt =
     about +
@@ -225,7 +226,7 @@ async function nameSubjects(
     reasoning: "none",
   });
   recordSpend(result.usage, memberId);
-  return parseNamed(result.text, bound?.collection ?? null);
+  return parseNamed(result.text);
 }
 
 // ── Resolution ───────────────────────────────────────────────────────────────
@@ -556,13 +557,33 @@ export async function suggestForTurn(
   if (!named.length) return 0;
   const garden = gardenFor(memberId)!;
   const locale = gardenLocale(memberId);
+  // What the conversation is about — the entry it is held from, the fiches
+  // loaded as its context — gets no note from here: its result is the
+  // conversation's summary on that fiche.
+  const about = aboutRefs(memberId, conversationId, bound);
   let changed = 0;
   for (const n of named) {
     const r = await resolve(memberId, garden, n, locale, bound);
+    if (r.existing && about.has(r.existing)) continue;
     if (record(memberId, conversationId, messageId, n, r)) changed++;
   }
   if (changed) announce(memberId, conversationId);
   return changed;
+}
+
+/** The entries a conversation is about: the one it is held from, and those
+ *  whose fiche the member loaded in its composer. */
+function aboutRefs(memberId: string, conversationId: string, bound: GardenEntry | null): Set<string> {
+  const refs = new Set<string>(bound ? [refOf(bound)] : []);
+  const rows = db
+    .query(
+      `SELECT json_extract(j.value, '$.id') AS id
+       FROM composer_specs s, json_each(s.spec_json, '$.items') j
+       WHERE s.conversation_id = ? AND s.account_id = ? AND json_extract(j.value, '$.type') = 'fiche'`,
+    )
+    .all(conversationId, memberId) as Array<{ id: string | null }>;
+  for (const r of rows) if (r.id) refs.add(String(r.id).replace(/-fiche$/, ""));
+  return refs;
 }
 
 /** Never on the reply's path, never throwing into it. */
