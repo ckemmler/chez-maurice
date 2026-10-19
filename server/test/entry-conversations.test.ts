@@ -21,7 +21,7 @@ const {
   readFullText, storedSummaryOf, summaryWordBudget, summarizeAndStore, setArticleSummaryGenerator, SUMMARY_VERSION,
 } = await import("../data-api/services/articleSummary");
 const { scanArticleFiches } = await import("../data-api/services/gardenArticles");
-const { conversationsAbout, conversationWordBudget, linkOnFiche, summaryFor, setEntryConversationSummarizer, summariseSettledConversations, SETTLED_MS } = await import("../data-api/services/entryConversations");
+const { conversationsAbout, conversationWordBudget, linkConversation, linkOnFiche, summaryFor, setEntryConversationSummarizer, summariseSettledConversations, SETTLED_MS } = await import("../data-api/services/entryConversations");
 const { getShelfEntry } = await import("../data-api/services/gardenShelf");
 
 const garden = { root: path.join(process.env.MAURICE_GARDENS_DIR!, MEMBER.username), username: MEMBER.username };
@@ -160,13 +160,15 @@ describe("the conversations about it", () => {
     expect(conversationsAbout(MEMBER.id, REF).map((c) => c.id)).not.toContain(empty.id);
   });
 
-  test("held from the page or with the fiche in context, both count", () => {
+  test("held from the page, it counts; with the fiche only in context, once the member links it", () => {
+    expect(conversationsAbout(MEMBER.id, REF).map((c) => c.id)).toEqual([held]);
+    linkConversation(MEMBER.id, composed, "articles/fr/sols-vivants");
     const list = conversationsAbout(MEMBER.id, REF);
-    expect(list.map((c) => [c.id, c.via]).sort()).toEqual([[composed, "context"], [held, "entry"]].sort());
+    expect(list.map((c) => [c.id, c.via]).sort()).toEqual([[composed, "linked"], [held, "entry"]].sort());
     expect(list.every((c) => c.summary === null)).toBe(true);
   });
 
-  test("after the first exchange, the fiche gets the link alone — once, and only for a conversation held from it", () => {
+  test("after the first exchange, the fiche gets the link alone — once, and not before an answer", () => {
     const fresh = createConversation(MEMBER.id, null, { entryRef: "articles/fr/sols-vivants" }).id;
     addMessage(fresh, "user", "Une question sans réponse", { authorId: MEMBER.id });
     expect(linkOnFiche(MEMBER.id, fresh)).toBeNull();
@@ -178,6 +180,7 @@ describe("the conversations about it", () => {
     expect(raw).toContain(`maurice://conversations/${held}`);
     expect(raw).not.toContain("transcript_hash");
     expect(linkOnFiche(MEMBER.id, held)).toBeNull();
+    // Linked, but no answer yet.
     expect(linkOnFiche(MEMBER.id, composed)).toBeNull();
     // Listed with no summary yet: the link is not one.
     expect(conversationsAbout(MEMBER.id, REF).find((c) => c.id === held)?.summary).toBeNull();

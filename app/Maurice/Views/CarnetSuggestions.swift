@@ -251,8 +251,9 @@ struct SuggestionsDrawer: View {
         do {
             let _: EntrySuggestion = try await api.client.post(
                 "/api/suggestions/\(row.id)/keep", body: KeepBody(candidate: candidate, episodes: episodes), token: api.token, timeout: 40)
-            // A shared article kept: the conversation is held from it now.
-            if row.kind == "articles" { await chat.refreshActiveEntry() }
+            // Linked to an entry (a shared article, a fiche in the context):
+            // the conversation may be held from it now.
+            if row.note.isEmpty { await chat.refreshActiveEntry() }
             await load()
             return true
         } catch {
@@ -456,7 +457,9 @@ private struct SuggestionRow: View {
                 } label: {
                     Text(episodes.count > 1 ? L("suggest.keep_episodes", episodes.count)
                          : episodes.count == 1 ? L("suggest.keep_episode")
-                         : row.kind == "articles" ? (row.existing ? L("suggest.link_entry") : L("suggest.add_to_carnet"))
+                         // No note to file: keeping says the conversation is
+                         // about it — an entry in the context, a shared article.
+                         : row.note.isEmpty ? (row.existing ? L("suggest.link_entry") : L("suggest.add_to_carnet"))
                          : row.existing ? L("suggest.add_note") : L("suggest.keep"))
                         .font(.system(size: 13, weight: .medium))
                         .foregroundStyle(theme.bg)

@@ -3,8 +3,11 @@
  *
  * An entry can be talked about many times, in different settings: from
  * Carnet's page (the conversation is *held from* the entry — `entry_ref`), or
- * in the Maurice app with the entry's fiche loaded into the composer. Both
- * count; a conversation that merely mentions the work does not.
+ * in the Maurice app, linked to it by the member from the conversation's
+ * Carnet drawer (`conversation_entries`) — a fiche loaded in the composer, an
+ * article shared there, is offered for that, and loading it is not yet
+ * talking about it. A conversation that merely mentions the work does not
+ * count either.
  *
  * A conversation held from the entry is written into its fiche as a fragment
  * of its own once it has a first question and a first answer: at first only
@@ -68,8 +71,8 @@ export interface EntryConversation {
   created_at: string;
   updated_at: string;
   message_count: number;
-  /** How it is about the entry: held from its page, or with its fiche in context. */
-  via: "entry" | "context";
+  /** How it is about the entry: held from its page, or linked from the Maurice app. */
+  via: "entry" | "linked";
   /** The specialised Maurice it was held with — its setting; null for the everyday one. */
   maurice: { id: string; name: string } | null;
   summary: ConversationSummaryFragment | null;
@@ -109,13 +112,11 @@ export function conversationsAbout(memberId: string, ref: EntryRef): EntryConver
        LEFT JOIN maurices mr ON mr.id = c.maurice_id
        WHERE c.entry_ref = ?
           OR EXISTS (
-            SELECT 1 FROM composer_specs s, json_each(s.spec_json, '$.items') j
-            WHERE s.conversation_id = c.id AND s.account_id = ?
-              AND json_extract(j.value, '$.type') = 'fiche'
-              AND json_extract(j.value, '$.id') = ?)
+            SELECT 1 FROM conversation_entries e
+            WHERE e.conversation_id = c.id AND e.member_id = ? AND e.entry_ref = ?)
        ORDER BY c.updated_at DESC, c.id DESC`,
     )
-    .all(memberId, entry, memberId, `${entry}-fiche`) as Row[];
+    .all(memberId, entry, memberId, entry) as Row[];
 
   const garden = gardenFor(memberId);
   const fiche = garden ? ficheFile(garden, ref) : null;
@@ -131,7 +132,7 @@ export function conversationsAbout(memberId: string, ref: EntryRef): EntryConver
         created_at: r.created_at,
         updated_at: r.updated_at,
         message_count: r.message_count,
-        via: r.entry_ref === entry ? "entry" : "context",
+        via: r.entry_ref === entry ? "entry" : "linked",
         maurice: r.maurice_id && r.maurice_name ? { id: r.maurice_id, name: r.maurice_name } : null,
         // A fragment holding the link alone has no summary yet.
         summary: stored && stored.hash ? describe(stored, currentHash(r.id)) : null,
@@ -234,8 +235,10 @@ export function entryConversationPrompt(input: EntryConversationSummaryInput): s
     "",
     `Hard limit: ${budget} words — fewer when the conversation produced less. Keep what was found and`,
     "concluded; drop how the exchange went. Plain paragraphs; a short bulleted list only where it genuinely helps.",
-    "Write it in the language the conversation is mostly held in. Speak of the member by name or as",
-    "\"you\" — never \"the user\". No title, no preamble, no closing remark. Return the text and nothing else.",
+    "Write it in the language the conversation is mostly held in, as notes the member keeps: start straight",
+    "in on the substance — never with their name, a greeting, or \"Maurice summarised…\". Where they must be",
+    "named, \"you\" (\"tu\" in French) — never \"the user\". No title, no preamble, no closing remark.",
+    "Return the text and nothing else.",
     "",
     "---",
     "",
@@ -351,40 +354,66 @@ function linkLine(title: string, conversationId: string): string {
 
 // ── The link, after the first exchange ──
 
+/** The entries a conversation is about: the one it is held from, then those
+ *  the member linked it to. */
+export function entriesOf(memberId: string, conversationId: string): string[] {
+  const held = getConversation(conversationId, memberId)?.entry_ref;
+  const linked = (db
+    .query(`SELECT entry_ref FROM conversation_entries WHERE conversation_id = ? AND member_id = ? ORDER BY created_at`)
+    .all(conversationId, memberId) as Array<{ entry_ref: string }>).map((r) => r.entry_ref);
+  return [...new Set([...(held ? [held] : []), ...linked])];
+}
+
+/** The member says the conversation is about this entry: it is filed on its
+ *  fiche from now on (at once when it already has an exchange). */
+export function linkConversation(memberId: string, conversationId: string, entryRef: string): void {
+  db.run(
+    `INSERT OR IGNORE INTO conversation_entries (conversation_id, member_id, entry_ref) VALUES (?, ?, ?)`,
+    [conversationId, memberId, entryRef],
+  );
+  linkOnFiche(memberId, conversationId, entryRef);
+}
+
 /**
- * File a conversation held from an entry on that entry's fiche, as soon as it
- * has a question and an answer: a fragment with its title and the link to it,
- * which a summary fills later. Once per conversation; a conversation with the
- * fiche merely in context gets none — loading a fiche is not talking about it.
+ * File a conversation on the fiche of an entry it is about, as soon as it has
+ * a question and an answer: a fragment with its title and the link to it,
+ * which a summary fills later. Once per conversation and entry. Without
+ * `entryRef`, every entry it is about. Returns the fragment written last.
  */
-export function linkOnFiche(memberId: string, conversationId: string): string | null {
+export function linkOnFiche(memberId: string, conversationId: string, entryRef?: string): string | null {
   const convo = getConversation(conversationId, memberId);
-  if (!convo?.entry_ref || convo.user_id !== memberId) return null;
-  const [collection, locale, slug] = convo.entry_ref.split("/");
-  if (!collection || !locale || !slug) return null;
+  if (!convo || !isParticipant(conversationId, memberId)) return null;
+  const refs = entryRef ? [entryRef] : entriesOf(memberId, conversationId);
   const garden = gardenFor(memberId);
-  const fiche = garden ? ficheFile(garden, { collection, locale, slug }) : null;
-  if (!garden || !fiche) return null;
-  if (summaryFragments(fiche).has(conversationId)) return null;
+  if (!garden || !refs.length) return null;
   const rows = transcriptRows(conversationId);
   if (!rows.some((r) => r.role === "user") || !rows.some((r) => r.role === "assistant")) return null;
 
-  const title = convo.title?.trim() || "Conversation";
-  const target = nextFragmentFile(fiche, collection);
-  writeFiche(target, {
-    summary: `Conversation avec Maurice — ${title}`,
-    conversation: conversationId,
-    written_at: new Date().toISOString().slice(0, 10),
-  }, linkLine(title, conversationId));
-  const paths = [target];
-  const fresh = parseFiche(fs.readFileSync(fiche, "utf-8"));
-  if (fresh && markOpened(fresh.frontmatter)) {
-    writeFiche(fiche, fresh.frontmatter, fresh.body);
-    paths.push(fiche);
+  let written: string | null = null;
+  for (const ref of refs) {
+    const [collection, locale, slug] = ref.split("/");
+    if (!collection || !locale || !slug) continue;
+    const fiche = ficheFile(garden, { collection, locale, slug });
+    if (!fiche || summaryFragments(fiche).has(conversationId)) continue;
+
+    const title = convo.title?.trim() || "Conversation";
+    const target = nextFragmentFile(fiche, collection);
+    writeFiche(target, {
+      summary: `Conversation avec Maurice — ${title}`,
+      conversation: conversationId,
+      written_at: new Date().toISOString().slice(0, 10),
+    }, linkLine(title, conversationId));
+    const paths = [target];
+    const fresh = parseFiche(fs.readFileSync(fiche, "utf-8"));
+    if (fresh && markOpened(fresh.frontmatter)) {
+      writeFiche(fiche, fresh.frontmatter, fresh.body);
+      paths.push(fiche);
+    }
+    autoCommit(garden, paths, `Link conversation: ${ref}`);
+    indexGardenPaths(memberId, paths);
+    written = target;
   }
-  autoCommit(garden, paths, `Link conversation: ${convo.entry_ref}`);
-  indexGardenPaths(memberId, paths);
-  return target;
+  return written;
 }
 
 /** After a reply, off its path, never throwing into it. */
@@ -419,9 +448,12 @@ const SWEEP_MS = 5 * 60_000;
 /** A sweep's ceiling: a backlog is worked through over several. */
 const PER_SWEEP = 5;
 
-/** A summary that failed, by conversation, with the transcript it failed on:
- *  not tried again until the conversation moves. */
-const failedOn = new Map<string, string>();
+/** A summary that failed, by conversation and entry: the transcript it failed
+ *  on, and when. Tried again an hour later — a provider that did not answer
+ *  (Scaleway, 19 October 2026) answers later — or at once if the conversation
+ *  moves. */
+const failedOn = new Map<string, { hash: string; at: number }>();
+const RETRY_MS = 60 * 60_000;
 
 /**
  * Write the summary of every conversation held from an entry that has settled
@@ -429,12 +461,16 @@ const failedOn = new Map<string, string>();
  * earlier transcript. Returns how many were written.
  */
 export async function summariseSettledConversations(now = Date.now()): Promise<number> {
+  // Every (conversation, entry) it is about: held from it, or linked to it.
   const rows = db
     .query(
-      `SELECT c.id, c.user_id, c.entry_ref, MAX(m.created_at) AS last_at
-       FROM conversations c JOIN messages m ON m.conversation_id = c.id
-       WHERE c.entry_ref IS NOT NULL
-       GROUP BY c.id
+      `SELECT p.id, p.user_id, p.entry_ref, MAX(m.created_at) AS last_at
+       FROM (
+         SELECT c.id, c.user_id, c.entry_ref FROM conversations c WHERE c.entry_ref IS NOT NULL
+         UNION
+         SELECT e.conversation_id, e.member_id, e.entry_ref FROM conversation_entries e
+       ) p JOIN messages m ON m.conversation_id = p.id
+       GROUP BY p.id, p.entry_ref
        ORDER BY last_at DESC`,
     )
     .all() as Array<{ id: string; user_id: string; entry_ref: string; last_at: string }>;
@@ -452,18 +488,20 @@ export async function summariseSettledConversations(now = Date.now()): Promise<n
     if (!fiche) continue;
     let stored = summaryFragments(fiche).get(r.id);
     if (!stored) {
-      if (!linkOnFiche(r.user_id, r.id)) continue;
+      if (!linkOnFiche(r.user_id, r.id, r.entry_ref)) continue;
       stored = summaryFragments(fiche).get(r.id);
       if (!stored) continue;
     }
     const hash = currentHash(r.id);
-    if (stored.hash === hash || failedOn.get(r.id) === hash) continue;
+    const key = `${r.id}:${r.entry_ref}`;
+    const failed = failedOn.get(key);
+    if (stored.hash === hash || (failed?.hash === hash && now - failed.at < RETRY_MS)) continue;
     try {
       await summaryFor(r.user_id, ref, r.id);
-      failedOn.delete(r.id);
+      failedOn.delete(key);
       written++;
     } catch (err) {
-      failedOn.set(r.id, hash);
+      failedOn.set(key, { hash, at: now });
       console.warn(`[entry-conversations] summary of ${r.id} failed (${(err as Error).message})`);
     }
   }

@@ -1126,6 +1126,21 @@ try { db.run(`ALTER TABLE conversations ADD COLUMN opened_by TEXT NOT NULL DEFAU
 // keeps of it lands back on that entry — and links the other things kept to
 // it (services/entrySuggestions.ts). `<collection>/<locale>/<slug>`, or null.
 try { db.run(`ALTER TABLE conversations ADD COLUMN entry_ref TEXT`); } catch {}
+// The other entries a conversation is about, by the member's word (19 October
+// 2026): an entry whose fiche they loaded in the composer, or an article shared
+// in the conversation, is offered behind the Carnet mark — "Link" — and once
+// linked the conversation is filed on that entry's fiche like one held from it
+// (data-api/services/entryConversations.ts). Loading a fiche alone is not
+// talking about it.
+db.run(`
+  CREATE TABLE IF NOT EXISTS conversation_entries (
+    conversation_id TEXT NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+    member_id       TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    entry_ref       TEXT NOT NULL,
+    created_at      TEXT NOT NULL DEFAULT (datetime('now')),
+    PRIMARY KEY (conversation_id, entry_ref)
+  )
+`);
 // The night's own daily cap: what Maurice may spend on nobody's turn — briefs,
 // and later the mapping — counted under the ledger's "system" spender
 // (services/budget.ts). Null = no cap of its own; the household's still applies.

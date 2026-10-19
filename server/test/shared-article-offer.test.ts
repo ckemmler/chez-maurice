@@ -96,3 +96,44 @@ describe("an article shared in the conversation", () => {
     expect(await sug.offerSharedArticle(ZOE, id, msg.id, "Bonjour")).toBe(false);
   });
 });
+
+describe("a fiche loaded in the composer", () => {
+  const { saveSpec } = require("../src/services/composer/specs");
+  const { conversationsAbout } = require("../data-api/services/entryConversations");
+
+  beforeAll(() => {
+    const dir = path.join(root, "books/fr");
+    fs.mkdirSync(path.join(dir, "humus-fiche/_fragments"), { recursive: true });
+    fs.writeFileSync(path.join(dir, "humus-fiche.md"),
+      "---\ntitle: Humus\nresource_collection: books\nresource_id: humus\ndate: '2026-08-23'\ntags: []\nlocale: fr\n---\n\nDu sol.\n");
+  });
+
+  test("is offered behind the Carnet mark, and goes when it leaves the context undecided", () => {
+    const id = createConversation(ZOE, null).id;
+    saveSpec(ZOE, id, [{ type: "fiche", id: "books/fr/humus-fiche" }]);
+    expect(sug.offerContextEntries(ZOE, id)).toBe(true);
+    expect(sug.suggestionsFor(ZOE, id).map((r) => [r.kind, r.title, r.existing, r.note])).toEqual([["books", "Humus", "books/fr/humus", ""]]);
+    // Not about it yet: loading a fiche is not talking about it.
+    expect(conversationsAbout(ZOE, { collection: "books", locale: "fr", slug: "humus" })).toEqual([]);
+
+    saveSpec(ZOE, id, []);
+    expect(sug.offerContextEntries(ZOE, id)).toBe(true);
+    expect(sug.suggestionsFor(ZOE, id)).toEqual([]);
+  });
+
+  test("linked, the conversation is about it and filed on its fiche", async () => {
+    const id = createConversation(ZOE, null).id;
+    saveSpec(ZOE, id, [{ type: "fiche", id: "books/fr/humus-fiche" }]);
+    addMessage(id, "user", "Que dit Kœnig du ver de terre ?", { authorId: ZOE });
+    addMessage(id, "assistant", "Qu'il est le seul révolutionnaire.", {});
+    sug.offerContextEntries(ZOE, id);
+    const kept = await sug.keepSuggestion(ZOE, sug.suggestionsFor(ZOE, id)[0]!.id);
+    expect(kept.state).toBe("kept");
+    const about = conversationsAbout(ZOE, { collection: "books", locale: "fr", slug: "humus" });
+    expect(about.map((c: any) => [c.id, c.via])).toEqual([[id, "entry"]]);
+    const frag = fs.readFileSync(path.join(root, "books/fr/humus-fiche/_fragments/001.frag"), "utf-8");
+    expect(frag).toContain(`maurice://conversations/${id}`);
+    // Offered again later, it is not: it is about it now.
+    expect(sug.offerContextEntries(ZOE, id)).toBe(false);
+  });
+});

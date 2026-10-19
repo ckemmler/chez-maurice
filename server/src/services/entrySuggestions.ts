@@ -33,7 +33,7 @@ import { indexGardenPaths } from "../../data-api/services/gardenIndex";
 import { noteBlock, withNote } from "../../data-api/services/gardenNote";
 import { appendResonance } from "../../data-api/services/gardenLinks";
 import { userLocale } from "./i18n";
-import { linkOnFiche } from "../../data-api/services/entryConversations";
+import { entriesOf, linkConversation } from "../../data-api/services/entryConversations";
 // The articles pipeline (gardenArticles, articleSummary, articleCleanup) is
 // loaded where it is used, not here: through the cleanup it reaches
 // highlights.ts, which fixes life.db's path when first loaded — and this file
@@ -595,7 +595,7 @@ export async function suggestForTurn(
 /** The entries a conversation is about: the one it is held from, and those
  *  whose fiche the member loaded in its composer. */
 function aboutRefs(memberId: string, conversationId: string, bound: GardenEntry | null): Set<string> {
-  const refs = new Set<string>(bound ? [refOf(bound)] : []);
+  const refs = new Set<string>([...(bound ? [refOf(bound)] : []), ...entriesOf(memberId, conversationId)]);
   const rows = db
     .query(
       `SELECT json_extract(j.value, '$.id') AS id
@@ -653,6 +653,58 @@ export async function offerSharedArticle(
   return changed;
 }
 
+/**
+ * Offer the entries whose fiche the member loaded in the composer: loading a
+ * fiche is not yet talking about it, so it is offered behind the Carnet mark —
+ * "Link" — and the member says. An offer for a fiche taken out of the context
+ * before it was decided goes with it. Returns whether the list changed.
+ */
+export function offerContextEntries(memberId: string, conversationId: string): boolean {
+  if (!eligible(memberId, conversationId)) return false;
+  const garden = gardenFor(memberId)!;
+  const inContext = new Set(
+    (db
+      .query(
+        `SELECT json_extract(j.value, '$.id') AS id
+         FROM composer_specs s, json_each(s.spec_json, '$.items') j
+         WHERE s.conversation_id = ? AND s.account_id = ? AND json_extract(j.value, '$.type') = 'fiche'`,
+      )
+      .all(conversationId, memberId) as Array<{ id: string | null }>)
+      .map((r) => String(r.id ?? "").replace(/-fiche$/, ""))
+      .filter(Boolean),
+  );
+  const about = new Set(entriesOf(memberId, conversationId));
+  const entries = listGardenEntries(garden);
+  let changed = false;
+
+  // Withdrawn: offers of this kind (a note-less row on an entry, keyed by its
+  // ref) whose fiche is no longer in the context.
+  const offered = db
+    .query(
+      `SELECT id, existing FROM entry_suggestions
+       WHERE member_id = ? AND conversation_id = ? AND state = 'proposed' AND note = '' AND key = existing`,
+    )
+    .all(memberId, conversationId) as Array<{ id: string; existing: string }>;
+  for (const o of offered) {
+    if (inContext.has(o.existing)) continue;
+    db.run(`DELETE FROM entry_suggestions WHERE id = ?`, [o.id]);
+    changed = true;
+  }
+
+  for (const ref of inContext) {
+    if (about.has(ref)) continue;
+    const e = entries.find((x) => refOf(x) === ref);
+    if (!e) continue;
+    const named: Named = { kind: e.collection, title: e.title, year: null, note: "", public: true };
+    if (record(memberId, conversationId, null, named, {
+      key: ref, title: e.title, year: entryYear(garden, e), subtitle: null,
+      image: openImage(garden, e.image), existing: ref, candidates: [],
+    })) changed = true;
+  }
+  if (changed) announce(memberId, conversationId);
+  return changed;
+}
+
 /** The text of a shared article, as a page the save can read: what the app
  *  took from the rendered page — past a paywall — rather than a fetch the
  *  site may refuse. */
@@ -682,11 +734,12 @@ export function setAfterArticleSave(fn: ((memberId: string, saved: SavedArticle)
 }
 
 /**
- * Keep a shared article: save it into the garden (or take the entry it
- * already is), and make the conversation one held from it — its fiche gets
- * the link to the conversation, and later what it came to.
+ * Keep an entry the conversation is about: an article shared in it, saved into
+ * the garden first when it is not there yet, or an entry whose fiche is in its
+ * context. The conversation is linked to it — its fiche gets the link to the
+ * conversation, and later what it came to.
  */
-async function keepSharedArticle(memberId: string, s: EntrySuggestion): Promise<EntrySuggestion> {
+async function keepAsAbout(memberId: string, s: EntrySuggestion): Promise<EntrySuggestion> {
   const garden = gardenFor(memberId);
   if (!garden) throw new SuggestionError("No garden for this member", 404);
   let ref = s.existing;
@@ -709,13 +762,13 @@ async function keepSharedArticle(memberId: string, s: EntrySuggestion): Promise<
     // As the share sheet's save does: cleaned, then summarised, after.
     if (!saved.duplicate && !saved.needs_capture) await afterArticleSave(memberId, saved);
   }
-  // The conversation is about it from now on — unless it already was about
-  // another entry, which stays its own.
+  // The conversation is about it from now on. The first entry so linked is
+  // also the one the app shows it is about, when it was held from none.
   db.run(`UPDATE conversations SET entry_ref = ? WHERE id = ? AND entry_ref IS NULL`, [ref, s.conversation_id]);
   try {
-    linkOnFiche(memberId, s.conversation_id);
+    linkConversation(memberId, s.conversation_id, ref);
   } catch (err) {
-    console.warn(`[suggest] link on the article's fiche failed (${(err as Error).message})`);
+    console.warn(`[suggest] link on the entry's fiche failed (${(err as Error).message})`);
   }
   db.run(
     `UPDATE entry_suggestions SET state = 'kept', kept_path = ?, existing = ?, decided_at = datetime('now'), updated_at = datetime('now') WHERE id = ?`,
@@ -808,7 +861,9 @@ export async function keepSuggestion(
   const s = own(memberId, id);
   if (!s) throw new SuggestionError("not found", 404);
   if (s.state === "kept") return s;
-  if (s.kind === "articles") return keepSharedArticle(memberId, s);
+  // No note to file: an article shared here, or an entry whose fiche is in
+  // the context — keeping it is saying the conversation is about it.
+  if (!s.note) return keepAsAbout(memberId, s);
   const garden = gardenFor(memberId);
   if (!garden) throw new SuggestionError("No garden for this member", 404);
   const episodes = [...new Set(episodeIds.map(String).filter(Boolean))];

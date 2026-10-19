@@ -5,6 +5,7 @@ import { scanNotes, resolveSubtree } from "../services/composer/notes";
 import { searchBooks, bookCoverage, libraryRootFor, listChapters } from "../services/composer/calibre";
 import { weighItems, validateItems } from "../services/composer/weights";
 import { getSpec, saveSpec, refreshSpec, resolveToText, canCompose } from "../services/composer/specs";
+import { offerContextEntries } from "../services/entrySuggestions";
 import { searchFiles, resolveFolderItem } from "../services/composer/files";
 import { searchConversations, SNIPPET_OPEN, SNIPPET_CLOSE } from "../services/conversationSearch";
 import { conversationContext, ensureSummary, SUMMARY_THRESHOLD } from "../services/composer/conversationSummary";
@@ -279,6 +280,13 @@ composer.put("/context/:cid", async (c) => {
   const items = Array.isArray(body.items) ? body.items : [];
   const res = saveSpec(memberId, cid, items);
   if ("errors" in res) return c.json({ error: "invalid items", details: res.errors }, 400);
+  // A fiche loaded here is offered behind the Carnet mark: whether the
+  // conversation is about it is the member's to say (entrySuggestions.ts).
+  try {
+    offerContextEntries(memberId, cid);
+  } catch (err) {
+    console.warn(`[suggest] context offer failed (${(err as Error).message})`);
+  }
   return c.json(res);
 });
 
