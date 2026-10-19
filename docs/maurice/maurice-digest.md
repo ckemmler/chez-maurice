@@ -17,15 +17,15 @@ digest: true
 covers:
   maurice-applications: '2026-10-10'
   maurice-architecture: '2026-10-16'
-  maurice-carnet: '2026-10-18'
-  maurice-chat: '2026-10-18'
+  maurice-carnet: '2026-10-19'
+  maurice-chat: '2026-10-19'
   maurice-composer: '2026-09-22'
   maurice-data-model: '2026-10-17'
   maurice-docs: '2026-10-15'
   maurice-domains: '2026-10-17'
   maurice-files: '2026-06-19'
   maurice-households-rooms: '2026-10-19'
-  maurice-knowledge: '2026-10-14'
+  maurice-knowledge: '2026-10-19'
   maurice-life: '2026-09-18'
   maurice-personas-hats: '2026-09-19'
   maurice-server: '2026-10-18'
@@ -64,7 +64,7 @@ The founding idea is **a memory you can see and shape** — the *apprivoisé* (t
 ## 3. The parts and how they fit
 
 1. **The Maurice app** — native SwiftUI for iPhone, iPad and Mac. It is the only place to chat with Maurice (there is no web chat client). A pure client: it holds no authoritative state and talks HTTPS and WebSocket to the server.
-2. **Carnet** — the iPhone/iPad companion for capturing and reading: books, articles, the member's entries, what Maurice keeps on them. No general chat; Maurice only from an entry.
+2. **Carnet** — the iPhone/iPad companion for capturing and reading: books, articles, the member's entries, what Maurice keeps on them. No general chat: its Maurice button opens a conversation about the entry in the Maurice app.
 3. **The server** — one Bun/Hono process, the whole backend. Its chat engine handles accounts, conversations, domains, files, gardens, the composer, models, moderation and the streaming loop that calls the model and runs tools. Its data API (`/api/v1/*`) serves books, the garden's media (articles, entries, résonances, flashcards) and, for the experimental tools, health, tasks, signals and so on.
 4. **The tools** — small MCP servers behind one gateway, which the server calls on every turn. They are how Maurice *does* things: read and write notes, search, read mail.
 5. **The web garden** — an Astro engine that renders each member's garden as a themeable website, privately for the member and publicly for what they publish.
@@ -148,10 +148,10 @@ There is also a **browser clipper** that saves the page being read into the gard
 - **Prices are in euros.** Every turn records its cost on the message. A member can turn on **"Show what each reply cost"**: a coin under each reply (cost, cached share, a breakdown on tap) and a *Cost and tokens* section per conversation. An unpriced model shows token counts, never a false zero.
 - **Members are never asked spending questions and never shown euros for their budget.** They see a **ring** in the sidebar (∞ with no budget, orange then red as it runs low, with three gentle warnings a month) and a *Budget* pane with its reset date.
 - **The operator sets the limits**, all optional, the tightest winning: an instance total or rolling-day cap (the hosted fleet's default is 10 € a day per household), a household daily cap, a member daily cap, a monthly household budget split into member shares, and a separate allowance for the night's automatic work. Caps are checked before every model round, not once per turn. Under a cap an unpriced model is refused; local models are exempt.
-- **Who pays what:** a member's own turns, the documentation tool, scanned-attachment transcription, mail reading and its documents, domain seeding and chapter summaries are charged to that member; the night's briefs and domain mapping to the household's *system* spender.
+- **Who pays what:** a member's own turns, the documentation tool, scanned-attachment transcription, mail reading and its documents, domain seeding, chapter and article summaries and the summaries of conversations on a fiche are charged to that member; the night's briefs and domain mapping to the household's *system* spender.
 - **Orders of magnitude:** a short classic summarized chapter by chapter costs a cent or two, a long novel some tens of cents; seeding a domain's notes under a cent; a night's domain mapping a few cents per member.
 
-*Gaps:* no payment (card top-up is a stub); article summaries, flashcards and signal parsing are not recorded in the ledger; the documentation tool's cost is not in the chat's displayed figure.
+*Gaps:* no payment (card top-up is a stub); flashcards and signal parsing are not recorded in the ledger; the documentation tool's cost is not in the chat's displayed figure.
 
 *Detail:* `server`, `chat`.
 
@@ -233,7 +233,7 @@ Each member has folders and files (5 GB each), in **Settings**: text, images, PD
 
 - **Notes:** created, updated and listed by Maurice when asked ("keep this in my notes" works in any private conversation); private until the member says otherwise; in the member's language; an existing note is updated rather than duplicated. **Journal** notes and dreams, with named people linked to their fiches. **Fragments** hold long material inside a note.
 - **Entries** — books, films, series, podcasts (and single episodes), articles, games, music, people — can have up to three faces: the **fiche** (the member's private working notes: metadata, dated comments, résonances, fragments), the **card** (the published face, in the member's own words — Maurice never drafts it), and **flashcards**. Metadata and covers come from public catalogues (Google Books, TMDB, IGDB, MusicBrainz, Podcast Index, Wikidata, Open Graph); a hosted household needs no keys for them. A fiche is opened only by a deliberate gesture.
-- **Articles:** saved from Carnet's share sheet, the browser clipper or a conversation. The rendered page is captured (past paywalls), duplicates detected, page furniture (credits, ads, newsletter boxes) removed by a light model that only drops blocks and never rewrites, and a summary written in the background. A site that blocks robots leaves a **bookmark** to complete later from a browser.
+- **Articles:** saved from Carnet's share sheet, the browser clipper or a conversation. The rendered page is captured (past paywalls), duplicates detected, page furniture (credits, ads, newsletter boxes) removed by a light model that only drops blocks and never rewrites, and a summary written in the background — meant to be read instead of the article, its length following the article's. A site that blocks robots leaves a **bookmark** to complete later from a browser.
 - **Highlights** (with note and colour) in books and articles, per member. A **résonance** files a passage onto another fiche as a dated block with a plain wiki-link back.
 - **People as hubs:** a person's fiche gathers what is known — relation, contact cards and addresses, fragments drawn from mail, a list of exchanges. The member's word is final: each element can be confirmed, rejected (never proposed again) or corrected; a confirmed relation is never overwritten (Maurice may only propose a revision beside it). Two people merge only on strong signals, never on a name alone.
 - **Flashcards** from a chapter, a book, a fiche or a fragment, in the Obsidian Spaced Repetition format, so the vault and the app share one schedule; hand-written cards survive regeneration.
@@ -296,15 +296,15 @@ Each member has folders and files (5 GB each), in **Settings**: text, images, PD
 
 - **Joining:** the same household and identity as the Maurice app — an invite code on a fresh device, then a PIN; several households on one device. The member sheet holds households, members, *Disconnect*, and a **Privacy** section (privacy policy, terms, **Delete my account**).
 - **Home: one list of entries** of every kind — books, articles, films, series, music, podcasts, games, posts — each row saying what the member has on it (notes, *Draft*, *Published*, *Not opened*) and where they are in it. Filters by kind, search and sort, an offline copy of the list. Swipe right to archive, left to delete (with a confirmation saying what leaves the garden).
-- **An entry's page:** identity and cover, the source (read, resume, chapters, original), and **one sheet with two faces** — the member's side (dated notes and quotes, with a page) and the shared side (write, publish, unpublish; publishing takes about 15 s). Dictation beside every field, in the entry's language on the device; Whisper recognises the language spoken.
+- **An entry's page:** identity and cover, the source (read, resume, chapters, original), and **one sheet with two faces**; an article opens on its summary instead, its sheet a tap away (*Fiche*, beside *Read*) — the member's side (dated notes and quotes, with a page) and the shared side (write, publish, unpublish; publishing takes about 15 s). Dictation beside every field, in the entry's language on the device; Whisper recognises the language spoken.
 - **Reading:** books from the household's library with chapters, summaries, highlights, the exact position synced per member and offline; *pause tracking* to look ahead without it counting. Articles with their styles, a Text/Summary switch, cached on the device.
 - **Sharing an entry** with other members: nothing is copied; they read it and may add signed notes. A first cut.
-- **Maurice from an entry:** a new conversation each time, with the entry as context; under each reply, what is worth keeping — a note for this entry, other works and people (linked by a résonance). Text only.
+- **Maurice from an entry:** the button opens the Maurice app — a new conversation with the entry as context, or, from a short menu, one already held about it. The fiche lists every conversation about the entry (from its page, or with its fiche loaded in the app), each with a summary of what it came to, written into the fiche when asked for and rewritten once the conversation went on. Without the Maurice app on the device, a text-only thread in Carnet, with what is worth keeping under each reply.
 - **Share extension** (*Save to Carnet*): saves the rendered page from Safari (past paywalls), or an address from other apps, with an optional first note; an offline queue keeps what could not be sent.
 - **The *Maurice* screen:** domains and their briefs (edit, rewrite, erase), reading companions, and older conversations Maurice opened (answered in the Maurice app). A book's page can create a reading companion.
 - No location tracking; a privacy manifest declares no tracking and nothing collected by the publisher. English only. Reading is iPhone/iPad only; on a Mac the garden is read on the web.
 
-*Status:* in daily use at home; the build prepared for App Review is with Apple. *Gaps:* *Log* and *Dashboards* are experimental and not shipped; no flashcard review; notes cannot be edited or deleted from the phone; shared articles show no text; the iPad and a real publish from a phone were never exercised.
+*Status:* in daily use at home; the build prepared for App Review is with Apple. *Gaps:* *Log* and *Dashboards* are experimental and not shipped; the hand-off to the Maurice app and the fiche's conversations were not yet tried on a phone; no flashcard review; notes cannot be edited or deleted from the phone; shared articles show no text; the iPad and a real publish from a phone were never exercised.
 
 *Detail:* `carnet`.
 
