@@ -30,6 +30,8 @@
 "chat.greeting" = "Hallo, %@.";
 "chat.new_conversation_hint" = "neue Unterhaltung";
 "chat.composer.placeholder" = "Frag Maurice etwas …";
+"chat.entry.about" = "Über";
+"chat.entry.open_in_carnet" = "In Carnet öffnen";
 "chat.composer.hint" = "⏎ zum Senden · ⇧⏎ für neue Zeile";
 "chat.composer.hint_room" = "⏎ an den Raum · ⌘⏎ für Maurice · ⇧⏎ neue Zeile";
 "chat.fallback_name" = "Du";

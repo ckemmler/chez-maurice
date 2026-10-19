@@ -42,7 +42,7 @@ struct MauriceApp: App {
                 .onOpenURL { url in
                     if url.scheme == "maurice", url.host == "conversations",
                        let id = url.pathComponents.last, id != "/" {
-                        NotificationManager.shared.onTap?(id, nil)
+                        NotificationManager.shared.open(id, household: nil)
                     } else if url.scheme == "maurice", url.host == "share" {
                         #if os(iOS)
                         ShareArrivals.shared.arrived()

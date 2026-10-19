@@ -152,6 +152,12 @@ struct ContentView: View {
         #if os(iOS)
         .onChange(of: ShareArrivals.shared.token) { showChatForSharedPage() }
         #endif
+        // A conversation opened from outside — Carnet's Maurice button, a kept
+        // note's link, a notification: the chat comes forward, as for a share.
+        .onChange(of: chat.revealed) {
+            gardens.openGardenId = nil
+            preferredColumn = .detail
+        }
     }
 
     /// A page shared from another app waits for the composer, which takes it

@@ -582,7 +582,13 @@ final class ChatService {
         }
         if !conversations.contains(where: { $0.id == id }) { await loadConversations() }
         await selectConversation(id)
+        revealed += 1
     }
+
+    /// Bumped each time a conversation is opened from outside — a link, a
+    /// notification: ContentView brings the chat to the front, whatever was
+    /// showing (the sidebar on a phone, a garden page).
+    private(set) var revealed = 0
 
     /// Whether the current conversation has any messages in it.
     var activeConversationIsEmpty: Bool {
@@ -709,6 +715,10 @@ final class ChatService {
     /// was: the previous thread's messages, participants and ids stay loaded, so
     /// the screen goes on showing the old conversation while the app believes
     /// none is selected. The conversation itself is created on first send.
+    /// The garden entry the open conversation is held from (Carnet's Maurice
+    /// button), for the line above the thread that leads back to it.
+    private(set) var activeEntry: ConversationEntry?
+
     func startNewConversation() async {
         // A reply still streaming belongs to the thread being left. Left running
         // it keeps writing — and on completion appends the finished answer into
@@ -726,6 +736,7 @@ final class ChatService {
         messagesLoadedFor = nil
         messages = []
         participants = []
+        activeEntry = nil
         knownIds = []
         streamingText = ""
         streamingData = []
@@ -748,6 +759,7 @@ final class ChatService {
             messages = detail.messages
             notice = nil
             participants = detail.participants ?? []
+            activeEntry = detail.entry
             knownIds = Set(messages.map { $0.id })
             messagesLoadedFor = conversationId
             pendingSummon = false
@@ -1447,6 +1459,7 @@ final class ChatService {
         proposalsUnseen = 0
         pendingSummon = false
         activeConversationId = nil
+        activeEntry = nil
         followedTurn = nil
         streamingText = ""
         streamingData = []
@@ -1709,7 +1722,24 @@ final class NotificationManager: NSObject, UNUserNotificationCenterDelegate {
     static let shared = NotificationManager()
     /// Open a conversation when its notification is tapped (conversationId,
     /// householdTag) — the tag (remote pushes only) routes to the right household.
-    var onTap: ((String, String?) -> Void)?
+    /// Set once the conversations are loaded; a tap or a link that came before
+    /// (the app launched by it) waits in `pendingTap` and is delivered then.
+    var onTap: ((String, String?) -> Void)? {
+        didSet {
+            if let onTap, let (id, tag) = pendingTap {
+                pendingTap = nil
+                onTap(id, tag)
+            }
+        }
+    }
+    private var pendingTap: (String, String?)?
+
+    /// Open this conversation — now, or once the app is ready to.
+    /// `maurice://conversations/<id>` (Carnet, a kept note's link) and a
+    /// tapped notification both come through here.
+    func open(_ id: String, household tag: String?) {
+        if let onTap { onTap(id, tag) } else { pendingTap = (id, tag) }
+    }
     /// The APNs device token (hex), once the system grants it; uploaded by ChatService.
     private(set) var deviceToken: String?
     /// Called when the device token arrives (ChatService uploads it to the server).
@@ -1768,7 +1798,7 @@ final class NotificationManager: NSObject, UNUserNotificationCenterDelegate {
         let info = response.notification.request.content.userInfo
         let id = info["conversationId"] as? String
         let tag = info["householdTag"] as? String
-        Task { @MainActor in if let id { NotificationManager.shared.onTap?(id, tag) } }
+        Task { @MainActor in if let id { NotificationManager.shared.open(id, household: tag) } }
         completionHandler()
     }
 }

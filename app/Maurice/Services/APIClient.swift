@@ -894,6 +894,15 @@ struct ServerConversationDetail: Decodable {
     let updated_at: String
     let messages: [ServerMessage]
     let participants: [ServerParticipant]?
+    /// The garden entry it is held from, when Carnet opened it from one.
+    let entry: ConversationEntry?
+}
+
+/// A garden entry a conversation is about: `ref` is `<collection>/<locale>/<slug>`.
+struct ConversationEntry: Decodable, Equatable {
+    let ref: String
+    let collection: String
+    let title: String
 }
 
 struct ServerMessage: Decodable, Identifiable {
