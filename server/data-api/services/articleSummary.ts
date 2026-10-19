@@ -17,6 +17,8 @@
 import fs from "node:fs";
 import path from "node:path";
 import { ancillaryComplete, ancillaryModel } from "../../src/services/ancillary";
+import { recordSpend } from "../../src/services/budget";
+import type { TurnUsage } from "../../src/services/pricing";
 import { autoCommit, fragmentsDir, gardenFor, parseFiche, writeFiche } from "./gardenFiche";
 import { extractArticleFromUrl } from "./articleExtract";
 import { indexGardenPaths } from "./gardenIndex";
@@ -40,28 +42,53 @@ export interface SummaryInput {
   lang?: string;
 }
 
+/**
+ * Which summary a fiche holds. A summary stamped with an older version (or
+ * none) is rewritten the next time the article is opened in Carnet: version 1
+ * was the 110-word paragraph, which gave a vague idea of the article; version 2
+ * is meant to be read *instead* of it (19 October 2026).
+ */
+export const SUMMARY_VERSION = 2;
+
+/**
+ * How long the summary may run, in words: about an eighth of the article,
+ * never under 150 nor over 600. A 600-word piece gets 150 words — its
+ * argument, not a teaser; a 5 000-word investigation gets 600.
+ */
+export function summaryWordBudget(text: string): number {
+  const words = text.split(/\s+/).filter(Boolean).length;
+  return Math.min(600, Math.max(150, Math.round(words / 8 / 10) * 10));
+}
+
 function buildPrompt(input: SummaryInput): string {
   const language = input.lang?.startsWith("fr")
     ? "français"
     : input.lang?.startsWith("en")
       ? "English"
       : "the language the article itself is written in";
+  const budget = summaryWordBudget(input.text);
 
   return [
     `Here is an article${input.publication ? ` from ${input.publication}` : ""}, titled "${input.title}".`,
     "",
-    // The word ceiling carries the weight here. Asked only for "3 to 5
-    // sentences", the model obliges with three sentences of eighty words each —
-    // technically compliant, and twice the length of a summary worth reading at
-    // a glance.
-    "Write a short summary of it: 3 to 5 sentences, at most 110 words, as a single paragraph.",
+    "Write a summary of it for a reader who will read the summary instead of the article.",
+    "Reading it must be enough to know what the article says — its substance, not a vague idea of it:",
+    "the thesis or the news; the arguments, evidence, facts and figures that carry it; who says what,",
+    "when that matters; the conclusion it reaches, and any reservation or open question it leaves.",
+    "Keep the concrete details. A summary that says \"the author examines several causes\" is useless;",
+    "one that names the causes and says which the author holds to be decisive is what is wanted.",
+    "",
+    // The ceiling is what keeps the length honest: asked for "a summary" alone,
+    // a model writes the same 120 words for a brief and for a long investigation.
+    `Length: at most ${budget} words, in proportion to what the article actually contains — a thin`,
+    "article gets a short summary, never padding.",
+    "Form: a few paragraphs of plain prose, separated by blank lines. No title, no headings, no bullet",
+    "points, no bold.",
     "",
     `Write it in ${language}.`,
-    "Say what the article actually argues or reports — the substance, the specific claims, the",
-    "conclusion it reaches. Do not describe the article from the outside: no \"this article",
-    "explains…\", no \"the author discusses…\". Start straight in on the content.",
-    "Do not add a title, a preamble, bullet points, or any closing remark.",
-    "Return the paragraph and nothing else.",
+    "Do not describe the article from the outside: no \"this article explains…\", no \"the author",
+    "discusses…\". Start straight in on the content. No preamble and no closing remark.",
+    "Return the summary and nothing else.",
     "",
     "---",
     "",
@@ -69,7 +96,7 @@ function buildPrompt(input: SummaryInput): string {
   ].join("\n");
 }
 
-export async function summarizeArticleText(input: SummaryInput): Promise<string> {
+export async function summarizeArticleText(input: SummaryInput): Promise<string | SummaryResult> {
   const text = input.text.trim();
   if (!text) throw new Error("no article text to summarise");
   if (text.length > MAX_TEXT_CHARS) {
@@ -78,13 +105,20 @@ export async function summarizeArticleText(input: SummaryInput): Promise<string>
     );
   }
 
-  // Through the ancillary door: the admin's model for `article_summary`, on
-  // whichever provider it belongs to. Room for adaptive thinking plus a short
-  // paragraph — on a thinking model those tokens count against max_tokens.
+  return generator({ ...input, text });
+}
+
+export interface SummaryResult { text: string; usage: TurnUsage | null }
+export type ArticleSummaryGenerator = (input: SummaryInput) => Promise<string | SummaryResult>;
+
+/** Through the ancillary door: the admin's model for `article_summary`, on
+ *  whichever provider it belongs to. Room for adaptive thinking plus up to
+ *  600 words — on a thinking model those tokens count against max_tokens. */
+const modelGenerator: ArticleSummaryGenerator = async (input) => {
   const result = await ancillaryComplete({
     invocation: "article_summary",
-    prompt: buildPrompt({ ...input, text }),
-    maxTokens: 4000,
+    prompt: buildPrompt(input),
+    maxTokens: 8000,
     effort: "low",
   });
 
@@ -98,25 +132,33 @@ export async function summarizeArticleText(input: SummaryInput): Promise<string>
   if (result.stop === "max_tokens") {
     throw new Error("the summary hit the token ceiling and would be cut off mid-sentence");
   }
-  return summary;
+  return { text: summary, usage: result.usage };
+};
+
+let generator: ArticleSummaryGenerator = modelGenerator;
+/** Tests swap the model call for a stub. */
+export function setArticleSummaryGenerator(g: ArticleSummaryGenerator | null): void {
+  generator = g ?? modelGenerator;
 }
 
 // ── Reading the article text back ──
 
-/** The full text saved alongside the fiche, or "" when there is no fragment. */
+/**
+ * The article's own text: the fiche's first fragment, written at save time.
+ * The fragments after it are not the article — a conversation's summary, what
+ * Maurice filed — and read as part of it they would end up in the reader and
+ * in the article's summary. "" when there is no fragment.
+ */
 export function readFullText(ficheFile: string): string {
   const dir = fragmentsDir(ficheFile);
   if (!fs.existsSync(dir)) return "";
-  return fs
+  const first = fs
     .readdirSync(dir)
     .filter((f) => f.endsWith(".frag"))
-    .sort()
-    .map((f) => {
-      const raw = fs.readFileSync(path.join(dir, f), "utf-8");
-      return raw.replace(/^---\n[\s\S]*?\n---\n?/, "");
-    })
-    .join("\n\n")
-    .trim();
+    .sort()[0];
+  if (!first) return "";
+  const raw = fs.readFileSync(path.join(dir, first), "utf-8");
+  return raw.replace(/^---\n[\s\S]*?\n---\n?/, "").trim();
 }
 
 // ── Write-back ──
@@ -124,20 +166,52 @@ export function readFullText(ficheFile: string): string {
 /**
  * Summarise one saved article and write the result into its frontmatter.
  *
- * `force` regenerates over an existing summary. Without it an article that
- * already has one is left alone, so a retry is safe to run over the whole
- * collection.
+ * `force` regenerates over an existing summary. Without it an article whose
+ * summary is of the current version is left alone, so a retry is safe to run
+ * over the whole collection; one of an older version is rewritten.
+ *
+ * One pass per fiche at a time: the save's background pass (cleanup, then
+ * summary) and Carnet opening the article a few seconds later both land here,
+ * and the second waits on the first rather than summarising the uncleaned text
+ * beside it.
  */
-export async function summarizeAndStore(
+export function summarizeAndStore(
   memberId: string,
   ref: ArticleFicheRef,
   opts: { force?: boolean } = {},
+): Promise<{ summary: string; regenerated: boolean }> {
+  const running = passes.get(ref.file);
+  if (running) {
+    // Whatever it came to: a failed pass leaves the next to try for itself,
+    // and a forced one need not run twice back to back.
+    return running.catch(() => {}).then(() => summarizeAndStore(memberId, ref, { force: false }));
+  }
+  return single(ref.file, () => summarize(memberId, ref, opts));
+}
+
+/** What each fiche's running pass is, so the next one waits on it. */
+const passes = new Map<string, Promise<unknown>>();
+
+function single<T>(file: string, run: () => Promise<T>): Promise<T> {
+  const task = run().finally(() => {
+    if (passes.get(file) === task) passes.delete(file);
+  });
+  passes.set(file, task);
+  return task;
+}
+
+async function summarize(
+  memberId: string,
+  ref: ArticleFicheRef,
+  opts: { force?: boolean },
 ): Promise<{ summary: string; regenerated: boolean }> {
   const garden = gardenFor(memberId);
   if (!garden) throw new ArticleSaveError("No garden for this member", 404);
 
   const existing = readStoredSummary(ref);
-  if (existing && !opts.force) return { summary: existing, regenerated: false };
+  if (existing.summary && existing.current && !opts.force) {
+    return { summary: existing.summary, regenerated: false };
+  }
 
   const parsed = parseFiche(fs.readFileSync(ref.file, "utf-8"));
   if (!parsed) throw new ArticleSaveError(`Could not parse: ${ref.slug}`, 422);
@@ -155,12 +229,16 @@ export async function summarizeAndStore(
     text = (await extractArticleFromUrl(url)).content;
   }
 
-  const summary = await summarizeArticleText({
+  const made = await summarizeArticleText({
     title: String(fm.title ?? ref.title),
     publication: String(meta.publication ?? fm.source ?? "") || undefined,
     text,
     lang: String(meta.lang ?? "") || undefined,
   });
+  const summary = typeof made === "string" ? made : made.text;
+  // Asked for by the member — by sharing the article, or by opening it — so
+  // charged to them, as the other passes run on their behalf are.
+  if (typeof made !== "string") recordSpend(made.usage, memberId);
 
   // Re-read: this runs seconds to minutes after the save, and the fiche may
   // have picked up a second comment or a hand edit in the meantime.
@@ -171,6 +249,7 @@ export async function summarizeAndStore(
     summary,
     summary_model: ancillaryModel("article_summary"),
     summary_at: new Date().toISOString().slice(0, 10),
+    summary_version: SUMMARY_VERSION,
   };
   if (ref.kind === "fiche") {
     fresh.frontmatter.meta = { ...(fresh.frontmatter.meta ?? {}), ...stamp };
@@ -183,14 +262,21 @@ export async function summarizeAndStore(
   // The summary is now part of the fiche's searchable metadata preamble.
   indexGardenPaths(memberId, [ref.file]);
 
-  return { summary, regenerated: !!existing };
+  return { summary, regenerated: !!existing.summary };
 }
 
-function readStoredSummary(ref: ArticleFicheRef): string {
+function readStoredSummary(ref: ArticleFicheRef): { summary: string; current: boolean } {
   const parsed = parseFiche(fs.readFileSync(ref.file, "utf-8"));
-  if (!parsed) return "";
+  if (!parsed) return { summary: "", current: false };
   const fm = parsed.frontmatter;
-  return String((ref.kind === "fiche" ? (fm.meta ?? {}).summary : fm.summary) ?? "");
+  return storedSummaryOf(ref.kind === "fiche" ? (fm.meta ?? {}) : fm);
+}
+
+/** The summary a fiche's meta (or a card's frontmatter) carries, and whether
+ *  it is of the current version. */
+export function storedSummaryOf(meta: Record<string, any>): { summary: string; current: boolean } {
+  const summary = String(meta.summary ?? "");
+  return { summary, current: !!summary && Number(meta.summary_version ?? 1) >= SUMMARY_VERSION };
 }
 
 /** Look one up by slug, for the on-demand route. */
@@ -233,8 +319,11 @@ export function scheduleArticleSummary(
         console.warn(`[articles] could not clean ${ref.slug}:`, (err as Error).message);
       })
     : Promise.resolve();
-  const task = before
-    .then(() => (opts.summarise === false ? { summary: "" } : summarizeAndStore(memberId, ref)))
+  // Registered as the fiche's pass from the start, cleanup included: a summary
+  // asked for meanwhile waits for the cleaned text.
+  const pass = single(ref.file, () =>
+    before.then(() => (opts.summarise === false ? { summary: "" } : summarize(memberId, ref, {}))));
+  const task = pass
     .then((r) => {
       if (r.summary) console.log(`[articles] summarised ${ref.slug}`);
     })

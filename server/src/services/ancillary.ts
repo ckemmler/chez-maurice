@@ -105,7 +105,14 @@ export const ANCILLARY_INVOCATIONS: AncillaryInvocation[] = [
   { id: "conversation_summary", side: "server", tier: "standard", label: "Conversation summary",
     blurb: "A long conversation loaded as context, summarised for the composer." },
   { id: "article_summary", side: "server", tier: "standard", label: "Article summary",
-    blurb: "The one-paragraph summary written on a saved article's fiche." },
+    blurb: "The summary written on a saved article's fiche — meant to be read instead of the article." },
+  // What a conversation about an entry came to (data-api/services/
+  // entryConversations.ts), filed in the entry's fiche as a fragment — written
+  // only when the member asks to see it, rewritten when the thread went on.
+  // Charged to them.
+  { id: "entry_conversation_summary", side: "server", tier: "standard", label: "Conversation on a fiche",
+    blurb: "What a conversation about a book, an article or a film came to, kept in its fiche when the member asks to see it.",
+    prefer: NIGHT_MODELS },
   // Before the summary (data-api/services/articleCleanup.ts): which blocks of a
   // captured page are not the article — a credit, "Advertisement", the title
   // again. A sorting job on previews, answered with a list of numbers.

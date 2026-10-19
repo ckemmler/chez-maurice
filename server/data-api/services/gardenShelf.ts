@@ -32,6 +32,8 @@ import { countHighlights, listHighlights } from "./highlights";
 import { fragmentsDir, isOpened, parseFiche, publicUrl, type GardenRef } from "./gardenFiche";
 import { listGardenEntries, type GardenEntry } from "./gardenEntries";
 import { NEEDS_CAPTURE } from "./gardenArticles";
+import { storedSummaryOf } from "./articleSummary";
+import { isConversationFragment } from "./entryConversations";
 import { archivedIds } from "./shelfArchive";
 import { gardenFor } from "./gardenFiche";
 import { NOTE_AUTHOR } from "./gardenNote";
@@ -75,6 +77,13 @@ export interface ArticleSource {
   captured: boolean;
   word_count: number;
   reading_minutes: number;
+  /**
+   * Page only, not the list: what the article says, written to be read in its
+   * place (articleSummary.ts). Null until it has been written; `current` false
+   * for one written before the summaries carried the substance — Carnet asks
+   * for it again.
+   */
+  summary?: { text: string; current: boolean } | null;
 }
 
 export interface ShelfEntry {
@@ -337,6 +346,9 @@ function readFragments(garden: GardenRef, ficheRel: string, collection: string):
       continue;
     }
     const parsed = parseFiche(raw);
+    // A conversation's summary is listed with its conversation
+    // (entryConversations.ts), shown when the member asks for it.
+    if (parsed && isConversationFragment(parsed.frontmatter)) continue;
     out.push({
       kind: "fragment", id: `f:${id}`, date: null,
       summary: String(parsed?.frontmatter.summary ?? ""),
@@ -347,10 +359,15 @@ function readFragments(garden: GardenRef, ficheRel: string, collection: string):
 }
 
 function countFragments(garden: GardenRef, ficheRel: string, collection: string): number {
+  const dir = fragmentsDir(path.join(garden.root, ficheRel));
   try {
     return fs
-      .readdirSync(fragmentsDir(path.join(garden.root, ficheRel)))
-      .filter((f) => f.endsWith(".frag") && !(collection === "articles" && f === "001.frag")).length;
+      .readdirSync(dir)
+      .filter((f) => f.endsWith(".frag") && !(collection === "articles" && f === "001.frag"))
+      .filter((f) => {
+        const parsed = parseFiche(fs.readFileSync(path.join(dir, f), "utf-8"));
+        return !(parsed && isConversationFragment(parsed.frontmatter));
+      }).length;
   } catch {
     return 0;
   }
@@ -762,6 +779,10 @@ export async function getShelfEntry(
   const lib = loadLibrary(books);
   const counts: Counts = { books: countHighlights(memberId), articles: countArticleHighlights(memberId) };
   const { row, card, fiche, book, subject } = await describe(memberId, garden, e, lib, counts);
+  if (row.source?.type === "article") {
+    const stored = storedSummaryOf(fiche ? fiche.meta : (card?.fm ?? {}));
+    row.source = { ...row.source, summary: stored.summary ? { text: stored.summary, current: stored.current } : null };
+  }
   const site = siteFor(ownerId);
   const foreign = ownerId !== memberId;
   const owner = memberBrief(ownerId);

@@ -175,6 +175,22 @@ export function getConversation(
     .get(viewerId, id) as Conversation | null;
 }
 
+/** The member's own conversation held from this entry with nothing said in it
+ *  yet, if there is one. */
+export function emptyEntryConversation(
+  userId: string, entryRef: string, mauriceId: string | null,
+): Conversation | null {
+  const row = db
+    .query(
+      `SELECT c.id FROM conversations c
+       WHERE c.user_id = ? AND c.entry_ref = ? AND c.maurice_id IS ?
+         AND NOT EXISTS (SELECT 1 FROM messages m WHERE m.conversation_id = c.id)
+       ORDER BY c.created_at DESC LIMIT 1`,
+    )
+    .get(userId, entryRef, mauriceId) as { id: string } | null;
+  return row ? getConversation(row.id, userId) : null;
+}
+
 export function createConversation(
   userId: string,
   mauriceId?: string | null,

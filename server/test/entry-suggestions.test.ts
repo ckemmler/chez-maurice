@@ -699,9 +699,12 @@ describe("opening a conversation from an entry", () => {
       method: "POST", body: JSON.stringify(body),
       headers: { Authorization: annaAuth, "Content-Type": "application/json" },
     });
+    // 201 for a new one; 200 when an earlier conversation held from it has
+    // nothing said in it yet, and is opened again instead.
     const made = await post({ entry: "series/fr/sugar" });
-    expect(made.status).toBe(201);
+    expect([200, 201]).toContain(made.status);
     const convo = (await made.json()) as any;
+    expect(((await (await post({ entry: "series/fr/sugar" })).json()) as any).id).toBe(convo.id);
     expect(convo.entry_ref).toBe("series/fr/sugar");
     expect(getSpec(ANNA, convo.id).items.map((i: any) => [i.type, i.id])).toEqual([["fiche", "series/fr/sugar-fiche"]]);
     // Found, and read: what the model is given holds what is written on the fiche.

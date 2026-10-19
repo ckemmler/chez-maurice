@@ -3827,6 +3827,26 @@ def _handle_delete_fiche(args: dict[str, Any]) -> dict[str, Any]:
     return {"deleted": f"{col}/{locale}/{rid}"}
 
 
+def _promoted_body(fiche_path: Path, body: str) -> str:
+    """The fiche's body with its fragments after it (frontmatter stripped) —
+    what a promotion makes the card of. A conversation's summary is left out:
+    it is the member's working material in Maurice's words, and the card is
+    published under the member's name (data-api/services/entryConversations.ts)."""
+    fiche_body = body.strip()
+    fdir = _fragments_dir(fiche_path)
+    if fdir.exists():
+        fragment_parts = []
+        for f in sorted(fdir.glob("*.frag")):
+            if f.stem.isdigit():
+                ffm, fbody = _parse_fragment_full(f)
+                if ffm.get("conversation"):
+                    continue
+                fragment_parts.append(fbody.strip())
+        if fragment_parts:
+            fiche_body = fiche_body + "\n\n" + "\n\n".join(fragment_parts) if fiche_body else "\n\n".join(fragment_parts)
+    return fiche_body
+
+
 def _handle_promote_fiche(args: dict[str, Any]) -> dict[str, Any]:
     """Promote a fiche to a full resource entry using its pre-fetched metadata."""
     col = args["resource_collection"]
@@ -3840,18 +3860,7 @@ def _handle_promote_fiche(args: dict[str, Any]) -> dict[str, Any]:
 
     fm, body = _parse_note(fiche_path)
     meta = fm.get("meta") or {}
-    fiche_body = body.strip()
-
-    # Concatenate fragments into body (strip frontmatter)
-    fdir = _fragments_dir(fiche_path)
-    if fdir.exists():
-        fragment_parts = []
-        for f in sorted(fdir.glob("*.frag")):
-            if f.stem.isdigit():
-                _, fbody = _parse_fragment(f)
-                fragment_parts.append(fbody.strip())
-        if fragment_parts:
-            fiche_body = fiche_body + "\n\n" + "\n\n".join(fragment_parts) if fiche_body else "\n\n".join(fragment_parts)
+    fiche_body = _promoted_body(fiche_path, body)
 
     # 2. If no meta, fall back to the existing create_*_entry handlers
     if not meta:

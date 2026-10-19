@@ -116,7 +116,7 @@ export function ownEntryRef(memberId: string, ref: string): string | null {
 }
 
 /** The entry a conversation is held from, when it is and the entry is still there. */
-function boundEntry(memberId: string, conversationId: string): GardenEntry | null {
+export function boundEntry(memberId: string, conversationId: string): GardenEntry | null {
   const ref = getConversation(conversationId, memberId)?.entry_ref;
   const garden = ref ? gardenFor(memberId) : null;
   if (!ref || !garden) return null;

@@ -11,6 +11,7 @@ import { gardenFor } from "../services/gardenFiche";
 import { GARDEN_COLLECTIONS, listGardenEntries } from "../services/gardenEntries";
 import { cardsFace } from "../services/flashcards";
 import { getShelfEntry, listNotes, listShelf, siteFor } from "../services/gardenShelf";
+import { conversationsAbout, EntryConversationError, summaryFor } from "../services/entryConversations";
 import {
   addNote, archiveEntry, completeCard, completeCover, deleteEntry, setCover, deployState, entryForBook, EntryWriteError, setPublished, writeShared, type EntryRef,
 } from "../services/gardenWrite";
@@ -97,6 +98,39 @@ app.get("/entries/:collection/:locale/:slug", async (c) => {
   const entry = await getShelfEntry(at.memberId, at.garden, collection, locale, slug, undefined, at.ownerId);
   if (!entry) return c.json({ error: "No such entry" }, 404);
   return c.json(entry);
+});
+
+// ── Conversations about the entry (services/entryConversations.ts) ──
+
+/**
+ * The member's conversations about this entry — held from its page, or with
+ * its fiche in context — each with the summary its fiche keeps of it, if one
+ * was asked for. Their own entries only: a conversation is the member's.
+ */
+app.get("/entries/:collection/:locale/:slug/conversations", (c) => {
+  const at = reach(c);
+  if (!at) return c.json({ error: "No such entry" }, 404);
+  if (at.ownerId !== at.memberId) return c.json({ conversations: [] });
+  const { collection, locale, slug } = c.req.param();
+  return c.json({ conversations: conversationsAbout(at.memberId, { collection, locale, slug }) });
+});
+
+/**
+ * What one of those conversations came to, as the fiche keeps it: read back
+ * when it is up to date, written (or rewritten, the thread having gone on)
+ * otherwise — a model call, so the client waits.
+ */
+app.post("/entries/:collection/:locale/:slug/conversations/:id/summary", async (c) => {
+  const memberId = c.get("userId") as string;
+  const { collection, locale, slug, id } = c.req.param();
+  try {
+    const summary = await summaryFor(memberId, { collection, locale, slug }, id);
+    return c.json({ summary });
+  } catch (e) {
+    if (e instanceof EntryConversationError) return c.json({ error: e.message }, e.status);
+    console.error("[garden-entries] conversation summary failed:", e);
+    return c.json({ error: `Failed to summarise: ${(e as Error).message}` }, 502);
+  }
 });
 
 // ── Sharing (services/entryShares.ts) ──

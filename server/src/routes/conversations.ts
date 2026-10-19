@@ -5,6 +5,7 @@ import {
   listConversations,
   getConversation,
   createConversation,
+  emptyEntryConversation,
   renameConversation,
   deleteConversation,
   getMessages,
@@ -34,7 +35,7 @@ import { pushToUser } from "../services/push";
 import { indexConversationInBackground } from "../services/mcpClient";
 import { searchConversations } from "../services/conversationSearch";
 import { takeReview } from "../services/reviewFooter";
-import { ownEntryRef, suggestInBackground } from "../services/entrySuggestions";
+import { boundEntry, ownEntryRef, suggestInBackground } from "../services/entrySuggestions";
 import { saveSpec } from "../services/composer/specs";
 import { memberLocale } from "../services/domainBriefs";
 import {
@@ -125,12 +126,17 @@ conversations.post("/", async (c) => {
     entryRef = ownEntryRef(uid, String(entry));
     if (!entryRef) return c.json({ error: "No such entry" }, 404);
   }
-  const convo = createConversation(uid, maurice_id ?? null, { entryRef });
+  // Carnet creates the conversation on the tap that opens the Maurice app; a
+  // second tap before anything was said there reopens the same one rather
+  // than leaving an empty thread behind each time.
+  const unused = entryRef ? emptyEntryConversation(uid, entryRef, maurice_id ?? null) : null;
+  const convo = unused ?? createConversation(uid, maurice_id ?? null, { entryRef });
   // The composer names a fiche by its file's stem, `-fiche` included: under
   // the entry's own ref it found nothing, and the turn went out with no
   // context at all (10 October 2026).
+  // Saved again on a reused one: the snapshot is then of the fiche as it is now.
   if (entryRef) saveSpec(uid, convo.id, [{ type: "fiche", id: `${entryRef}-fiche` }]);
-  return c.json(convo, 201);
+  return c.json(convo, unused ? 200 : 201);
 });
 
 // ── GET /api/conversations/search?q=…&limit=… ───────────────────
@@ -161,7 +167,11 @@ conversations.get("/:id", (c) => {
     (m) => !m.author_id || !blocked.has(m.author_id),
   );
   const participants = getParticipants(convo.id);
-  return c.json({ ...convo, messages, participants });
+  // Held from a garden entry: what it is, for the header that leads back to it
+  // in Carnet. The entry is in its owner's garden, so only the owner sees it.
+  const held = convo.entry_ref && convo.user_id === c.get("userId") ? boundEntry(convo.user_id, convo.id) : null;
+  const entry = held ? { ref: convo.entry_ref, collection: held.collection, title: held.title } : null;
+  return c.json({ ...convo, messages, participants, entry });
 });
 
 // ── POST /api/conversations/:id/read — mark read (drives unread roll-up) ──
