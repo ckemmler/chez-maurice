@@ -1,6 +1,6 @@
 ---
 title: Households, rooms & devices
-date: '2026-10-15'
+date: '2026-10-19'
 flags: []
 locale: en
 description: Members and roles, guests, multi-person rooms, device pairing and PINs,
@@ -49,7 +49,7 @@ Each household's face in that switcher is its own: `households.name`, `icon` (an
 
 A conversation is a **room**; a 1:1 chat is just a room with one human. Membership is `conversation_participants`, and access is participant-based — `listConversations()` joins on membership, so you only see rooms you're in. `addParticipant()` enforces guest reach, fans the event to the room, and notifies the newcomer.
 
-Maurice's role shifts with the room: in a 1:1 every message summons him; in a multi-human room he answers **only when mentioned** — `mentionsMaurice()` matches `@claude` / `@maurice` (the ➤ button posts a summon, 💬 posts a human-only message). The composer follows that: in a room 💬 is the **default button** — last in the row, at the far right, filled with the member's accent, and what Return posts; ➤ sits to its left and keeps ⌘Return. A 1:1 has no 💬 at all, so Return still goes to Maurice. Read state (`last_read_at` per participant) drives the per-foyer unread roll-up, which counts rooms where someone else wrote since you last read — and, since 19 September 2026, the conversations [[maurice-chat|Maurice opened on his own]] that you have not opened yet (his replies in a thread you started never count).
+Maurice's role shifts with the room: in a 1:1 every message summons him; in a multi-human room he answers **only when mentioned** — `mentionsMaurice()` matches `@claude` / `@maurice` (the ➤ button posts a summon, 💬 posts a human-only message). The composer follows that: in a room 💬 is the **default button** — last in the row, at the far right, filled with the member's accent, and, on the Mac, what Return posts; ➤ sits to its left and keeps ⌘Return. A 1:1 has no 💬 at all, so Return there goes to Maurice. On iPhone and iPad the keyboard's Return breaks the line instead (a plain return key, not a blue send key): a message leaves by its button, or by ⌘Return on a hardware keyboard. Read state (`last_read_at` per participant) drives the per-foyer unread roll-up, which counts rooms where someone else wrote since you last read — and, since 19 September 2026, the conversations [[maurice-chat|Maurice opened on his own]] that you have not opened yet (his replies in a thread you started never count).
 
 Liveness uses two WebSocket channels off `roomBus` (`server/src/services/roomBus.ts`): a per-room channel for live messages, and a **per-user channel** (`/api/me/ws`) for activity — "someone is chatting with you" — even when you're not in that room. Its events: `activity` (a message in a room you are in), `conversation_added` (someone added you), and `conversation_opened` (Maurice opened a conversation for you, with his first message). See [[maurice-server]].
 

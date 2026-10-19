@@ -1,6 +1,6 @@
 ---
 title: Maurice — the digest
-date: '2026-10-17'
+date: '2026-10-19'
 flags: []
 locale: en
 description: 'The system documentation condensed to what a user needs: everything
@@ -24,7 +24,7 @@ covers:
   maurice-docs: '2026-10-15'
   maurice-domains: '2026-10-17'
   maurice-files: '2026-06-19'
-  maurice-households-rooms: '2026-10-15'
+  maurice-households-rooms: '2026-10-19'
   maurice-knowledge: '2026-10-14'
   maurice-life: '2026-09-18'
   maurice-personas-hats: '2026-09-19'
@@ -185,7 +185,7 @@ There is also a **browser clipper** that saves the page being read into the gard
 
 ## 11. Rooms and safety
 
-- A **room** is a conversation with more than one person. Humans talk freely; **Maurice answers only when summoned** (`@maurice`, or the ➤ button; Return posts to humans only). Everyone in a room shares the loaded context; no one's briefs, memory search, mail or suggestions are used there.
+- A **room** is a conversation with more than one person. Humans talk freely; **Maurice answers only when summoned** (`@maurice`, or the ➤ button; on the Mac, Return posts to humans only). Everyone in a room shares the loaded context; no one's briefs, memory search, mail or suggestions are used there.
 - Live updates over WebSocket, push when no socket is connected.
 - **Moderation**, in shared rooms only: long-press a message to **Report** (child safety first) or **Block** a participant. Reports reach the household's operator. A private one-to-one can never be reported, so private conversations stay out of the operator's reach. Before connecting to a household as a non-admin, the app shows a notice about who runs the server; the settings link to Apple and to child-protection authorities, and the terms of use forbid objectionable content.
 
