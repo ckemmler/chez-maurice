@@ -3134,12 +3134,19 @@ private struct ComposerBar: View {
                 // growing to ~10 lines before it scrolls.
                 TextField(session.localized("chat.composer.placeholder"),
                           text: $inputText, axis: .vertical)
-                    .onSubmit { submit(returnAction) }
                     .textFieldStyle(.plain)
                 .font(.system(size: kBodyFont + 2))
                 .lineLimit(2...10)
                 .focused($isFocused)
-                .submitLabel(.send)
+                // iPhone and iPad: the keyboard's Return breaks the line, and
+                // wears the plain return arrow to say so; sending is the ➤ / 💬
+                // buttons (⌘Return on a hardware keyboard). The blue "send" key
+                // promised a send the field could not keep in a multi-line draft.
+                #if os(iOS)
+                .submitLabel(.return)
+                #else
+                .onSubmit { submit(returnAction) }
+                #endif
                 // ⌘V with an image on the clipboard attaches it, the way a
                 // photo from the picker would. The text field handles string
                 // pastes itself; an image is not something it can read, so the
