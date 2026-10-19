@@ -28,7 +28,7 @@ covers:
   maurice-knowledge: '2026-10-19'
   maurice-life: '2026-09-18'
   maurice-personas-hats: '2026-09-19'
-  maurice-server: '2026-10-18'
+  maurice-server: '2026-10-19'
   maurice-shared-gardens: '2026-10-15'
   maurice-tools: '2026-10-10'
   maurice-web-garden: '2026-10-17'
@@ -133,7 +133,7 @@ There is also a **browser clipper** that saves the page being read into the gard
 - **A key is what makes a model exist**: the apps, the access grid and the admin console only list models whose provider has a key. The admin's **access grid** says which models each standard member may use; an admin may use all.
 - **Which model answers:** the conversation's domain (if it names one), else the member's everyday choice, else the household default. The model pill in the composer switches model, grouped by provider. There is **no automatic failover** between providers.
 - **The household default is a setting.** The policy for hosted households is Scaleway only: **DeepSeek V4 Flash** as the everyday model and the small **Qwen 3.6** for light work.
-- **Background work** (summaries, briefs, mail reading, the documentation tool…) runs through named *ancillary invocations*. Each resolves to an admin's pin, else its own default, else the household's ancillary model, else the chat default. Chapter summaries and the full mail reading use the household's default model; the night's domain work prefers DeepSeek V4 Flash; light sorting jobs prefer the small Qwen.
+- **Background work** (summaries, briefs, mail reading, the documentation tool…) runs through named *ancillary invocations*. Each resolves to an admin's pin, else its own default, else the household's ancillary model, else the chat default. Chapter summaries and the full mail reading use the household's default model; summaries and other prose, and the night's domain work, prefer DeepSeek V4 Flash; light sorting jobs prefer the small Qwen. No Mistral model is ever advised.
 - **Reasoning:** a household setting for the everyday Maurice ("answer directly" by default) and a per-domain choice; some models always reason, DeepSeek V4 Flash can be told not to, and on Claude Opus 5.5 "answer directly" means the least reasoning it allows. A domain's creativity setting is ignored by the current Claude models, which accept none.
 - **Prompt caching** lowers the cost of repeated prefixes: explicitly on Anthropic, automatically on Z.ai and, among Scaleway's models, reported only by DeepSeek V4 Flash. The cost meter shows what it saved.
 - **Context window:** when a conversation outgrows the model's window, the oldest turns are dropped, the cut is remembered so later turns stay consistent, and the model is told the beginning is missing.
