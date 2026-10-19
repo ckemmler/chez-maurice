@@ -90,14 +90,12 @@ export interface AncillaryInvocation {
   defaultModel?: () => string | null;
 }
 
-/** The night model P0 bis chose, and its fallbacks — see `prefer` above.
- *  Scaleway's models first, and no Mistral where Scaleway has another (30
- *  September 2026: the owner found them too poor); `mistral-small-latest` stays
- *  last only for a household whose one key is Mistral's. */
+/** The night model P0 bis chose, and its fallback — see `prefer` above.
+ *  Scaleway's models only: no Mistral (30 September 2026: the owner found them
+ *  too poor; 19 October 2026: dropped as a fallback too). */
 const NIGHT_MODELS = [
   "deepseek-v4-flash-0731",              // scaleway — the brief that reads like one
   "qwen3.6-35b-a3b",                     // scaleway — the small Qwen
-  "mistral-small-latest",                // mistral, for a Mistral-only household
 ];
 
 export const ANCILLARY_INVOCATIONS: AncillaryInvocation[] = [
@@ -118,7 +116,7 @@ export const ANCILLARY_INVOCATIONS: AncillaryInvocation[] = [
   // again. A sorting job on previews, answered with a list of numbers.
   { id: "article_cleanup", side: "server", tier: "light", label: "Article cleanup",
     blurb: "Sorting a saved article's text from the page's furniture — credits, advertising markers, the header said twice — before it is read.",
-    prefer: ["qwen3.6-35b-a3b", "mistral-small-latest"] },
+    prefer: ["qwen3.6-35b-a3b"] },
   // A book's chapters condensed one by one (data-api/services/bookProcessing.ts),
   // each with the summaries before it as context — what the reader shows beside
   // the text and what the reading companion reads. The household's own default
@@ -158,7 +156,7 @@ export const ANCILLARY_INVOCATIONS: AncillaryInvocation[] = [
   // small Qwen, without reasoning. Charged to the member whose turn it was.
   { id: "entry_suggest", side: "server", tier: "light", label: "Carnet suggestions",
     blurb: "After a reply, the works and people the exchange named, offered to the member as entries to keep in their garden.",
-    prefer: ["qwen3.6-35b-a3b", "mistral-small-latest"] },
+    prefer: ["qwen3.6-35b-a3b"] },
   // Seeding the garden (services/domainSeeding.ts): on the member's yes, in
   // their own turn, charged to them — the night's model, not the night's purse.
   { id: "domain_seed", side: "server", tier: "standard", label: "Domain notes",
@@ -173,7 +171,7 @@ export const ANCILLARY_INVOCATIONS: AncillaryInvocation[] = [
   // one the member's cost range was priced on.
   { id: "mail_read_light", side: "server", tier: "light", label: "Mail sorting",
     blurb: "The light pass of the mail reading: keep or skip, from the headers and the first characters of each message.",
-    prefer: ["qwen3.6-35b-a3b", "mistral-small-latest"] },
+    prefer: ["qwen3.6-35b-a3b"] },
   { id: "mail_write", side: "server", tier: "standard", label: "Mail documents",
     blurb: "The fiches and digests written in the garden from the mail readings — the night's model, as the domain notes.",
     prefer: NIGHT_MODELS },
@@ -249,7 +247,9 @@ export function presentInvocations(): AncillaryInvocation[] {
 // Who is in, and who is not:
 //  - **Scaleway** leads every tier. European, served from Paris, and cheap
 //    where it matters.
-//  - **Mistral** follows, for a household that has that key and not the other.
+//  - **Mistral** is absent since 19 October 2026: the owner found its models
+//    too poor, and a household whose only key is Mistral's is advised nothing
+//    and keeps its own model, as one with only American keys does.
 //  - **Z.ai** is absent: GLM 5.3 and its Flash are both large models, and a
 //    dossier title on either is the thing being avoided.
 //  - **Anthropic and OpenAI are absent by decision, not by size** (18 September
@@ -270,18 +270,18 @@ export const PREFERRED: Record<AncillaryTier, string[]> = {
   // A sentence, a title, three tags. The cheapest capable model wins.
   light: [
     "qwen3.6-35b-a3b",                     // scaleway — the small Qwen, reads images too
-    "mistral-small-latest",                // mistral, for a Mistral-only household
   ],
-  // A paragraph of prose: summaries, syntheses, briefings. Output tokens are
-  // what these spend, so the order follows the output price.
+  // Prose someone reads: summaries, syntheses, briefings. Ordered by the
+  // output price until 19 October 2026, which put GPT-OSS first; but an
+  // article's summary is now read in place of the article, and DeepSeek is
+  // the one whose prose reads well — for a tenth of a cent more an article.
   standard: [
+    "deepseek-v4-flash-0731",              // scaleway — the household's chat default
     "gpt-oss-120b",                        // scaleway — OpenAI's weights, Paris
-    "mistral-small-latest",                // mistral
   ],
   // The few that genuinely reason — flashcards today, and nothing else.
   heavy: [
     "qwen3.5-397b-a17b",                   // scaleway
-    "mistral-large-latest",                // mistral
   ],
 };
 
