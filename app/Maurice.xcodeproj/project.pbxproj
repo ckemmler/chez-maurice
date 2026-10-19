@@ -28,7 +28,6 @@
 		55C05838479D1BE65C3871C7 /* MyDataView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20D9492CD169800719A16C6D /* MyDataView.swift */; };
 		5792B7EEEB4D674709A40D76 /* DomainBriefView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5C3DB8955BF008783D2F7399 /* DomainBriefView.swift */; };
 		58C19733EBF8E99AB41D71A9 /* Hats.swift in Sources */ = {isa = PBXBuildFile; fileRef = DCDEAA0E48CC14C7C18BE8FD /* Hats.swift */; };
-		59B67C643B5A71D878B6A7D1 /* MarkdownUI in Frameworks */ = {isa = PBXBuildFile; productRef = 7C956089E4A23890D03A7C5B /* MarkdownUI */; };
 		5B4288B9598CBE20AE92F4D9 /* YoungSerif-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 723F14E6AB7B2EAB08CC94EF /* YoungSerif-Regular.ttf */; };
 		5B7821ABC8358319D3368DF8 /* ImportConversationsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3B5F6F2E3C5F7D8FFDE02630 /* ImportConversationsView.swift */; };
 		5DF005A2A1E5A2B26E0DBCF4 /* MauriceTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1ABC13222ECFAD2CFC3180B /* MauriceTheme.swift */; };
@@ -76,7 +75,10 @@
 		CCEF2532174820F615C4C61F /* ChatService.swift in Sources */ = {isa = PBXBuildFile; fileRef = EDFA39C22354B093CDDBB691 /* ChatService.swift */; };
 		D050F6CF74E2684FAF9E78A2 /* ChatService.swift in Sources */ = {isa = PBXBuildFile; fileRef = EDFA39C22354B093CDDBB691 /* ChatService.swift */; };
 		D0B48FA211BB0DB5BB28B7EA /* ChatSnippets.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0093E2B2C16E646EA2A8E856 /* ChatSnippets.swift */; };
-		D8646EEFDB175A13C908F420 /* MarkdownUI in Frameworks */ = {isa = PBXBuildFile; productRef = 452588EF4A59C7B3E4BE0156 /* MarkdownUI */; };
+		59E30D455DCA086740EAAC6B /* ReplyGallery.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5AC34BFF481FB9147DAA839D /* ReplyGallery.swift */; };
+		6806AEA67B5E0E72F096C7D9 /* ReplyGallery.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5AC34BFF481FB9147DAA839D /* ReplyGallery.swift */; };
+		ACBC576FB79C6A47875ADEF1 /* ReplyText.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9CFB5AE60E6690883019E231 /* ReplyText.swift */; };
+		7463881919853441C4200999 /* ReplyText.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9CFB5AE60E6690883019E231 /* ReplyText.swift */; };
 		DC9818E7C55A314BA0092CA4 /* ShareViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = ABE5F5AA1F13BF97D9A67BDD /* ShareViewController.swift */; };
 		DE41C437D70BFE6F0A82015E /* Localizable.strings in Resources */ = {isa = PBXBuildFile; fileRef = 64254BB6519693E70459014E /* Localizable.strings */; };
 		E0931CFF7A305AC88466021B /* ImportConversationsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3B5F6F2E3C5F7D8FFDE02630 /* ImportConversationsView.swift */; };
@@ -121,6 +123,8 @@
 
 /* Begin PBXFileReference section */
 		0093E2B2C16E646EA2A8E856 /* ChatSnippets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatSnippets.swift; sourceTree = "<group>"; };
+		5AC34BFF481FB9147DAA839D /* ReplyGallery.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReplyGallery.swift; sourceTree = "<group>"; };
+		9CFB5AE60E6690883019E231 /* ReplyText.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReplyText.swift; sourceTree = "<group>"; };
 		00B700626149A3D1C0D6D5CB /* PairingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PairingView.swift; sourceTree = "<group>"; };
 		0CD335EB3BF542EDF13DA17D /* Maurice_iOS.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Maurice_iOS.entitlements; sourceTree = "<group>"; };
 		0D1A322B73BEA06F034F1718 /* DomainEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DomainEditorView.swift; sourceTree = "<group>"; };
@@ -189,7 +193,6 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				59B67C643B5A71D878B6A7D1 /* MarkdownUI in Frameworks */,
 				FEA11BEC64D6D78DD1F6145E /* SwiftMath in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -198,7 +201,6 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				D8646EEFDB175A13C908F420 /* MarkdownUI in Frameworks */,
 				6E245195E6CD90C3C83CB1BD /* SwiftMath in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -283,6 +285,8 @@
 				EE3170FDE5751A81E295CF2E /* BoaterHat.swift */,
 				128CD9E8B27DD3AD93E49524 /* CarnetSuggestions.swift */,
 				0093E2B2C16E646EA2A8E856 /* ChatSnippets.swift */,
+				5AC34BFF481FB9147DAA839D /* ReplyGallery.swift */,
+				9CFB5AE60E6690883019E231 /* ReplyText.swift */,
 				4E01BB325D88F4E74B3571BC /* ChatView.swift */,
 				7A157516CA9C98CE6FB4E293 /* ComposerViews.swift */,
 				462A7ECD4C83B5ADC43A81CB /* ContentView.swift */,
@@ -359,7 +363,6 @@
 			);
 			name = Maurice_macOS;
 			packageProductDependencies = (
-				452588EF4A59C7B3E4BE0156 /* MarkdownUI */,
 				D1B845FF866B55501A5D0C68 /* SwiftMath */,
 			);
 			productName = Maurice_macOS;
@@ -400,7 +403,6 @@
 			);
 			name = Maurice_iOS;
 			packageProductDependencies = (
-				7C956089E4A23890D03A7C5B /* MarkdownUI */,
 				BF74ECA03676D1736856AEB2 /* SwiftMath */,
 			);
 			productName = Maurice_iOS;
@@ -446,7 +448,6 @@
 			mainGroup = F81067684A1EE16B2E0FC7F1;
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
-				159AE80C2E72D2DDF8BE78D1 /* XCRemoteSwiftPackageReference "swift-markdown-ui" */,
 				319A44DBB636BD0AA5D275BE /* XCRemoteSwiftPackageReference "SwiftMath" */,
 			);
 			preferredProjectObjectVersion = 77;
@@ -508,6 +509,8 @@
 				B732DCB9E5F61EAEC2D7F191 /* CarnetSuggestions.swift in Sources */,
 				CCEF2532174820F615C4C61F /* ChatService.swift in Sources */,
 				D0B48FA211BB0DB5BB28B7EA /* ChatSnippets.swift in Sources */,
+				6806AEA67B5E0E72F096C7D9 /* ReplyGallery.swift in Sources */,
+				7463881919853441C4200999 /* ReplyText.swift in Sources */,
 				8D85F19C2F440203BAFC484F /* ChatView.swift in Sources */,
 				7D41CDDFD359570A173D9D72 /* ComposerStore.swift in Sources */,
 				AF3DE3F5A58AC486DD4036F1 /* ComposerViews.swift in Sources */,
@@ -558,6 +561,8 @@
 				3E96FF24D227953BEB5EA28F /* CarnetSuggestions.swift in Sources */,
 				D050F6CF74E2684FAF9E78A2 /* ChatService.swift in Sources */,
 				79D972E8244DCF5442DB6922 /* ChatSnippets.swift in Sources */,
+				59E30D455DCA086740EAAC6B /* ReplyGallery.swift in Sources */,
+				ACBC576FB79C6A47875ADEF1 /* ReplyText.swift in Sources */,
 				CB71AD2912D05739932A2EB1 /* ChatView.swift in Sources */,
 				7CB12254AF16A2499EAEA7D7 /* ComposerStore.swift in Sources */,
 				E3C10DC76C2CF893DD4DF505 /* ComposerViews.swift in Sources */,
@@ -991,14 +996,6 @@
 /* End XCConfigurationList section */
 
 /* Begin XCRemoteSwiftPackageReference section */
-		159AE80C2E72D2DDF8BE78D1 /* XCRemoteSwiftPackageReference "swift-markdown-ui" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/gonzalezreal/swift-markdown-ui";
-			requirement = {
-				kind = upToNextMajorVersion;
-				minimumVersion = 2.4.1;
-			};
-		};
 		319A44DBB636BD0AA5D275BE /* XCRemoteSwiftPackageReference "SwiftMath" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/mgriebling/SwiftMath";
@@ -1010,16 +1007,6 @@
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
-		452588EF4A59C7B3E4BE0156 /* MarkdownUI */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = 159AE80C2E72D2DDF8BE78D1 /* XCRemoteSwiftPackageReference "swift-markdown-ui" */;
-			productName = MarkdownUI;
-		};
-		7C956089E4A23890D03A7C5B /* MarkdownUI */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = 159AE80C2E72D2DDF8BE78D1 /* XCRemoteSwiftPackageReference "swift-markdown-ui" */;
-			productName = MarkdownUI;
-		};
 		BF74ECA03676D1736856AEB2 /* SwiftMath */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = 319A44DBB636BD0AA5D275BE /* XCRemoteSwiftPackageReference "SwiftMath" */;

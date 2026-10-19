@@ -24,9 +24,6 @@ settings:
     CODE_SIGN_STYLE: Automatic
 
 packages:
-  MarkdownUI:
-    url: https://github.com/gonzalezreal/swift-markdown-ui
-    from: "2.4.1"
   SwiftMath:
     url: https://github.com/mgriebling/SwiftMath
     from: "1.7.0"
@@ -44,8 +41,6 @@ targetTemplates:
         excludes:
           - Info.plist
     dependencies:
-      - package: MarkdownUI
-        product: MarkdownUI
       - package: SwiftMath
         product: SwiftMath
     settings:

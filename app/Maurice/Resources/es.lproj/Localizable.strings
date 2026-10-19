@@ -114,7 +114,6 @@
 "chat.add_to_room" = "Añadir a la sala";
 "chat.copy" = "Copiar";
 "chat.regenerate" = "Regenerar";
-"chat.select_text" = "Seleccionar texto";
 "chat.image_failed" = "No se pudo cargar la imagen";
 "chat.generating_image" = "Generando imagen…";
 "chat.review_context" = "Revisar contexto";

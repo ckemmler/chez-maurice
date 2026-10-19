@@ -1,17 +1,16 @@
 import SwiftUI
-import MarkdownUI
 #if os(iOS)
 import UIKit
 #else
 import AppKit
 #endif
 
-// ── Snippets: code blocks one can copy, long pastes as cards ────
+// ── Snippets: long pastes and shared articles as cards ──────────
 //
-// Both live in fenced blocks. A code block Maurice writes gets a copy button;
-// a long paste travels inside the member's message as a block whose info string
-// is `pasted` — the model reads it as quoted material, a client that doesn't
-// know the convention shows a plain code block, and this app draws a card.
+// Both live in fenced blocks. A long paste travels inside the member's message
+// as a block whose info string is `pasted` — the model reads it as quoted
+// material, a client that doesn't know the convention shows a plain code
+// block, and this app draws a card.
 
 func copyToPasteboard(_ text: String) {
     #if os(iOS)
@@ -169,42 +168,7 @@ struct SharedArticle: Equatable {
     }
 }
 
-// MARK: - Code block
-
-/// A fenced block in a reply: its language, if given, and a copy button over
-/// the code. The button copies the code alone, not the fences.
-struct CodeBlockView: View {
-    let configuration: CodeBlockConfiguration
-    let theme: MauriceTheme
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            HStack(spacing: 6) {
-                if let language = configuration.language, !language.isEmpty {
-                    Text(language)
-                        .font(.system(size: 11, design: .monospaced))
-                        .foregroundStyle(theme.inkMute)
-                }
-                Spacer(minLength: 0)
-                CopyButton(text: configuration.content.trimmingCharacters(in: .newlines), theme: theme)
-            }
-            .padding(.leading, 10)
-            .padding(.trailing, 4)
-            .padding(.top, 2)
-            configuration.label
-                .markdownTextStyle {
-                    FontFamilyVariant(.monospaced)
-                    FontSize(13)
-                    ForegroundColor(theme.codeInk)
-                }
-                .padding(.horizontal, 10)
-                .padding(.bottom, 10)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(theme.codeBg)
-        .clipShape(RoundedRectangle(cornerRadius: 6))
-    }
-}
+// MARK: - Copy
 
 /// "Copy", then "Copied" for a moment.
 private struct CopyButton: View {

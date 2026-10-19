@@ -24,7 +24,16 @@ struct MauriceApp: App {
 
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            Group {
+                #if DEBUG
+                if ReplyGallery.requested { ReplyGallery() } else { ContentView() }
+                #else
+                ContentView()
+                #endif
+            }
+                #if DEBUG && os(macOS)
+                .task { await ReplyGallery.snapshotIfAsked() }
+                #endif
                 .environment(session)
                 .environment(resolvedChatService)
                 .environment(resolvedComposer)

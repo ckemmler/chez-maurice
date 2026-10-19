@@ -1,6 +1,5 @@
 import SwiftUI
 import PhotosUI
-import MarkdownUI
 import ImageIO
 import UniformTypeIdentifiers
 import SwiftMath
@@ -1216,10 +1215,11 @@ private struct MessageRow: View {
         }
     }
 
-    /// Message body wrapped with the shared-room safety menu (Report / Block).
+    /// Message body, with the shared-room safety menu (Report / Block): on
+    /// its photos and cards a context menu, on its text the selection menu —
+    /// a context menu there would take the long press that selects.
     private var messageContent: some View {
         messageContentCore
-            .contextMenu { roomSafetyMenu }
             .sheet(isPresented: $showReport) {
                 ReportSheet(targetType: "message", targetId: message.id)
             }
@@ -1240,6 +1240,19 @@ private struct MessageRow: View {
         }
     }
 
+    /// The same, for the selection menu of the message's text.
+    private var roomMenuItems: [ReplyMenuItem] {
+        guard chat.isRoom else { return [] }
+        var items = [ReplyMenuItem(title: "Report message", systemImage: "flag") { showReport = true }]
+        if let aid = message.author_id, aid != session.activeUserId {
+            items.append(ReplyMenuItem(title: "Block \(authorParticipant?.display_name ?? "user")",
+                                       systemImage: "hand.raised", destructive: true) {
+                Task { await chat.block(memberId: aid) }
+            })
+        }
+        return items
+    }
+
     /// Image (if any) + markdown body — shared by both layouts.
     @ViewBuilder
     private var messageContentCore: some View {
@@ -1255,6 +1268,7 @@ private struct MessageRow: View {
         if let baseURL = session.serverURL {
             if paths.count == 1 {
                 ChatImageView(url: baseURL + paths[0])
+                    .contextMenu { roomSafetyMenu }
             } else if paths.count > 1 {
                 // Several photos: a row of smaller ones, scrolled sideways.
                 ScrollView(.horizontal, showsIndicators: false) {
@@ -1264,15 +1278,17 @@ private struct MessageRow: View {
                         }
                     }
                 }
+                .contextMenu { roomSafetyMenu }
             }
         }
         if !textContent.isEmpty {
-            SelectableMarkdown(text: textContent)
+            SelectableMarkdown(text: textContent, menu: roomMenuItems)
         } else if paths.isEmpty {
-            SelectableMarkdown(text: message.content)
+            SelectableMarkdown(text: message.content, menu: roomMenuItems)
         }
         if let blocks = message.data, DataCardStack.hasCards(blocks) {
             DataCardStack(blocks: blocks)
+                .contextMenu { roomSafetyMenu }
         }
     }
 
@@ -2034,7 +2050,7 @@ private struct StreamingRow: View {
         if let img = imageInfo {
             ChatImageView(url: serverBaseURL + img.path)
         } else if !text.isEmpty {
-            MarkdownText(text: String(text.prefix(visibleLength)))
+            ReplyText(markdown: String(text.prefix(visibleLength)), selectable: false)
                 .opacity(0.85)
         }
         if DataCardStack.hasCards(blocks) {
@@ -2247,52 +2263,18 @@ private struct ImageGeneratingIndicator: View {
     }
 }
 
-// MARK: - Markdown Text (full GFM via swift-markdown-ui)
+// MARK: - Message text
 
 // Conversation body type: bigger and edge-to-edge on phone, denser in the
-// desktop window (which centers a narrower column).
+// desktop window (which centers a narrower column). `ReplyText` sets the
+// messages in it.
 #if os(iOS)
-private let kBodyFont: CGFloat = 16.5
-private let kBodyLineSpacing: CGFloat = 4.5
+let kBodyFont: CGFloat = 16.5
+let kBodyLineSpacing: CGFloat = 4.5
 #else
-private let kBodyFont: CGFloat = 14.5
-private let kBodyLineSpacing: CGFloat = 3
+let kBodyFont: CGFloat = 14.5
+let kBodyLineSpacing: CGFloat = 3
 #endif
-
-private struct MarkdownText: View {
-    @Environment(\.mauriceTheme) private var theme
-    let text: String
-
-    var body: some View {
-        let inkColor = MTColor(theme.ink)
-        Markdown(renderMathMarkup(text))
-            .markdownTheme(mauriceMarkdownTheme(theme))
-            // Math: TeX spans were rewritten to `maurice-math:` images upstream;
-            // these providers draw them with SwiftMath (inline → text style,
-            // lone-paragraph → display style). Non-math URLs fall back to default.
-            .markdownInlineImageProvider(MathInlineImageProvider(fontSize: kBodyFont, color: inkColor))
-            .markdownImageProvider(MathBlockImageProvider(fontSize: kBodyFont, color: inkColor))
-            .lineSpacing(kBodyLineSpacing)
-            // macOS: per-block click-drag selection is fine and expected. iOS:
-            // omit it — the textSelection long-press swallows the gesture our
-            // context menu needs, and selection there happens via the Select-text
-            // sheet instead (which can span the whole message).
-            #if os(macOS)
-            .textSelection(.enabled)
-            #endif
-    }
-}
-
-// MARK: - Math (LaTeX) rendering
-//
-// LLMs write math in TeX delimiters — \(…\) inline, \[…\] / $$…$$ display.
-// swift-markdown-ui has no math support and would render "\(" as an escaped
-// paren, so BEFORE markdown sees the text we rewrite each math span into a
-// Markdown image whose URL carries the LaTeX (base64url). Two image providers
-// then draw those URLs with SwiftMath: inline spans in text style, lone-
-// paragraph (display) spans in display style. Code spans/fences are left alone.
-
-private let kMathScheme = "maurice-math:"
 
 /// Photos one message may carry — the server refuses more.
 private let kMaxPhotosPerMessage = 10
@@ -2302,165 +2284,22 @@ private struct PendingPaste: Identifiable {
     let id: Int
 }
 
-/// Rewrite TeX spans to `![](maurice-math:<b64url>)` images, skipping code.
-/// Display spans are forced onto their own paragraph so markdown routes them
-/// through the block image provider. A cheap fast-path skips text with no math.
-func renderMathMarkup(_ text: String) -> String {
-    guard text.contains("\\(") || text.contains("\\[") || text.contains("$$") else { return text }
-    // 1: fenced code (2: its fence — it closes only on as many backticks, so a
-    // pasted block may hold ``` of its own) · 3: inline code · 4: \[..\] ·
-    // 5: $$..$$ · 6: \(..\)
-    let pattern = #"((`{3,})[\s\S]*?\2)|(`[^`]*`)|\\\[([\s\S]*?)\\\]|\$\$([\s\S]*?)\$\$|\\\(([\s\S]*?)\\\)"#
-    guard let re = try? NSRegularExpression(pattern: pattern) else { return text }
-    let ns = text as NSString
-    var out = ""
-    var last = 0
-    for m in re.matches(in: text, range: NSRange(location: 0, length: ns.length)) {
-        out += ns.substring(with: NSRange(location: last, length: m.range.location - last))
-        last = m.range.location + m.range.length
-        func grp(_ i: Int) -> String? {
-            let r = m.range(at: i)
-            return r.location == NSNotFound ? nil : ns.substring(with: r)
-        }
-        if grp(1) != nil || grp(3) != nil {
-            out += ns.substring(with: m.range)           // code — verbatim
-        } else if let b = grp(4) ?? grp(5) {
-            out += "\n\n" + mathImageTag(b) + "\n\n"      // display
-        } else if let i = grp(6) {
-            out += mathImageTag(i)                        // inline
-        }
-    }
-    out += ns.substring(from: last)
-    return out
-}
-
-private func mathImageTag(_ latex: String) -> String {
-    let trimmed = latex.trimmingCharacters(in: .whitespacesAndNewlines)
-    guard let b64 = trimmed.data(using: .utf8)?.base64EncodedString() else { return latex }
-    let urlSafe = b64.replacingOccurrences(of: "+", with: "-")
-        .replacingOccurrences(of: "/", with: "_")
-        .replacingOccurrences(of: "=", with: "")
-    return "![](\(kMathScheme)\(urlSafe))"
-}
-
-/// Decode the LaTeX carried by a `maurice-math:` image URL (nil for any other).
-private func decodeMathLatex(_ url: URL) -> String? {
-    let s = url.absoluteString
-    guard s.hasPrefix(kMathScheme) else { return nil }
-    var b64 = String(s.dropFirst(kMathScheme.count))
-        .replacingOccurrences(of: "-", with: "+")
-        .replacingOccurrences(of: "_", with: "/")
-    while b64.count % 4 != 0 { b64 += "=" }
-    guard let data = Data(base64Encoded: b64) else { return nil }
-    return String(data: data, encoding: .utf8)
-}
-
-#if os(iOS)
-private extension Image { init(mtImage img: MTImage) { self.init(uiImage: img) } }
-#else
-private extension Image { init(mtImage img: MTImage) { self.init(nsImage: img) } }
-#endif
-
-/// Render a LaTeX string to a native image; nil if SwiftMath can't parse it.
-private func renderMath(_ latex: String, display: Bool, fontSize: CGFloat, color: MTColor) -> MTImage? {
-    var mi = MathImage(latex: latex, fontSize: fontSize, textColor: color,
-                       labelMode: display ? .display : .text, textAlignment: .left)
-    let (err, img, _) = mi.asImage()
-    return err == nil ? img : nil
-}
-
-/// Last-resort image of the raw source (monospaced), so a malformed expression
-/// still shows its TeX rather than vanishing.
-private func mathFallbackImage(_ s: String, fontSize: CGFloat, color: MTColor) -> MTImage {
-    #if os(iOS)
-    let font = UIFont.monospacedSystemFont(ofSize: fontSize, weight: .regular)
-    #else
-    let font = NSFont.monospacedSystemFont(ofSize: fontSize, weight: .regular)
-    #endif
-    let str = NSAttributedString(string: s, attributes: [.font: font, .foregroundColor: color])
-    let size = str.size()
-    #if os(iOS)
-    return UIGraphicsImageRenderer(size: size).image { _ in str.draw(at: .zero) }
-    #else
-    let img = NSImage(size: size)
-    img.lockFocus(); str.draw(at: .zero); img.unlockFocus()
-    return img
-    #endif
-}
-
-/// Draws inline TeX (`\(…\)`) within a line of text, in text style.
-struct MathInlineImageProvider: InlineImageProvider {
-    let fontSize: CGFloat
-    let color: MTColor
-    func image(with url: URL, label: String) async throws -> Image {
-        guard let latex = decodeMathLatex(url) else {
-            return try await DefaultInlineImageProvider.default.image(with: url, label: label)
-        }
-        let img = renderMath(latex, display: false, fontSize: fontSize, color: color)
-            ?? mathFallbackImage(latex, fontSize: fontSize, color: color)
-        return Image(mtImage: img)
-    }
-}
-
-/// Draws display TeX (`\[…\]`, `$$…$$`) that sits alone in a paragraph.
-struct MathBlockImageProvider: ImageProvider {
-    let fontSize: CGFloat
-    let color: MTColor
-    @ViewBuilder func makeImage(url: URL?) -> some View {
-        if let url, let latex = decodeMathLatex(url) {
-            if let img = renderMath(latex, display: true, fontSize: fontSize, color: color) {
-                Image(mtImage: img).frame(maxWidth: .infinity, alignment: .leading)
-            } else {
-                Text(latex).font(.system(size: fontSize, design: .monospaced))
-            }
-        } else {
-            DefaultImageProvider.default.makeImage(url: url)
-        }
-    }
-}
-
-/// Rich markdown body plus a long-press menu (iOS). swift-markdown-ui draws each
-/// block as its own view, so in-place selection can't cross paragraphs; the menu
-/// offers Copy (whole message) and "Select text…", which presents the full body
-/// in one selectable view where any span — across paragraphs — can be grabbed.
+/// A message's body, selectable from end to end (see `ReplyText`), whose
+/// links into the member's garden open signed in.
 private struct SelectableMarkdown: View {
     @Environment(SessionStore.self) private var session
     let text: String
+    /// What a shared room adds to the selection menu: Report, Block.
+    var menu: [ReplyMenuItem] = []
     /// A person fiche the footer links to, opened in-app (PersonReviewView).
     @State private var fiche: PersonRef?
-    #if os(iOS)
-    @State private var showingSelect = false
-    @State private var showingMenu = false
-    #endif
 
     var body: some View {
-        #if os(iOS)
-        // A bottom action sheet on long-press, rather than `.contextMenu` — the
-        // latter lifts the view into a blurry preview "platter" that flashes
-        // awkwardly over transparent text before the menu opens.
-        MarkdownText(text: text)
-            .environment(\.openURL, OpenURLAction { gardenLink($0) })
-            .onLongPressGesture(minimumDuration: 0.4) {
-                UIImpactFeedbackGenerator(style: .medium).impactOccurred()
-                showingMenu = true
-            }
-            .confirmationDialog("", isPresented: $showingMenu, titleVisibility: .hidden) {
-                Button(session.localized("chat.copy")) { UIPasteboard.general.string = text }
-                Button(session.localized("chat.select_text")) { showingSelect = true }
-            }
-            .sheet(isPresented: $showingSelect) {
-                SelectTextSheet(text: text)
-            }
-            .sheet(item: $fiche) { ref in
-                PersonReviewView(ref: ref).environment(session)
-            }
-        #else
-        MarkdownText(text: text)
+        ReplyText(markdown: text, menu: menu)
             .environment(\.openURL, OpenURLAction { gardenLink($0) })
             .sheet(item: $fiche) { ref in
                 PersonReviewView(ref: ref).environment(session)
             }
-        #endif
     }
 
     /// A link into the member's garden on this household's server — the
@@ -2516,32 +2355,8 @@ private struct SelectableMarkdown: View {
 private struct ChatGardenTokenRequest: Encodable { let rotate: Bool }
 
 #if os(iOS)
-/// Full message body as plain, fully-selectable text in a dismissible sheet.
-private struct SelectTextSheet: View {
-    @Environment(\.dismiss) private var dismiss
-    @Environment(SessionStore.self) private var session
-    @Environment(\.mauriceTheme) private var theme
-    let text: String
-
-    var body: some View {
-        NavigationStack {
-            SelectableTextView(text: text, textColor: UIColor(theme.ink))
-                .padding(.horizontal, 16)
-                .padding(.vertical, 12)
-                .background(theme.surface.ignoresSafeArea())
-                .navigationTitle(session.localized("chat.select_text"))
-                .navigationBarTitleDisplayMode(.inline)
-                .toolbar {
-                    ToolbarItem(placement: .confirmationAction) {
-                        Button(session.localized("common.done")) { dismiss() }
-                    }
-                }
-        }
-    }
-}
-
-/// Read-only, selectable, scrollable UITextView — selection can span the whole
-/// message (the thing a stack of swift-markdown-ui blocks can't do).
+/// Read-only, selectable, scrollable UITextView — a long paste opened from its
+/// card.
 struct SelectableTextView: UIViewRepresentable {
     let text: String
     let textColor: UIColor
@@ -2566,55 +2381,6 @@ struct SelectableTextView: UIViewRepresentable {
     }
 }
 #endif
-
-/// Map the app's semantic tokens onto a swift-markdown-ui Theme. Starts from
-/// the basic theme (sensible defaults for headings/lists/tables/blockquotes)
-/// and recolors text/code/links/rules to match Maurice's palette.
-func mauriceMarkdownTheme(_ t: MauriceTheme) -> MarkdownUI.Theme {
-    MarkdownUI.Theme()
-        .text {
-            ForegroundColor(t.ink)
-            FontSize(kBodyFont)
-        }
-        .strong { FontWeight(.semibold) }
-        .link { ForegroundColor(t.ink) }
-        .code {
-            FontFamilyVariant(.monospaced)
-            FontSize(13)
-            ForegroundColor(t.codeInk)
-            BackgroundColor(t.codeBg)
-        }
-        .codeBlock { configuration in
-            // A long paste rides in the member's message as a `pasted` block
-            // (see PastedText): a card, not a wall of monospaced text.
-            // A shared article rides the same way, as an `article` block.
-            if configuration.language == PastedText.fenceInfo {
-                PastedTextCard(snippet: .paste(configuration.content), theme: t)
-            } else if configuration.language == SharedArticle.fenceInfo {
-                PastedTextCard(snippet: .article(SharedArticle(block: configuration.content)), theme: t)
-            } else {
-                CodeBlockView(configuration: configuration, theme: t)
-            }
-        }
-        .table { configuration in
-            configuration.label
-                .markdownTableBorderStyle(.init(color: t.rule))
-        }
-        .tableCell { configuration in
-            configuration.label
-                .markdownTextStyle { ForegroundColor(t.ink) }
-                .padding(.horizontal, 8)
-                .padding(.vertical, 5)
-        }
-        .blockquote { configuration in
-            configuration.label
-                .markdownTextStyle { ForegroundColor(t.inkSoft) }
-                .padding(.leading, 12)
-                .overlay(alignment: .leading) {
-                    Rectangle().fill(t.rule).frame(width: 3)
-                }
-        }
-}
 
 // MARK: - Streaming Indicator
 

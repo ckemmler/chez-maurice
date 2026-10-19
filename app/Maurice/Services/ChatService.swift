@@ -1523,9 +1523,8 @@ private final class BackgroundGrace {
 // participant changes, and summon events. Clients can't set an Authorization
 // header on a WebSocket, so the session token rides in the query.
 //
-// (Kept in this file rather than its own because the Xcode project lists sources
-// explicitly and MarkdownUI is wired into the committed project, not project.yml,
-// so `xcodegen generate` can't be used to pick up a new standalone file.)
+// (Kept in this file rather than its own because the Xcode project lists its
+// sources explicitly: a new file has to be added to project.pbxproj by hand.)
 
 @MainActor
 final class RoomSocket {

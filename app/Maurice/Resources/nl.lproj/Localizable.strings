@@ -114,7 +114,6 @@
 "chat.add_to_room" = "Toevoegen aan ruimte";
 "chat.copy" = "Kopiëren";
 "chat.regenerate" = "Opnieuw genereren";
-"chat.select_text" = "Tekst selecteren";
 "chat.image_failed" = "Afbeelding kon niet laden";
 "chat.generating_image" = "Afbeelding genereren…";
 "chat.review_context" = "Context bekijken";

@@ -1,5 +1,4 @@
 import SwiftUI
-import MarkdownUI
 
 // The member's word on a person fiche, in the app (27 September 2026).
 //
@@ -658,12 +657,7 @@ struct PersonReviewView: View {
     }
 
     private func markdown(_ text: String, sources: Bool = false) -> some View {
-        Markdown(sources || showSources ? text : withoutSources(text))
-            .markdownTheme(mauriceMarkdownTheme(theme))
-            .font(.system(size: 14))
-            #if os(macOS)
-            .textSelection(.enabled)
-            #endif
+        ReplyText(markdown: sources || showSources ? text : withoutSources(text))
     }
 
     private func editSheet(_ e: Editing) -> some View {
