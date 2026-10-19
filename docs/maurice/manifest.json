@@ -1,12 +1,12 @@
 {
   "format": "maurice-docs",
   "version": 1,
-  "generated_at": "2026-10-19T14:50:24Z",
+  "generated_at": "2026-10-19T15:10:31Z",
   "notes": [
     { "file": "maurice-applications.md", "slug": "maurice-applications", "date": "2026-10-10", "bytes": 13984, "sha256": "715567c9d43b3f47a45ed74435828c4e6fca5c68d10e4e0da967d830938810cf" },
     { "file": "maurice-architecture.md", "slug": "maurice-architecture", "date": "2026-10-16", "bytes": 36805, "sha256": "6f4f07924c8393288e8bcf317e960eb72d1e44e531a26d9d859f30ff56ab29de" },
     { "file": "maurice-carnet.md", "slug": "maurice-carnet", "date": "2026-10-19", "bytes": 37358, "sha256": "5517dff54df48ffc9891a9396cf1d1b501e4b454c4d2372505c8e5f68ed0f314" },
-    { "file": "maurice-chat.md", "slug": "maurice-chat", "date": "2026-10-19", "bytes": 58919, "sha256": "873ab73f95666160b878dce0f5e6fd24bd468bd1f6b7d8e07f9a45cbd20863fe" },
+    { "file": "maurice-chat.md", "slug": "maurice-chat", "date": "2026-10-19", "bytes": 59310, "sha256": "5cee866f9b9f18dea6f8e4ed892a0b95a914f67d30fef3ce628984e41ea0627d" },
     { "file": "maurice-composer.md", "slug": "maurice-composer", "date": "2026-09-22", "bytes": 11034, "sha256": "f3972e3134cd359ad0bdc47bbccd7deca1334fee83524cbcd9bfbdf6af7a65b0" },
     { "file": "maurice-data-model.md", "slug": "maurice-data-model", "date": "2026-10-17", "bytes": 35767, "sha256": "47e84b76e7fd6b293daa8a1a2cc3d7fe918b84b213b0cfdde58b107ed8535046" },
     { "file": "maurice-digest.md", "slug": "maurice-digest", "date": "2026-10-19", "bytes": 50981, "sha256": "f606c0bb19d72902a4825728247144405e29155af17168d1d17189d8ed539891" },
