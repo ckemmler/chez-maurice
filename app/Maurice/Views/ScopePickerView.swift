@@ -34,6 +34,10 @@ struct SidebarView: View {
     /// field (the iOS 26 minimized-search idiom, drawn ourselves).
     @State private var searchOpen = false
     @FocusState private var searchFocused: Bool
+    /// Set by the magnifier only: the field takes the keyboard when it opens,
+    /// not each time the column comes back on screen (on iPhone, back from a
+    /// conversation, which raised the keyboard over a field it then hid).
+    @State private var focusSearchOnAppear = false
     @Namespace private var glassNS
 
     /// Called when a conversation is opened, so the compact (iPhone) layout can
@@ -107,7 +111,7 @@ struct SidebarView: View {
                 let disabled = chat.activeConversationIsEmpty
                 Button {
                     gardens.openGardenId = nil
-                    onActivateConversation()
+                    activate()
                     // One Maurice: a new conversation is his. Entering a
                     // domain is done from its page ("Talk about it").
                     Task { await chat.createConversation(mauriceId: nil) }
@@ -173,7 +177,7 @@ struct SidebarView: View {
                         ForEach(gardens.gardens) { g in
                             GardenRow(garden: g, active: gardens.openGardenId == g.id) {
                                 gardens.openGardenId = g.id
-                                onActivateConversation()
+                                activate()
                             }
                         }
                     }
@@ -198,7 +202,7 @@ struct SidebarView: View {
                         ForEach(chat.searchResults) { hit in
                             Button {
                                 gardens.openGardenId = nil
-                                onActivateConversation()
+                                activate()
                                 Task { await chat.selectConversation(hit.conversation.id) }
                             } label: {
                                 SearchHitRow(
@@ -212,7 +216,7 @@ struct SidebarView: View {
                     ForEach(searching ? [] : visibleConversations) { convo in
                         Button {
                             gardens.openGardenId = nil
-                            onActivateConversation()
+                            activate()
                             Task { await chat.selectConversation(convo.id) }
                         } label: {
                             ConversationRow(
@@ -327,7 +331,7 @@ struct SidebarView: View {
     #endif
 
     private var searchButton: some View {
-        Button { searchOpen = true } label: {
+        Button { focusSearchOnAppear = true; searchOpen = true } label: {
             Image(systemName: "magnifyingglass")
                 .font(.system(size: searchControlSize * 0.42, weight: .medium))
                 .foregroundStyle(theme.inkSoft)
@@ -355,29 +359,41 @@ struct SidebarView: View {
                 .textInputAutocapitalization(.never)
                 .submitLabel(.search)
                 #endif
-                .onAppear { searchFocused = true }
+                .onAppear {
+                    if focusSearchOnAppear { searchFocused = true; focusSearchOnAppear = false }
+                }
                 #if os(macOS)
                 .onExitCommand { closeSearch() }
                 #endif
             #if os(iOS)
             if searchFocused && chat.searchQuery.isEmpty {
                 HideKeyboardButton(focus: $searchFocused, color: theme.inkMute,
-                                   label: session.localized("chat.hide_keyboard"))
+                                   label: session.localized("chat.hide_keyboard"),
+                                   height: searchControlSize)
             }
             #endif
+            // The whole height of the bar, not the 28-point glyph: a thumb
+            // aiming at the cross landed on the row above and opened it.
             Button { closeSearch() } label: {
                 Image(systemName: "xmark.circle.fill")
                     .font(.system(size: 15)).foregroundStyle(theme.inkMute)
-                    .frame(width: 28, height: 28)
-                    .contentShape(Circle())
+                    .frame(width: 40, height: searchControlSize)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .accessibilityLabel(session.localized("sidebar.search_clear"))
         }
-        .padding(.leading, 12).padding(.trailing, 6)
+        .padding(.leading, 12).padding(.trailing, 2)
         .frame(height: searchControlSize)
         .frame(maxWidth: .infinity)
         .glassControl(theme, in: Capsule(), morph: "sidebar.search", namespace: glassNS)
+    }
+
+    /// Opens what a sidebar row points at. The search field gives up the
+    /// keyboard first, or it stayed raised over the conversation.
+    private func activate() {
+        searchFocused = false
+        onActivateConversation()
     }
 
     private func closeSearch() {
