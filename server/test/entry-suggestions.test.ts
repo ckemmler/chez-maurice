@@ -196,6 +196,37 @@ describe("resolution", () => {
     expect(sug.confident({ kind: "movies", title: "Dune", year: 2021, note: "n" }, [two[1]!])).toBe(false);
   });
 
+  test("a song is looked up through its recordings and kept under its album", async () => {
+    // What search_album answers for a track: the albums it is on, the studio one first.
+    searchResults.search_album = [
+      { id: "o", title: "A Night at the Opera", year: null, subtitle: "Queen", image: "https://img/o.jpg", track: "Bohemian Rhapsody" },
+      { id: "s", title: "Bohemian Rhapsody", year: null, subtitle: "Queen", image: "", track: "Bohemian Rhapsody" },
+    ];
+    modelSays = { subjects: [{ kind: "music", title: "Bohemian Rhapsody", track: "Bohemian Rhapsody", creator: "Queen", year: 1975, note: "Tu parlais de Bohemian Rhapsody." }] };
+    expect(await turn()).toBe(1);
+    expect(toolCalls).toEqual([{ tool: "search_album", args: { track: "Bohemian Rhapsody", artist: "Queen" } }]);
+    const [s] = sug.suggestionsFor(ANNA, convo);
+    // The artist named sings it: the album is taken, not the single of the song's name.
+    expect(s!.key).toBe("id:o");
+    expect(s!.title).toBe("A Night at the Opera");
+    expect(s!.image).toBe("https://img/o.jpg");
+  });
+
+  test("a song: the album named settles it, an artist alone does not without one", () => {
+    const albums = [
+      { id: "g", title: "Geometry Bass", year: null, subtitle: "Kingpvz", image: "", track: "Clubstep" },
+      { id: "t", title: "Theories", year: null, subtitle: "dj-Nate", image: "", track: "Clubstep" },
+    ];
+    const song = { kind: "music", title: "Clubstep", track: "Clubstep", note: "n" };
+    expect(sug.confident(song, albums)).toBe(false);
+    expect(sug.confident({ ...song, creator: "Kingpvz" }, albums)).toBe(true);
+    expect(sug.confident({ ...song, title: "Geometry Bass" }, albums)).toBe(true);
+    // The song's title is not an album's: the single by that name is not taken for it.
+    expect(sug.confident(song, [{ ...albums[0]!, title: "Clubstep" }])).toBe(false);
+    expect(sug.parseNamed(JSON.stringify({ subjects: [{ kind: "music", title: "Theories", track: " Clubstep ", year: 2011, note: "n" }] })))
+      .toEqual([{ kind: "music", title: "Theories", track: "Clubstep", year: null, note: "n", creator: "", public: true }]);
+  });
+
   test("someone from their own life is never looked up; a public figure is", async () => {
     searchResults.search_person = [{ id: "Q1", title: "Catherine O'Hara", year: null, subtitle: "Canadian actress", image: "" }];
     modelSays = { subjects: [

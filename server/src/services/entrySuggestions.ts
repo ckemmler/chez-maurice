@@ -58,6 +58,8 @@ export interface Candidate {
   year: number | null;
   subtitle: string;
   image: string;
+  /** An album found for a song: the song's title as the album lists it. */
+  track?: string;
 }
 
 export interface EntrySuggestion {
@@ -96,6 +98,8 @@ export interface Named {
   year?: number | null;
   creator?: string;
   public?: boolean;
+  /** A song named: it is kept under its album, `title` (when the pass knows it). */
+  track?: string;
   note: string;
 }
 
@@ -152,15 +156,16 @@ const refOf = (e: GardenEntry) => `${e.collection}/${e.locale}/${e.slug}`;
 const SYSTEM = `You read one exchange between a person and their assistant, and decide whether it named anything worth an entry in that person's notebook.
 
 An entry is a WORK or a PERSON, named in the exchange:
-- movies, series, books, music (an album), podcasts, games
+- movies, series, books, music (an album, or a song: it is kept under its album), podcasts, games
 - people: someone public (an actor, an author) or someone the person knows, named by first and last name
 
 Answer with JSON only: {"subjects": [...]}, at most ${MAX_PER_TURN}, most often none.
 
-Each subject: {"kind": "movies|series|books|music|podcasts|games|people", "title": "...", "year": 2015, "creator": "...", "public": true, "note": "..."}
+Each subject: {"kind": "movies|series|books|music|podcasts|games|people", "title": "...", "year": 2015, "creator": "...", "track": "...", "public": true, "note": "..."}
 - "title": the work's usual title, or the person's full name. Never a first name alone.
 - "year": the work's first release, when you are sure. Omit otherwise.
 - "creator": the author, the artist, the director — when the exchange or common knowledge gives it. Omit for people.
+- "track": for music only, when the exchange is about a song rather than an album: the song's title. "title" is then its album when you are sure of it, the song's title otherwise; "year" is omitted; the note names the song.
 - "public": for people only. true for a public figure, false for someone from the person's own life.
 - "note": one to three sentences, in the language the person wrote in (French if they wrote French, whatever the language of these instructions), addressed to them: "you" in English; in French "tu" or "vous", as the assistant addresses them. Never "the person", "the user", "they".
   The note keeps what will be worth rereading in a year:
@@ -212,6 +217,9 @@ export function parseNamed(text: string, alsoKind: string | null = null): Named[
       kind, title, year, note,
       creator: typeof s?.creator === "string" ? s.creator.trim() : "",
       public: kind === "people" ? s?.public !== false : true,
+      ...(kind === "music" && typeof s?.track === "string" && s.track.trim()
+        ? { track: s.track.replace(/\s+/g, " ").trim(), year: null }
+        : {}),
     });
     if (out.length === MAX_PER_TURN) break;
   }
@@ -336,6 +344,15 @@ export function setGardenCall(fn: GardenCall | null): void {
 }
 
 async function searchProvider(memberId: string, named: Named, locale: string): Promise<Candidate[]> {
+  // A song is found through its recordings, and answers the albums it is on.
+  if (named.kind === "music" && named.track) {
+    const found = await searchCall(memberId, "music", { track: named.track, ...(named.creator ? { artist: named.creator } : {}) }, MAX_CANDIDATES);
+    // The album the pass named, when it is among them, first. Not the song's own
+    // title standing in for an album it did not know: that is the single's.
+    const album = normalise(named.title);
+    if (album === normalise(named.track)) return found;
+    return [...found.filter((c) => normalise(c.title) === album), ...found.filter((c) => normalise(c.title) !== album)];
+  }
   const args: Record<string, unknown> = named.kind === "people"
     ? { name: named.title, limit: MAX_CANDIDATES }
     : { title: named.title, limit: MAX_CANDIDATES };
@@ -353,10 +370,13 @@ async function searchProvider(memberId: string, named: Named, locale: string): P
 
 /** A free term, as the member typed it or Maurice rephrased it: no year, no
  *  author — the term says what it says. */
-function searchTerm(memberId: string, kind: string, term: string, locale: string, limit: number): Promise<Candidate[]> {
+async function searchTerm(memberId: string, kind: string, term: string, locale: string, limit: number): Promise<Candidate[]> {
   const args: Record<string, unknown> = kind === "people" ? { name: term, limit } : { title: term, limit };
   if (kind === "books") args.locale = locale;
-  return searchCall(memberId, kind, args, limit);
+  const found = await searchCall(memberId, kind, args, limit);
+  // No album by that name: it may be a song's, which answers its albums.
+  if (!found.length && kind === "music") return searchCall(memberId, kind, { track: term, limit }, limit);
+  return found;
 }
 
 async function searchCall(memberId: string, kind: string, args: Record<string, unknown>, limit: number): Promise<Candidate[]> {
@@ -370,6 +390,7 @@ async function searchCall(memberId: string, kind: string, args: Record<string, u
     year: Number.isInteger(Number(r?.year)) && Number(r?.year) > 0 ? Number(r.year) : null,
     subtitle: String(r?.subtitle ?? ""),
     image: String(r?.image ?? ""),
+    ...(r?.track ? { track: String(r.track) } : {}),
   })).filter((c: Candidate) => c.id && c.title);
 }
 
@@ -447,6 +468,13 @@ function settle(named: Named, found: Candidate[]): Candidate[] {
 export function confident(named: Named, candidates: Candidate[]): boolean {
   const top = candidates[0];
   if (!top) return false;
+  // A song: the album named is among those it is on, or the artist named sings it.
+  if (named.track) {
+    const album = normalise(named.title);
+    if (album !== normalise(named.track) && normalise(top.title) === album) return true;
+    const artist = named.creator ? normalise(named.creator) : "";
+    return !!artist && normalise(top.subtitle).includes(artist);
+  }
   const same = (c: Candidate) => named.kind === "people" ? sameName(c.title, named.title) : normalise(c.title) === normalise(named.title);
   if (!same(top)) return false;
   if (named.year && top.year) return Math.abs(named.year - top.year) <= 1;
@@ -1219,7 +1247,9 @@ export async function searchAgain(
   const seen = new Set([...s.seen, ...s.candidates.map((c) => c.id)]);
   const named: Named = { kind: s.kind, title: s.title, year: s.year, creator: s.subtitle ?? "", note: s.note };
   const sameTitle = (c: Candidate) =>
-    s.kind === "people" ? sameName(c.title, s.title) : normalise(c.title) === normalise(s.title);
+    s.kind === "people" ? sameName(c.title, s.title)
+      // An album found for the song the suggestion is named after.
+      : normalise(c.title) === normalise(s.title) || (!!c.track && normalise(c.track) === normalise(s.title));
 
   for (const { term, exact } of terms) {
     // Their own entry under that name: nothing to look up.

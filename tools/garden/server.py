@@ -1375,17 +1375,19 @@ async def list_tools() -> list[Tool]:
             name="search_album",
             description=(
                 "Search MusicBrainz for albums (also EPs and singles). "
+                "For a song, pass `track` instead of `title`: it answers the albums the song is on, "
+                "the original studio album first — a song is kept under its album. "
                 "Returns candidates to review before creating an entry."
             ),
             inputSchema={
                 "type": "object",
                 "properties": {
                     "title": {"type": "string", "description": "Album title to search"},
+                    "track": {"type": "string", "description": "A song's title: search the albums it is on instead of album titles"},
                     "artist": {"type": "string", "description": "Artist name to narrow results"},
-                    "year": {"type": "integer", "description": "First release year to narrow results"},
+                    "year": {"type": "integer", "description": "First release year to narrow results (albums only)"},
                     "limit": {"type": "integer", "default": 5, "description": "Max results to return"},
                 },
-                "required": ["title"],
             },
         ),
         Tool(
@@ -4664,6 +4666,11 @@ async def _handle_search_album(args: dict[str, Any]) -> dict[str, Any]:
 
 def _search_album_sync(args: dict[str, Any]) -> dict[str, Any]:
     limit = args.get("limit", 5)
+    track = (args.get("track") or "").strip()
+    if track:
+        return _candidates_card("music", track, _musicbrainz_track_albums(track, args.get("artist"), limit))
+    if not args.get("title"):
+        return {"error": "one of title or track is required"}
     results = _musicbrainz_search(args["title"], args.get("artist"), args.get("year"), limit)
     candidates = []
     for group in results[:limit]:
@@ -5386,6 +5393,67 @@ def _musicbrainz_best(title: str, artist: str | None, year: int | None) -> dict[
                 group.get("first-release-date") or "")
 
     return min(exact, key=rank)
+
+
+def _musicbrainz_track_albums(track: str, artist: str | None, limit: int = 5) -> list[dict[str, Any]]:
+    """The albums a song is on, as album candidates — the song is kept under its album.
+
+    A known song has hundreds of recordings (live sets, bootlegs, compilations,
+    covers), and MusicBrainz's own filters drop a recording as soon as any one
+    of its releases is a compilation, original included: so one search, sorted
+    here. Only recordings under the song's own title, only official releases;
+    a plain studio album first, then an EP, then a single, then the rest
+    (live, compilation, soundtrack), each by its earliest release, undated last.
+    """
+    query = f"recording:{_musicbrainz_quote(track)}"
+    if artist:
+        query += f" AND artist:{_musicbrainz_quote(artist)}"
+    data = _musicbrainz_get("recording", {"query": query, "limit": 100})
+    wanted = track.casefold().strip()
+    groups: dict[str, dict[str, Any]] = {}
+    for rec in data.get("recordings") or []:
+        if (rec.get("title") or "").casefold().strip() != wanted:
+            continue
+        for rel in rec.get("releases") or []:
+            group = rel.get("release-group") or {}
+            mbid = group.get("id")
+            if not mbid or rel.get("status") not in (None, "Official"):
+                continue
+            date = rel.get("date") or ""
+            known = groups.get(mbid)
+            if known:
+                if date and (not known["date"] or date < known["date"]):
+                    known["date"] = date
+                continue
+            groups[mbid] = {
+                "id": mbid,
+                "title": group.get("title") or rel.get("title") or "",
+                "type": group.get("primary-type") or "",
+                "plain": not group.get("secondary-types"),
+                "date": date,
+                "artist": _musicbrainz_artist(rec),
+                "track": rec.get("title") or track,
+            }
+
+    def rank(g: dict[str, Any]) -> tuple[int, int, str]:
+        kind = {"Album": 0, "EP": 1, "Single": 2}.get(g["type"], 3)
+        return (kind if g["plain"] else kind + 4, 0 if g["date"] else 1, g["date"])
+
+    return [
+        {
+            "musicbrainz_id": g["id"],
+            "title": g["title"],
+            # The dates seen are those of the releases the search lists, a 2001
+            # reissue as often as the 1975 album: no year beats a wrong one.
+            # The fiche takes the album's own, by its id.
+            "year": None,
+            "artist": g["artist"],
+            "album_type": g["type"],
+            "track": g["track"],
+            "cover_url": _coverart_url(g["id"], 250),
+        }
+        for g in sorted(groups.values(), key=rank)[: max(1, int(limit))]
+    ]
 
 
 def _musicbrainz_by_id(mbid: str) -> dict[str, Any]:
