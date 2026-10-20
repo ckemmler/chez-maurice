@@ -1,6 +1,6 @@
 ---
 title: Life capabilities
-date: '2026-09-18'
+date: '2026-10-20'
 flags: []
 locale: en
 description: 'The experimental tool fleet: health, tasks, signals & coaching, calendar,
@@ -17,7 +17,7 @@ parent: maurice-docs
 
 # Life capabilities
 
-Beyond knowledge, Maurice plugs into the practical texture of a life — sleep, tasks, habits, calendar, reading. These are the **private [[maurice-tools|overlay]]**: real and in daily use at home, but **experimental**, and **none of them ship in the initial release** (which is chat + garden). Tool *names* below are the live MCP tools; some internals are approximate because the overlay is private.
+Beyond knowledge, Maurice plugs into the practical texture of a life — sleep, tasks, habits, calendar, reading. These are the **private [[maurice-tools|overlay]]**: real and in daily use at home, but **experimental**, and **none of them ship in the initial release** (which is chat + notes). Tool *names* below are the live MCP tools; some internals are approximate because the overlay is private.
 
 ## The fleet
 
@@ -36,14 +36,14 @@ Beyond knowledge, Maurice plugs into the practical texture of a life — sleep, 
 
 ## A couple of loops worth seeing
 
-- **Coaching adherence** closes a loop across servers: a [[maurice-knowledge|garden]] note declares `coaching_metrics` (a pillar, a signal category, a target like `3/week`); you log activity with `signals.signal_log`; `coaching_adherence` then scores how you're tracking. The plan lives as a visible, editable note — not a hidden setting.
+- **Coaching adherence** closes a loop across servers: a [[maurice-knowledge|note]] declares `coaching_metrics` (a pillar, a signal category, a target like `3/week`); you log activity with `signals.signal_log`; `coaching_adherence` then scores how you're tracking. The plan lives as a visible, editable note — not a hidden setting.
 - **Reading into a chat**: `calibre` is what makes **books** a [[maurice-composer|composer]] source — chapter summaries or full text, scoped (all / up-to / selected / progress) and weighed against the token budget. Since September 2026 the tools count chapters one way: `list_chapters` returns each chapter's `chapter` (1-based over the body chapters, null for front and back matter) and `section` beside the raw file `index`; `get_chapter_summary` and `get_chapter_summaries_up_to` take `chapter` first, and `get_reading_progress` reports `chapter` and the matching `chapter_index`. The composer's chapter headers and its "Books in this conversation" prompt use the same numbers. There is one global library, configurable from the admin dashboard (`calibre_libraries`, see [[maurice-data-model]]).
 - **Reading on the phone**: the same Calibre routes back [[maurice-carnet|Carnet]]'s library — covers, chapters and summaries, highlights, bookmarks, the reading position synced per member, offline downloads. Chapter extraction and summarisation run as server-side jobs whose errors surface on `/status`; the CLI interpreter is chosen per action by capability, after Python 3.14 broke extraction once. Highlights and the reading position are what feed a book's [[maurice-knowledge|flashcards]].
 - **Dashboards and capture**: `layouts` defines the server-driven dashboards Carnet renders by day; `places` and `uploads` take its passive location signals and its documents.
 
 ## Ships vs. exists
 
-**Everything on this page is experimental and does not ship initially.** It lives in the private `maurice-tools` overlay and rolls out gradually as each piece is polished. A public, garden-only install has none of it.
+**Everything on this page is experimental and does not ship initially.** It lives in the private `maurice-tools` overlay and rolls out gradually as each piece is polished. A public install, chat and notes only, has none of it.
 
 ## Gaps & notes
 

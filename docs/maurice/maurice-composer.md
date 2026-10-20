@@ -1,6 +1,6 @@
 ---
 title: The context composer
-date: '2026-09-22'
+date: '2026-10-20'
 flags: []
 locale: en
 description: Loading notes, books, files, and past conversations into a chat under
@@ -22,9 +22,9 @@ This is where the *apprivoisé* idea becomes a control surface: you choose exact
 
 | Type | Options | Notes |
 |---|---|---|
-| **Notes** | recursive fan-out (include descendants), include-archived, exclude list | A note or a whole subtree from the [[maurice-knowledge|garden]]. The tree follows `[[wiki-links]]` breadth-first: a note hangs under the node nearest the root that links to it, so a MOC's own links are its children and a cross-linked note appears once, at its shallowest — loading `maurice-docs` with descendants is the whole system documentation, seventeen notes. |
+| **Notes** | recursive fan-out (include descendants), include-archived, exclude list | A note or a whole subtree from the member's [[maurice-knowledge|notes]]. The tree follows `[[wiki-links]]` breadth-first: a note hangs under the node nearest the root that links to it, so a MOC's own links are its children and a cross-linked note appears once, at its shallowest — loading `maurice-docs` with descendants is the whole system documentation, seventeen notes. |
 | **Books** | chapter scope: `all` / `up_to` (spoiler-safe slider) / pick chapters / **`progress`**; representation `summary` or `full` | Chapters from a [[maurice-life|Calibre]] library. |
-| **Fiches** | include its fragments (on by default) | A garden fiche and what was written on it — the working face of a book, article, film or person. |
+| **Fiches** | include its fragments (on by default) | A fiche and what was written on it — the working face of a book, article, film or person. |
 | **Past conversations** | representation `summary` (default past 8k tokens) or `full` | A prior thread, as memory — summarised once it is long, see below. |
 | **Files** | — | Text, PDF, or image from the [[maurice-files|files library]]. |
 | **Folders** | recurse, exclude list | Sweeps in text files (counted) and binaries (uncounted). |
@@ -133,7 +133,7 @@ unknown ref reads as empty text, exactly as a missing chapter did.
 
 ## Ships vs. exists
 
-The composer and its **notes / conversations / files** sources are **core and ship**. **Books** depend on the experimental [[maurice-life|Calibre]] tool, so that source only lights up where the private tools are installed. Loading a garden note is the one place that reads the note's text at turn time. **Fiches and their fragments** are now a composer source of their own (`src/services/composer/fiches.ts`), alongside the corpus search that already reached them.
+The composer and its **notes / conversations / files** sources are **core and ship**. **Books** depend on the experimental [[maurice-life|Calibre]] tool, so that source only lights up where the private tools are installed. Loading a note is the one place that reads the note's text at turn time. **Fiches and their fragments** are now a composer source of their own (`src/services/composer/fiches.ts`), alongside the corpus search that already reached them.
 
 ## Gaps & notes
 

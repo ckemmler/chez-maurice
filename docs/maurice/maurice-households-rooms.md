@@ -1,6 +1,6 @@
 ---
 title: Households, rooms & devices
-date: '2026-10-19'
+date: '2026-10-20'
 flags: []
 locale: en
 description: Members and roles, guests, multi-person rooms, device pairing and PINs,
@@ -65,9 +65,9 @@ When an event can't reach a live socket, it becomes an APNs push (`server/src/se
 
 ## The household archive
 
-Since 19 September 2026 a household knows how to export itself. The **household archive** is a versioned `.maurice.tar.gz` (`maurice-archive` v1, `server/src/services/archive.ts`, format documented in `docs/household-archive.md`) holding everything the household *is*: `maurice.db` and the data-api databases as consistent `VACUUM INTO` snapshots checked by `integrity_check`, the gardens with each member's git history and `gardens.json`, images, files, uploads, avatars, `config.toml`, `secret.key` (the household key that opens the mail passwords in `mail_accounts`, since 25 September 2026: without it a moved household would keep its mailboxes and lose every password), and a `manifest.json` (household, members, schema version, server version, contents). Left out: backups, logs, the dead Qdrant directory, the corpus vector index (regenerable), `.env` and the Mac's `ops/` secrets, and the bare git remotes under `~/.maurice/git`. It contains the provider keys: **it is a secret.**
+Since 19 September 2026 a household knows how to export itself. The **household archive** is a versioned `.maurice.tar.gz` (`maurice-archive` v1, `server/src/services/archive.ts`, format documented in `docs/household-archive.md`) holding everything the household *is*: `maurice.db` and the data-api databases as consistent `VACUUM INTO` snapshots checked by `integrity_check`, every member's notes with their git history, and `gardens.json`, images, files, uploads, avatars, `config.toml`, `secret.key` (the household key that opens the mail passwords in `mail_accounts`, since 25 September 2026: without it a moved household would keep its mailboxes and lose every password), and a `manifest.json` (household, members, schema version, server version, contents). Left out: backups, logs, the dead Qdrant directory, the corpus vector index (regenerable), `.env` and the Mac's `ops/` secrets, and the bare git remotes under `~/.maurice/git`. It contains the provider keys: **it is a secret.**
 
-The admin gets it from the console's section 07, "Export this household" (`GET /admin/export`), or with a bearer token on `GET /api/admin/export` — streamed as `tar` reads, so the first byte leaves before the uploads are read. A fresh Maurice imports it into an empty data directory (refused if a `maurice.db` is already there; the server's own migrations bring the schema forward on first boot): `scripts/import-household.sh <archive> [dir]` on a Mac, `scripts/container.sh import <archive>` for a local container, `ops/household.sh add <host> <name> <domain> --from <archive>` for a household on a shared host — the archive travels over ssh's stdin and no copy stays on the host. Still by hand after an import: rebuilding the corpus index, and the gardens' `origin` remotes, which point at the old machine.
+The admin gets it from the console's section 07, "Export this household" (`GET /admin/export`), or with a bearer token on `GET /api/admin/export` — streamed as `tar` reads, so the first byte leaves before the uploads are read. A fresh Maurice imports it into an empty data directory (refused if a `maurice.db` is already there; the server's own migrations bring the schema forward on first boot): `scripts/import-household.sh <archive> [dir]` on a Mac, `scripts/container.sh import <archive>` for a local container, `ops/household.sh add <host> <name> <domain> --from <archive>` for a household on a shared host — the archive travels over ssh's stdin and no copy stays on the host. Still by hand after an import: rebuilding the corpus index, and the `origin` remotes of the members' notes repositories, which point at the old machine.
 
 ## Ships vs. exists
 
@@ -75,7 +75,7 @@ All of this — members, roles, guests, rooms, device enrollment, PINs, foyer sw
 
 ## Gaps & notes
 
-- **The server is single-tenant.** There is one hardcoded `'default'` household per server; "multiple households" is a *client* capability (one device, many servers). The schema carries `household_id` everywhere, but a single server doesn't host multiple households. At home this is literal: each extra household is its own launchd agent, on its own port, with its own data directory and gardens root (see [[maurice-architecture]]).
+- **The server is single-tenant.** There is one hardcoded `'default'` household per server; "multiple households" is a *client* capability (one device, many servers). The schema carries `household_id` everywhere, but a single server doesn't host multiple households. At home this is literal: each extra household is its own launchd agent, on its own port, with its own data directory and its own root for the members' notes (see [[maurice-architecture]]).
 - **A device-pairing ceremony exists but is unused.** `/api/auth/pair` + the `devices` table (one-time pairing tokens) are implemented, yet the app pairs via the unauthenticated `/api/health` — the token flow is currently orphaned.
 - **Sessions don't expire** in this version.
 - **No in-app place to rename a household or change its face.** The API is there (admin only) and the tower uses it once, at creation; after that it takes a direct API call or the database. A household made before the tower keeps its derived icon until someone sets one.
