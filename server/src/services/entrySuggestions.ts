@@ -322,6 +322,8 @@ async function gatewayCall(memberId: string, tool: string, args: Record<string, 
   const session = await McpSession.open(memberId);
   const { text, isError } = await session.callTool(`garden__${tool}`, args);
   if (isError) throw new Error(text || `${tool} failed`);
+  // A tool that raised answers in plain words, not JSON: `Error: HTTP Error 503…`.
+  if (text.startsWith("Error: ")) throw new Error(text.slice("Error: ".length));
   const parsed = JSON.parse(text);
   if (parsed?.error) throw new Error(String(parsed.error));
   return parsed;
