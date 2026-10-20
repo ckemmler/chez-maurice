@@ -2279,6 +2279,104 @@ let kBodyLineSpacing: CGFloat = 3
 /// Photos one message may carry — the server refuses more.
 private let kMaxPhotosPerMessage = 10
 
+#if os(iOS)
+/// Lets the composer field's Paste take an image. SwiftUI's TextField offers
+/// Paste only when the clipboard holds text, and has no paste hook on iOS
+/// (pasteDestination is macOS-only); its UITextView ignores a widened paste
+/// configuration. So the field's text view, and only it, is given a subclass
+/// that offers Paste for an image-only clipboard and hands that paste to
+/// `onPaste`; everything else goes to the original implementation.
+private struct ImagePasteEnabler: UIViewRepresentable {
+    let onPaste: () -> Void
+
+    func makeUIView(context: Context) -> Probe {
+        let probe = Probe()
+        probe.isUserInteractionEnabled = false
+        probe.onPaste = onPaste
+        return probe
+    }
+    func updateUIView(_ probe: Probe, context: Context) {
+        probe.onPaste = onPaste
+        probe.attach()
+    }
+
+    /// Sits behind the field; once in a window, finds the nearest text view.
+    final class Probe: UIView {
+        var onPaste: () -> Void = {}
+        override func didMoveToWindow() {
+            super.didMoveToWindow()
+            guard window != nil else { return }
+            DispatchQueue.main.async { [weak self] in self?.attach() }
+        }
+        func attach() {
+            var node = superview
+            while let view = node {
+                if let textView = Self.firstTextView(in: view) {
+                    ImagePasteTextView.enable(textView) { [weak self] in self?.onPaste() }
+                    return
+                }
+                node = view.superview
+            }
+        }
+        private static func firstTextView(in view: UIView) -> UITextView? {
+            if let textView = view as? UITextView { return textView }
+            for sub in view.subviews { if let found = firstTextView(in: sub) { return found } }
+            return nil
+        }
+    }
+}
+
+private enum ImagePasteTextView {
+    private static let prefix = "MauriceImagePaste_"
+    private static var handlerKey: UInt8 = 0
+    private final class Handler { let run: () -> Void; init(_ run: @escaping () -> Void) { self.run = run } }
+
+    static func enable(_ textView: UITextView, onPaste: @escaping () -> Void) {
+        objc_setAssociatedObject(textView, &handlerKey, Handler(onPaste), .OBJC_ASSOCIATION_RETAIN_NONATOMIC)
+        guard let current = object_getClass(textView),
+              !NSStringFromClass(current).hasPrefix(prefix),
+              let subclass = subclass(of: current) else { return }
+        object_setClass(textView, subclass)
+    }
+
+    private static var imageOnly: Bool {
+        UIPasteboard.general.hasImages && !UIPasteboard.general.hasStrings && !UIPasteboard.general.hasURLs
+    }
+
+    private static func subclass(of base: AnyClass) -> AnyClass? {
+        let name = prefix + NSStringFromClass(base)
+        if let existing = NSClassFromString(name) { return existing }
+        guard let subclass = objc_allocateClassPair(base, name, 0) else { return nil }
+        let paste = #selector(UIResponderStandardEditActions.paste(_:))
+
+        let canPerform = #selector(UIResponder.canPerformAction(_:withSender:))
+        typealias CanPerform = @convention(c) (AnyObject, Selector, Selector, Any?) -> Bool
+        let superCanPerform = unsafeBitCast(class_getMethodImplementation(base, canPerform), to: CanPerform.self)
+        let canPerformBlock: @convention(block) (AnyObject, Selector, Any?) -> Bool = { this, action, sender in
+            if action == paste, imageOnly { return true }
+            return superCanPerform(this, canPerform, action, sender)
+        }
+        class_addMethod(subclass, canPerform, imp_implementationWithBlock(canPerformBlock),
+                        method_getTypeEncoding(class_getInstanceMethod(base, canPerform)!))
+
+        typealias Paste = @convention(c) (AnyObject, Selector, Any?) -> Void
+        let superPaste = unsafeBitCast(class_getMethodImplementation(base, paste), to: Paste.self)
+        let pasteBlock: @convention(block) (AnyObject, Any?) -> Void = { this, sender in
+            if imageOnly, let handler = objc_getAssociatedObject(this, &handlerKey) as? Handler {
+                handler.run()
+                return
+            }
+            superPaste(this, paste, sender)
+        }
+        class_addMethod(subclass, paste, imp_implementationWithBlock(pasteBlock),
+                        method_getTypeEncoding(class_getInstanceMethod(base, paste)!))
+
+        objc_registerClassPair(subclass)
+        return subclass
+    }
+}
+#endif
+
 /// A pending paste, by its place in the composer's list.
 private struct PendingPaste: Identifiable {
     let id: Int
@@ -2944,6 +3042,9 @@ private struct ComposerBar: View {
                     pasteImageFromClipboard()
                     return .handled
                 }
+                // The field's own Paste (the edit menu on a touch) takes an
+                // image too, as a pending photo.
+                .background(ImagePasteEnabler { pasteImageFromClipboard() })
                 #endif
                 // macOS: Return sends, Shift-Return breaks the line. SwiftUI's
                 // vertical TextField gives Return to onSubmit and lets
@@ -3373,7 +3474,7 @@ private struct ComposerBar: View {
                       maxSelectionCount: max(1, kMaxPhotosPerMessage - pendingImages.count),
                       selectionBehavior: .ordered, matching: .images)
         .sheet(isPresented: $showCamera) {
-            CameraCaptureView { data in
+            CameraCaptureView(mode: .photo) { data in
                 showCamera = false
                 attachPhoto(data)
             }
