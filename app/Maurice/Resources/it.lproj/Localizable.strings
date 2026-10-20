@@ -85,7 +85,7 @@
 "model.cloud" = "Cloud";
 "persona.provider.ollama" = "SUL DISPOSITIVO · OLLAMA";
 "tools.always_on" = "Sempre attivo · %@";
-"tools.section.garden" = "Giardino";
+"tools.section.garden" = "Note";
 "tools.section.experimental" = "Sperimentale · %d";
 "tools.count.one" = "%d strumento";
 "tools.count.other" = "%d strumenti";
@@ -235,13 +235,13 @@
 "chat.switch_model" = "Cambia modello";
 
 /* Settings reorg + avatar */
-"settings.garden.title" = "Il tuo giardino";
+"settings.garden.title" = "Il tuo sito";
 "settings.garden.webtheme" = "Tema web";
 "settings.garden.open" = "Apri nel browser";
 "settings.garden.signedin" = "connesso";
-"settings.garden.openlink" = "Apri il tuo giardino";
+"settings.garden.openlink" = "Apri il tuo sito";
 "settings.garden.openbutton" = "Apri";
-"settings.garden.webtheme_hint" = "L'aspetto del tuo giardino sul web.";
+"settings.garden.webtheme_hint" = "L'aspetto del tuo sito.";
 "settings.mcp.token" = "Token di accesso";
 "settings.mcp.copyhint" = "Tocca per copiare o rigenerare.";
 "settings.avatar.hint" = "Tocca la foto per cambiarla.";
@@ -299,34 +299,34 @@
 "chat.remove_participant" = "Rimuovi dalla conversazione";
 
 /* Giardini condivisi */
-"gardens.section" = "Giardini";
+"gardens.section" = "Note";
 "gardens.conversations" = "Conversazioni";
-"gardens.mine" = "Il mio giardino";
+"gardens.mine" = "Le mie note";
 "gardens.you" = "Tu";
 "gardens.whole_house" = "Tutta la casa";
-"gardens.garden" = "giardino";
+"gardens.garden" = "note";
 "gardens.browse" = "Sfoglia";
-"gardens.browse_garden" = "Sfoglia questo giardino nel browser";
-"gardens.open_tool" = "Impostazioni del giardino · ricerca";
+"gardens.browse_garden" = "Sfoglia queste note nel browser";
+"gardens.open_tool" = "Impostazioni delle note · ricerca";
 "gardens.browse_note" = "Sfoglia questa nota nel browser";
 "gardens.search" = "Cerca in queste note…";
 "gardens.webtheme" = "Tema web";
-"gardens.webtheme_hint" = "L'aspetto di questo giardino sul web — ogni giardiniere lo vede.";
-"gardens.all_notes" = "Tutto in questo giardino";
+"gardens.webtheme_hint" = "L'aspetto di queste note sul web — chiunque le condivida lo vede.";
+"gardens.all_notes" = "Tutte queste note";
 "gardens.notes" = "note";
-"gardens.empty" = "Ancora niente qui — condividi una nota per far nascere questo giardino.";
+"gardens.empty" = "Ancora niente qui — condividi una nota e comparirà qui.";
 "gardens.no_match" = "Nessuna nota corrisponde.";
 "gardens.today" = "oggi";
 "gardens.note_access" = "Accesso alla nota";
 "gardens.tends" = "se ne prende cura";
 "gardens.you_tag" = "tu";
 "gardens.share" = "Condividi";
-"gardens.share_hint" = "Condividere con qualcuno sposta questa nota nel giardino che curate insieme — vale anche dal tuo giardino personale.";
+"gardens.share_hint" = "Condividere con qualcuno sposta questa nota tra quelle che tenete insieme — vale anche dalle tue note personali.";
 "gardens.remove_self" = "Rimuoviti…";
 "gardens.remove_self_confirm" = "Rimuoviti da questa nota";
 "gardens.remove_hint" = "Puoi rimuovere solo te stesso — mai gli altri.";
-"gardens.in_garden_with" = "nel giardino che curi con %@";
-"gardens.in_your_garden" = "nel tuo giardino personale";
+"gardens.in_garden_with" = "nelle note che tieni con %@";
+"gardens.in_your_garden" = "nelle tue note personali";
 
 /* Dictation */
 "chat.dictate" = "Detta";
@@ -559,9 +559,9 @@
 
 /* The garden's notes of a domain, seeded by Maurice at its adoption (P2-C) */
 "gardens.unreviewed" = "da rileggere";
-"gardens.unreviewed.help" = "Scritta da Maurice, non ancora riletta: aprila nel giardino per tenerla, correggerla o buttarla";
-"brief.notes_one" = "%d nota nel giardino";
-"brief.notes_other" = "%d note nel giardino";
+"gardens.unreviewed.help" = "Scritta da Maurice, non ancora riletta: aprila nel browser per tenerla, correggerla o buttarla";
+"brief.notes_one" = "%d nota";
+"brief.notes_other" = "%d note";
 "brief.notes.unreviewed_one" = "%d da rileggere";
 "brief.notes.unreviewed_other" = "%d da rileggere";
 "brief.notes.open" = "Apri";
@@ -590,7 +590,7 @@
 "settings.import.night" = "Le conversazioni importate compaiono nella tua lista con la loro origine. La notte seguente Maurice le legge: i tuoi domini possono esserti proposti al mattino.";
 
 /* The drawer "Define my domains" under the conversation Maurice opens (P2-D, 20 September 2026) */
-"proposals.rule" = "Un dominio adottato riceve il suo quaderno, scritto da Maurice entro un minuto o due. Le note nel tuo giardino vengono scritte solo dove le chiedi, ciascuna segnata come non ancora riletta.";
+"proposals.rule" = "Un dominio adottato riceve il suo quaderno, scritto da Maurice entro un minuto o due. Le note vengono scritte solo dove le chiedi, ciascuna segnata come non ancora riletta.";
 "proposals.conversations.one" = "%d conversazione";
 "proposals.conversations.other" = "%d conversazioni";
 "proposals.mail.one" = "%d filo di posta";
@@ -601,7 +601,7 @@
 "proposals.name" = "Nome";
 "proposals.summary" = "Una riga su cosa è";
 "proposals.split_hint" = "Forse più cose: %@";
-"proposals.seed" = "Seminare il mio giardino con qualche nota";
+"proposals.seed" = "Scrivere qualche nota per cominciare";
 "proposals.adopt" = "Adotta";
 "proposals.section" = "Proposte (%d)";
 "proposals.failed" = "Il server non ha preso. Riprova.";
@@ -672,9 +672,9 @@
 "mail.remove.confirm" = "Maurice smetterà di leggere %@. Puoi anche revocare la password presso il tuo provider.";
 "mail.forget" = "Dimentica";
 "mail.forget.title" = "Dimenticare questa casella?";
-"mail.forget.message" = "Ciò che Maurice ha letto da %@, e da nessun'altra parte, lascia il server della tua casa, e le righe che ne derivano lasciano il tuo giardino. Ciò che hai corretto tu viene sfoltito, mai eliminato. Cancellare anche la cronologia riscrive la cronologia del giardino: una copia già scaricata altrove tiene la vecchia.";
+"mail.forget.message" = "Ciò che Maurice ha letto da %@, e da nessun'altra parte, lascia il server della tua casa, e le righe che ne derivano lasciano le tue note. Ciò che hai corretto tu viene alleggerito, mai eliminato. Cancellare anche la cronologia riscrive la cronologia delle tue note: una copia già scaricata altrove tiene la vecchia.";
 "mail.forget.history" = "Dimentica e cancella la cronologia";
-"mail.forget.done" = "Dimenticata: %d messaggi, %d file sfoltiti, %d eliminati.";
+"mail.forget.done" = "Dimenticata: %d messaggi, %d file alleggeriti, %d eliminati.";
 "mail.add" = "Aggiungi una casella";
 "mail.address" = "Indirizzo email";
 "mail.password" = "Password per le app";
@@ -725,7 +725,7 @@
 "mail.reading.approve" = "Lascia leggere Maurice";
 "mail.reading.withdraw" = "Ritira l'approvazione";
 "mail.reading.help" = "Maurice legge gli scambi veri degli ultimi anni, di notte, e ti dice chi conta per te e cosa è in corso. Nulla viene inviato, nulla cambia nella tua casella.";
-"mail.reading.caption" = "La lettura è un sì che dai tu, qui. Puoi ritirarlo in ogni momento. Ciò che Maurice ne scrive è nel tuo giardino, sotto «La mia posta».";
+"mail.reading.caption" = "La lettura è un sì che dai tu, qui. Puoi ritirarlo in ogni momento. Ciò che Maurice ne scrive è nelle tue note, sotto «La mia posta».";
 "mail.box.messages" = "%d messaggi rilevati";
 "mail.box.reading" = "Lettura: %1$d smistati · %2$d da leggere · %3$d letti";
 "mail.box.left" = "Resta: ~%1$@ da smistare, ~%2$@ da leggere · %3$@";
@@ -803,7 +803,7 @@
 "review.items" = "%d elementi da verificare";
 "review.one_item" = "1 elemento da verificare";
 "review.all_checked" = "Tutto verificato";
-"review.by_maurice" = "Scritta da Maurice leggendo la tua posta. Ciò che confermi, rifiuti o correggi viene scritto nel tuo giardino.";
+"review.by_maurice" = "Scritta da Maurice leggendo la tua posta. Ciò che confermi, rifiuti o correggi viene scritto nelle tue note.";
 "review.confirm" = "Conferma";
 "review.reject" = "Rifiuta";
 "review.edit" = "Correggi";
@@ -829,10 +829,10 @@
 "review.reject_fiche.title" = "Eliminare questa scheda?";
 "review.reject_fiche.message" = "Maurice non la scriverà più.";
 "review.not_person" = "Non è una persona";
-"review.open_garden" = "Apri nel giardino";
+"review.open_garden" = "Apri nel browser";
 "review.failed" = "Non sono riuscito a salvare.";
 "review.load_failed" = "Non sono riuscito a leggere la scheda.";
-"review.edit.hint" = "Le tue parole sostituiscono quelle di Maurice e valgono come confermate. È markdown, come lo conserva il tuo giardino.";
+"review.edit.hint" = "Le tue parole sostituiscono quelle di Maurice e valgono come confermate. È markdown, come lo conservano le tue note.";
 "review.show_sources" = "Mostra le fonti";
 "review.hide_sources" = "Nascondi le fonti";
 "review.conflict.cards" = "In %d schede della tua rubrica";
@@ -844,7 +844,7 @@
 "mydata.index_caption" = "Portare via, riportare o cancellare tutto ciò che questa casa conserva di te.";
 "mydata.caption" = "Tutto ciò che il server di questa casa conserva di te è tuo: puoi portarlo via, riportarlo, cancellarlo o andartene.";
 "mydata.export.title" = "Esporta i miei dati";
-"mydata.export.text" = "Un solo file con le tue conversazioni, il tuo giardino e la sua cronologia, i tuoi file, le tue immagini, la posta letta e il resto, in un formato leggibile. Non contiene password né i messaggi degli altri.";
+"mydata.export.text" = "Un solo file con le tue conversazioni, le tue note e la loro cronologia, i tuoi file, le tue immagini, la posta letta e il resto, in un formato leggibile. Non contiene password né i messaggi degli altri.";
 "mydata.export.button" = "Esporta…";
 "mydata.export.preparing" = "Preparazione dell’archivio…";
 "mydata.export.done" = "Archivio salvato.";
@@ -855,15 +855,15 @@
 "mydata.import.done" = "Importato: %d conversazioni, %d file, %d note.";
 "mydata.import.already" = "Questo archivio è già stato importato in questo account.";
 "mydata.erase.title" = "Cancella i miei dati";
-"mydata.erase.text" = "Conversazioni, giardino, file, posta, fatti e tutto ciò che Maurice ne ha tratto vengono cancellati dal server. Il tuo account resta, vuoto. È definitivo: esporta prima se vuoi conservarne una copia.";
+"mydata.erase.text" = "Conversazioni, note, file, posta, fatti e tutto ciò che Maurice ne ha tratto vengono cancellati dal server. Il tuo account resta, vuoto. È definitivo: esporta prima se vuoi conservarne una copia.";
 "mydata.erase.button" = "Cancella i miei dati…";
 "mydata.erase.done" = "I tuoi dati sono stati cancellati.";
 "mydata.delete.title" = "Elimina il mio account";
 "mydata.delete.text" = "Viene cancellato tutto, poi l’account stesso. Le stanze che condividevi restano agli altri, senza i tuoi messaggi. È definitivo.";
 "mydata.delete.button" = "Elimina il mio account…";
 "mydata.backups" = "I backup locali della notte vengono riscritti senza di te al momento della cancellazione. Se questa casa è ospitata, i backup esterni del fornitore scadono da soli, secondo il suo calendario.";
-"mydata.clone.title" = "Clonare il mio giardino";
-"mydata.clone.text" = "Il tuo giardino ha un indirizzo git: clonalo in Obsidian, Working Copy o un terminale e tienine una copia aggiornata. Per ora in sola lettura: ciò che cambi lì non torna qui.";
+"mydata.clone.title" = "Clonare le mie note";
+"mydata.clone.text" = "Le tue note hanno un indirizzo git: clonale in Obsidian, Working Copy o un terminale e tienine una copia aggiornata. Per ora in sola lettura: ciò che cambi lì non torna qui.";
 "mydata.clone.button" = "Mostra l’indirizzo";
 "mydata.clone.address" = "Indirizzo";
 "mydata.clone.username" = "Nome utente";
@@ -875,12 +875,12 @@
 "mydata.clone.howto" = "Obsidian: installa il plugin della comunità «Git», esegui «Git: Clone an existing remote repo», incolla l’indirizzo, poi inserisci nome utente e chiave quando richiesti. Working Copy: «Clone repository», lo stesso indirizzo, la stessa chiave. Su un computer: git clone seguito dall’indirizzo, poi apri la cartella come vault in Obsidian.";
 "mydata.clone.warning" = "La copia non è cifrata: le note segnate come private vi sono in chiaro. Proteggi il dispositivo che la conserva. Contiene le tue note, le tue schede e la loro cronologia e, riscritti ogni notte nella cartella _maurice, i tuoi evidenziati, le posizioni di lettura, le voci archiviate e i tuoi domini. Non la tua posta, né l’indice di ricerca.";
 "mydata.clone.conversations" = "Includi le mie conversazioni";
-"mydata.clone.conversations_note" = "Ogni notte le tue conversazioni vengono scritte nel giardino, una per file, in _maurice/conversations. In una stanza condivisa, solo i tuoi messaggi.";
-"mydata.clone.no_garden" = "Non hai ancora un giardino in questa casa.";
+"mydata.clone.conversations_note" = "Ogni notte le tue conversazioni vengono scritte nelle tue note, una per file, in _maurice/conversations. In una stanza condivisa, solo i tuoi messaggi.";
+"mydata.clone.no_garden" = "Non hai ancora note in questa casa.";
 "mydata.failed" = "Non riuscito: %@";
 "mydata.residual.corpus" = "L’indice di ricerca non era raggiungibile; verrà svuotato al prossimo avvio del server.";
-"mydata.residual.remote" = "Una copia del tuo giardino esiste altrove, fuori dalla portata di questo server: %@";
-"mydata.residual.site" = "Un sito pubblicato dal tuo giardino potrebbe essere ancora online: eliminalo presso il suo fornitore.";
+"mydata.residual.remote" = "Una copia delle tue note esiste altrove, fuori dalla portata di questo server: %@";
+"mydata.residual.site" = "Un sito pubblicato dalle tue note potrebbe essere ancora online: eliminalo presso il suo fornitore.";
 "mydata.residual.archives" = "%d archivio/i della casa esportato/i da un amministratore contengono ancora i tuoi dati: chiedigli di eliminarli.";
 "mydata.confirm.data" = "Tutto ciò che questa casa conserva di te sta per essere cancellato, senza ritorno. Il tuo account resta.";
 "mydata.confirm.account" = "Tutto ciò che questa casa conserva di te sta per essere cancellato, poi il tuo account, senza ritorno.";

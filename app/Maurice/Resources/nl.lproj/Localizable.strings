@@ -85,7 +85,7 @@
 "model.cloud" = "Cloud";
 "persona.provider.ollama" = "OP APPARAAT · OLLAMA";
 "tools.always_on" = "Altijd aan · %@";
-"tools.section.garden" = "Tuin";
+"tools.section.garden" = "Notities";
 "tools.section.experimental" = "Experimenteel · %d";
 "tools.count.one" = "%d hulpmiddel";
 "tools.count.other" = "%d hulpmiddelen";
@@ -235,13 +235,13 @@
 "chat.switch_model" = "Model wisselen";
 
 /* Settings reorg + avatar */
-"settings.garden.title" = "Jouw tuin";
+"settings.garden.title" = "Jouw site";
 "settings.garden.webtheme" = "Webthema";
 "settings.garden.open" = "In browser openen";
 "settings.garden.signedin" = "ingelogd";
-"settings.garden.openlink" = "Open je tuin";
+"settings.garden.openlink" = "Open je site";
 "settings.garden.openbutton" = "Openen";
-"settings.garden.webtheme_hint" = "Hoe je tuin er op het web uitziet.";
+"settings.garden.webtheme_hint" = "Hoe je site eruitziet.";
 "settings.mcp.token" = "Auth-token";
 "settings.mcp.copyhint" = "Tik om te kopiëren of te vernieuwen.";
 "settings.avatar.hint" = "Tik op de foto om hem te wijzigen.";
@@ -299,34 +299,34 @@
 "chat.remove_participant" = "Uit gesprek verwijderen";
 
 /* Gedeelde tuinen */
-"gardens.section" = "Tuinen";
+"gardens.section" = "Notities";
 "gardens.conversations" = "Gesprekken";
-"gardens.mine" = "Mijn tuin";
+"gardens.mine" = "Mijn notities";
 "gardens.you" = "Jij";
 "gardens.whole_house" = "Het hele huis";
-"gardens.garden" = "tuin";
+"gardens.garden" = "notities";
 "gardens.browse" = "Openen";
-"gardens.browse_garden" = "Deze tuin in de browser bekijken";
-"gardens.open_tool" = "Tuininstellingen · zoeken";
+"gardens.browse_garden" = "Deze notities in de browser bekijken";
+"gardens.open_tool" = "Notitie-instellingen · zoeken";
 "gardens.browse_note" = "Deze notitie in de browser bekijken";
 "gardens.search" = "Zoek in deze notities…";
 "gardens.webtheme" = "Webthema";
-"gardens.webtheme_hint" = "Zo ziet deze tuin er op het web uit — elke tuinier ziet het.";
-"gardens.all_notes" = "Alles in deze tuin";
+"gardens.webtheme_hint" = "Zo zien deze notities er op het web uit — iedereen die ze deelt ziet het.";
+"gardens.all_notes" = "Al deze notities";
 "gardens.notes" = "notities";
-"gardens.empty" = "Nog niets hier — deel een notitie om deze tuin te beginnen.";
+"gardens.empty" = "Nog niets hier — deel een notitie en ze verschijnt hier.";
 "gardens.no_match" = "Geen notities gevonden.";
 "gardens.today" = "vandaag";
 "gardens.note_access" = "Notitie-toegang";
-"gardens.tends" = "verzorgt hem";
+"gardens.tends" = "past erop";
 "gardens.you_tag" = "jij";
 "gardens.share" = "Delen";
-"gardens.share_hint" = "Delen met iemand verplaatst deze notitie naar de tuin die jullie samen verzorgen — net zo vanuit je persoonlijke tuin.";
+"gardens.share_hint" = "Delen met iemand verplaatst deze notitie naar de notities die jullie samen bijhouden — net zo vanuit je eigen notities.";
 "gardens.remove_self" = "Jezelf verwijderen…";
 "gardens.remove_self_confirm" = "Jezelf van deze notitie verwijderen";
 "gardens.remove_hint" = "Je kunt alleen jezelf verwijderen — nooit anderen.";
-"gardens.in_garden_with" = "in de tuin die je met %@ verzorgt";
-"gardens.in_your_garden" = "in je persoonlijke tuin";
+"gardens.in_garden_with" = "in de notities die je met %@ bijhoudt";
+"gardens.in_your_garden" = "in je eigen notities";
 
 /* Dictation */
 "chat.dictate" = "Dicteren";
@@ -559,9 +559,9 @@
 
 /* The garden's notes of a domain, seeded by Maurice at its adoption (P2-C) */
 "gardens.unreviewed" = "na te lezen";
-"gardens.unreviewed.help" = "Door Maurice geschreven, nog niet nagelezen: open ze in de tuin om ze te bewaren, te verbeteren of weg te gooien";
-"brief.notes_one" = "%d notitie in de tuin";
-"brief.notes_other" = "%d notities in de tuin";
+"gardens.unreviewed.help" = "Door Maurice geschreven, nog niet nagelezen: open ze in de browser om ze te bewaren, te verbeteren of weg te gooien";
+"brief.notes_one" = "%d notitie";
+"brief.notes_other" = "%d notities";
 "brief.notes.unreviewed_one" = "%d na te lezen";
 "brief.notes.unreviewed_other" = "%d na te lezen";
 "brief.notes.open" = "Openen";
@@ -590,7 +590,7 @@
 "settings.import.night" = "Geïmporteerde gesprekken verschijnen in je lijst met hun herkomst. De nacht erna leest Maurice ze: je domeinen kunnen je 's ochtends worden voorgesteld.";
 
 /* The drawer "Define my domains" under the conversation Maurice opens (P2-D, 20 September 2026) */
-"proposals.rule" = "Een overgenomen domein krijgt zijn schrift, binnen een minuut of twee door Maurice geschreven. Notities in je tuin worden alleen geschreven waar je erom vraagt, elk gemarkeerd als nog niet nagekeken.";
+"proposals.rule" = "Een overgenomen domein krijgt zijn schrift, binnen een minuut of twee door Maurice geschreven. Notities worden alleen geschreven waar je erom vraagt, elk gemarkeerd als nog niet nagekeken.";
 "proposals.conversations.one" = "%d gesprek";
 "proposals.conversations.other" = "%d gesprekken";
 "proposals.mail.one" = "%d mailgesprek";
@@ -601,7 +601,7 @@
 "proposals.name" = "Naam";
 "proposals.summary" = "Eén regel over wat het is";
 "proposals.split_hint" = "Misschien meerdere dingen: %@";
-"proposals.seed" = "Mijn tuin inzaaien met een paar notities";
+"proposals.seed" = "Een paar notities schrijven om te beginnen";
 "proposals.adopt" = "Overnemen";
 "proposals.section" = "Voorstellen (%d)";
 "proposals.failed" = "De server nam het niet aan. Probeer het opnieuw.";
@@ -672,7 +672,7 @@
 "mail.remove.confirm" = "Maurice leest %@ niet meer. Je kunt het wachtwoord ook bij je provider intrekken.";
 "mail.forget" = "Vergeten";
 "mail.forget.title" = "Deze mailbox vergeten?";
-"mail.forget.message" = "Wat Maurice uit %@ las, en nergens anders vandaan, verlaat de server van je huishouden, en de regels die eruit komen verlaten je tuin. Wat je zelf verbeterde wordt ingekort, nooit verwijderd. Ook de geschiedenis wissen herschrijft de geschiedenis van je tuin: een kopie die elders al is opgehaald houdt de oude.";
+"mail.forget.message" = "Wat Maurice uit %@ las, en nergens anders vandaan, verlaat de server van je huishouden, en de regels die eruit komen verlaten je notities. Wat je zelf verbeterde wordt ingekort, nooit verwijderd. Ook de geschiedenis wissen herschrijft de geschiedenis van je notities: een kopie die elders al is opgehaald houdt de oude.";
 "mail.forget.history" = "Vergeten en geschiedenis wissen";
 "mail.forget.done" = "Vergeten: %d berichten, %d bestanden ingekort, %d verwijderd.";
 "mail.add" = "Mailbox toevoegen";
@@ -725,7 +725,7 @@
 "mail.reading.approve" = "Maurice laten lezen";
 "mail.reading.withdraw" = "Goedkeuring intrekken";
 "mail.reading.help" = "Maurice leest 's nachts de echte uitwisselingen van de laatste jaren en zegt je wie voor jou telt en wat er speelt. Er wordt niets verzonden, niets in je mailbox veranderd.";
-"mail.reading.caption" = "Het lezen is een ja dat jij geeft, hier. Je kunt het altijd intrekken. Wat Maurice eruit schrijft staat in je tuin, onder “Mijn mail”.";
+"mail.reading.caption" = "Het lezen is een ja dat jij geeft, hier. Je kunt het altijd intrekken. Wat Maurice eruit schrijft staat in je notities, onder “Mijn mail”.";
 "mail.box.messages" = "%d berichten verzameld";
 "mail.box.reading" = "Lezen: %1$d gesorteerd · %2$d te lezen · %3$d gelezen";
 "mail.box.left" = "Nog: ~%1$@ te sorteren, ~%2$@ te lezen · %3$@";
@@ -803,7 +803,7 @@
 "review.items" = "%d punten na te kijken";
 "review.one_item" = "1 punt na te kijken";
 "review.all_checked" = "Alles nagekeken";
-"review.by_maurice" = "Door Maurice geschreven uit je post. Wat je bevestigt, afwijst of verbetert, wordt in je tuin geschreven.";
+"review.by_maurice" = "Door Maurice geschreven uit je post. Wat je bevestigt, afwijst of verbetert, wordt in je notities geschreven.";
 "review.confirm" = "Bevestigen";
 "review.reject" = "Afwijzen";
 "review.edit" = "Verbeteren";
@@ -829,10 +829,10 @@
 "review.reject_fiche.title" = "Deze kaart verwijderen?";
 "review.reject_fiche.message" = "Maurice schrijft ze niet meer.";
 "review.not_person" = "Dit is geen persoon";
-"review.open_garden" = "Openen in de tuin";
+"review.open_garden" = "Openen in de browser";
 "review.failed" = "Ik kon het niet opslaan.";
 "review.load_failed" = "Ik kon de kaart niet lezen.";
-"review.edit.hint" = "Jouw woorden vervangen die van Maurice en gelden als bevestigd. Het is markdown, zoals je tuin het bewaart.";
+"review.edit.hint" = "Jouw woorden vervangen die van Maurice en gelden als bevestigd. Het is markdown, zoals je notities het bewaren.";
 "review.show_sources" = "Bronnen tonen";
 "review.hide_sources" = "Bronnen verbergen";
 "review.conflict.cards" = "In %d kaarten van je adresboek";
@@ -844,7 +844,7 @@
 "mydata.index_caption" = "Alles wat dit huishouden van je bewaart meenemen, terugbrengen of wissen.";
 "mydata.caption" = "Alles wat de server van dit huishouden van je bewaart is van jou: je kunt het meenemen, terugbrengen, wissen of vertrekken.";
 "mydata.export.title" = "Mijn gegevens exporteren";
-"mydata.export.text" = "Eén bestand met je gesprekken, je tuin en zijn geschiedenis, je bestanden, je afbeeldingen, de gelezen post en de rest, in een leesbaar formaat. Het bevat geen wachtwoord en geen berichten van anderen.";
+"mydata.export.text" = "Eén bestand met je gesprekken, je notities en hun geschiedenis, je bestanden, je afbeeldingen, de gelezen post en de rest, in een leesbaar formaat. Het bevat geen wachtwoord en geen berichten van anderen.";
 "mydata.export.button" = "Exporteren…";
 "mydata.export.preparing" = "Archief voorbereiden…";
 "mydata.export.done" = "Archief opgeslagen.";
@@ -855,15 +855,15 @@
 "mydata.import.done" = "Geïmporteerd: %d gesprekken, %d bestanden, %d notities.";
 "mydata.import.already" = "Dit archief is al in dit account geïmporteerd.";
 "mydata.erase.title" = "Mijn gegevens wissen";
-"mydata.erase.text" = "Gesprekken, tuin, bestanden, post, feiten en alles wat Maurice eruit heeft gehaald worden van de server gewist. Je account blijft, leeg. Dit is definitief: exporteer eerst als je een kopie wilt bewaren.";
+"mydata.erase.text" = "Gesprekken, notities, bestanden, post, feiten en alles wat Maurice eruit heeft gehaald worden van de server gewist. Je account blijft, leeg. Dit is definitief: exporteer eerst als je een kopie wilt bewaren.";
 "mydata.erase.button" = "Mijn gegevens wissen…";
 "mydata.erase.done" = "Je gegevens zijn gewist.";
 "mydata.delete.title" = "Mijn account verwijderen";
 "mydata.delete.text" = "Alles wordt gewist, daarna het account zelf. De kamers die je deelde blijven bij de anderen, zonder je berichten. Dit is definitief.";
 "mydata.delete.button" = "Mijn account verwijderen…";
 "mydata.backups" = "De lokale back-ups van de nacht worden bij het wissen zonder jou herschreven. Als dit huishouden gehost wordt, verlopen de externe back-ups van de host vanzelf, volgens diens schema.";
-"mydata.clone.title" = "Mijn tuin klonen";
-"mydata.clone.text" = "Je tuin heeft een git-adres: kloon hem in Obsidian, Working Copy of een terminal en houd een actuele kopie bij. Voorlopig alleen-lezen: wat je daar wijzigt, komt hier niet terug.";
+"mydata.clone.title" = "Mijn notities klonen";
+"mydata.clone.text" = "Je notities hebben een git-adres: kloon ze in Obsidian, Working Copy of een terminal en houd een actuele kopie bij. Voorlopig alleen-lezen: wat je daar wijzigt, komt hier niet terug.";
 "mydata.clone.button" = "Adres tonen";
 "mydata.clone.address" = "Adres";
 "mydata.clone.username" = "Gebruikersnaam";
@@ -875,12 +875,12 @@
 "mydata.clone.howto" = "Obsidian: installeer de community-plug-in ‘Git’, voer ‘Git: Clone an existing remote repo’ uit, plak het adres en geef gebruikersnaam en sleutel wanneer daarom gevraagd wordt. Working Copy: ‘Clone repository’, hetzelfde adres, dezelfde sleutel. Op een computer: git clone gevolgd door het adres, en open de map daarna als kluis in Obsidian.";
 "mydata.clone.warning" = "De kopie is niet versleuteld: als privé gemarkeerde notities staan er leesbaar in. Bescherm het apparaat dat hem bewaart. Hij bevat je notities, je fiches en hun geschiedenis en, elke nacht opnieuw geschreven in de map _maurice, je markeringen, leesposities, gearchiveerde items en domeinen. Niet je post, en niet de zoekindex.";
 "mydata.clone.conversations" = "Mijn gesprekken opnemen";
-"mydata.clone.conversations_note" = "Elke nacht worden je gesprekken in de tuin geschreven, één per bestand, onder _maurice/conversations. In een gedeelde ruimte alleen je eigen berichten.";
-"mydata.clone.no_garden" = "Je hebt nog geen tuin in dit huishouden.";
+"mydata.clone.conversations_note" = "Elke nacht worden je gesprekken in je notities geschreven, één per bestand, onder _maurice/conversations. In een gedeelde ruimte alleen je eigen berichten.";
+"mydata.clone.no_garden" = "Je hebt nog geen notities in dit huishouden.";
 "mydata.failed" = "Mislukt: %@";
 "mydata.residual.corpus" = "De zoekindex was niet bereikbaar; hij wordt geleegd bij de volgende start van de server.";
-"mydata.residual.remote" = "Een kopie van je tuin bestaat elders, buiten het bereik van deze server: %@";
-"mydata.residual.site" = "Een site die vanuit je tuin is gepubliceerd staat mogelijk nog online: verwijder die bij de host ervan.";
+"mydata.residual.remote" = "Een kopie van je notities bestaat elders, buiten het bereik van deze server: %@";
+"mydata.residual.site" = "Een site die vanuit je notities is gepubliceerd staat mogelijk nog online: verwijder die bij de host ervan.";
 "mydata.residual.archives" = "%d huishoudarchief/-archieven, geëxporteerd door een beheerder, bevatten je gegevens nog: vraag hem die te verwijderen.";
 "mydata.confirm.data" = "Alles wat dit huishouden van je bewaart wordt voorgoed gewist. Je account blijft.";
 "mydata.confirm.account" = "Alles wat dit huishouden van je bewaart wordt voorgoed gewist, daarna je account.";

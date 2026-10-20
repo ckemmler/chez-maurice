@@ -1185,13 +1185,16 @@ struct GardenPageView: View {
                         .font(.system(size: 14, weight: .medium))
                         .foregroundStyle(theme.ink)
                         .lineLimit(1)
-                    Text("/")
-                        .font(.system(size: 12, design: .monospaced))
-                        .foregroundStyle(theme.inkMute)
-                    Text(session.localized("gardens.garden"))
-                        .font(.system(size: 15, design: .serif).italic())
-                        .foregroundStyle(theme.inkSoft)
-                        .lineLimit(1)
+                    // "My notes" reads alone; a shared set gets "/ notes".
+                    if !garden.mine {
+                        Text("/")
+                            .font(.system(size: 12, design: .monospaced))
+                            .foregroundStyle(theme.inkMute)
+                        Text(session.localized("gardens.garden"))
+                            .font(.system(size: 15, design: .serif).italic())
+                            .foregroundStyle(theme.inkSoft)
+                            .lineLimit(1)
+                    }
                 }
             }
             .plainGlass()
@@ -1238,13 +1241,16 @@ struct GardenPageView: View {
                 .foregroundStyle(theme.ink)
                 .lineLimit(1)
                 .truncationMode(.tail)
-            Text("/")
-                .font(.system(size: 11, design: .monospaced))
-                .foregroundStyle(theme.inkMute)
-            Text(session.localized("gardens.garden"))
-                .font(.system(size: 15, design: .serif).italic())
-                .foregroundStyle(theme.inkSoft)
-                .lineLimit(1)
+            // "My notes" reads alone; a shared set gets "/ notes".
+            if !garden.mine {
+                Text("/")
+                    .font(.system(size: 11, design: .monospaced))
+                    .foregroundStyle(theme.inkMute)
+                Text(session.localized("gardens.garden"))
+                    .font(.system(size: 15, design: .serif).italic())
+                    .foregroundStyle(theme.inkSoft)
+                    .lineLimit(1)
+            }
             Spacer(minLength: 8)
             Button { gardens.browseGarden(garden) } label: {
                 HStack(spacing: 6) {
