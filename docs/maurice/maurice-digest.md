@@ -28,7 +28,7 @@ covers:
   maurice-knowledge: '2026-10-19'
   maurice-life: '2026-09-18'
   maurice-personas-hats: '2026-09-19'
-  maurice-server: '2026-10-19'
+  maurice-server: '2026-10-20'
   maurice-shared-gardens: '2026-10-15'
   maurice-tools: '2026-10-10'
   maurice-web-garden: '2026-10-17'
@@ -232,7 +232,7 @@ Each member has folders and files (5 GB each), in **Settings**: text, images, PD
 ## 15. The garden and what grows in it
 
 - **Notes:** created, updated and listed by Maurice when asked ("keep this in my notes" works in any private conversation); private until the member says otherwise; in the member's language; an existing note is updated rather than duplicated. **Journal** notes and dreams, with named people linked to their fiches. **Fragments** hold long material inside a note.
-- **Entries** — books, films, series, podcasts (and single episodes), articles, games, music, people — can have up to three faces: the **fiche** (the member's private working notes: metadata, dated comments, résonances, fragments), the **card** (the published face, in the member's own words — Maurice never drafts it), and **flashcards**. Metadata and covers come from public catalogues (Google Books, TMDB, IGDB, MusicBrainz, Podcast Index, Wikidata, Open Graph); a hosted household needs no keys for them. A fiche is opened only by a deliberate gesture.
+- **Entries** — books, films, series, podcasts (and single episodes), articles, games, music, people — can have up to three faces: the **fiche** (the member's private working notes: metadata, dated comments, résonances, fragments), the **card** (the published face, in the member's own words — Maurice never drafts it), and **flashcards**. Metadata and covers come from public catalogues (Google Books, TMDB, IGDB, MusicBrainz, Podcast Index, Wikidata, Open Graph); a hosted household needs no keys for them. An entry kept while its catalogue had no key fills itself in from *Refresh details* once the key is set, when its title names one work only; otherwise Carnet says why. A fiche is opened only by a deliberate gesture.
 - **Articles:** saved from Carnet's share sheet, the browser clipper or a conversation. The rendered page is captured (past paywalls), duplicates detected, page furniture (credits, ads, newsletter boxes) removed by a light model that only drops blocks and never rewrites, and two summaries written in the background: the essence in a paragraph, in your language, and a longer one in the article's, meant to be read instead of it, its length following the article's. A site that blocks robots leaves a **bookmark** to complete later from a browser.
 - **Highlights** (with note and colour) in books and articles, per member. A **résonance** files a passage onto another fiche as a dated block with a plain wiki-link back.
 - **People as hubs:** a person's fiche gathers what is known — relation, contact cards and addresses, fragments drawn from mail, a list of exchanges. The member's word is final: each element can be confirmed, rejected (never proposed again) or corrected; a confirmed relation is never overwritten (Maurice may only propose a revision beside it). Two people merge only on strong signals, never on a name alone.
