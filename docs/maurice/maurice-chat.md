@@ -36,8 +36,14 @@ empty it shows the keyboard glyph beside its close button, which hides the
 keyboard and leaves the search open (20 October 2026, `Views/SearchKeyboard.swift`;
 a garden's search field has the glyph too). The controls used to be an overlay
 on the list's scroll view, which runs on under the keyboard: the open field sat
-behind it, close button included, and a keyboard once raised by the search
-stayed up until the app was relaunched. They are now a bottom `safeAreaInset`.
+behind it, close button included. They are now a bottom `safeAreaInset`. The
+close button and the glyph take the bar's full height (a thumb aiming at the
+28-point cross opened the row above), and opening a row drops the field's
+focus first: on iPhone the system handed the keyboard back to the field on the
+way back from a conversation, without SwiftUI's focus knowing, so it stayed up
+over a field it hid. The field takes the keyboard only when the magnifier
+opens it. A conversation brought forward by another path while a search is
+open (a notification, a shared page) is not covered yet.
 
 ## The conversation header and its details sheet
 
