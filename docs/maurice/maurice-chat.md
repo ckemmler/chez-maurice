@@ -31,14 +31,13 @@ scoped to the member's own rooms and never matching a turn by someone they have
 blocked. A title match counts too. Clearing the field brings the recency list
 back. The [[maurice-composer|composer]]'s picker reaches into the same index.
 
-On iPhone and iPad the keyboard hides from the field itself (20 October 2026,
-`Views/SearchKeyboard.swift`): an empty field's return key reads *Done* instead
-of a Search with nothing to search, and the field shows the keyboard glyph
-beside its close button; with text, the Search key hides it too, the hits
-staying in place. iOS puts no icon on the return key, hence the two. Every
-search field of the app does the same — a garden's, the composer's picker, the
-Carnet drawer's *Refine*. Before, a keyboard once raised by the search could
-stay up for good.
+On iPhone and iPad the open field rides above the keyboard, and while it is
+empty it shows the keyboard glyph beside its close button, which hides the
+keyboard and leaves the search open (20 October 2026, `Views/SearchKeyboard.swift`;
+a garden's search field has the glyph too). The controls used to be an overlay
+on the list's scroll view, which runs on under the keyboard: the open field sat
+behind it, close button included, and a keyboard once raised by the search
+stayed up until the app was relaunched. They are now a bottom `safeAreaInset`.
 
 ## The conversation header and its details sheet
 
