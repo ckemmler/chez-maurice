@@ -2682,9 +2682,9 @@ private struct PaletteSwatch: View {
     }
 }
 
-// MARK: - Camera capture (selfie → crop sheet)
+// MARK: - Camera capture (selfie → crop sheet, or a plain photo for the composer)
 
-/// AVFoundation session driver. Front camera by default; capture delivers JPEG/HEIC
+/// AVFoundation session driver. Starts on the given camera; capture delivers JPEG/HEIC
 /// Data on the main queue. Session work runs off-main on a private queue.
 final class CameraModel: NSObject, ObservableObject, AVCapturePhotoCaptureDelegate {
     enum Status { case requesting, denied, ready }
@@ -2694,8 +2694,10 @@ final class CameraModel: NSObject, ObservableObject, AVCapturePhotoCaptureDelega
     private let output = AVCapturePhotoOutput()
     private var input: AVCaptureDeviceInput?
     private let queue = DispatchQueue(label: "maurice.camera.session")
-    private var position: AVCaptureDevice.Position = .front
+    private var position: AVCaptureDevice.Position
     var onCapture: ((Data) -> Void)?
+
+    init(position: AVCaptureDevice.Position) { self.position = position }
 
     func start() {
         switch AVCaptureDevice.authorizationStatus(for: .video) {
@@ -2740,8 +2742,9 @@ final class CameraModel: NSObject, ObservableObject, AVCapturePhotoCaptureDelega
 #if os(iOS)
 struct CameraPreview: UIViewRepresentable {
     let session: AVCaptureSession
+    var gravity: AVLayerVideoGravity = .resizeAspectFill
     func makeUIView(context: Context) -> PreviewView {
-        let v = PreviewView(); v.previewLayer.session = session; v.previewLayer.videoGravity = .resizeAspectFill; return v
+        let v = PreviewView(); v.previewLayer.session = session; v.previewLayer.videoGravity = gravity; return v
     }
     func updateUIView(_ v: PreviewView, context: Context) {}
     final class PreviewView: UIView {
@@ -2752,15 +2755,16 @@ struct CameraPreview: UIViewRepresentable {
 #elseif os(macOS)
 struct CameraPreview: NSViewRepresentable {
     let session: AVCaptureSession
-    func makeNSView(context: Context) -> PreviewView { PreviewView(session: session) }
+    var gravity: AVLayerVideoGravity = .resizeAspectFill
+    func makeNSView(context: Context) -> PreviewView { PreviewView(session: session, gravity: gravity) }
     func updateNSView(_ v: PreviewView, context: Context) {}
     final class PreviewView: NSView {
         let previewLayer = AVCaptureVideoPreviewLayer()
-        init(session: AVCaptureSession) {
+        init(session: AVCaptureSession, gravity: AVLayerVideoGravity) {
             super.init(frame: .zero)
             wantsLayer = true
             previewLayer.session = session
-            previewLayer.videoGravity = .resizeAspectFill
+            previewLayer.videoGravity = gravity
             layer = previewLayer
         }
         required init?(coder: NSCoder) { fatalError("init(coder:) not used") }
@@ -2770,10 +2774,21 @@ struct CameraPreview: NSViewRepresentable {
 #endif
 
 struct CameraCaptureView: View {
+    /// `.avatar`: front camera, round viewfinder (the crop sheet follows).
+    /// `.photo`: back camera, the whole frame as it will be sent.
+    enum Mode { case avatar, photo }
+
     @Environment(\.mauriceTheme) private var theme
     @Environment(\.dismiss) private var dismiss
-    @StateObject private var cam = CameraModel()
+    @StateObject private var cam: CameraModel
+    private let mode: Mode
     let onCapture: (Data) -> Void
+
+    init(mode: Mode = .avatar, onCapture: @escaping (Data) -> Void) {
+        self.mode = mode
+        self.onCapture = onCapture
+        _cam = StateObject(wrappedValue: CameraModel(position: mode == .avatar ? .front : .back))
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -2781,7 +2796,11 @@ struct CameraCaptureView: View {
                 Color.black
                 switch cam.status {
                 case .ready:
-                    CameraPreview(session: cam.session).clipShape(Circle()).padding(26)
+                    if mode == .avatar {
+                        CameraPreview(session: cam.session).clipShape(Circle()).padding(26)
+                    } else {
+                        CameraPreview(session: cam.session, gravity: .resizeAspect)
+                    }
                 case .requesting:
                     ProgressView().tint(.white)
                 case .denied:
@@ -2792,7 +2811,7 @@ struct CameraCaptureView: View {
                     }
                 }
             }
-            .frame(maxWidth: .infinity).frame(height: 360)
+            .frame(maxWidth: .infinity).frame(height: mode == .avatar ? 360 : 520)
 
             HStack {
                 Button { dismiss() } label: { Text(L("common.cancel")).font(.system(size: 14)) }
@@ -2813,7 +2832,7 @@ struct CameraCaptureView: View {
             }
             .padding(.horizontal, 30).padding(.top, 16).padding(.bottom, 20)
         }
-        .frame(minWidth: 360, idealWidth: 380, minHeight: 460)
+        .frame(minWidth: 360, idealWidth: 380, minHeight: mode == .avatar ? 460 : 620)
         .background(theme.surface)
         .presentationBackground(theme.surface)
         .onAppear { cam.onCapture = { data in onCapture(data) }; cam.start() }
