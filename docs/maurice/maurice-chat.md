@@ -1,6 +1,6 @@
 ---
 title: The chat experience
-date: '2026-10-19'
+date: '2026-10-20'
 flags: []
 locale: en
 description: Streaming render, tool-result data cards, math, markdown, images, dictation,
@@ -21,7 +21,7 @@ The chat surface is native SwiftUI (`app/Maurice/Views/ChatView.swift`, with str
 
 ## Finding a past conversation
 
-The sidebar's bottom bar carries a magnifier (facing the household switcher);
+The sidebar's bottom bar carries a magnifier (facing the identity chip);
 tapping it opens a full-width search field in its place — the iOS 26
 "minimized search" idiom, drawn in our own bar and morphing on OS 26. Two
 characters in and the list becomes hits — the room plus the passage that matched, matched words
@@ -30,6 +30,15 @@ messages** (an FTS5 index kept in step by triggers, see [[maurice-data-model]]),
 scoped to the member's own rooms and never matching a turn by someone they have
 blocked. A title match counts too. Clearing the field brings the recency list
 back. The [[maurice-composer|composer]]'s picker reaches into the same index.
+
+On iPhone and iPad the keyboard hides from the field itself (20 October 2026,
+`Views/SearchKeyboard.swift`): an empty field's return key reads *Done* instead
+of a Search with nothing to search, and the field shows the keyboard glyph
+beside its close button; with text, the Search key hides it too, the hits
+staying in place. iOS puts no icon on the return key, hence the two. Every
+search field of the app does the same — a garden's, the composer's picker, the
+Carnet drawer's *Refine*. Before, a keyboard once raised by the search could
+stay up for good.
 
 ## The conversation header and its details sheet
 
