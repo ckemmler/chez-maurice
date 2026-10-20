@@ -60,7 +60,7 @@ export function assertLocale(value: string): string {
 function assertWithin(target: string, base: string): string {
   const resolved = path.resolve(target);
   if (resolved !== path.resolve(base) && !resolved.startsWith(path.resolve(base) + path.sep)) {
-    throw new Error("path escapes the garden");
+    throw new Error("path escapes the notes folder");
   }
   return resolved;
 }

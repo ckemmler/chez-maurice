@@ -94,7 +94,7 @@ export const ui: Record<Locale, Record<string, string>> = {
     "notes.unreviewed.hint": "Read it, then keep it as it is, correct it (Edit, in the toolbar), or throw it away.",
     "notes.unreviewed.keep": "Keep",
     "notes.unreviewed.discard": "Throw away",
-    "notes.unreviewed.confirm": "Throw this note away? The garden keeps its history.",
+    "notes.unreviewed.confirm": "Throw this note away? Its history is kept.",
     "notes.unreviewed.kept": "Kept",
 
     // Podcasts
@@ -256,7 +256,7 @@ export const ui: Record<Locale, Record<string, string>> = {
     "notes.unreviewed.hint": "Lisez-la, puis gardez-la telle quelle, corrigez-la (Modifier, dans la barre d'outils) ou jetez-la.",
     "notes.unreviewed.keep": "Garder",
     "notes.unreviewed.discard": "Jeter",
-    "notes.unreviewed.confirm": "Jeter cette note ? Le jardin en garde l'historique.",
+    "notes.unreviewed.confirm": "Jeter cette note ? Son historique est conservé.",
     "notes.unreviewed.kept": "Gardée",
 
     // Podcasts

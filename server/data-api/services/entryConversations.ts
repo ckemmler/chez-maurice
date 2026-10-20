@@ -291,7 +291,7 @@ async function writeSummary(
   memberId: string, ref: EntryRef, conversationId: string, force = false,
 ): Promise<ConversationSummaryFragment> {
   const garden = gardenFor(memberId);
-  if (!garden) throw new EntryConversationError("No garden for this member");
+  if (!garden) throw new EntryConversationError("No notes for this member");
   if (!isParticipant(conversationId, memberId) || !isAbout(memberId, ref, conversationId)) {
     throw new EntryConversationError("No such conversation about this entry");
   }

@@ -434,7 +434,7 @@ const README: Record<"fr" | "en", (convos: boolean) => string> = {
   fr: (convos) => `# _maurice
 
 Ce dossier est écrit chaque nuit par Maurice, à partir de ce que le foyer garde
-de vous hors du jardin. Ne le modifiez pas : il est réécrit à chaque export, et
+de vous hors de vos notes. Ne le modifiez pas : il est réécrit à chaque export, et
 ses commits sont signés « Maurice (export) ».
 
 - \`highlights/books/\` et \`highlights/articles/\` : vos surlignages, un fichier
@@ -455,7 +455,7 @@ membres. Pour une copie complète, utilisez l'export « Mes données ».
   en: (convos) => `# _maurice
 
 This folder is written every night by Maurice, from what the household keeps
-of you outside your garden. Do not edit it: each export rewrites it, and its
+of you outside your notes. Do not edit it: each export rewrites it, and its
 commits are signed "Maurice (export)".
 
 - \`highlights/books/\` and \`highlights/articles/\`: your highlights, one file per

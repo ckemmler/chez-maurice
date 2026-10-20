@@ -245,9 +245,9 @@ const HISTORY_SCRIPT = path.resolve(import.meta.dir, "../../scripts/garden_prune
 /** Prune every past version (step 3). Returns null when done, else why not. */
 export function pruneHistory(garden: GardenRef, gone: Set<string>): string | null {
   const top = spawnSync("git", ["rev-parse", "--show-toplevel"], { cwd: garden.root, encoding: "utf8" });
-  if (top.status !== 0) return "the garden is not a git repository";
+  if (top.status !== 0) return "the notes are not a git repository";
   const root = top.stdout.trim();
-  if (spawnSync("git", ["status", "--porcelain"], { cwd: root, encoding: "utf8" }).stdout.trim()) return "the garden has uncommitted changes";
+  if (spawnSync("git", ["status", "--porcelain"], { cwd: root, encoding: "utf8" }).stdout.trim()) return "the notes have uncommitted changes";
   const idsFile = path.join(root, ".git", "forgotten-mail-ids");
   fs.writeFileSync(idsFile, [...gone].join("\n"));
   const r = spawnSync("python3", [HISTORY_SCRIPT, root, idsFile], { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
@@ -269,7 +269,7 @@ export interface ForgetResult {
 
 export async function forgetMailbox(memberId: string, address: string, opts: { history?: boolean; locale?: string } = {}): Promise<ForgetResult> {
   const garden = gardenFor(memberId);
-  if (!garden) throw new Error("the member has no garden");
+  if (!garden) throw new Error("the member has no notes");
   const label = mailboxLabels(listMailAccounts(memberId)).get(address.toLowerCase()) ?? null;
   const r = await mailToolCall(memberId, "forget_mailbox", { address });
   if (r?.error || r?.raw) throw new Error(String(r.error ?? r.raw));

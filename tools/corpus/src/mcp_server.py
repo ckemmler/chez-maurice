@@ -70,7 +70,7 @@ class CorpusMCPServer:
                 Tool(
                     name="search",
                     description=(
-                        "Semantic search across the indexed corpus: garden notes, fiches "
+                        "Semantic search across the indexed corpus: the member's notes, fiches "
                         "(books, films, series, podcasts, articles, people) and the long "
                         "text hanging off them, past conversations with Maurice, book "
                         "chapters, thoughts, dossiers.\n\n"
@@ -90,7 +90,7 @@ class CorpusMCPServer:
                         'fiches. {"author": "Seth"} — anything by an author whose name contains '
                         'Seth. {"collection": ["articles", "podcasts"], "publication": "Monde"}. '
                         '{"source_type": ["note", "fiche", "card", "fragment"]} — only the '
-                        'garden, what they chose to keep, as against {"source_type": '
+                        'notes, what they chose to keep, as against {"source_type": '
                         '"conversation"}, what they have said. Conversations outnumber '
                         'everything else, so an unfiltered search is usually a search of '
                         'those: filter when you mean a particular kind of memory.'
@@ -271,14 +271,14 @@ class CorpusMCPServer:
                     name="forget_member",
                     description=(
                         "Erase everything the corpus holds for one member: their index, "
-                        "the hashes of their garden's files, their import runs. The server's "
+                        "the hashes of their notes' files, their import runs. The server's "
                         "call when a member erases their data — never a conversation's."
                     ),
                     inputSchema={
                         "type": "object",
                         "properties": {
                             "member_id": {"type": "string"},
-                            "garden": {"type": "string", "description": "The member's garden directory"},
+                            "garden": {"type": "string", "description": "The member's notes directory"},
                         },
                         "required": ["member_id"],
                     },
@@ -335,7 +335,7 @@ class CorpusMCPServer:
                 Tool(
                     name="map_notes",
                     description=(
-                        "Group the caller's garden notes of one kind by their vectors — the "
+                        "Group the caller's notes of one kind by their vectors — the "
                         "domains' mapping on the mail: the thread digests the mail import "
                         "writes (`origin: mail`, `kind: thread`). One centroid per note, "
                         "spherical k-means, a merge of the too-close centroids, a second level "

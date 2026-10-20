@@ -57,7 +57,7 @@ function reach(c: any): { memberId: string; ownerId: string; garden: NonNullable
 app.get("/entries", async (c) => {
   const memberId = c.get("userId") as string;
   const garden = gardenFor(memberId);
-  if (!garden) return c.json({ error: "No garden for this member" }, 404);
+  if (!garden) return c.json({ error: "No notes for this member" }, 404);
 
   // `view=shelf` — Carnet's one list: the kinds it shows, the household's
   // books that have no entry yet, and what a row says about each (its source,
@@ -140,7 +140,7 @@ app.post("/entries/:collection/:locale/:slug/conversations/:id/summary", async (
 app.post("/entries/:collection/:locale/:slug/participants", async (c) => {
   const memberId = c.get("userId") as string;
   const garden = gardenFor(memberId);
-  if (!garden) return c.json({ error: "No garden for this member" }, 404);
+  if (!garden) return c.json({ error: "No notes for this member" }, 404);
   const body = await jsonBody(c);
   const target = body?.member_id ? memberBrief(String(body.member_id))
     : body?.username ? memberBriefByUsername(String(body.username)) : null;
@@ -181,7 +181,7 @@ app.delete("/entries/:collection/:locale/:slug/participants/:memberId", async (c
 async function written(c: any, ref: EntryRef | null, work: (memberId: string, garden: any, ref: EntryRef) => unknown) {
   const memberId = c.get("userId") as string;
   const garden = gardenFor(memberId);
-  if (!garden) return c.json({ error: "No garden for this member" }, 404);
+  if (!garden) return c.json({ error: "No notes for this member" }, 404);
   try {
     const target = ref ?? (c.req.param() as EntryRef);
     const extra = await work(memberId, garden, target);
@@ -243,7 +243,7 @@ app.post("/entries/:collection/:locale/:slug/notes", async (c) => {
 app.post("/entries/from-book", async (c) => {
   const memberId = c.get("userId") as string;
   const garden = gardenFor(memberId);
-  if (!garden) return c.json({ error: "No garden for this member" }, 404);
+  if (!garden) return c.json({ error: "No notes for this member" }, 404);
   const body = await jsonBody(c);
   const bookId = Number(body?.book_id);
   if (!body || !Number.isInteger(bookId)) return c.json({ error: "book_id required" }, 400);
@@ -308,7 +308,7 @@ app.put("/entries/:collection/:locale/:slug/cover", (c) =>
 app.delete("/entries/:collection/:locale/:slug", (c) => {
   const memberId = c.get("userId") as string;
   const garden = gardenFor(memberId);
-  if (!garden) return c.json({ error: "No garden for this member" }, 404);
+  if (!garden) return c.json({ error: "No notes for this member" }, 404);
   try {
     const { deleted, deploy } = deleteEntry(memberId, garden, c.req.param() as EntryRef);
     dropShares(memberId, deleted);
@@ -329,7 +329,7 @@ app.delete("/entries/:collection/:locale/:slug", (c) => {
 app.post("/entries/archive", async (c) => {
   const memberId = c.get("userId") as string;
   const garden = gardenFor(memberId);
-  if (!garden) return c.json({ error: "No garden for this member" }, 404);
+  if (!garden) return c.json({ error: "No notes for this member" }, 404);
   const body = await jsonBody(c);
   if (!body || typeof body.id !== "string" || typeof body.archived !== "boolean") {
     return c.json({ error: "id and archived required" }, 400);
@@ -346,7 +346,7 @@ app.post("/entries/archive", async (c) => {
 /** Where the site deploy stands — what the phone shows after "Publish". */
 app.get("/site/deploy", (c) => {
   const garden = gardenFor(c.get("userId") as string);
-  if (!garden) return c.json({ error: "No garden for this member" }, 404);
+  if (!garden) return c.json({ error: "No notes for this member" }, 404);
   return c.json(deployState(garden.username));
 });
 

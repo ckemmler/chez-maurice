@@ -92,7 +92,7 @@ app.post("/", async (c) => {
 app.get("/", (c) => {
   const memberId = c.get("userId") as string;
   const garden = gardenFor(memberId);
-  if (!garden) return c.json({ error: "No garden for this member" }, 404);
+  if (!garden) return c.json({ error: "No notes for this member" }, 404);
 
   // Highlight counts ride along so the list can badge rows without N requests.
   const counts = countArticleHighlights(memberId);
@@ -110,7 +110,7 @@ app.get("/lookup", (c) => {
   if (!url) return c.json({ error: "url is required" }, 400);
 
   const garden = gardenFor(memberId);
-  if (!garden) return c.json({ error: "No garden for this member" }, 404);
+  if (!garden) return c.json({ error: "No notes for this member" }, 404);
 
   const found = findArticleFiche(garden, url);
   return c.json({ saved: !!found, article: found });
@@ -151,7 +151,7 @@ app.post("/:slug/summary", async (c) => {
 app.get("/:slug", (c) => {
   const memberId = c.get("userId") as string;
   const garden = gardenFor(memberId);
-  if (!garden) return c.json({ error: "No garden for this member" }, 404);
+  if (!garden) return c.json({ error: "No notes for this member" }, 404);
 
   try {
     const ref = findArticleBySlug(memberId, c.req.param("slug"), c.req.query("locale"));

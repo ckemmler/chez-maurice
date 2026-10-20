@@ -1472,7 +1472,7 @@ web.get("/users/:id/edit", (c) => {
           </div>
           <div class="access-block">
             <div class="access-head"><span class="ttl2">Experimental tools</span></div>
-            <div class="hint" style="margin-bottom:8px">Unlocks the experimental tool families (calendar, health, research, the rest of the garden…) in this member's chats. Off by default.</div>
+            <div class="hint" style="margin-bottom:8px">Unlocks the experimental tool families (calendar, health, research, the rest of the notes tools…) in this member's chats. Off by default.</div>
             <div class="chips"><label class="chip"><input type="checkbox" name="experimental_tools" ${expOK ? "checked" : ""} ${admin ? "disabled" : ""} /><span class="cdot"><span class="chk">${admin ? "🔒" : "✓"}</span></span><span class="clab">${admin ? "Always on (admin)" : "Enable experimental tools"}</span></label></div>
           </div>
           ${!admin ? `

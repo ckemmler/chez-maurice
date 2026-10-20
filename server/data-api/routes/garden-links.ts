@@ -24,7 +24,7 @@ const app = new Hono();
 app.get("/targets", (c) => {
   const memberId = c.get("userId") as string;
   const garden = gardenFor(memberId);
-  if (!garden) return c.json({ error: "No garden for this member" }, 404);
+  if (!garden) return c.json({ error: "No notes for this member" }, 404);
 
   const q = c.req.query("q") ?? "";
   return c.json({ targets: searchLinkTargets(garden, q, 20, siteFor(memberId)) });
@@ -33,7 +33,7 @@ app.get("/targets", (c) => {
 app.post("/", async (c) => {
   const memberId = c.get("userId") as string;
   const garden = gardenFor(memberId);
-  if (!garden) return c.json({ error: "No garden for this member" }, 404);
+  if (!garden) return c.json({ error: "No notes for this member" }, 404);
 
   let body: ResonanceInput & { source_book_title?: string };
   try {

@@ -309,7 +309,7 @@ function layers(userId?: string | null): Layer[] {
       spentUsd: spentTotalUsd(),
       reason: totalCapMessage(usd(c.totalUsd)) ??
         `This instance has spent its allowance of ${usd(c.totalUsd)}. ` +
-        `Nothing is lost — the conversation and everything in the garden are still here.`,
+        `Nothing is lost — the conversation and all your notes are still here.`,
     });
   }
   return out;

@@ -449,7 +449,7 @@ export function proposalPromptSection(memberId: string | undefined, memberName: 
     `Do not bring them up yourself. If ${memberName} asks about them, or asks you to act on one, use the tools: \`domains__propose\` (list them, show one in full, or add one they name), \`domains__adjust\` (rename, merge, split, dismiss — a dismissed proposal does not come back), \`domains__adopt\` (create the domain). ` +
     `Nothing becomes a domain without ${memberName}'s explicit yes to that proposal in this conversation — never on a hint, an "ok" to something else, or your own judgement. Their words on what a domain is about are right by definition. ` +
     `Adopting writes the first brief in the background; in ${memberName}'s language the app calls a brief "${word}" — use that word. Do not read ids aloud; use names. ` +
-    `\`domains__seed\` writes a few notes on an adopted domain in their garden, each marked as yours and not yet reviewed: a yes to the domain is not a yes to the notes, so offer once after an adoption and call it only on a yes to the notes themselves (\`action: "decline"\` records a no).`
+    `\`domains__seed\` writes a few notes for them on an adopted domain, each marked as yours and not yet reviewed: a yes to the domain is not a yes to the notes, so offer once after an adoption and call it only on a yes to the notes themselves (\`action: "decline"\` records a no).`
   );
 }
 
@@ -524,7 +524,7 @@ const TOOLS: McpTool[] = [
   {
     name: "domains__seed",
     description:
-      "Write a few notes in the member's garden on a domain adopted from a proposal — only after the member said yes to the notes themselves (adopting the domain is not that yes). One note for the domain (what Maurice understood, the open threads, where it comes from) and up to three on its salient subjects, all marked as written by Maurice and not yet reviewed, with their provenance; the member keeps, corrects or throws each away. Takes up to a minute; returns the notes with their links. `action: \"decline\"` records that the member does not want notes, so they are not asked again.",
+      "Write a few notes for the member on a domain adopted from a proposal — only after the member said yes to the notes themselves (adopting the domain is not that yes). One note for the domain (what Maurice understood, the open threads, where it comes from) and up to three on its salient subjects, all marked as written by Maurice and not yet reviewed, with their provenance; the member keeps, corrects or throws each away. Takes up to a minute; returns the notes with their links. `action: \"decline\"` records that the member does not want notes, so they are not asked again.",
     inputSchema: {
       type: "object",
       properties: {
@@ -642,15 +642,15 @@ export async function runDomainTool(name: string, input: any, memberId: string |
       domain_id: r.domain.id,
       conversations_bound: r.bound,
       brief: "being written now; it will appear on the domain's page in the app",
-      garden: "no note written: offer to seed the garden (domains__seed) and wait for a yes to the notes",
+      notes: "no note written: offer to write a few notes on it (domains__seed) and wait for a yes to the notes",
     });
   }
 
   if (name === "domains__seed") {
     const p = mine(str(inp.id));
     if (!p) return fail("no such proposal");
-    if (p.state !== "adopted" || !p.maurice_id) return fail(`this proposal is ${p.state}; only an adopted domain can be seeded`);
-    if (p.stats.seed) return fail(p.stats.seed.state === "written" ? "the garden was already seeded for this domain" : "the member declined notes on this domain");
+    if (p.state !== "adopted" || !p.maurice_id) return fail(`this proposal is ${p.state}; notes are written only for an adopted domain`);
+    if (p.stats.seed) return fail(p.stats.seed.state === "written" ? "the notes on this domain were already written" : "the member declined notes on this domain");
     if (str(inp.action) === "decline") {
       updateProposal(p.id, { stats: { ...p.stats, seed: { state: "declined", at: new Date().toISOString() } } });
       return ok({ declined: p.name, note: "no note written; do not offer again" });
@@ -663,7 +663,7 @@ export async function runDomainTool(name: string, input: any, memberId: string |
       seeded: domain.name,
       notes: r.notes.map((n) => ({ title: n.title, role: n.role, link: n.web_path })),
       from_conversations: r.sources,
-      note: "each note is marked as written by Maurice and not yet reviewed; the member keeps, corrects or throws it away in the garden",
+      note: "each note is marked as written by Maurice and not yet reviewed; the member keeps, corrects or throws it away",
     });
   }
   return fail(`unknown tool ${name}`);

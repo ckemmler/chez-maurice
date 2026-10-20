@@ -191,7 +191,7 @@ describe("refusals", () => {
   test("a member's token does not open another member's garden", async () => {
     const r = await client(WORK, "clone", "-q", url(B, tokens.ada), path.join(WORK, "ben-by-ada"));
     expect(r.code).not.toBe(0);
-    expect(r.out).toContain("This garden is not yours.");
+    expect(r.out).toContain("These notes are not yours.");
     expect(fs.existsSync(path.join(WORK, "ben-by-ada", "notes"))).toBe(false);
     // Nor does the full one, nor a direct upload-pack request.
     const res = await fetch(`${base}/git/${B}.git/git-upload-pack`, {
@@ -273,7 +273,7 @@ describe("the garden's repository", () => {
     expect(x.code).toBe(0);
     expect(y.code).toBe(0);
     const subjects = local(path.join(GARDENS, F), "log", "--format=%s").stdout.trim().split("\n");
-    expect(subjects.filter((l) => l === "Garden under version control")).toHaveLength(1);
+    expect(subjects.filter((l) => l === "Notes under version control")).toHaveLength(1);
   });
 
   test("a garden inside another repository is never served", async () => {

@@ -83,7 +83,7 @@ export function ensureGardenRepo(root: string): Promise<RepoState> {
 async function prepare(root: string): Promise<RepoState> {
   const top = await git(root, "rev-parse", "--show-toplevel");
   if (top.status === 0 && real(top.stdout.trim()) !== real(root)) {
-    return { ok: false, reason: "this garden is inside another repository" };
+    return { ok: false, reason: "these notes are inside another repository" };
   }
   // A repository with a commit is ready. One without — an init whose first
   // commit failed — is finished now rather than served empty for ever.
@@ -105,7 +105,7 @@ async function prepare(root: string): Promise<RepoState> {
 
   const add = await git(root, "add", "-A");
   if (add.status !== 0) return { ok: false, reason: `first commit failed: ${add.stderr.trim()}` };
-  const commit = await git(root, "commit", "--quiet", "--allow-empty", "-m", "Garden under version control");
+  const commit = await git(root, "commit", "--quiet", "--allow-empty", "-m", "Notes under version control");
   if (commit.status !== 0) return { ok: false, reason: `first commit failed: ${commit.stderr.trim()}` };
   return { ok: true, created: true };
 }

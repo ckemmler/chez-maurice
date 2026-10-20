@@ -443,7 +443,7 @@ function entryHome(garden: GardenRef, collection: string, locale: string, slug: 
   const entry = listGardenEntries(garden).find(
     (e) => e.collection === collection && e.locale === locale && e.slug === slug,
   );
-  if (!entry) throw new FlashcardError(`No garden entry for ${collection}/${locale}/${slug}`, 404);
+  if (!entry) throw new FlashcardError(`No entry for ${collection}/${locale}/${slug}`, 404);
   return { entry, ficheFile };
 }
 
@@ -627,7 +627,7 @@ export async function generateCards(
   opts: GenerateOptions = {},
 ): Promise<CardFileStatus> {
   const garden = gardenFor(memberId);
-  if (!garden) throw new FlashcardError("No garden for this member", 404);
+  if (!garden) throw new FlashcardError("No notes for this member", 404);
   const { text, home } = await resolveSource(memberId, garden, source);
   if (!text.text.trim()) throw new FlashcardError("The source has no text to make cards from", 422);
   if (text.text.length > MAX_TEXT_CHARS) throw new FlashcardError(`The source is ${text.text.length} characters, above the ${MAX_TEXT_CHARS} guard`, 422);
@@ -878,7 +878,7 @@ export function readCardFile(garden: GardenRef, relFile: string): CardFile & { b
 function safeCardsPath(garden: GardenRef, relFile: string): string {
   const abs = path.resolve(garden.root, relFile);
   const root = path.resolve(garden.root);
-  if (!abs.startsWith(root + path.sep)) throw new FlashcardError("path escapes the garden", 400);
+  if (!abs.startsWith(root + path.sep)) throw new FlashcardError("path escapes the notes folder", 400);
   if (path.basename(path.dirname(abs)) !== "_cards" || !abs.endsWith(".md")) {
     throw new FlashcardError("not a card file", 400);
   }

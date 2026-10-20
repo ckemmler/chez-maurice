@@ -276,5 +276,5 @@ export function fichesForExchanges(conversationId: string, memberId: string | nu
     noteFiche(conversationId, f.locale, f.basename);
   }
   if (!parts.length) return "";
-  return `\n\n[The fiche these addresses belong to, from the member's garden — what the headers above mean: who the person is to them, what is going on, what was promised, what is left open. Answer from it as much as from the headers.${pending ? " What is marked not confirmed yet is Maurice's reading of the mail: use it, and say it is unconfirmed; the system adds the review footer." : ""}]\n\n${parts.join("\n\n")}`;
+  return `\n\n[The fiche these addresses belong to, from the member's notes — what the headers above mean: who the person is to them, what is going on, what was promised, what is left open. Answer from it as much as from the headers.${pending ? " What is marked not confirmed yet is Maurice's reading of the mail: use it, and say it is unconfirmed; the system adds the review footer." : ""}]\n\n${parts.join("\n\n")}`;
 }

@@ -249,10 +249,10 @@ export function corpusNotice(toolNames: string[]): string {
     `A person's fiche is the hub: who they are to them, dated, and — when their mail is read — what is going on with them, what was promised, what is left open, the latest exchanges. ` +
     `A fiche among the hits is the person, and the hit carries \`person\`: who they are, their addresses, and — from their mail — how many messages, since when, and the last one. That answers "when did I last write to them" on its own. ` +
     `Look at the people before the mailbox, never in the same round: a mail tool called beside this search is not run${toolNames.includes("garden__get_fiche") ? `; for more than the summary, open the fiche (garden__get_fiche, resource_collection "people")` : ""}.\n` +
-    `- their garden, what they chose to keep on a subject: filters {"source_type": ["note", "fiche", "card", "fragment"]}\n` +
+    `- their notes, what they chose to keep on a subject: filters {"source_type": ["note", "fiche", "card", "fragment"]}\n` +
     `- what they have already said to you: filters {"source_type": "conversation"}\n` +
     `- what they have only read or gathered, and rarely needs asking: filters {"source_type": ["book", "dossier", "thought"]}\n` +
-    `The garden and the conversations are the usual pair; the people join them whenever someone is involved. Weigh what comes back in that same order — what they wrote down themselves outranks what they once said in passing, which outranks a page from someone else's book. ` +
+    `Their notes and the conversations are the usual pair; the people join them whenever someone is involved. Weigh what comes back in that same order — what they wrote down themselves outranks what they once said in passing, which outranks a page from someone else's book. ` +
     `Say where something came from when it matters, and say when something comes from a brief rather than from a search you just ran.\n` +
     `A result may carry "people": who someone its passage mentions is to them now, from that person's fiche, dated (since → until). A passage can be years old — a colleague it places at a company may have left since — so where the two differ, the person's line is what holds today; say so. A line marked [not confirmed yet] is Maurice's reading of their mail: use it, and say it is unconfirmed.\n` +
     `Two things it is not. It is not a way to check an outside fact — what a school's app is, what an error code means, what something costs — which the web answers and their own writing does not; ` +
@@ -289,7 +289,7 @@ export function mailNotice(toolNames: string[], memberId: string | null | undefi
     `${memberName} has linked their mailboxes (${boxes})${book ? " and their address book, which groups a person's addresses" : ""}. ` +
     `${when} into a header store: who wrote to whom, when, about what, for every message. ` +
     (read
-      ? `They also said yes to the reading, so the correspondence is read too: each person who matters has a private fiche in their garden (people/<locale>/<slug>-fiche.md) saying who they are to ${memberName}, their addresses, the latest exchanges, and fragments on what is going on, what was promised and what is left open — every line linked to its message. `
+      ? `They also said yes to the reading, so the correspondence is read too: each person who matters has a private fiche among their notes (people/<locale>/<slug>-fiche.md) saying who they are to ${memberName}, their addresses, the latest exchanges, and fragments on what is going on, what was promised and what is left open — every line linked to its message. `
       : "") +
     `A question about their mail — what is going on with someone, when they last wrote, the latest exchanges with their accountant — is answered from what is already there, in this order:\n` +
     steps.map((t, i) => `${i + 1}. ${t}`).join("\n")
@@ -302,7 +302,7 @@ function toolRosterNotice(toolNames: string[], web: boolean): string {
   const docs = `Questions about Maurice himself — what you can do, how something works or is set up, what is built — go to maurice_docs; answer them from its result, not from what you assume.`;
   const names = [...(web ? ["Web search"] : []), ...familyTitles(toolNames)];
   if (names.length === 0) {
-    return `\n\n## Your tools\nYou have no tools this turn but one, maurice_docs, Maurice's own documentation: no web search, and none of the household's personal tools. Answer from what you know and from this conversation. Anything that would need a tool — the calendar, tasks, contacts, health data, the garden, the library — you cannot reach: say so plainly rather than guessing or describing a lookup you didn't make. ${docs}`;
+    return `\n\n## Your tools\nYou have no tools this turn but one, maurice_docs, Maurice's own documentation: no web search, and none of the household's personal tools. Answer from what you know and from this conversation. Anything that would need a tool — the calendar, tasks, contacts, health data, their notes, the library — you cannot reach: say so plainly rather than guessing or describing a lookup you didn't make. ${docs}`;
   }
   return `\n\n## Your tools\nThis turn you have exactly these, and nothing else: ${names.join(", ")}, and maurice_docs, Maurice's own documentation. Use them when they help, and prefer them over guessing for anything about the people here. Every other capability — whatever isn't in that list — is unavailable to you right now, whether or not it exists elsewhere in the household: if asked for it, say you don't have it here rather than pretending to look. When asked what you can do, answer from this list, not from what an assistant like you usually has. Use them quietly: the app shows the member every search you run, so "let me check", "I'm looking into this" and "one more search to be sure" are lines they read between the question and the answer, and a turn of several rounds accumulates them into a running commentary. Say what you found, not that you are about to look. ${docs}`;
 }
@@ -310,7 +310,7 @@ function toolRosterNotice(toolNames: string[], web: boolean): string {
 /** The roster notice of a turn that holds nothing at all — a plugin provider
  *  that takes no tools (services/providerPlugins.ts), not even maurice_docs. */
 const NO_TOOLS_NOTICE =
-  `\n\n## Your tools\nYou have no tools this turn: no web search, no documentation lookup, and none of the household's personal tools. Answer from what you know and from this conversation. Anything that would need a tool — the calendar, tasks, contacts, health data, the garden, the library — you cannot reach: say so plainly rather than guessing or describing a lookup you didn't make.`;
+  `\n\n## Your tools\nYou have no tools this turn: no web search, no documentation lookup, and none of the household's personal tools. Answer from what you know and from this conversation. Anything that would need a tool — the calendar, tasks, contacts, health data, their notes, the library — you cannot reach: say so plainly rather than guessing or describing a lookup you didn't make.`;
 
 // Anthropic tool definition for our self-hosted web search.
 const WEB_SEARCH_TOOL = {

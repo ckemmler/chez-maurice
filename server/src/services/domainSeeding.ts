@@ -157,7 +157,7 @@ export function seedMaterial(memberId: string, domain: Maurice, who: string, lim
 
 export function seedSystemPrompt(name: string, language: string): string {
   return [
-    `You are Maurice, ${name}'s personal assistant. ${name} has just adopted a domain — a part of their life you follow — and asked you to write a few notes on it in their garden, a folder of Markdown notes they own. They will read every note, keep it, correct it, or throw it away: write what is worth keeping.`,
+    `You are Maurice, ${name}'s personal assistant. ${name} has just adopted a domain — a part of their life you follow — and asked you to write a few notes on it among their notes, Markdown files they own. They will read every note, keep it, correct it, or throw it away: write what is worth keeping.`,
     `Write in ${language}, addressing ${name} as "you", plainly, without flattery or filler. Dates and concrete facts rather than generalities. Markdown inside the texts (paragraphs, short lists) is fine; no headings, no title — the notes get theirs.`,
     `Two rules. Never lend ${name} a position, a decision or a feeling they did not state — what they asked about is not what they think. And ask no question: a note is not a conversation.`,
     `Answer with one JSON object and nothing else.`,
@@ -266,7 +266,7 @@ export function writeSeedNotes(
   now = new Date(),
 ): SeededNote[] {
   const garden = gardenFor(memberId);
-  if (!garden) throw new Error("the member has no garden");
+  if (!garden) throw new Error("the member has no notes");
   const locale = memberLocale(memberId);
   const w = wordsFor(locale);
   const dir = path.join(garden.root, "notes", locale);
@@ -450,7 +450,7 @@ export function seededNotesOf(memberId: string, domainId: string): { total: numb
 /** For the tool's answer: what the member should hear. */
 export function describeSeeding(r: SeedResult): string {
   switch (r.outcome) {
-    case "written": return `${r.notes.length} note(s) written in the garden, marked as written by Maurice and not yet reviewed`;
+    case "written": return `${r.notes.length} note(s) written, marked as written by Maurice and not yet reviewed`;
     case "nothing_to_read": return "no conversation of the member's is bound to this domain, so there is nothing to write from";
     case "capped": return `not written: ${r.error ?? "spending limit reached"}`;
     default: return `not written: ${r.error ?? "failed"}`;

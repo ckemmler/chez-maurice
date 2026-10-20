@@ -215,7 +215,7 @@ export async function saveArticleFiche(
   input: SaveArticleInput,
 ): Promise<SaveArticleResult> {
   const garden = gardenFor(memberId);
-  if (!garden) throw new ArticleSaveError("No garden for this member", 404);
+  if (!garden) throw new ArticleSaveError("No notes for this member", 404);
 
   const rawUrl = (input.url ?? "").trim();
   if (!rawUrl) throw new ArticleSaveError("url is required", 400);
@@ -584,7 +584,7 @@ export function addArticleComment(
   locale?: string,
 ): ArticleDescription & { body: string } {
   const garden = gardenFor(memberId);
-  if (!garden) throw new ArticleSaveError("No garden for this member", 404);
+  if (!garden) throw new ArticleSaveError("No notes for this member", 404);
   const text = comment.trim();
   if (!text) throw new ArticleSaveError("comment is required", 400);
 
@@ -775,7 +775,7 @@ export function setArticleStatus(
   locale?: string,
 ): { slug: string; locale: string; status: string } {
   const garden = gardenFor(memberId);
-  if (!garden) throw new ArticleSaveError("No garden for this member", 404);
+  if (!garden) throw new ArticleSaveError("No notes for this member", 404);
 
   const ref = scanArticleFiches(garden).find(
     (f) => f.slug === slug && (!locale || f.locale === locale),

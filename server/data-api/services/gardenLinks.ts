@@ -192,7 +192,7 @@ export function appendResonance(
   const entries = listGardenEntries(garden);
   const entry = findEntry(entries, input.to);
   if (!entry) {
-    throw new GardenLinkError(`No garden entry for ${input.to.locale}/${input.to.slug}`, 404);
+    throw new GardenLinkError(`No entry for ${input.to.locale}/${input.to.slug}`, 404);
   }
   // The fiche is the working face; an entry that only has a card takes the
   // resonance at the bottom of the card.

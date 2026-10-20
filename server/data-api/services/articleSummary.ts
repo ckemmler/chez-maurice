@@ -257,7 +257,7 @@ async function summarize(
   opts: { force?: boolean },
 ): Promise<StoredSummaries> {
   const garden = gardenFor(memberId);
-  if (!garden) throw new ArticleSaveError("No garden for this member", 404);
+  if (!garden) throw new ArticleSaveError("No notes for this member", 404);
 
   const readerLang = userLocale(memberId);
   const existing = readStoredSummary(ref, readerLang);
@@ -369,7 +369,7 @@ export function findArticleBySlug(
   locale?: string,
 ): ArticleFicheRef {
   const garden = gardenFor(memberId);
-  if (!garden) throw new ArticleSaveError("No garden for this member", 404);
+  if (!garden) throw new ArticleSaveError("No notes for this member", 404);
   const ref = scanArticleFiches(garden).find(
     (f) => f.slug === slug && (!locale || f.locale === locale),
   );

@@ -17,8 +17,8 @@ import { gardensRoot } from "../services/gardensRoot";
 import { getUser } from "../services/users";
 
 const READ_ONLY =
-  "This garden is read-only: Maurice serves clones and fetches, not pushes (yet).\n" +
-  "Ce jardin est en lecture seule : Maurice sert les clones, pas encore les envois (push).";
+  "These notes are read-only: Maurice serves clones and fetches, not pushes (yet).\n" +
+  "Ces notes sont en lecture seule : Maurice sert les clones, pas encore les envois (push).";
 
 const git = new Hono();
 
@@ -33,7 +33,7 @@ async function basicMember(header: string | undefined): Promise<string | null> {
 
 git.all("/*", async (c) => {
   const m = c.req.path.match(/^\/git\/([A-Za-z0-9][A-Za-z0-9._-]*)\.git(\/.*)?$/);
-  if (!m) return text(404, "Not a garden address.");
+  if (!m) return text(404, "Not a notes address.");
   const [, member, sub = "/"] = m;
   const service = c.req.query("service");
 
@@ -49,14 +49,14 @@ git.all("/*", async (c) => {
     });
   }
   const user = getUser(userId);
-  if (!user || user.username !== member) return text(403, "This garden is not yours.");
+  if (!user || user.username !== member) return text(403, "These notes are not yours.");
 
   const root = join(gardensRoot(), member);
-  if (!isGardenDir(root)) return text(404, "You have no garden on this household.");
+  if (!isGardenDir(root)) return text(404, "You have no notes on this household.");
   const repo = await ensureGardenRepo(root);
   if (!repo.ok) {
     console.error(`[git] ${member}: ${repo.reason}`);
-    return text(409, `This garden cannot be served: ${repo.reason}.`);
+    return text(409, `These notes cannot be served: ${repo.reason}.`);
   }
   if (repo.created) {
     // The night's export skips a garden that is not a repository; this one has

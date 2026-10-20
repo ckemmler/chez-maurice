@@ -618,7 +618,7 @@ async function documentsPass(memberId: string, d: MailDocumentsDeps): Promise<Do
   const fail = (outcome: DocumentsRun["outcome"], error: string): DocumentsRun => { run.outcome = outcome; run.error = error; return run; };
 
   const garden = gardenFor(memberId);
-  if (!garden) return fail("failed", "the member has no garden");
+  if (!garden) return fail("failed", "the member has no notes");
   const locale = memberLocale(memberId);
   const language = LANGUAGE[locale] ?? "English";
   const w = wordsFor(locale);
@@ -963,7 +963,7 @@ function trackedPaths(garden: GardenRef, paths: string[]): string[] {
  *  readings are not touched. */
 export async function eraseMailDocuments(memberId: string, d: MailDocumentsDeps = deps): Promise<{ removed: number; reset: number; error: string | null }> {
   const garden = gardenFor(memberId);
-  if (!garden) return { removed: 0, reset: 0, error: "the member has no garden" };
+  if (!garden) return { removed: 0, reset: 0, error: "the member has no notes" };
   const removed = eraseMailFiles(garden);
   if (removed.length) {
     try {

@@ -31,7 +31,7 @@ function mine(c: any): GardenRef | Response {
   const memberId = c.get("userId") as string;
   if (isGuest(memberId)) return c.json({ error: "Forbidden" }, 403);
   const garden = gardenFor(memberId);
-  if (!garden || !existsSync(garden.root)) return c.json({ error: "No garden" }, 404);
+  if (!garden || !existsSync(garden.root)) return c.json({ error: "No notes" }, 404);
   return garden;
 }
 

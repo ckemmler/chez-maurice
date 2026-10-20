@@ -34,7 +34,7 @@ gardens.patch("/:id", async (c) => {
   const memberId = c.get("userId") as string;
   const id = c.req.param("id");
   if (!id.split("+").includes(memberId)) {
-    return c.json({ error: "Not a gardener of this garden" }, 403);
+    return c.json({ error: "You don't share these notes" }, 403);
   }
   const body = (await c.req.json().catch(() => ({}))) as { web_theme?: string };
   const theme = (body.web_theme ?? "").trim();

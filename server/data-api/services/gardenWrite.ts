@@ -67,7 +67,7 @@ function findEntry(garden: GardenRef, ref: EntryRef): GardenEntry {
 function fileOf(garden: GardenRef, ref: EntryRef, suffix: "" | "-fiche"): string {
   const target = path.join(garden.root, ref.collection, assertLocale(ref.locale), `${assertSlug(ref.slug)}${suffix}.md`);
   if (!path.resolve(target).startsWith(path.resolve(garden.root) + path.sep)) {
-    throw new EntryWriteError("path escapes the garden", 400);
+    throw new EntryWriteError("path escapes the notes folder", 400);
   }
   return target;
 }
@@ -500,7 +500,7 @@ export function deleteEntry(memberId: string, garden: GardenRef, ref: EntryRef):
     const under = e.fiche ? path.join(garden.root, e.fiche.file).replace(/\.md$/, "") : null;
     if (under) files.push(...filesUnder(under));
     for (const file of files) {
-      if (!path.resolve(file).startsWith(root)) throw new EntryWriteError("path escapes the garden", 400);
+      if (!path.resolve(file).startsWith(root)) throw new EntryWriteError("path escapes the notes folder", 400);
     }
     for (const file of files) {
       // Its real path, taken while it exists: autoCommit resolves symlinks to

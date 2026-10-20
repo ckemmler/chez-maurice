@@ -40,7 +40,7 @@ function fail(c: any, e: unknown, what: string) {
 app.get("/due", (c) => {
   const memberId = c.get("userId") as string;
   const garden = gardenFor(memberId);
-  if (!garden) return c.json({ error: "No garden for this member" }, 404);
+  if (!garden) return c.json({ error: "No notes for this member" }, 404);
   const cards = listDueCards(garden);
   return c.json({ cards, count: cards.length });
 });
@@ -48,7 +48,7 @@ app.get("/due", (c) => {
 app.get("/entry", async (c) => {
   const memberId = c.get("userId") as string;
   const garden = gardenFor(memberId);
-  if (!garden) return c.json({ error: "No garden for this member" }, 404);
+  if (!garden) return c.json({ error: "No notes for this member" }, 404);
 
   const collection = c.req.query("collection"), locale = c.req.query("locale"), slug = c.req.query("slug");
   if (!collection || !locale || !slug) return c.json({ error: "collection, locale and slug are required" }, 400);
@@ -67,7 +67,7 @@ app.get("/entry", async (c) => {
 app.get("/file", (c) => {
   const memberId = c.get("userId") as string;
   const garden = gardenFor(memberId);
-  if (!garden) return c.json({ error: "No garden for this member" }, 404);
+  if (!garden) return c.json({ error: "No notes for this member" }, 404);
   const rel = c.req.query("path");
   if (!rel) return c.json({ error: "path is required" }, 400);
   try {
@@ -80,7 +80,7 @@ app.get("/file", (c) => {
 app.put("/file", async (c) => {
   const memberId = c.get("userId") as string;
   const garden = gardenFor(memberId);
-  if (!garden) return c.json({ error: "No garden for this member" }, 404);
+  if (!garden) return c.json({ error: "No notes for this member" }, 404);
   let body: { path?: string; body?: string };
   try {
     body = await c.req.json();
@@ -124,7 +124,7 @@ app.post("/generate", async (c) => {
 app.post("/review", async (c) => {
   const memberId = c.get("userId") as string;
   const garden = gardenFor(memberId);
-  if (!garden) return c.json({ error: "No garden for this member" }, 404);
+  if (!garden) return c.json({ error: "No notes for this member" }, 404);
   let body: { path?: string; card_id?: string; rating?: string };
   try {
     body = await c.req.json();

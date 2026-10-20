@@ -47,7 +47,7 @@ export function mauriceDocsTool() {
   return {
     name: MAURICE_DOCS_TOOL_NAME,
     description:
-      "Ask Maurice's own documentation. Use this whenever the question is about Maurice himself — the household AI system you are: what he can do, how a feature works (conversations and rooms, the garden and its notes, Carnet, domains and their briefs, the tools, the models and providers, the corpus, backups, the admin console, hosting and the container), how to set something up or where a setting lives, what is built and what is not, or why he was designed the way he is. " +
+      "Ask Maurice's own documentation. Use this whenever the question is about Maurice himself — the household AI system you are: what he can do, how a feature works (conversations and rooms, notes and the site, Carnet, domains and their briefs, the tools, the models and providers, the corpus, backups, the admin console, hosting and the container), how to set something up or where a setting lives, what is built and what is not, or why he was designed the way he is. " +
       "You have no reliable knowledge of this system beyond what this tool returns: never answer such a question from memory or from what an assistant like you usually is. " +
       "Give the question as the person asked it, with the context that makes it precise. The answer comes back grounded in the documentation, with the notes it drew on; relay it in your own voice and keep what it says about what ships, what is experimental and what does not exist yet. " +
       `Pass \`note\` instead to get one note in full, for detail the answer left out — one of: ${notes || "(no notes available)"}.`,

@@ -54,7 +54,7 @@ export function gardenConfig(): GardenConfig {
   }
   const config: GardenConfig = {
     name: cfg.name || member,
-    title: cfg.title || `${member}'s garden`,
+    title: cfg.title || cfg.name || member,
     avatar: siteAvatarPath(cfg.avatar ?? null),
     base: cfg.base,
     domain: cfg.domain,

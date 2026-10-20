@@ -813,7 +813,7 @@ export function setAfterArticleSave(fn: ((memberId: string, saved: SavedArticle)
  */
 async function keepAsAbout(memberId: string, s: EntrySuggestion): Promise<EntrySuggestion> {
   const garden = gardenFor(memberId);
-  if (!garden) throw new SuggestionError("No garden for this member", 404);
+  if (!garden) throw new SuggestionError("No notes for this member", 404);
   let ref = s.existing;
   if (!ref) {
     const message = s.message_id
@@ -937,7 +937,7 @@ export async function keepSuggestion(
   // the context — keeping it is saying the conversation is about it.
   if (!s.note) return keepAsAbout(memberId, s);
   const garden = gardenFor(memberId);
-  if (!garden) throw new SuggestionError("No garden for this member", 404);
+  if (!garden) throw new SuggestionError("No notes for this member", 404);
   const episodes = [...new Set(episodeIds.map(String).filter(Boolean))];
   if (episodes.length && s.kind !== "podcasts") throw new SuggestionError("only a podcast has episodes", 400);
 
@@ -1123,7 +1123,7 @@ export async function episodesFor(memberId: string, id: string, feed?: string | 
   if (!s) throw new SuggestionError("not found", 404);
   if (s.kind !== "podcasts") throw new SuggestionError("only a podcast has episodes", 400);
   const garden = gardenFor(memberId);
-  if (!garden) throw new SuggestionError("No garden for this member", 404);
+  if (!garden) throw new SuggestionError("No notes for this member", 404);
   if (feed && !s.candidates.some((c) => c.id === feed)) throw new SuggestionError("unknown candidate", 400);
   const show = feed ?? (await feedOf(memberId, garden, s));
   if (!show) throw new SuggestionError("the show's feed is not known", 409);
@@ -1226,7 +1226,7 @@ export async function searchAgain(
   if (bound && s.existing === refOf(bound)) throw new SuggestionError("this is the conversation's own entry", 409);
   if (s.kind === "people" && !s.public) throw new SuggestionError("someone from the member's life is not looked up", 409);
   const garden = gardenFor(memberId);
-  if (!garden) throw new SuggestionError("No garden for this member", 404);
+  if (!garden) throw new SuggestionError("No notes for this member", 404);
 
   const typed = query?.replace(/\s+/g, " ").trim().slice(0, 200) || null;
   // Asked to look again without a word: Maurice's term first, then what the

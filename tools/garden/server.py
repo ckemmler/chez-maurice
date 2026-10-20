@@ -197,7 +197,7 @@ def _assert_within(path: Path, base: Path) -> Path:
     component that slipped past validation still cannot escape the garden."""
     rp, rb = path.resolve(), base.resolve()
     if rp != rb and rb not in rp.parents:
-        raise ValueError(f"path escapes garden: {path}")
+        raise ValueError(f"path escapes the notes folder: {path}")
     return rp
 
 sys.path.insert(0, str(REPO_ROOT / "tools"))
@@ -676,7 +676,7 @@ async def list_tools() -> list[Tool]:
     tools = [
         Tool(
             name="create_note",
-            description="Create a new garden note markdown file.",
+            description="Create a new note (a Markdown file).",
             inputSchema={
                 "type": "object",
                 "required": ["id", "title"],
@@ -720,7 +720,7 @@ async def list_tools() -> list[Tool]:
         ),
         Tool(
             name="delete_note",
-            description="Delete a garden note and its associated image if any.",
+            description="Delete a note and its associated image if any.",
             inputSchema={
                 "type": "object",
                 "required": ["id", "confirm"],
@@ -832,7 +832,7 @@ async def list_tools() -> list[Tool]:
         ),
         Tool(
             name="list_notes",
-            description="List garden notes with optional filters.",
+            description="List notes with optional filters.",
             inputSchema={
                 "type": "object",
                 "properties": {
@@ -1743,7 +1743,7 @@ async def list_tools() -> list[Tool]:
         ),
         Tool(
             name="get_user_guide",
-            description="Get the garden user guide with conventions, link syntax, and content structure. Call this when you need to know how to format links, structure content, or follow project conventions.",
+            description="Get the notes guide with conventions, link syntax, and content structure. Call this when you need to know how to format links, structure content, or follow project conventions.",
             inputSchema={"type": "object", "properties": {}},
         ),
         # ── Hero image tools ──
@@ -1808,7 +1808,7 @@ async def list_tools() -> list[Tool]:
                 "Add or remove content flags on any piece of content — blog posts, essays, "
                 "notes, pages and every resource collection. This is how something becomes "
                 "publishable: `public` is what makes an item appear in a production build; "
-                "without it the item is a draft, visible only when browsing the garden "
+                "without it the item is a draft, visible only when browsing the site "
                 "locally. Additive by design, so setting `public` cannot silently drop an "
                 "`encrypted` or `moc` flag already there. Deploying the site is a separate "
                 "step (deploy_site)."
@@ -1863,7 +1863,7 @@ async def list_tools() -> list[Tool]:
 # ---------------------------------------------------------------------------
 
 _USER_GUIDE = """\
-# Garden User Guide
+# Notes Guide
 
 ## Content Structure
 
@@ -1871,7 +1871,7 @@ Content lives in a git repo with this structure:
 ```
 {collection}/{locale}/{slug}.md        — resource entries (books, articles, movies, series, podcasts, people)
 {collection}/{locale}/{slug}-fiche.md  — fiches (personal sidecar notes, dev-only)
-notes/{locale}/{slug}.md               — garden notes
+notes/{locale}/{slug}.md               — notes
 ```
 
 Locales: `en`, `fr`. Default is `en` but most content is in French (`fr`).

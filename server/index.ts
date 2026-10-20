@@ -359,7 +359,7 @@ function privatePage(): string {
   p { color: #6b6358; line-height: 1.6; font-size: .98rem; }
   code { font-family: ui-monospace, monospace; background: #ece3d6; padding: .1rem .35rem; border-radius: 4px; }
 </style></head><body>
-  <h1>This garden is private</h1>
+  <h1>This site is private</h1>
   <p>Open it from the Maurice app (Settings → open in browser) to sign in, then this link will work for 30 days.</p>
 </body></html>`;
 }
@@ -417,7 +417,7 @@ app.get("/gardens/:id", (c) => {
   const esc = (s: string) =>
     s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
   const names = garden.members.map((m) => m.display_name);
-  const title = names.length > 1 ? names.join(" & ") : `${names[0] ?? "?"} — garden`;
+  const title = names.length > 1 ? names.join(" & ") : `${names[0] ?? "?"} — notes`;
   const items = garden.notes
     .map(
       (n) =>
@@ -440,11 +440,11 @@ app.get("/gardens/:id", (c) => {
   p.hint { color: #6b6358; font-size: .9rem; }
 </style></head><body>
   <h1>${esc(title)}</h1>
-  <div class="sub">${garden.notes.length} note${garden.notes.length === 1 ? "" : "s"} · shared garden</div>
+  <div class="sub">${garden.notes.length} note${garden.notes.length === 1 ? "" : "s"} · shared notes</div>
   <ul>
-      ${items || "<li><span class='meta'>Nothing here yet — share a note to start this garden.</span></li>"}
+      ${items || "<li><span class='meta'>Nothing here yet — share a note and it will show here.</span></li>"}
   </ul>
-  <p class="hint">This is the garden's root note — a plain list, until someone redesigns it.</p>
+  <p class="hint">This is the root note of these notes — a plain list, until someone redesigns it.</p>
 </body></html>`);
 });
 
@@ -814,7 +814,7 @@ app.notFound(async (c) => {
   const port = webPort;
 
   if (slug) {
-    if (!gardenExists(slug)) return c.text("Garden not available", 404);
+    if (!gardenExists(slug)) return c.text("Site not available", 404);
   } else {
     // No /g/<member>/ prefix. An HTML navigation → send the member to their
     // own garden. Engine assets (/src, /@vite, /@id, /_astro …) are referenced

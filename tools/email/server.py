@@ -372,7 +372,7 @@ async def list_tools() -> list[Tool]:
         Tool(
             name="get_by_id",
             description=(
-                "Read one message by the id a garden note's source carries (the header store's message id, "
+                "Read one message by the id a note's source carries (the header store's message id, "
                 "e.g. `gm:…`): what the note says can be checked against the message itself. "
                 "Same output as get_message. " + UNTRUSTED_NOTE
             ),
@@ -407,7 +407,7 @@ async def list_tools() -> list[Tool]:
         ),
         Tool(
             name="documents_record",
-            description="Server-side: what the documents pass wrote in the garden (`written`) and found gone (`deleted`), keyed on the source.",
+            description="Server-side: what the documents pass wrote in the member's notes (`written`) and found gone (`deleted`), keyed on the source.",
             inputSchema={
                 "type": "object",
                 "properties": {

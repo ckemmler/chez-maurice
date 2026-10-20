@@ -155,12 +155,12 @@ export const ANCILLARY_INVOCATIONS: AncillaryInvocation[] = [
   // none. A sorting job on a short text, run on every private turn — the
   // small Qwen, without reasoning. Charged to the member whose turn it was.
   { id: "entry_suggest", side: "server", tier: "light", label: "Carnet suggestions",
-    blurb: "After a reply, the works and people the exchange named, offered to the member as entries to keep in their garden.",
+    blurb: "After a reply, the works and people the exchange named, offered to the member as entries to keep in their notes.",
     prefer: ["qwen3.6-35b-a3b"] },
   // Seeding the garden (services/domainSeeding.ts): on the member's yes, in
   // their own turn, charged to them — the night's model, not the night's purse.
   { id: "domain_seed", side: "server", tier: "standard", label: "Domain notes",
-    blurb: "The notes Maurice writes in the garden when a member adopts a domain and asks for them — marked as not yet reviewed.",
+    blurb: "The notes Maurice writes when a member adopts a domain and asks for them — marked as not yet reviewed.",
     prefer: NIGHT_MODELS },
   // The mail reading (services/mailReading.ts, lot 4 of the mail import): two
   // passes over a member's approved window, in their name and under their
@@ -173,7 +173,7 @@ export const ANCILLARY_INVOCATIONS: AncillaryInvocation[] = [
     blurb: "The light pass of the mail reading: keep or skip, from the headers and the first characters of each message.",
     prefer: ["qwen3.6-35b-a3b"] },
   { id: "mail_write", side: "server", tier: "standard", label: "Mail documents",
-    blurb: "The fiches and digests written in the garden from the mail readings — the night's model, as the domain notes.",
+    blurb: "The fiches and digests written in the member's notes from the mail readings — the night's model, as the domain notes.",
     prefer: NIGHT_MODELS },
   { id: "mail_read_full", side: "server", tier: "standard", label: "Mail reading",
     blurb: "The full pass of the mail reading: one structured reading per kept message, sealed in the member's mail store.",
@@ -197,7 +197,7 @@ export const ANCILLARY_INVOCATIONS: AncillaryInvocation[] = [
   { id: "briefing_content", side: "tools", tier: "standard", label: "Briefing content", blurb: "The briefing's sections.", needs: "tools/pipelines/research_tracks", ownDispatch: true },
   { id: "media_curation", side: "tools", tier: "standard", label: "Media curation", blurb: "Choosing and describing media for a dossier.", needs: "tools/pipelines/research_tracks", ownDispatch: true },
   { id: "signal_report", side: "tools", tier: "standard", label: "Signal report", blurb: "The periodic report over the signals.", needs: "tools/pipelines/research_tracks", ownDispatch: true },
-  { id: "resonance_queries", side: "tools", tier: "standard", label: "Résonance queries", blurb: "What to look for when linking an entry to the garden.", needs: "tools/pipelines/research_tracks", ownDispatch: true },
+  { id: "resonance_queries", side: "tools", tier: "standard", label: "Résonance queries", blurb: "What to look for when linking an entry to the member's notes.", needs: "tools/pipelines/research_tracks", ownDispatch: true },
   { id: "resonance_filtering", side: "tools", tier: "standard", label: "Résonance filtering", blurb: "Keeping the links that resonate.", needs: "tools/pipelines/research_tracks", ownDispatch: true },
   // A scanned page or a photo attached to a mail, transcribed for the member
   // who asked to read it (tools/email/vision.py), and charged to them. Tried
