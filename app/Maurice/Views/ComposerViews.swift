@@ -1281,6 +1281,7 @@ struct AddContextSheet: View {
     @Environment(\.dismiss) private var dismiss
     let accent: Color
     @State private var q = ""
+    @FocusState private var qFocused: Bool
     @State private var results: [SearchEntry] = []
     @State private var showImporter = false
     @State private var uploading = false
@@ -1331,6 +1332,8 @@ struct AddContextSheet: View {
 
             TextField(L("context.searchPlaceholder"), text: $q)
                 .textFieldStyle(.plain).font(.system(size: 15))
+                .focused($qFocused)
+                .searchReturnKey(isEmpty: q.isEmpty, focus: $qFocused)
                 .padding(10)
                 .background(RoundedRectangle(cornerRadius: 10).fill(theme.bg))
                 .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(theme.rule, lineWidth: 0.5))

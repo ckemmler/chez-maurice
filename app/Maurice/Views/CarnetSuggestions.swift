@@ -513,8 +513,8 @@ private struct SuggestionRow: View {
                         .textFieldStyle(.roundedBorder)
                         .font(.system(size: 13))
                         .focused($termFocused)
-                        .submitLabel(.search)
-                        .onSubmit { Task { await search(term) } }
+                        .searchReturnKey(isEmpty: term.trimmingCharacters(in: .whitespaces).isEmpty,
+                                         focus: $termFocused) { Task { await search(term) } }
                     Button(L("suggest.search_go")) { Task { await search(term) } }
                         .buttonStyle(.plain)
                         .font(.system(size: 12, weight: .medium))

@@ -354,12 +354,18 @@ struct SidebarView: View {
                 .autocorrectionDisabled()
                 #if os(iOS)
                 .textInputAutocapitalization(.never)
-                .submitLabel(.search)
                 #endif
+                .searchReturnKey(isEmpty: chat.searchQuery.isEmpty, focus: $searchFocused)
                 .onAppear { searchFocused = true }
                 #if os(macOS)
                 .onExitCommand { closeSearch() }
                 #endif
+            #if os(iOS)
+            if searchFocused && chat.searchQuery.isEmpty {
+                HideKeyboardButton(focus: $searchFocused, color: theme.inkMute,
+                                   label: session.localized("chat.hide_keyboard"))
+            }
+            #endif
             Button { closeSearch() } label: {
                 Image(systemName: "xmark.circle.fill")
                     .font(.system(size: 15)).foregroundStyle(theme.inkMute)
@@ -1009,6 +1015,7 @@ struct GardenPageView: View {
     var onToggleSidebar: () -> Void = {}
 
     @State private var query = ""
+    @FocusState private var queryFocused: Bool
     /// How many rows are currently built. A garden runs to a few hundred
     /// entries once fiches and cards join the notes, and building them all up
     /// front costs a visible beat on entry and on every keystroke in the search
@@ -1286,6 +1293,15 @@ struct GardenPageView: View {
                 .textFieldStyle(.plain)
                 .font(.system(size: 13.5))
                 .foregroundStyle(theme.ink)
+                .focused($queryFocused)
+                .searchReturnKey(isEmpty: query.isEmpty, focus: $queryFocused)
+            #if os(iOS)
+            if queryFocused && query.isEmpty {
+                HideKeyboardButton(focus: $queryFocused, color: theme.inkMute,
+                                   label: session.localized("chat.hide_keyboard"))
+                    .frame(height: 16)
+            }
+            #endif
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
