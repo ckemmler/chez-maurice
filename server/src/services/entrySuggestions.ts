@@ -371,6 +371,48 @@ async function searchCall(memberId: string, kind: string, args: Record<string, u
   })).filter((c: Candidate) => c.id && c.title);
 }
 
+const PROVIDER: Record<string, string> = {
+  movies: "TMDB", series: "TMDB", books: "Google Books", podcasts: "Podcast Index", games: "IGDB", music: "MusicBrainz",
+};
+
+/**
+ * Pin a fiche filed under its title alone — its provider had no key, or was
+ * down, the day it was made — to the work it names, and have the garden fetch
+ * that work's metadata into it. Only when the provider's first answer is
+ * surely the one: a stranger's cover is worse than none. Answers null once
+ * pinned, or why it could not be, in words for the member.
+ */
+export async function pinFiche(
+  memberId: string, ref: { collection: string; locale: string; slug: string }, title: string, year: number | null,
+): Promise<string | null> {
+  const idArg = ID_ARG[ref.collection];
+  const provider = PROVIDER[ref.collection];
+  if (!idArg || !provider) return null;
+  const named: Named = { kind: ref.collection, title, year, note: "" };
+  let found: Candidate[];
+  try {
+    found = distinct(await searchProvider(memberId, named, ref.locale));
+  } catch (err) {
+    const message = (err as Error).message;
+    // Every provider without a key says so the same way, naming the dashboard.
+    return /Other API keys/.test(message)
+      ? `${provider} has no key in this household: an administrator adds one in the dashboard, under Other API keys.`
+      : `${provider} could not be reached (${message}).`;
+  }
+  if (!found.length) return `${provider} knows nothing called “${title}”.`;
+  if (!confident(named, found)) return `${provider} cannot tell for sure which “${title}” this is: ask Maurice to pick it.`;
+  const id = found[0]!.id;
+  try {
+    await gardenCall(memberId, "update_fiche", {
+      resource_collection: ref.collection, resource_id: ref.slug, locale: ref.locale,
+      [idArg.name]: idArg.integer ? Number(id) : id,
+    });
+  } catch (err) {
+    return `${provider} could not be read (${(err as Error).message}).`;
+  }
+  return null;
+}
+
 /**
  * One row per work: a catalogue lists the copies of a feed or the reprints of
  * a book under the same title and maker, which read as a list of identical

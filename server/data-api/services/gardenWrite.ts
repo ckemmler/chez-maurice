@@ -430,6 +430,32 @@ export async function completeCover(memberId: string, garden: GardenRef, ref: En
   return true;
 }
 
+const PROVIDER_IDS = ["tmdb_id", "google_books_id", "podcastindex_id", "igdb_id", "musicbrainz_id"];
+
+/**
+ * Complete an entry, as asked from it: its cover, then its card's fields. A
+ * fiche filed under its title alone — its provider had no key, or was down,
+ * the day it was made — has nothing to take them from, so the work is looked
+ * up first. An entry that is still without a cover says why, when there is a
+ * why to say: the member saw nothing change, and would otherwise blame the
+ * work for it.
+ */
+export async function completeDetails(memberId: string, garden: GardenRef, ref: EntryRef): Promise<void> {
+  if (!(await completeCover(memberId, garden, ref))) {
+    const entry = findEntry(garden, ref);
+    const fiche = readFace(garden, entry.fiche?.file);
+    const bare = fiche && !coverSource(fiche.meta) && !PROVIDER_IDS.some((k) => fiche.meta[k] != null);
+    if (bare) {
+      const { pinFiche } = await import("../../src/services/entrySuggestions");
+      const year = Number(fiche.meta.year) > 0 ? Number(fiche.meta.year) : null;
+      const why = await pinFiche(memberId, ref, String(fiche.fm.title ?? entry.title), year);
+      if (why) throw new EntryWriteError(why, 422);
+      await completeCover(memberId, garden, ref);
+    }
+  }
+  await completeCard(memberId, garden, ref);
+}
+
 // ── Deleting, putting away ──
 
 /** Every locale of the subject `entry` is one of: the row the list shows. */

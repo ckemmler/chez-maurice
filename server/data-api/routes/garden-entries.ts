@@ -13,7 +13,7 @@ import { cardsFace } from "../services/flashcards";
 import { getShelfEntry, listNotes, listShelf, siteFor } from "../services/gardenShelf";
 import { conversationsAbout, EntryConversationError, summaryFor } from "../services/entryConversations";
 import {
-  addNote, archiveEntry, completeCard, completeCover, deleteEntry, setCover, deployState, entryForBook, EntryWriteError, setPublished, writeShared, type EntryRef,
+  addNote, archiveEntry, completeCard, completeDetails, deleteEntry, setCover, deployState, entryForBook, EntryWriteError, setPublished, writeShared, type EntryRef,
 } from "../services/gardenWrite";
 
 import {
@@ -278,13 +278,10 @@ app.put("/entries/:collection/:locale/:slug/shared", async (c) => {
  * lacks, and its cover. What is asked for when an entry shows without them.
  */
 app.post("/entries/:collection/:locale/:slug/details", (c) =>
-  written(c, null, async (memberId, garden, ref) => {
-    // The same request for every kind and every shape of entry: a cover for
-    // one that has none, whatever faces it has; then the card's own fields,
-    // when there is a card.
-    await completeCover(memberId, garden, ref);
-    await completeCard(memberId, garden, ref);
-  }));
+  // The same request for every kind and every shape of entry: a cover for one
+  // that has none, whatever faces it has; then the card's own fields, when
+  // there is a card.
+  written(c, null, completeDetails));
 
 /** Publish: the `public` flag, then a deploy of the member's site. */
 app.post("/entries/:collection/:locale/:slug/shared/publish", (c) =>

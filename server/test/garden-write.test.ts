@@ -14,11 +14,12 @@ import { spawnSync } from "node:child_process";
 const TMP = fs.mkdtempSync(path.join(os.tmpdir(), "maurice-write-"));
 process.env.MAURICE_GARDENS_DIR = path.join(TMP, "gardens");
 
-const { addNote, noteBlock, withNote, writeShared, setPublished, setDeployRunner, deployState, requestDeploy, deleteEntry, archiveEntry, completeCard, completeCover, setCover, EntryWriteError } =
+const { addNote, noteBlock, withNote, writeShared, setPublished, setDeployRunner, deployState, requestDeploy, deleteEntry, archiveEntry, completeCard, completeCover, completeDetails, setCover, EntryWriteError } =
   await import("../data-api/services/gardenWrite");
 const { getShelfEntry, listShelf } = await import("../data-api/services/gardenShelf");
 const { searchLinkTargets } = await import("../data-api/services/gardenLinks");
 const { MEMBER } = await import("./_member");
+const { setGardenCall } = await import("../src/services/entrySuggestions");
 const { default: db } = await import("../src/db");
 
 const garden = { root: path.join(process.env.MAURICE_GARDENS_DIR!, MEMBER.username), username: MEMBER.username };
@@ -56,6 +57,7 @@ beforeAll(() => {
 
 afterAll(() => {
   setDeployRunner(null);
+  setGardenCall(null);
   db.run(`UPDATE users SET notes_domain = NULL WHERE id = ?`, [MEMBER.id]);
   fs.rmSync(TMP, { recursive: true, force: true });
 });
@@ -341,5 +343,75 @@ describe("a cover brought by the device", () => {
     expect(() => setCover(MEMBER.id, garden, ref, new Uint8Array())).toThrow("No picture");
     expect(fs.existsSync(path.join(garden.root, "images/resources/books/fr-humus.jpg"))).toBe(false);
     expect(() => setCover(MEMBER.id, garden, { collection: "notes", locale: "fr", slug: "une-note" }, JPEG)).toThrow("Not an entry");
+  });
+});
+
+describe("an entry filed by its title alone", () => {
+  const BARE = `---\ntitle: Geometry Dash\nresource_collection: games\nresource_id: geometry-dash\ndate: '2026-10-17'\ntags: []\nlocale: fr\nmeta: {}\n---\n\n## Commentaire\n\n2026-10-17 — La musique.\n`;
+  const ref = { collection: "games", locale: "fr", slug: "geometry-dash" };
+  const calls: Array<{ tool: string; args: Record<string, unknown> }> = [];
+  const game = (id: number, title: string, year: number) => ({ id, title, year, subtitle: "RobTop Games", image: "" });
+  let results: unknown[] = [];
+
+  beforeAll(() => {
+    setGardenCall(async (_member, tool, args) => {
+      calls.push({ tool, args });
+      if (tool === "search_game") return { card: "candidates", results };
+      if (tool === "update_fiche") {
+        // What the garden tool does: the metadata into the fiche. The cover is
+        // put in place beside it, so nothing is fetched from the network.
+        write("games/fr/geometry-dash-fiche.md", BARE.replace("meta: {}", `meta:\n  igdb_id: ${args.igdb_id}\n  title: Geometry Dash`));
+        write("images/resources/games/fr-geometry-dash.jpg", "jpg");
+        return { resource_id: "geometry-dash", updated: ["meta"] };
+      }
+      throw new Error(`unexpected ${tool}`);
+    });
+  });
+
+  test("is looked up, pinned to the work, and given its cover", async () => {
+    write("games/fr/geometry-dash-fiche.md", BARE);
+    results = [game(11642, "Geometry Dash", 2013), game(280740, "Geometry Dash PSP", 2023)];
+    calls.length = 0;
+    await completeDetails(MEMBER.id, garden, ref);
+    expect(calls.map((c) => c.tool)).toEqual(["search_game", "update_fiche"]);
+    expect(calls[1]!.args).toEqual({ resource_collection: "games", resource_id: "geometry-dash", locale: "fr", igdb_id: 11642 });
+    expect((await entry("games", "fr", "geometry-dash"))!.image).toBe(`/images/${MEMBER.username}/resources/games/fr-geometry-dash.jpg`);
+    // Once pinned, it is not looked up again.
+    calls.length = 0;
+    await completeDetails(MEMBER.id, garden, ref);
+    expect(calls).toEqual([]);
+  });
+
+  test("says why when it cannot be: no key, nothing found, or not sure which", async () => {
+    fs.rmSync(path.join(garden.root, "images/resources/games/fr-geometry-dash.jpg"));
+    write("games/fr/geometry-dash-fiche.md", BARE);
+    const why = async () => {
+      try {
+        await completeDetails(MEMBER.id, garden, ref);
+      } catch (e) {
+        expect(e).toBeInstanceOf(EntryWriteError);
+        return (e as Error).message;
+      }
+      return null;
+    };
+    setGardenCall(async () => { throw new Error('No IGDB credentials configured — add the client id and secret under "Other API keys" in the admin dashboard.'); });
+    expect(await why()).toContain("IGDB has no key in this household");
+    setGardenCall(async () => ({ card: "candidates", results: [] }));
+    expect(await why()).toContain("IGDB knows nothing called");
+    setGardenCall(async () => ({ card: "candidates", results: [game(1, "Geometry Dash", 2013), game(2, "Geometry Dash", 2024)] }));
+    expect(await why()).toContain("cannot tell for sure");
+    // Nothing was written along the way.
+    expect(read("games/fr/geometry-dash-fiche.md")).toBe(BARE);
+  });
+
+  test("a fiche that names its work is not looked up again for want of a cover", async () => {
+    const calls: string[] = [];
+    setGardenCall(async (_m, tool) => { calls.push(tool); return {}; });
+    // `kept` carries a TMDB id and no cover: nothing to say, nothing to ask.
+    fs.rmSync(path.join(garden.root, "images/resources/series/fr-kept.jpg"), { force: true });
+    write("series/fr/kept-fiche.md",
+      `---\ntitle: Kept\nresource_collection: series\nresource_id: kept\ndate: '2026-10-09'\ntags: []\nlocale: fr\nmeta:\n  tmdb_id: 2\n---\n`);
+    await completeDetails(MEMBER.id, garden, { collection: "series", locale: "fr", slug: "kept" });
+    expect(calls).toEqual([]);
   });
 });
