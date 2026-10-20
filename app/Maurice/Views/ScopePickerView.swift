@@ -242,8 +242,8 @@ struct SidebarView: View {
                     }
                 }
                 .padding(.horizontal, 10)
-                // Room for the floating controls to hover clear of the last row.
-                .padding(.bottom, floatingClearance)
+                // A little air between the last row and the floating controls.
+                .padding(.bottom, 16)
             }
             .mask(
                 LinearGradient(
@@ -255,7 +255,10 @@ struct SidebarView: View {
                     startPoint: .top, endPoint: .bottom
                 )
             )
-            .overlay(alignment: .bottom) { floatingControls }
+            // An inset, not an overlay: the scroll view runs on under the
+            // keyboard, so an overlay pinned to its bottom stayed there, the
+            // open search field and its close button out of reach.
+            .safeAreaInset(edge: .bottom, spacing: 0) { floatingControls }
         }
         .glassSidebarBackground(theme)
         .sheet(isPresented: $showSettings) {
@@ -315,10 +318,6 @@ struct SidebarView: View {
         .animation(.spring(duration: 0.35, bounce: 0.15), value: searchOpen)
     }
 
-    /// How far the list scrolls past its last row so nothing hides for good
-    /// under the floating controls.
-    private var floatingClearance: CGFloat { searchControlSize + 26 }
-
     // The magnifier and the open field share one glass identity, so on OS 26
     // the button morphs into the field instead of being swapped out.
     #if os(macOS)
@@ -354,8 +353,8 @@ struct SidebarView: View {
                 .autocorrectionDisabled()
                 #if os(iOS)
                 .textInputAutocapitalization(.never)
+                .submitLabel(.search)
                 #endif
-                .searchReturnKey(isEmpty: chat.searchQuery.isEmpty, focus: $searchFocused)
                 .onAppear { searchFocused = true }
                 #if os(macOS)
                 .onExitCommand { closeSearch() }
@@ -1294,7 +1293,6 @@ struct GardenPageView: View {
                 .font(.system(size: 13.5))
                 .foregroundStyle(theme.ink)
                 .focused($queryFocused)
-                .searchReturnKey(isEmpty: query.isEmpty, focus: $queryFocused)
             #if os(iOS)
             if queryFocused && query.isEmpty {
                 HideKeyboardButton(focus: $queryFocused, color: theme.inkMute,
