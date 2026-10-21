@@ -1,6 +1,6 @@
 ---
 title: The data model
-date: '2026-10-20'
+date: '2026-10-21'
 flags: []
 locale: en
 description: 'The SQLite schema behind the chat engine: identity, conversations, files,
@@ -40,7 +40,7 @@ Anthropic's key stays in `households.api_key`; the other providers got their own
 | `mail_accounts` | `id`, `member_id` (cascade), `address` (unique per member), `name`, `provider`, `host`, `port`, `security`, `username` (all optional — the `email` tool guesses them from the domain), `secret`, `state` ∈ `unchecked`/`ok`/`error`, `last_error`, `checked_at`, `created_at`, `updated_at` | A member's mailbox, added by the member themselves (25 September 2026, `services/mailAccounts.ts`). `secret` is the password sealed with AES-256-GCM (`v1:` + base64 of IV, tag, ciphertext) under the **household key**: `MAURICE_SECRET_KEY` (32 bytes, hex or base64) when set, else `secret.key` in the app dir, created on first use, mode 0600. A copy of `maurice.db` without the key carries no usable password; the household archive carries the key. No route returns `secret`; only the loopback route the tool reads decrypts it. |
 | `contact_accounts` | `id`, `member_id` (cascade), `url` (null = the provider's own address), `username`, `name`, `provider`, `secret`, `state` ∈ `unchecked`/`ok`/`error`, `last_error`, `checked_at`, `synced_at`, `cards`, `created_at`, `updated_at` | A member's address book, a CardDAV login added by the member (27 September 2026, lot 2 of `specs/contacts.md`, `services/contactAccounts.ts`). `secret` sealed exactly as `mail_accounts.secret`, never returned. |
 | `contact_cards` | `id`, `account_id` (cascade), `member_id` (cascade), `href`, `etag`, `uid`, `full_name`, `nickname` (JSON), `org`, `emails` (JSON, lowercased), `phones` (JSON) | The cards of those address books as last read, replaced whole at every read of an account; a read that fails keeps the last good cards. Nothing is written back to the server. |
-| `device_tokens` | `token` (PK), `user_id`, `platform`, `household_tag` | APNs push; `household_tag` routes a tap to the right foyer in a multi-household app. |
+| `device_tokens` | `token` (PK), `user_id`, `platform`, `household_tag`, `p256dh`, `auth` | Push: an APNs token, or a Web Push endpoint URL with its subscription keys (`p256dh`, `auth`, since 21 October 2026); `household_tag` routes a tap to the right foyer in a multi-household app. |
 | `devices` | `id`, `household_id`, `name`, `pairing_token` (unique), `paired_at` | Programmatic device pairing. |
 | `guest_contacts` | `guest_user_id` + `member_id` (PK) | The people a guest may reach; enforced both directions. |
 | `erasures` | `id`, `member_id` (no FK — the member may be gone), `scope ∈ {data,account}`, `erased_at`, `pending` | The register of erasures (3 October 2026, `services/memberErase.ts`): an opaque id and a date, nothing that says who. `pending` holds the path of the member's notes while the corpus step waits for the gateway, and is emptied when it succeeds. |

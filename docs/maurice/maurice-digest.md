@@ -20,7 +20,7 @@ covers:
   maurice-carnet: '2026-10-21'
   maurice-chat: '2026-10-21'
   maurice-composer: '2026-10-20'
-  maurice-data-model: '2026-10-20'
+  maurice-data-model: '2026-10-21'
   maurice-docs: '2026-10-20'
   maurice-domains: '2026-10-20'
   maurice-files: '2026-06-19'
@@ -96,10 +96,10 @@ There is also a **browser clipper** that saves the page being read into the memb
   - **guest** — full capabilities but a limited *reach*: an explicit contact list, checked both ways, and only the domains shared with them. This is how you host someone, or are hosted;
   - **child** — a flag an admin ticks (the server knows no ages): no public pages, never proposed domains, never sent a conversation Maurice opened. It does not change model access or content rules.
 - **Login safety:** a PIN is mandatory because the server is on the internet; failures are rate-limited and all answer the same "Invalid credentials". On the phone and the Mac, sessions are kept in the system **Keychain**. A session ended on the server — revoked, or the member removed — sends the device back to the member picker, which says so.
-- **Push notifications** (APNs) reach the Maurice app and Carnet when someone writes to you, including as a guest in another household. Only Apple devices are notified for now: a device of another kind can register, and is kept, but nothing reaches it yet.
+- **Push notifications** reach the Maurice app and Carnet when someone writes to you, including as a guest in another household: through Apple's service for the Apple apps, and through Web Push for a device that registers a subscription — the Android app, in private testing, via UnifiedPush and a relay such as ntfy. The payload is encrypted to the device: the relay sees that a message passed, not what it says.
 - **Personal tokens** (`maur_…`) let a member connect other clients (see §18).
 
-*Gaps:* sessions do not expire (they end only when revoked); no push for Android yet; a household cannot be renamed in the app; an invitation cannot create a guest (guests are set up in the console); `maurice://` invitation links open only on iOS.
+*Gaps:* sessions do not expire (they end only when revoked); a household cannot be renamed in the app; an invitation cannot create a guest (guests are set up in the console); `maurice://` invitation links open only on iOS.
 
 *Detail:* `households-rooms`, `server`.
 
@@ -358,7 +358,7 @@ Each member has folders and files (5 GB each), in **Settings**: text, images, PD
 
 - **Not built:** payment and top-ups; writing back to the notes from an Obsidian clone (push); a web chat client; OAuth for mail (Outlook.com, Google contacts); mail in the corpus; flashcard review in Carnet; demo servers for trying the apps without a household (designed, deferred); a hosted member's own domain; on-device inference.
 - **Not intended:** Maurice proposing notes from patterns he notices; automatic periodic reviews.
-- **Rough edges:** sessions never expire (only revoked); no push for Android; a reply in progress is lost on a server restart; no provider failover; external MCP clients see every mounted tool; some member-triggered background calls are not on the ledger; erasure cannot reach off-site backups or exported archives; the databases are snapshot, not versioned (the notes are); after a household import the search index and git remotes are fixed by hand; the experimental tools are partly documented and absent from hosted households.
+- **Rough edges:** sessions never expire (only revoked); a reply in progress is lost on a server restart; no provider failover; external MCP clients see every mounted tool; some member-triggered background calls are not on the ledger; erasure cannot reach off-site backups or exported archives; the databases are snapshot, not versioned (the notes are); after a household import the search index and git remotes are fixed by hand; the experimental tools are partly documented and absent from hosted households.
 
 ## 25. Where to look
 
