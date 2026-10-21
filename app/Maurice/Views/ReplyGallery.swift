@@ -20,6 +20,14 @@ struct ReplyGallery: View {
     private var theme: MauriceTheme { MauriceTheme.palette(dark ? "studio" : "cream") }
 
     var body: some View {
+        if StreamProbe.on {
+            StreamProbeView().environment(\.mauriceTheme, theme)
+        } else {
+            gallery
+        }
+    }
+
+    private var gallery: some View {
         VStack(spacing: 0) {
             HStack {
                 Picker("", selection: $sample) {
@@ -165,5 +173,47 @@ struct ReplyGallery: View {
         Peux-tu résumer ce texte ?
         """, reply: "En une phrase : c'est une note collée, *sur plusieurs lignes*."),
     ]
+}
+/// `-ReplyGalleryStream`: a reply streamed as a fast model sends it — bursts
+/// of a few characters to a few words, about 350 a second — through the
+/// streaming row, every reveal step logged (STREAMTICK).
+enum StreamProbe {
+    static let on = ProcessInfo.processInfo.arguments.contains("-ReplyGalleryStream")
+}
+
+struct StreamProbeView: View {
+    @State private var text = ""
+    @State private var ended = false
+    @State private var done = false
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading) {
+                if done {
+                    ReplyText(markdown: text)
+                } else {
+                    StreamingRow(text: text, serverBaseURL: "", ended: ended,
+                                 onRevealed: { NSLog("STREAMDONE"); done = true })
+                }
+            }
+            .padding(16)
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .task {
+            let all = Array(ReplyGallery.samples.prefix(4).map(\.reply).joined(separator: "\n\n"))
+            var rng = SystemRandomNumberGenerator()
+            var i = 0
+            try? await Task.sleep(for: .seconds(1))
+            NSLog("STREAMSTART %d chars", all.count)
+            while i < all.count {
+                let n = Int.random(in: 2...24, using: &rng)
+                text += String(all[i..<min(all.count, i + n)])
+                i += n
+                try? await Task.sleep(for: .milliseconds(Double(n) / 350 * 1000))
+            }
+            NSLog("STREAMEND")
+            ended = true
+        }
+    }
 }
 #endif

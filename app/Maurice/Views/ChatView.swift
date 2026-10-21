@@ -2005,7 +2005,7 @@ struct DataBlockBody: View {
     }
 }
 
-private struct StreamingRow: View {
+struct StreamingRow: View {
     @Environment(\.mauriceTheme) private var theme
     let text: String
     let serverBaseURL: String
@@ -2021,10 +2021,16 @@ private struct StreamingRow: View {
     var onRevealed: () -> Void = {}
     @State private var visibleLength: Int = 0
     @State private var lastTick: Date?
+    @State private var clock = RevealClock()
 
-    // RunLoop timer — fires reliably independent of SwiftUI rendering. Each
-    // tick re-lays the whole reply out, so not faster than the eye needs.
-    private let tick = Timer.publish(every: 1.0 / 30, on: .main, in: .common).autoconnect()
+    /// The reveal's timer, made once per row. Built in the row's initializer
+    /// it was a new one at every update of the thread — every few tokens —
+    /// and its subscription started over each time, so it fired only when
+    /// the stream paused, and the text came in clumps.
+    private final class RevealClock {
+        // Lazy: the throwaway instances an initializer makes never start one.
+        lazy var ticks = Timer.publish(every: 1.0 / 60, on: .main, in: .common).autoconnect()
+    }
 
     /// Characters a second when the reveal has caught up with the stream.
     private static let pace = 120.0
@@ -2041,7 +2047,7 @@ private struct StreamingRow: View {
 
     var body: some View {
         streamLayout
-        .onReceive(tick) { now in
+        .onReceive(clock.ticks) { now in
             let total = text.count
             guard imageInfo == nil, visibleLength < total else {
                 lastTick = nil
@@ -2053,11 +2059,14 @@ private struct StreamingRow: View {
             // stream until the end of the turn swapped the rest in at once.
             // The further behind, the faster: a burst drains in a fraction
             // of a second and the reveal stays a few words behind the stream.
-            let dt = min(0.25, lastTick.map { now.timeIntervalSince($0) } ?? 1.0 / 30)
+            let dt = min(0.25, lastTick.map { now.timeIntervalSince($0) } ?? 1.0 / 60)
             lastTick = now
             let behind = Double(total - visibleLength)
             let step = max(1, Int((Self.pace + behind * Self.catchUp) * dt))
             visibleLength = min(visibleLength + step, total)
+            #if DEBUG
+            if StreamProbe.on { NSLog("STREAMTICK dt=%.1fms step=%d behind=%d", dt * 1000, step, Int(behind)) }
+            #endif
             onAdvance()
         }
     }
