@@ -227,6 +227,10 @@ export const proxyAuth = createMiddleware(async (c, next) => {
   // Allow API health check
   if (path === "/api/health") return next();
 
+  // The web sign-in link checks the token it carries and replaces the cookie
+  // with it; a stale cookie from an earlier link must not answer 401 first.
+  if (path === "/login" || path === "/login/") return next();
+
   // MCP gateway routes: the gateway runs its own OAuth (access tokens it minted,
   // or maur_* tokens it validates itself). The server must NOT try to validate
   // those here — it would reject the gateway's opaque access tokens as bad

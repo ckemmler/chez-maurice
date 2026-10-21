@@ -26,6 +26,15 @@ function isCarnet(platform: string | null | undefined): boolean {
   return (platform ?? "").startsWith("carnet");
 }
 
+/** The platforms whose tokens are APNs tokens. A row with no platform predates
+ *  the column and came from the Maurice app. Anything else (an Android client's
+ *  token, say) is not Apple's to deliver: sent there it comes back
+ *  BadDeviceToken and would be pruned as dead. */
+const APPLE_PLATFORMS = new Set(["ios", "macos", "carnet-ios"]);
+export function isApplePlatform(platform: string | null | undefined): boolean {
+  return !platform || APPLE_PLATFORMS.has(platform);
+}
+
 /** The APNs topic for a device token, from the platform the client registered
  *  it with (`carnet-ios` → Carnet's bundle id; anything else → the Maurice app). */
 export function apnsTopicFor(platform: string | null | undefined): string {

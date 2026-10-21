@@ -58,3 +58,20 @@ test("a link that is not a member's token is refused", async () => {
   expect((await webLogin.request(`/?token=nope`)).status).toBe(400);
   expect((await webLogin.request(`/?token=maur_nope`)).status).toBe(401);
 });
+
+test("a stale cookie does not stand in the way of a fresh link", async () => {
+  // Through the global middleware, as in index.ts: the cookie used to be
+  // checked first and answered a JSON 401 before the link was read.
+  const { Hono } = await import("hono");
+  const { proxyAuth } = await import("../src/middleware/auth");
+  const app = new Hono();
+  app.use("/*", proxyAuth);
+  app.route("/login", webLogin);
+  setLocale("en");
+  for (const stale of ["maur_revoked", "0".repeat(64)]) {
+    const res = await app.request(`/login?token=${token}`, { headers: { Cookie: `maurice_session=${stale}` } });
+    expect(res.status).toBe(302);
+    expect(res.headers.get("location")).toBe("/g/wl-lea/");
+    expect(res.headers.get("set-cookie")).toContain(`maurice_session=${token}`);
+  }
+});

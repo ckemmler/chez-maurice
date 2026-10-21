@@ -3,7 +3,7 @@
 // per-user socket: we only push when the user has no socket connected.
 
 import db from "../db";
-import { sendApns } from "./apns";
+import { isApplePlatform, sendApns } from "./apns";
 
 export function registerDeviceToken(userId: string, token: string, platform: string, householdTag?: string): void {
   db.run(
@@ -18,18 +18,25 @@ export function removeDeviceToken(token: string): void {
   db.run(`DELETE FROM device_tokens WHERE token = ?`, [token]);
 }
 
-/** Send an alert push to every device registered to `userId`. Fire-and-forget
- *  from request handlers; prunes tokens Apple says are gone. */
+/** Send an alert push to every Apple device registered to `userId`.
+ *  Fire-and-forget from request handlers; prunes tokens Apple says are gone.
+ *  Tokens of other platforms are skipped and kept: nothing delivers them yet,
+ *  and APNs would refuse them. */
 export async function pushToUser(
   userId: string,
   payload: { title: string; body: string; conversationId?: string },
+  send: typeof sendApns = sendApns,
 ): Promise<void> {
   const rows = db.query(`SELECT token, household_tag, platform FROM device_tokens WHERE user_id = ?`)
     .all(userId) as { token: string; household_tag: string | null; platform: string | null }[];
   console.log(`[push] pushToUser ${userId}: ${rows.length} token(s)`);
   for (const { token, household_tag, platform } of rows) {
+    if (!isApplePlatform(platform)) {
+      console.log(`[push]   token=${token.slice(0, 10)}… platform=${platform} → skipped (not APNs)`);
+      continue;
+    }
     try {
-      const r = await sendApns(token, { ...payload, householdTag: household_tag ?? undefined, platform: platform ?? undefined });
+      const r = await send(token, { ...payload, householdTag: household_tag ?? undefined, platform: platform ?? undefined });
       console.log(`[push]   token=${token.slice(0, 10)}… tag=${household_tag} platform=${platform} → status=${r.status} reason=${r.reason ?? "ok"}`);
       if (r.reason === "BadDeviceToken" || r.reason === "Unregistered" || r.status === 410) {
         db.run(`DELETE FROM device_tokens WHERE token = ?`, [token]);

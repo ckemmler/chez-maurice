@@ -39,6 +39,7 @@ import { heldEntry, offerSharedArticle, ownEntryRef, suggestInBackground } from 
 import { linkOnFicheInBackground } from "../../data-api/services/entryConversations";
 import { saveSpec } from "../services/composer/specs";
 import { memberLocale } from "../services/domainBriefs";
+import { t } from "../services/i18n";
 import {
   beginTurn,
   recordEvent,
@@ -556,9 +557,21 @@ conversations.post("/:id/messages", async (c) => {
         };
         // Every event a client would see goes to the registry first, so a
         // re-attaching client gets exactly what this one got.
+        let erred = false;
         const send = async (event: TurnEvent) => {
+          if (event.type === "error") erred = true;
           recordEvent(convoId, event);
           await write(event);
+        };
+        // A turn always ends on a terminal event. One that left nothing to
+        // persist (the model said nothing, or ⏹ came before the first word)
+        // ends on `error` unless one was already sent — otherwise the stream
+        // just closed and the app, taking that for a lost connection,
+        // re-attached until it gave up.
+        const endWithoutReply = async () => {
+          if (erred) return;
+          const key = signal.aborted ? "chat.stopped_empty" : "chat.empty_reply";
+          await send({ type: "error", message: t(memberLocale(userId), key) });
         };
 
         const flushPending = async () => {
@@ -741,6 +754,7 @@ conversations.post("/:id/messages", async (c) => {
           await appendFooter();
           const msg = persistReply();
           if (msg) await send({ type: "done", message_id: msg.id });
+          else await endWithoutReply();
         } catch (err: any) {
           // Stopped (POST /:id/turn/stop) or the stream broke — keep the
           // partial reply. A stop is a normal end; a break is an error.
@@ -748,6 +762,7 @@ conversations.post("/:id/messages", async (c) => {
           const msg = persistReply();
           if (signal.aborted) {
             if (msg) await send({ type: "done", message_id: msg.id });
+            else await endWithoutReply();
           } else {
             await send({ type: "error", message: err.message || "Stream failed" });
           }
