@@ -225,6 +225,8 @@ final class ChatService {
     /// Outlives `streamTask`: when the follower gave up while the app was
     /// away, a return to the front tries again from here.
     private var followedTurn: (convoId: String, startedAt: Date)?
+    /// The stream being followed opened on a `resume` of a turn already over.
+    private var resumedFinished = false
     /// The conversation `messages` actually holds, as opposed to the one merely
     /// selected. Anything destructive has to key off this, not off emptiness.
     private var messagesLoadedFor: String?
@@ -1128,7 +1130,11 @@ final class ChatService {
     func regenerate() async {
         guard !isStreaming, let convoId = activeConversationId, let last = messages.last else { return }
         if last.role == "assistant" { messages.removeLast() }
-        await runAssistantStream(convoId: convoId, content: "", imageDataUris: [], regenerate: true)
+        // The thread's own Maurice: `maurice_id` is always sent, and a null
+        // would re-arm the conversation to the everyday one, losing its
+        // domain or reading companion.
+        await runAssistantStream(convoId: convoId, content: "", imageDataUris: [], regenerate: true,
+                                 mauriceId: currentMauriceId)
     }
 
     /// The thread ends on a member's message with no reply, and Maurice is not
@@ -1231,9 +1237,14 @@ final class ChatService {
                     }
                     attached = true
                     attachFailures = 0
+                    resumedFinished = false
                     if let terminal = try await pump(stream) {
                         return .ended(terminal.type == .done ? terminal : nil)
                     }
+                    // A turn already over that had no terminal event to give:
+                    // a server from before 21 October 2026 ended a reply
+                    // without a word that way. Nothing more will come.
+                    if resumedFinished { return .nothingRunning }
                     // The bytes ran out before done/error: the connection
                     // went, not the turn. (Also what a kicked pump looks like.)
                     if Task.isCancelled { return .abandoned }
@@ -1392,6 +1403,7 @@ final class ChatService {
         switch event.type {
         case .resume:
             // Everything the turn produced while we were not looking.
+            resumedFinished = event.finished == true
             streamingText = event.text ?? ""
             streamingData = event.blocks ?? []
             streamingUsage = event.usage

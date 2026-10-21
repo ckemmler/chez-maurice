@@ -485,6 +485,7 @@ final class MauriceStore {
         if let body { req.httpBody = try? JSONSerialization.data(withJSONObject: body) }
         guard let (data, resp) = try? await URLSession.shared.data(for: req),
               let http = resp as? HTTPURLResponse else { return (0, nil) }
+        APIClient.note(http, for: req)
         return (http.statusCode, try? JSONSerialization.jsonObject(with: data))
     }
 }

@@ -118,6 +118,12 @@ struct UserPickerView: View {
                     Text(error)
                         .font(.caption)
                         .foregroundStyle(.red)
+                } else if session.sessionEnded {
+                    Text(session.localized("picker.session_ended"))
+                        .font(.caption)
+                        .foregroundStyle(theme.inkSoft)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 32)
                 }
 
                 Spacer()
@@ -277,7 +283,8 @@ struct UserPickerView: View {
             let _: OkResponse = try await api.post("/api/auth/set-pin", body: ["pin": pin], token: pending.token)
             let u = pending.user
             finishEnroll(userId: pending.userId, token: pending.token,
-                         user: DeviceUser(id: u.id, displayName: u.displayName, avatarColor: u.avatarColor, hasPin: true, role: u.role))
+                         user: DeviceUser(id: u.id, displayName: u.displayName, avatarColor: u.avatarColor, hasPin: true,
+                                          role: u.role, avatarURL: u.avatarURL, username: u.username))
             pendingEnroll = nil
             pinSetupText = ""; pinSetupConfirm = ""; pinSetupError = nil
         } catch let err as APIError {
@@ -288,6 +295,7 @@ struct UserPickerView: View {
     }
 
     private func finishEnroll(userId: String, token: String, user: DeviceUser) {
+        session.sessionEnded = false
         session.loginUser(userId, token: token)
         var updated = session.deviceUsers.filter { $0.id != userId }
         updated.append(user)
@@ -302,10 +310,16 @@ struct UserPickerView: View {
         do {
             let api = APIClient(baseURL: url)
 
-            if let token = session.deviceUsers.compactMap({ session.tokenForUser($0.id) }).first {
-                users = try await api.get("/api/users", token: token)
-            } else {
-                users = []
+            // Any member's token will do; one the server refuses is dropped
+            // (APIClient.note) and the next is tried.
+            users = []
+            for token in session.deviceUsers.compactMap({ session.tokenForUser($0.id) }) {
+                do {
+                    users = try await api.get("/api/users", token: token)
+                    break
+                } catch APIError.server(401, _) {
+                    continue
+                }
             }
         } catch {
             self.error = error.localizedDescription
@@ -325,6 +339,7 @@ struct UserPickerView: View {
                 body: ["username": adminUsername, "password": adminPassword]
             )
 
+            session.sessionEnded = false
             session.loginUser(response.user_id, token: response.token)
             users = try await api.get("/api/users", token: response.token)
             session.updateDeviceUsers(users.map { DeviceUser(from: $0) })
@@ -351,11 +366,17 @@ struct UserPickerView: View {
             return
         }
 
-        // No PIN — try fast switch with cached token, else login without PIN
+        // No PIN — switch with the cached token. Without one there is no way
+        // in from here: the server never opens a session for a member with
+        // no PIN on their id alone. An invitation code is the way back.
         if session.switchToUser(user.id) {
+            session.sessionEnded = false
             return
         }
-        Task { await loginUser(user, pin: nil) }
+        enrollCode = ""
+        enrollNeedsProfile = false
+        enrollError = session.localized("picker.needs_invite", user.display_name)
+        showEnroll = true
     }
 
     private func submitPin(for user: ServerUser) {
@@ -376,6 +397,7 @@ struct UserPickerView: View {
                 body: body
             )
 
+            session.sessionEnded = false
             session.loginUser(user.id, token: response.token)
 
             let deviceUser = DeviceUser(from: user)

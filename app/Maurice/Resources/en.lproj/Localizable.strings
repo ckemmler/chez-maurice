@@ -14,6 +14,8 @@
 "picker.pin.title" = "Enter your PIN";
 "picker.pin.placeholder" = "PIN";
 "picker.pin.error" = "Invalid PIN";
+"picker.session_ended" = "Your session on this household has ended. Sign in again.";
+"picker.needs_invite" = "%@ has no PIN: enter an invitation code to sign in on this device.";
 "picker.pin.cancel" = "Cancel";
 "picker.pin.submit" = "Enter";
 "picker.admin.title" = "Admin login";

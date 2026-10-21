@@ -14,6 +14,8 @@
 "picker.pin.title" = "Voer je pincode in";
 "picker.pin.placeholder" = "Pincode";
 "picker.pin.error" = "Ongeldige pincode";
+"picker.session_ended" = "Je sessie in dit huishouden is beëindigd. Meld je opnieuw aan.";
+"picker.needs_invite" = "%@ heeft geen pincode: voer een uitnodigingscode in om op dit apparaat aan te melden.";
 "picker.pin.cancel" = "Annuleren";
 "picker.pin.submit" = "Bevestigen";
 "picker.admin.title" = "Beheerderslogin";

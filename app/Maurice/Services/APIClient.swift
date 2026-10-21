@@ -69,6 +69,7 @@ final class APIClient: Sendable {
     ) async throws {
         let request = buildRequest(path, method: "DELETE", token: token)
         let (_, response) = try await URLSession.shared.data(for: request)
+        if let http = response as? HTTPURLResponse { Self.note(http, for: request) }
         guard let http = response as? HTTPURLResponse,
               (200...299).contains(http.statusCode) else {
             throw APIError.requestFailed
@@ -118,6 +119,7 @@ final class APIClient: Sendable {
         let request = buildRequest(path, method: "GET", token: token, timeout: 1800)
         let (tmp, response) = try await URLSession.shared.download(for: request)
         guard let http = response as? HTTPURLResponse else { throw APIError.requestFailed }
+        Self.note(http, for: request)
         guard (200...299).contains(http.statusCode) else {
             let data = (try? Data(contentsOf: tmp)) ?? Data()
             try? FileManager.default.removeItem(at: tmp)
@@ -176,6 +178,7 @@ final class APIClient: Sendable {
                         continuation.finish(throwing: APIError.requestFailed)
                         return
                     }
+                    Self.note(http, for: request)
                     guard (200...299).contains(http.statusCode) else {
                         continuation.finish(throwing: await Self.httpError(http, bytes))
                         return
@@ -208,6 +211,7 @@ final class APIClient: Sendable {
         )
         let (bytes, response) = try await streamSession.bytes(for: request)
         guard let http = response as? HTTPURLResponse else { throw APIError.requestFailed }
+        Self.note(http, for: request)
         if http.statusCode == 204 { return nil }
         guard (200...299).contains(http.statusCode) else {
             throw await Self.httpError(http, bytes)
@@ -295,6 +299,7 @@ final class APIClient: Sendable {
         guard let http = response as? HTTPURLResponse else {
             throw APIError.requestFailed
         }
+        Self.note(http, for: request)
         guard (200...299).contains(http.statusCode) else {
             if let body = try? JSONDecoder().decode(ErrorBody.self, from: data) {
                 throw APIError.server(http.statusCode, body.error)
@@ -303,6 +308,24 @@ final class APIClient: Sendable {
         }
         return try JSONDecoder().decode(T.self, from: data)
     }
+
+    /// Report a refused session. Sessions never expire, so a 401 to a request
+    /// that carried a member's token means the session was revoked or the
+    /// member removed; SessionStore forgets the token and, for the active
+    /// member, goes back to the member picker. Requests without a token
+    /// (sign-in, enrolment) never report.
+    static func note(_ http: HTTPURLResponse, for request: URLRequest) {
+        guard http.statusCode == 401,
+              let auth = request.value(forHTTPHeaderField: "Authorization"),
+              auth.hasPrefix("Bearer ") else { return }
+        NotificationCenter.default.post(name: .mauriceSessionRejected, object: nil,
+                                        userInfo: ["token": String(auth.dropFirst("Bearer ".count))])
+    }
+}
+
+extension Notification.Name {
+    /// A member's token was answered 401 (`userInfo["token"]`).
+    static let mauriceSessionRejected = Notification.Name("maurice.sessionRejected")
 }
 
 // MARK: - Stream Event

@@ -62,9 +62,13 @@ struct ContentView: View {
                     async let minHold: Void = Task.sleep(for: .seconds(2))
                     async let prefs: () = session.loadPreferences()
                     async let personas: () = maurices.load()
+                    // The member's own row: a sign-in by avatar or PIN
+                    // only had the household list, which has no username.
+                    async let me: () = session.refreshActiveUser()
                     await chat.onUserSwitch()
                     await prefs
                     await personas
+                    await me
                     try? await minHold
                     isLoading = false
                     // Foyer badges are non-critical — refresh them in the

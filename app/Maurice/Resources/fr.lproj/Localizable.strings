@@ -14,6 +14,8 @@
 "picker.pin.title" = "Saisissez votre code PIN";
 "picker.pin.placeholder" = "PIN";
 "picker.pin.error" = "Code PIN invalide";
+"picker.session_ended" = "Votre session sur ce foyer a pris fin. Reconnectez-vous.";
+"picker.needs_invite" = "%@ n'a pas de code PIN : saisissez un code d'invitation pour vous connecter sur cet appareil.";
 "picker.pin.cancel" = "Annuler";
 "picker.pin.submit" = "Entrer";
 "picker.admin.title" = "Connexion admin";

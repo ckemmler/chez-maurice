@@ -14,6 +14,8 @@
 "picker.pin.title" = "Introduza o seu PIN";
 "picker.pin.placeholder" = "PIN";
 "picker.pin.error" = "PIN inválido";
+"picker.session_ended" = "A tua sessão nesta casa terminou. Inicia sessão de novo.";
+"picker.needs_invite" = "%@ não tem PIN: introduz um código de convite para entrar neste dispositivo.";
 "picker.pin.cancel" = "Cancelar";
 "picker.pin.submit" = "Entrar";
 "picker.admin.title" = "Sessão de administrador";

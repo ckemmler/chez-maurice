@@ -1,4 +1,5 @@
 import Foundation
+import Security
 import SwiftUI
 
 // MARK: - Global localization
@@ -24,8 +25,6 @@ func L(_ key: String, _ args: CVarArg...) -> String {
 
 // MARK: - Session Store
 
-/// Persists server connection info and per-user session tokens.
-/// Uses UserDefaults for server config and Keychain for tokens.
 /// A household this device belongs to — a paired server + the users enrolled
 /// there + which one is active. The device can hold several at once.
 struct Household: Codable, Identifiable, Hashable {
@@ -84,6 +83,8 @@ struct Invitation: Equatable {
     }
 }
 
+/// Persists server connection info and per-user session tokens: the
+/// households in UserDefaults, the tokens in the Keychain (TokenVault).
 @Observable
 final class SessionStore {
     /// An invitation received and not yet used. The user picker picks it up:
@@ -180,13 +181,24 @@ final class SessionStore {
         return args.isEmpty ? fmt : String(format: fmt, arguments: args)
     }
 
+    /// The active member's session was refused (401) and they are back at
+    /// the member picker; it says why, once.
+    var sessionEnded = false
+
     init() {
         deviceId = UserDefaults.standard.string(forKey: "maurice.deviceId")
+        TokenVault.migrateFromDefaults()
         loadHouseholds()
         migrateLegacyIfNeeded()
         currentHouseholdId = UserDefaults.standard.string(forKey: "maurice.currentHousehold") ?? households.first?.id
         loadLocalPrefs()
         syncActiveUserMirror()
+        // Sessions never expire: a 401 on a request that carried a token means
+        // it was revoked or its member removed.
+        NotificationCenter.default.addObserver(forName: .mauriceSessionRejected, object: nil, queue: .main) { [weak self] note in
+            guard let token = note.userInfo?["token"] as? String else { return }
+            self?.sessionRejected(token: token)
+        }
     }
 
     // MARK: - Households
@@ -265,7 +277,7 @@ final class SessionStore {
     /// another household, or fully unpaired if it was the last.
     func unpair() {
         guard let hid = currentHouseholdId else { return }
-        for user in deviceUsers { removeToken(for: user.id) }
+        for user in deviceUsers { removeToken(for: user.id); clearMcpToken(for: user.id) }
         households.removeAll { $0.id == hid }
         currentHouseholdId = households.first?.id
         loadLocalPrefs()
@@ -296,7 +308,49 @@ final class SessionStore {
         return true
     }
 
-    func updateDeviceUsers(_ users: [DeviceUser]) { deviceUsers = users }
+    func updateDeviceUsers(_ users: [DeviceUser]) { deviceUsers = keepingUsernames(users) }
+
+    /// `GET /api/users` leaves `username` out for anyone but an admin; a
+    /// member list built from it must not erase the usernames already known
+    /// (My data's erase confirmation asks for it).
+    private func keepingUsernames(_ users: [DeviceUser]) -> [DeviceUser] {
+        let known = Dictionary(deviceUsers.compactMap { u in u.username.map { (u.id, $0) } },
+                               uniquingKeysWith: { a, _ in a })
+        return users.map { u in
+            guard u.username == nil, let name = known[u.id] else { return u }
+            var kept = u
+            kept.username = name
+            return kept
+        }
+    }
+
+    /// Refresh the active member from `GET /api/users/me`, the one answer that
+    /// carries their username whatever their role. Run after every sign-in.
+    func refreshActiveUser() async {
+        guard let url = serverURL, let uid = activeUserId, let token = tokenForActiveUser else { return }
+        guard let me: ServerUser = try? await APIClient(baseURL: url).get("/api/users/me", token: token),
+              me.id == uid, activeUserId == uid else { return }
+        var users = deviceUsers.filter { $0.id != uid }
+        users.append(DeviceUser(from: me))
+        deviceUsers = keepingUsernames(users)
+    }
+
+    /// A request carrying `token` was answered 401: forget that token (and
+    /// the member's web-link token with it) wherever it is stored. If it was
+    /// the active member's, the household goes back to its member picker.
+    func sessionRejected(token: String) {
+        for h in households {
+            for u in h.deviceUsers where TokenVault.get(Self.tokenKey(h.id, u.id)) == token {
+                TokenVault.remove(Self.tokenKey(h.id, u.id))
+                TokenVault.remove(Self.mcpKey(h.id, u.id))
+                if h.activeUserId == u.id {
+                    updateHousehold(id: h.id) { $0.activeUserId = nil }
+                    if h.id == currentHouseholdId { sessionEnded = true }
+                }
+            }
+        }
+        syncActiveUserMirror()
+    }
 
     /// Fold fresh server profiles into the persisted device users. Avatar, color,
     /// and name can change server-side after a device was paired (e.g. a photo set
@@ -310,50 +364,49 @@ final class SessionStore {
         var changed = false
         for i in users.indices {
             guard let s = byId[users[i].id] else { continue }
-            let fresh = DeviceUser(from: s)
+            var fresh = DeviceUser(from: s)
+            if fresh.username == nil { fresh.username = users[i].username }
             if fresh != users[i] { users[i] = fresh; changed = true }
         }
         if changed { deviceUsers = users }
     }
 
-    // MARK: - Token Storage (per household + user)
+    // MARK: - Token Storage (per household + user, in the Keychain)
+
+    static func tokenKey(_ householdId: String, _ userId: String) -> String { "maurice.token.\(householdId).\(userId)" }
+    static func mcpKey(_ householdId: String, _ userId: String) -> String { "maurice.mcp-token.\(householdId).\(userId)" }
 
     private func tokenKey(_ userId: String) -> String? {
-        guard let hid = currentHouseholdId else { return nil }
-        return "maurice.token.\(hid).\(userId)"
+        currentHouseholdId.map { Self.tokenKey($0, userId) }
     }
     func tokenForUser(_ userId: String) -> String? {
-        guard let k = tokenKey(userId) else { return nil }
-        return UserDefaults.standard.string(forKey: k)
+        tokenKey(userId).flatMap(TokenVault.get)
     }
 
     /// Bearer for any household's active user (used to register the push token
     /// with every household, not just the current one).
     func token(for household: Household) -> String? {
         guard let uid = household.activeUserId else { return nil }
-        return UserDefaults.standard.string(forKey: "maurice.token.\(household.id).\(uid)")
+        return TokenVault.get(Self.tokenKey(household.id, uid))
     }
     private func storeToken(_ token: String, for userId: String) {
-        guard let k = tokenKey(userId) else { return }
-        UserDefaults.standard.set(token, forKey: k)
+        if let k = tokenKey(userId) { TokenVault.set(token, k) }
     }
     private func removeToken(for userId: String) {
-        guard let k = tokenKey(userId) else { return }
-        UserDefaults.standard.removeObject(forKey: k)
+        if let k = tokenKey(userId) { TokenVault.remove(k) }
     }
 
     private func mcpKey(_ userId: String) -> String? {
-        guard let hid = currentHouseholdId else { return nil }
-        return "maurice.mcp-token.\(hid).\(userId)"
+        currentHouseholdId.map { Self.mcpKey($0, userId) }
     }
     func mcpToken(for userId: String) -> String? {
-        mcpKey(userId).flatMap { UserDefaults.standard.string(forKey: $0) }
+        mcpKey(userId).flatMap(TokenVault.get)
     }
     func saveMcpToken(_ token: String, for userId: String) {
-        if let k = mcpKey(userId) { UserDefaults.standard.set(token, forKey: k) }
+        if let k = mcpKey(userId) { TokenVault.set(token, k) }
     }
     func clearMcpToken(for userId: String) {
-        if let k = mcpKey(userId) { UserDefaults.standard.removeObject(forKey: k) }
+        if let k = mcpKey(userId) { TokenVault.remove(k) }
     }
 
     // MARK: - Preferences
@@ -414,12 +467,16 @@ final class SessionStore {
            let decoded = try? JSONDecoder().decode([DeviceUser].self, from: data) { users = decoded }
         let activeUid = UserDefaults.standard.string(forKey: "maurice.activeUserId")
         let hid = UUID().uuidString
+        // The old keys went to the Keychain under their own names
+        // (TokenVault.migrateFromDefaults, run just before).
         for u in users {
-            if let t = UserDefaults.standard.string(forKey: "maurice.token.\(u.id)") {
-                UserDefaults.standard.set(t, forKey: "maurice.token.\(hid).\(u.id)")
+            if let t = TokenVault.get("maurice.token.\(u.id)") {
+                TokenVault.set(t, Self.tokenKey(hid, u.id))
+                TokenVault.remove("maurice.token.\(u.id)")
             }
-            if let m = UserDefaults.standard.string(forKey: "maurice.mcp-token.\(u.id)") {
-                UserDefaults.standard.set(m, forKey: "maurice.mcp-token.\(hid).\(u.id)")
+            if let m = TokenVault.get("maurice.mcp-token.\(u.id)") {
+                TokenVault.set(m, Self.mcpKey(hid, u.id))
+                TokenVault.remove("maurice.mcp-token.\(u.id)")
             }
         }
         households = [Household(id: hid, serverURL: url, name: Self.defaultName(url),
@@ -440,6 +497,62 @@ final class SessionStore {
 }
 
 // MARK: - Device User (cached locally)
+
+// MARK: - Token vault
+
+/// Session and web-link (`maur_`) tokens live in the Keychain, one
+/// generic-password item per token, named by the key UserDefaults used to
+/// hold it in plain text (until 21 October 2026). Readable after the first
+/// unlock, so a reply followed in the background still has its token.
+enum TokenVault {
+    private static let service = "eu.chezmaurice.maurice.tokens"
+
+    private static func query(_ key: String) -> [String: Any] {
+        [kSecClass as String: kSecClassGenericPassword,
+         kSecAttrService as String: service,
+         kSecAttrAccount as String: key]
+    }
+
+    static func get(_ key: String) -> String? {
+        var q = query(key)
+        q[kSecReturnData as String] = true
+        q[kSecMatchLimit as String] = kSecMatchLimitOne
+        var out: CFTypeRef?
+        guard SecItemCopyMatching(q as CFDictionary, &out) == errSecSuccess,
+              let data = out as? Data else { return nil }
+        return String(data: data, encoding: .utf8)
+    }
+
+    @discardableResult
+    static func set(_ value: String, _ key: String) -> Bool {
+        let data = Data(value.utf8)
+        var status = SecItemUpdate(query(key) as CFDictionary, [kSecValueData as String: data] as CFDictionary)
+        if status == errSecItemNotFound {
+            var add = query(key)
+            add[kSecValueData as String] = data
+            add[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlock
+            status = SecItemAdd(add as CFDictionary, nil)
+        }
+        if status != errSecSuccess { print("[keychain] could not store \(key): \(status)") }
+        return status == errSecSuccess
+    }
+
+    static func remove(_ key: String) {
+        SecItemDelete(query(key) as CFDictionary)
+    }
+
+    /// Once per install, in effect: every token still in UserDefaults moves to
+    /// the Keychain, and its plain-text copy is erased only once the Keychain
+    /// holds it.
+    static func migrateFromDefaults() {
+        let defaults = UserDefaults.standard
+        for (key, value) in defaults.dictionaryRepresentation()
+        where key.hasPrefix("maurice.token.") || key.hasPrefix("maurice.mcp-token.") {
+            guard let token = value as? String else { continue }
+            if get(key) == token || set(token, key) { defaults.removeObject(forKey: key) }
+        }
+    }
+}
 
 struct DeviceUser: Identifiable, Codable, Hashable {
     let id: String

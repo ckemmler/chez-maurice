@@ -14,6 +14,8 @@
 "picker.pin.title" = "Gib deine PIN ein";
 "picker.pin.placeholder" = "PIN";
 "picker.pin.error" = "Ungültige PIN";
+"picker.session_ended" = "Deine Sitzung in diesem Haushalt ist beendet. Melde dich erneut an.";
+"picker.needs_invite" = "%@ hat keine PIN: Gib einen Einladungscode ein, um dich auf diesem Gerät anzumelden.";
 "picker.pin.cancel" = "Abbrechen";
 "picker.pin.submit" = "Bestätigen";
 "picker.admin.title" = "Admin-Anmeldung";

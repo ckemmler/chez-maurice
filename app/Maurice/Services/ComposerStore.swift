@@ -227,7 +227,9 @@ final class ComposerStore {
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         if let body { req.httpBody = try? JSONSerialization.data(withJSONObject: body) }
         guard let (data, resp) = try? await URLSession.shared.data(for: req),
-              let http = resp as? HTTPURLResponse, (200..<300).contains(http.statusCode) else { return nil }
+              let http = resp as? HTTPURLResponse else { return nil }
+        APIClient.note(http, for: req)
+        guard (200..<300).contains(http.statusCode) else { return nil }
         return try? JSONSerialization.jsonObject(with: data)
     }
 

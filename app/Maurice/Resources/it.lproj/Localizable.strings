@@ -14,6 +14,8 @@
 "picker.pin.title" = "Inserisci il tuo PIN";
 "picker.pin.placeholder" = "PIN";
 "picker.pin.error" = "PIN non valido";
+"picker.session_ended" = "La tua sessione in questa casa è terminata. Accedi di nuovo.";
+"picker.needs_invite" = "%@ non ha un PIN: inserisci un codice di invito per accedere su questo dispositivo.";
 "picker.pin.cancel" = "Annulla";
 "picker.pin.submit" = "Entra";
 "picker.admin.title" = "Accesso amministratore";
