@@ -135,6 +135,20 @@ final class ChatService {
     /// `done`). Carried onto the finished message.
     var streamingUsage: TurnUsage?
     var isGeneratingImage = false
+    /// A reply whose turn has ended while the thread was still typing it out.
+    /// Its message is already in `messages`; the streaming row goes on drawing
+    /// it until the reveal reaches the end (`finishReveal`), so the last lines
+    /// type out like the rest instead of dropping in at once.
+    struct FinishingReply {
+        let id: String
+        let conversationId: String
+        let text: String
+        let blocks: [DataBlock]
+        let activity: TurnActivity
+    }
+    var finishing: FinishingReply?
+    /// Counts the turns followed: the streaming row starts afresh with each.
+    var turnSerial = 0
     /// What the turn being streamed is doing — one growing line rather than a
     /// label that flickers with every call (see `TurnActivity`).
     var activity = TurnActivity()
@@ -753,6 +767,7 @@ final class ChatService {
         streamingText = ""
         streamingData = []
         streamingUsage = nil
+        finishing = nil
         activity = TurnActivity()
         toolTrails = [:]
         pendingSummon = false
@@ -1175,9 +1190,11 @@ final class ChatService {
         open: (() throws -> AsyncThrowingStream<StreamEvent, Error>)?
     ) async {
         isStreaming = true
+        turnSerial += 1
         streamingText = ""
         streamingData = []
         streamingUsage = nil
+        finishing = nil
         activity = TurnActivity(startedAt: Date())
         error = nil
         followedTurn = (convoId, Date())
@@ -1310,10 +1327,20 @@ final class ChatService {
             }
             // The recap stays under the reply, whether the message came from
             // this stream or reached the thread over the socket first.
+            var done = activity
+            done.finish()
             if !activity.steps.isEmpty {
-                var done = activity
-                done.finish()
                 toolTrails[id] = done
+            }
+            if !streamingText.isEmpty {
+                finishing = FinishingReply(id: id, conversationId: convoId, text: streamingText,
+                                           blocks: streamingData, activity: done)
+                // Should the row never get there (gone from screen, app
+                // asleep), the message shows anyway.
+                Task { [weak self] in
+                    try? await Task.sleep(for: .seconds(10))
+                    self?.finishReveal(id)
+                }
             }
         }
 
@@ -1351,6 +1378,12 @@ final class ChatService {
         } onCancel: {
             task.cancel()
         }
+    }
+
+    /// The streaming row has typed the finished reply out: its message takes
+    /// its place.
+    func finishReveal(_ id: String) {
+        if finishing?.id == id { finishing = nil }
     }
 
     /// Show one event of a turn — the same whether it comes from the request
@@ -1476,6 +1509,7 @@ final class ChatService {
         streamingText = ""
         streamingData = []
         streamingUsage = nil
+        finishing = nil
         activity = TurnActivity()
         toolTrails = [:]
         error = nil

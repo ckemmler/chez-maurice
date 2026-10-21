@@ -234,6 +234,11 @@ struct ChatView: View {
     }
     #endif
 
+    /// The reply of this thread still typing out after its turn ended.
+    private var finishing: ChatService.FinishingReply? {
+        chat.finishing.flatMap { $0.conversationId == chat.activeConversationId ? $0 : nil }
+    }
+
     /// The scrolling conversation (or the empty state) + an error banner.
     @ViewBuilder
     private var streamView: some View {
@@ -244,23 +249,37 @@ struct ChatView: View {
                     ScrollView {
                         VStack(alignment: .leading, spacing: 22) {
                             ForEach(Array(chat.messages.enumerated()), id: \.element.id) { index, message in
-                                MessageRow(message: message, isLast: index == chat.messages.count - 1)
-                                    .id(message.id)
+                                // A reply still typing out is drawn by the
+                                // streaming row below until it is done.
+                                if message.id != finishing?.id {
+                                    MessageRow(message: message, isLast: index == chat.messages.count - 1)
+                                        .id(message.id)
+                                }
                             }
 
                             // Streaming row — kept alive with a stable id so
-                            // @State (visibleLength) persists across text updates.
-                            if chat.isStreaming {
+                            // @State (visibleLength) persists across text
+                            // updates, and a new one for each turn.
+                            if chat.isStreaming || finishing != nil {
                                 if chat.isGeneratingImage {
                                     ImageGeneratingIndicator()
                                 } else {
                                     // The turn in progress, laid out as the
                                     // reply it becomes: the one line for its
                                     // progress, then the prose, then the
-                                    // answer cards.
-                                    StreamingRow(text: withoutReviewFooter(chat.streamingText, blocks: chat.streamingData),
+                                    // answer cards. Once the turn has ended
+                                    // the same row types out what is left —
+                                    // one call, so its reveal carries on where
+                                    // it was — then the message takes over.
+                                    StreamingRow(text: withoutReviewFooter(finishing?.text ?? chat.streamingText,
+                                                                           blocks: finishing?.blocks ?? chat.streamingData),
                                                  serverBaseURL: session.serverURL ?? "",
-                                                 activity: chat.activity, blocks: chat.streamingData)
+                                                 activity: finishing?.activity ?? chat.activity,
+                                                 blocks: finishing?.blocks ?? chat.streamingData,
+                                                 ended: finishing != nil,
+                                                 onAdvance: { if isNearBottom { scrollToBottom(proxy, animated: false) } },
+                                                 onRevealed: { if let id = finishing?.id { chat.finishReveal(id) } })
+                                    .id(chat.turnSerial)
                                 }
                             } else if chat.pendingSummon {
                                 // Observer's view: someone else summoned Maurice
@@ -328,11 +347,11 @@ struct ChatView: View {
                         // made the follow feel loose.
                         if isNearBottom { scrollToBottom(proxy, animated: false) }
                     }
-                    .onChange(of: chat.isStreaming) {
+                    .onChange(of: chat.isStreaming || finishing != nil) {
                         // The streamed row becomes the final message (and its
                         // footer, cards, recap): keep the end in view for a
                         // reader who was following, leave one who was not.
-                        if !chat.isStreaming && isNearBottom { scrollToBottom(proxy) }
+                        if !chat.isStreaming && finishing == nil && isNearBottom { scrollToBottom(proxy) }
                     }
                     .onChange(of: chat.messages.count) {
                         if pendingScrollToBottom {
@@ -1994,10 +2013,23 @@ private struct StreamingRow: View {
     /// The turn's blocks so far: the sources and tool rows behind the line,
     /// the answer cards under the prose.
     var blocks: [DataBlock] = []
+    /// The turn is over: `text` will not grow, the row is typing out the rest.
+    var ended = false
+    /// The visible text grew (for the thread to follow it down).
+    var onAdvance: () -> Void = {}
+    /// Everything is shown, the turn over: the message can take the row's place.
+    var onRevealed: () -> Void = {}
     @State private var visibleLength: Int = 0
+    @State private var lastTick: Date?
 
-    // RunLoop timer — fires reliably independent of SwiftUI rendering
-    private let tick = Timer.publish(every: 0.01, on: .main, in: .common).autoconnect()
+    // RunLoop timer — fires reliably independent of SwiftUI rendering. Each
+    // tick re-lays the whole reply out, so not faster than the eye needs.
+    private let tick = Timer.publish(every: 1.0 / 30, on: .main, in: .common).autoconnect()
+
+    /// Characters a second when the reveal has caught up with the stream.
+    private static let pace = 120.0
+    /// How fast a backlog drains: a third of it a tenth of a second.
+    private static let catchUp = 3.0
 
     /// Parse image markdown: `![alt](/api/images/file.png)`
     private var imageInfo: (alt: String, path: String)? {
@@ -2009,13 +2041,24 @@ private struct StreamingRow: View {
 
     var body: some View {
         streamLayout
-        .onReceive(tick) { _ in
-            guard imageInfo == nil else { return }
-            guard visibleLength < text.count else { return }
-            // Reveal 1-3 chars per tick (~100-300 chars/sec)
-            let behind = text.count - visibleLength
-            let step = max(1, min(3, behind / 4))
-            visibleLength = min(visibleLength + step, text.count)
+        .onReceive(tick) { now in
+            let total = text.count
+            guard imageInfo == nil, visibleLength < total else {
+                lastTick = nil
+                if ended { onRevealed() }
+                return
+            }
+            // Paced by the time gone by, not by the ticks: a busy main thread
+            // fires fewer of them, and a fixed step per tick fell behind the
+            // stream until the end of the turn swapped the rest in at once.
+            // The further behind, the faster: a burst drains in a fraction
+            // of a second and the reveal stays a few words behind the stream.
+            let dt = min(0.25, lastTick.map { now.timeIntervalSince($0) } ?? 1.0 / 30)
+            lastTick = now
+            let behind = Double(total - visibleLength)
+            let step = max(1, Int((Self.pace + behind * Self.catchUp) * dt))
+            visibleLength = min(visibleLength + step, total)
+            onAdvance()
         }
     }
 
@@ -2045,7 +2088,7 @@ private struct StreamingRow: View {
     @ViewBuilder
     private var streamContent: some View {
         if text.isEmpty || activity.isVisible {
-            TurnActivityRow(activity: activity, blocks: blocks, live: true)
+            TurnActivityRow(activity: activity, blocks: blocks, live: !ended)
         }
         if let img = imageInfo {
             ChatImageView(url: serverBaseURL + img.path)
