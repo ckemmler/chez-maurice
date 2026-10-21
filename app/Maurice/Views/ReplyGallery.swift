@@ -20,7 +20,9 @@ struct ReplyGallery: View {
     private var theme: MauriceTheme { MauriceTheme.palette(dark ? "studio" : "cream") }
 
     var body: some View {
-        if StreamProbe.on {
+        if StreamProbe.chat {
+            ChatProbeView().environment(\.mauriceTheme, theme)
+        } else if StreamProbe.on {
             StreamProbeView().environment(\.mauriceTheme, theme)
         } else {
             gallery
@@ -178,7 +180,54 @@ struct ReplyGallery: View {
 /// of a few characters to a few words, about 350 a second — through the
 /// streaming row, every reveal step logged (STREAMTICK).
 enum StreamProbe {
-    static let on = ProcessInfo.processInfo.arguments.contains("-ReplyGalleryStream")
+    static let chat = ProcessInfo.processInfo.arguments.contains("-ReplyGalleryChat")
+    static let on = chat || ProcessInfo.processInfo.arguments.contains("-ReplyGalleryStream")
+}
+
+/// `-ReplyGalleryChat`: the real thread view, thirty exchanges deep, with a
+/// reply streamed in as the household's tunnel delivers one — a line of
+/// about eleven characters every fifty milliseconds.
+struct ChatProbeView: View {
+    @Environment(ChatService.self) private var chat
+
+    var body: some View {
+        NavigationStack { ChatView() }
+            .task {
+                let now = ISO8601DateFormatter().string(from: Date())
+                func msg(_ id: String, _ role: String, _ text: String) -> ServerMessage {
+                    ServerMessage(id: id, role: role, content: text, model: nil, author_id: nil,
+                                  data: nil, usage: nil, created_at: now)
+                }
+                var history: [ServerMessage] = []
+                for i in 0..<30 {
+                    let s = ReplyGallery.samples[i % 4]
+                    history.append(msg("u\(i)", "user", s.question))
+                    history.append(msg("a\(i)", "assistant", s.reply))
+                }
+                chat.activeConversationId = "probe"
+                chat.messages = history
+                try? await Task.sleep(for: .seconds(2))
+                let all = Array(ReplyGallery.samples.prefix(4).map(\.reply).joined(separator: "\n\n"))
+                chat.messages.append(msg("uq", "user", "Explique-moi tout."))
+                chat.turnSerial += 1
+                chat.isStreaming = true
+                NSLog("STREAMSTART %d chars", all.count)
+                var i = 0
+                while i < all.count {
+                    let n = Int.random(in: 1...22)
+                    chat.streamingText += String(all[i..<min(all.count, i + n)])
+                    i += n
+                    try? await Task.sleep(for: .milliseconds(50))
+                }
+                NSLog("STREAMEND")
+                let text = chat.streamingText
+                chat.messages.append(msg("reply", "assistant", text))
+                chat.finishing = ChatService.FinishingReply(id: "reply", conversationId: "probe", text: text,
+                                                            blocks: [], activity: TurnActivity())
+                chat.streamingText = ""
+                chat.isStreaming = false
+            }
+    }
 }
 
 struct StreamProbeView: View {
@@ -186,18 +235,30 @@ struct StreamProbeView: View {
     @State private var ended = false
     @State private var done = false
 
+    /// The thread above: thirty finished replies, as in a long conversation.
+    private static let history = (0..<30).map { ReplyGallery.samples[$0 % 4].reply }
+
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading) {
-                if done {
-                    ReplyText(markdown: text)
-                } else {
-                    StreamingRow(text: text, serverBaseURL: "", ended: ended,
-                                 onRevealed: { NSLog("STREAMDONE"); done = true })
+        ScrollViewReader { proxy in
+            ScrollView {
+                VStack(alignment: .leading, spacing: 22) {
+                    ForEach(Self.history.indices, id: \.self) { i in
+                        ReplyText(markdown: Self.history[i])
+                    }
+                    if done {
+                        ReplyText(markdown: text)
+                    } else {
+                        StreamingRow(text: text, serverBaseURL: "", ended: ended,
+                                     onAdvance: { proxy.scrollTo("bottom", anchor: UnitPoint(x: 0, y: 1)) },
+                                     onRevealed: { NSLog("STREAMDONE"); done = true })
+                    }
+                    Color.clear.frame(height: 1).id("bottom")
                 }
+                .padding(16)
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .padding(16)
-            .frame(maxWidth: .infinity, alignment: .leading)
+            // As the thread does: follow every token down.
+            .onChange(of: text.count) { proxy.scrollTo("bottom", anchor: UnitPoint(x: 0, y: 1)) }
         }
         .task {
             let all = Array(ReplyGallery.samples.prefix(4).map(\.reply).joined(separator: "\n\n"))

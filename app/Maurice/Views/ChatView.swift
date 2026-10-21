@@ -257,35 +257,8 @@ struct ChatView: View {
                                 }
                             }
 
-                            // Streaming row — kept alive with a stable id so
-                            // @State (visibleLength) persists across text
-                            // updates, and a new one for each turn.
-                            if chat.isStreaming || finishing != nil {
-                                if chat.isGeneratingImage {
-                                    ImageGeneratingIndicator()
-                                } else {
-                                    // The turn in progress, laid out as the
-                                    // reply it becomes: the one line for its
-                                    // progress, then the prose, then the
-                                    // answer cards. Once the turn has ended
-                                    // the same row types out what is left —
-                                    // one call, so its reveal carries on where
-                                    // it was — then the message takes over.
-                                    StreamingRow(text: withoutReviewFooter(finishing?.text ?? chat.streamingText,
-                                                                           blocks: finishing?.blocks ?? chat.streamingData),
-                                                 serverBaseURL: session.serverURL ?? "",
-                                                 activity: finishing?.activity ?? chat.activity,
-                                                 blocks: finishing?.blocks ?? chat.streamingData,
-                                                 ended: finishing != nil,
-                                                 onAdvance: { if isNearBottom { scrollToBottom(proxy, animated: false) } },
-                                                 onRevealed: { if let id = finishing?.id { chat.finishReveal(id) } })
-                                    .id(chat.turnSerial)
-                                }
-                            } else if chat.pendingSummon {
-                                // Observer's view: someone else summoned Maurice
-                                // and his reply hasn't arrived over the socket yet.
-                                TurnActivityRow(activity: TurnActivity(), live: true, withHat: true)
-                            }
+                            // The turn in progress — its own view, see LiveTurnRow.
+                            LiveTurnRow(follow: { if isNearBottom { scrollToBottom(proxy, animated: false) } })
 
                             // Permanent bottom anchor: the scroll target AND the
                             // probe for "is the user near the bottom?".
@@ -340,12 +313,6 @@ struct ChatView: View {
                         // Opening/switching a thread: snap to the latest, follow.
                         isNearBottom = true
                         pendingScrollToBottom = true
-                    }
-                    .onChange(of: chat.streamingText.count) {
-                        // Unanimated: an eased hop per token stutters, and a
-                        // hop still in flight when the next one starts is what
-                        // made the follow feel loose.
-                        if isNearBottom { scrollToBottom(proxy, animated: false) }
                     }
                     .onChange(of: chat.isStreaming || finishing != nil) {
                         // The streamed row becomes the final message (and its
@@ -2005,6 +1972,55 @@ struct DataBlockBody: View {
     }
 }
 
+/// The foot of the thread while a turn runs: the streaming row, the image
+/// being made, or the wait for a reply someone else summoned.
+///
+/// Its own view so that what changes with every token — the text, the
+/// activity — is read here and nowhere above. Read in the thread's body, it
+/// re-ran every message row of the thread at each token; on a long thread
+/// that kept the main thread busy enough for the reveal to advance in jumps.
+private struct LiveTurnRow: View {
+    @Environment(ChatService.self) private var chat
+    @Environment(SessionStore.self) private var session
+    /// Scroll to the end, if the reader is following.
+    let follow: () -> Void
+
+    var body: some View {
+        // This thread's reply still typing out after its turn ended.
+        let finishing = chat.finishing.flatMap { $0.conversationId == chat.activeConversationId ? $0 : nil }
+        // Kept alive with a stable id so @State (visibleLength) persists
+        // across text updates, and a new one for each turn.
+        if chat.isStreaming || finishing != nil {
+            if chat.isGeneratingImage {
+                ImageGeneratingIndicator()
+            } else {
+                // The turn in progress, laid out as the reply it becomes: the
+                // one line for its progress, then the prose, then the answer
+                // cards. Once the turn has ended the same row types out what
+                // is left — one call, so its reveal carries on where it was —
+                // then the message takes over.
+                StreamingRow(text: withoutReviewFooter(finishing?.text ?? chat.streamingText,
+                                                       blocks: finishing?.blocks ?? chat.streamingData),
+                             serverBaseURL: session.serverURL ?? "",
+                             activity: finishing?.activity ?? chat.activity,
+                             blocks: finishing?.blocks ?? chat.streamingData,
+                             ended: finishing != nil,
+                             onAdvance: follow,
+                             onRevealed: { if let id = finishing?.id { chat.finishReveal(id) } })
+                .id(chat.turnSerial)
+                // Unanimated: an eased hop per token stutters, and a hop
+                // still in flight when the next one starts is what made the
+                // follow feel loose.
+                .onChange(of: chat.streamingText.count) { follow() }
+            }
+        } else if chat.pendingSummon {
+            // Observer's view: someone else summoned Maurice and his reply
+            // hasn't arrived over the socket yet.
+            TurnActivityRow(activity: TurnActivity(), live: true, withHat: true)
+        }
+    }
+}
+
 struct StreamingRow: View {
     @Environment(\.mauriceTheme) private var theme
     let text: String
@@ -2039,6 +2055,8 @@ struct StreamingRow: View {
 
     /// Parse image markdown: `![alt](/api/images/file.png)`
     private var imageInfo: (alt: String, path: String)? {
+        // Read at every tick: prose is turned away before the regex.
+        guard text.drop(while: \.isWhitespace).hasPrefix("![") else { return nil }
         let pattern = /^!\[(.+?)\]\((.+?)\)$/
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard let match = trimmed.wholeMatch(of: pattern) else { return nil }
