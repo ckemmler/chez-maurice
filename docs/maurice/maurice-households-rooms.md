@@ -1,6 +1,6 @@
 ---
 title: Households, rooms & devices
-date: '2026-10-20'
+date: '2026-10-21'
 flags: []
 locale: en
 description: Members and roles, guests, multi-person rooms, device pairing and PINs,
@@ -30,6 +30,8 @@ Then `UserPickerView.swift` is the member grid, with three ways in:
 - **PIN** — tap your avatar, enter your PIN → `POST /api/auth/login` (`{ user_id, pin }`).
 - **Admin** — username + password → `POST /api/auth/login`.
 - **Invite code** — `POST /api/auth/enroll` redeems a code; if you're a standard member you then set a PIN (`/api/auth/set-pin`). Guests enroll without one.
+
+**On the device** (21 October 2026). The session tokens and the member's `maur_` web-link token live in the **Keychain** (`TokenVault` in `SessionStore.swift`; Carnet's in its App Group's access group, so its share extension reads them too), no longer in plain UserDefaults; each app moves what it finds there once, at launch, and erases the plain copy only when the Keychain holds it. Sessions never expire, so a **401** to any request that carried a token means the session was revoked or the member removed: the app forgets that token (and the web-link token with it) and, for the member on screen, goes back to the member picker, which says the session ended. A member **without a PIN** and without a session on the device cannot be signed in by a tap — the server never opens one on a member's id alone — so the tap offers the invite code instead. After every sign-in the app reads the member's own row (`GET /api/users/me`): the household list gives no `username` to a non-admin, and *My data*'s erase confirmation asks for it.
 
 Invite codes (`server/src/services/auth.ts`) are 8 characters from an unambiguous alphabet (no I/O/0/1), one active per member, valid ~7 days, reusable within the window; `/api/auth/enroll` is the public guessing surface so failed attempts are rate-limited per-IP and globally. Sessions are opaque 64-char tokens, refreshed on use.
 

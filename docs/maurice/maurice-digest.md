@@ -1,6 +1,6 @@
 ---
 title: Maurice — the digest
-date: '2026-10-20'
+date: '2026-10-21'
 flags: []
 locale: en
 description: 'The system documentation condensed to what a user needs: everything
@@ -17,18 +17,18 @@ digest: true
 covers:
   maurice-applications: '2026-10-20'
   maurice-architecture: '2026-10-20'
-  maurice-carnet: '2026-10-20'
+  maurice-carnet: '2026-10-21'
   maurice-chat: '2026-10-21'
   maurice-composer: '2026-10-20'
   maurice-data-model: '2026-10-20'
   maurice-docs: '2026-10-20'
   maurice-domains: '2026-10-20'
   maurice-files: '2026-06-19'
-  maurice-households-rooms: '2026-10-20'
+  maurice-households-rooms: '2026-10-21'
   maurice-knowledge: '2026-10-20'
   maurice-life: '2026-10-20'
   maurice-personas-hats: '2026-09-19'
-  maurice-server: '2026-10-20'
+  maurice-server: '2026-10-21'
   maurice-shared-gardens: '2026-10-20'
   maurice-tools: '2026-10-20'
   maurice-web-garden: '2026-10-20'
@@ -36,7 +36,7 @@ covers:
 
 # Maurice — the digest
 
-This is the whole documentation condensed for someone who uses Maurice and will never read its code: what it can do, how it behaves, what its architecture guarantees, what is finished and what is not. It describes the system as it stands on 20 October 2026. Each section names the note that holds the detail (*Detail:* `server`, `carnet`…); any of them can be asked for in full.
+This is the whole documentation condensed for someone who uses Maurice and will never read its code: what it can do, how it behaves, what its architecture guarantees, what is finished and what is not. It describes the system as it stands on 21 October 2026. Each section names the note that holds the detail (*Detail:* `server`, `carnet`…); any of them can be asked for in full.
 
 Two distinctions run through everything. **Ships vs. exists**: what every install and every hosted household gets, against what runs only at the developer's home in a private overlay and is experimental. **Built vs. planned**: a planned feature is never described here as working; the gaps are listed at the end of each section and gathered at the end.
 
@@ -89,17 +89,17 @@ There is also a **browser clipper** that saves the page being read into the memb
 ## 5. Households, members, devices
 
 - **One server is one household**; a device can hold several households, each with its own session, switched from a pill with an unread badge.
-- **Joining:** enter the server's address; the app shows the household's name, icon and colour. A **fresh device joins with an invite code** given by an admin (8 characters, about 7 days, reusable within that window, rate-limited), then the member sets a PIN. An admin can also issue an **open invitation** — QR code, typed code or link, single use, 7 days — with which a newcomer gives a first name and colour and becomes a standard member. Once a member is signed in on a device, the device shows the household's members, and switching is a tap plus a PIN. The admin signs in with a username and password.
+- **Joining:** enter the server's address; the app shows the household's name, icon and colour. A **fresh device joins with an invite code** given by an admin (8 characters, about 7 days, reusable within that window, rate-limited), then the member sets a PIN. An admin can also issue an **open invitation** — QR code, typed code or link, single use, 7 days — with which a newcomer gives a first name and colour and becomes a standard member. Once a member is signed in on a device, the device shows the household's members, and switching is a tap plus a PIN; a member without a PIN comes back on a device only with an invite code. The admin signs in with a username and password.
 - **Roles:**
   - **admin** — manages members, keys, models, budgets and the household's identity;
   - **standard** — a full member with a mandatory PIN;
   - **guest** — full capabilities but a limited *reach*: an explicit contact list, checked both ways, and only the domains shared with them. This is how you host someone, or are hosted;
   - **child** — a flag an admin ticks (the server knows no ages): no public pages, never proposed domains, never sent a conversation Maurice opened. It does not change model access or content rules.
-- **Login safety:** a PIN is mandatory because the server is on the internet; failures are rate-limited and all answer the same "Invalid credentials".
-- **Push notifications** (APNs) reach the Maurice app and Carnet when someone writes to you, including as a guest in another household.
+- **Login safety:** a PIN is mandatory because the server is on the internet; failures are rate-limited and all answer the same "Invalid credentials". On the phone and the Mac, sessions are kept in the system **Keychain**. A session ended on the server — revoked, or the member removed — sends the device back to the member picker, which says so.
+- **Push notifications** (APNs) reach the Maurice app and Carnet when someone writes to you, including as a guest in another household. Only Apple devices are notified for now: a device of another kind can register, and is kept, but nothing reaches it yet.
 - **Personal tokens** (`maur_…`) let a member connect other clients (see §18).
 
-*Gaps:* sessions do not expire; a household cannot be renamed in the app; an invitation cannot create a guest (guests are set up in the console); `maurice://` invitation links open only on iOS.
+*Gaps:* sessions do not expire (they end only when revoked); no push for Android yet; a household cannot be renamed in the app; an invitation cannot create a guest (guests are set up in the console); `maurice://` invitation links open only on iOS.
 
 *Detail:* `households-rooms`, `server`.
 
@@ -171,7 +171,7 @@ There is also a **browser clipper** that saves the page being read into the memb
 
 - **Conversations:** a sidebar list with full-text **search** over one's own conversations (passages highlighted, blocked people excluded); on iPhone and iPad, as in Carnet, an empty search field shows a keyboard glyph that hides the keyboard; a details sheet (title, model, people, costs, leaving a room).
 - **Writing:** one **+** (camera, photos, files, pasted image, context, the conversation's tools); a **long paste** (1 000 characters or 20 lines) becomes a card above the field instead of a wall of text — removable, opened in full, or put back in the field — and shows as a card in the conversation too; an **article shared from another app** on iOS (*Chez Maurice* in the share sheet) opens a new conversation with the article as such a card — read by the household's server from the page as Safari showed it, so a paywalled article you are reading comes whole, nothing saved to your notes, but offered at once in the conversation's Carnet drawer (*Add to Carnet*), which saves it and ties the conversation to it — ready for your question; **dictation** — by default the recording goes to the household's server and **Whisper** transcribes it whole when you stop (better punctuation, the household's names spelled right, and the language you spoke recognised on its own, whatever the phone's is), its text replacing a live preview the device writes as you speak; turned off in Settings, dictation stays on the device, with Apple's newest recogniser on iOS/macOS 26; Apple's model downloads in the background the first time, and dictation does not wait on it when another engine can listen; the old recogniser last, using Apple's servers only for a language without a local model and only if allowed; the iPhone **Action Button** to start a dictated conversation.
-- **Replies:** Markdown, **LaTeX math**, tables (a grid when they fit, a list of short records on a narrow screen), code blocks with their language and a **Copy** button, Copy, **Regenerate** (last turn only, also after an error; switching model first replays on the new model). Every message is **one selectable text**, on the iPhone as on the Mac: a selection runs across paragraphs, lists, code and tables with the system's handles and menu, and copies as clean text — a blank line between blocks, formulas as TeX, a table's cells tab-separated.
+- **Replies:** Markdown, **LaTeX math**, tables (a grid when they fit, a list of short records on a narrow screen), code blocks with their language and a **Copy** button, Copy, **Regenerate** (last turn only, also after an error; switching model first replays on the new model; the conversation keeps its domain or reading companion). A reply that comes back empty ends with a message saying so, not a long wait for a lost connection. Every message is **one selectable text**, on the iPhone as on the Mac: a selection runs across paragraphs, lists, code and tables with the system's handles and menu, and copies as clean text — a blank line between blocks, formulas as TeX, a table's cells tab-separated.
 - **Images:** sent from camera, library or clipboard — up to ten in one message, several picked at once — and read by a vision model; **generated** when an image provider key is set (a spinner, then the image).
 - **After a reply — "worth keeping":** in a private conversation, a light model names at most three works or people the exchange established (a song is offered under its album), matched first against the member's notes, then a catalogue (someone from the member's own life is never looked up online). A Carnet mark in the header counts them; *Keep* files a dated note on the entry with a link back to the conversation; *Look again* and *Refine* correct a wrong match; a dismissed subject is never offered again. Never in rooms, for guests or for children.
 - **"To check":** when a person fiche written from the mail and not yet confirmed enters a turn, a card lists its unconfirmed elements to confirm, reject or correct.
@@ -294,17 +294,18 @@ Each member has folders and files (5 GB each), in **Settings**: text, images, PD
 
 ## 20. Carnet
 
-- **Joining:** the same household and identity as the Maurice app — an invite code on a fresh device, then a PIN; several households on one device. The member sheet holds households, members, *Disconnect*, and a **Privacy** section (privacy policy, terms, **Delete my account**).
+- **Joining:** the same household and identity as the Maurice app — an invite code on a fresh device (an open invitation too: a first name and a colour), then a PIN; several households on one device; a session ended on the server sends the device back to the member picker. The member sheet holds households, members, *Disconnect*, and a **Privacy** section (privacy policy, terms, **Delete my account**).
 - **Home: one list of entries** of every kind — books, articles, films, series, music, podcasts, games, posts — each row saying what the member has on it (notes, *Draft*, *Published*, *Not opened*) and where they are in it. Filters by kind, search and sort, an offline copy of the list. Swipe right to archive, left to delete (with a confirmation saying what is removed).
 - **An entry's page:** identity and cover, the source (read, resume, chapters, original), and **one sheet with two faces**; an article opens on its summary instead — the essence, then *See more…* for the long one — its sheet a tap away (*Fiche*, beside *Read*) — the member's side (dated notes and quotes, with a page) and the shared side (write, publish, unpublish; publishing takes about 15 s). Dictation beside every field, in the entry's language on the device; Whisper recognises the language spoken.
-- **Reading:** books from the household's library with chapters, summaries, highlights, the exact position synced per member and offline; *pause tracking* to look ahead without it counting. Articles with their styles, a Text/Summary switch, cached on the device.
+- **Reading:** books from the household's library with chapters, summaries, highlights, the exact position synced per member and offline; *pause tracking* to look ahead without it counting; *Resume* takes another device's position when it is newer. Articles with their styles, a Text/Summary switch, cached on the device.
 - **Sharing an entry** with other members: nothing is copied; they read it and may add signed notes. A first cut.
 - **Maurice from an entry:** the button opens the Maurice app — a new conversation with the entry as context, or, from a short menu, one already held about it. The fiche lists every conversation about the entry (from its page, or linked to it in the app — a fiche loaded in the composer is offered in the conversation's Carnet drawer, *Link*, and loading it alone is not talking about it), each with a summary of what it came to, written into the fiche once the conversation has settled and rewritten when it goes on. Without the Maurice app on the device, a text-only thread in Carnet, with what is worth keeping under each reply. Maurice's replies, the conversations read in Carnet and their summaries select from end to end, as in the Maurice app (formulas show as TeX).
-- **Share extension** (*Save to Carnet*): saves the rendered page from Safari (past paywalls), or an address from other apps, with an optional first note; an offline queue keeps what could not be sent.
+- **Share extension** (*Save to Carnet*): saves the rendered page from Safari (past paywalls), or an address from other apps, with an optional first note; an offline queue keeps what could not be sent and sends it later as the member who shared it — kept, and listed in the member sheet, while that member has no session on the device.
+- **Open in the browser** opens the member's site signed in.
 - **The *Maurice* screen:** domains and their briefs (edit, rewrite, erase), reading companions, and older conversations Maurice opened (answered in the Maurice app). A book's page can create a reading companion.
 - No location tracking; a privacy manifest declares no tracking and nothing collected by the publisher. English only. Reading is iPhone/iPad only; on a Mac the notes are read in the browser.
 
-*Status:* in daily use at home; the build prepared for App Review is with Apple. *Gaps:* *Log* and *Dashboards* are experimental and not shipped; the hand-off to the Maurice app and the fiche's conversations were not yet tried on a phone; no flashcard review; notes cannot be edited or deleted from the phone; shared articles show no text; the iPad and a real publish from a phone were never exercised.
+*Status:* in daily use at home; the build prepared for App Review is with Apple. *Gaps:* *Log* and *Dashboards* are experimental and not shipped; the hand-off to the Maurice app and the fiche's conversations were not yet tried on a phone, nor were the session, invitation and offline-queue fixes of 21 October (checked on a simulator); no flashcard review; notes cannot be edited or deleted from the phone; shared articles show no text; the iPad and a real publish from a phone were never exercised.
 
 *Detail:* `carnet`.
 
@@ -357,7 +358,7 @@ Each member has folders and files (5 GB each), in **Settings**: text, images, PD
 
 - **Not built:** payment and top-ups; writing back to the notes from an Obsidian clone (push); a web chat client; OAuth for mail (Outlook.com, Google contacts); mail in the corpus; flashcard review in Carnet; demo servers for trying the apps without a household (designed, deferred); a hosted member's own domain; on-device inference.
 - **Not intended:** Maurice proposing notes from patterns he notices; automatic periodic reviews.
-- **Rough edges:** sessions never expire; a reply in progress is lost on a server restart; no provider failover; external MCP clients see every mounted tool; some member-triggered background calls are not on the ledger; erasure cannot reach off-site backups or exported archives; the databases are snapshot, not versioned (the notes are); after a household import the search index and git remotes are fixed by hand; the experimental tools are partly documented and absent from hosted households.
+- **Rough edges:** sessions never expire (only revoked); no push for Android; a reply in progress is lost on a server restart; no provider failover; external MCP clients see every mounted tool; some member-triggered background calls are not on the ledger; erasure cannot reach off-site backups or exported archives; the databases are snapshot, not versioned (the notes are); after a household import the search index and git remotes are fixed by hand; the experimental tools are partly documented and absent from hosted households.
 
 ## 25. Where to look
 
