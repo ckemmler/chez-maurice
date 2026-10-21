@@ -419,6 +419,10 @@ db.run(`CREATE INDEX IF NOT EXISTS idx_device_tokens_user ON device_tokens(user_
 // The device's local id for this household, echoed in pushes so a multi-household
 // app can route the tap to the right household.
 try { db.run(`ALTER TABLE device_tokens ADD COLUMN household_tag TEXT`); } catch {}
+// A Web Push subscription (the Android app, through UnifiedPush): the token is
+// the endpoint URL, these are the keys its payloads are encrypted to.
+try { db.run(`ALTER TABLE device_tokens ADD COLUMN p256dh TEXT`); } catch {}
+try { db.run(`ALTER TABLE device_tokens ADD COLUMN auth TEXT`); } catch {}
 // Recoverable raw token, set only for self-service tokens (label 'mcp-settings')
 // so any of a member's devices can display the same stable MCP bearer.
 try { db.run(`ALTER TABLE api_tokens ADD COLUMN token_plain TEXT`); } catch {}

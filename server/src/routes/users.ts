@@ -14,6 +14,7 @@ import {
 import { unreadRoomCount } from "../services/conversations";
 import { saveAvatar } from "../services/avatars";
 import { registerDeviceToken, removeDeviceToken } from "../services/push";
+import { isPushEndpoint } from "../services/webpush";
 import { blockMember, unblockMember } from "../services/safety";
 import { createInviteCode, getInviteForUser, revokeInvite } from "../services/auth";
 import { createOpenInvite, listOpenInvites, revokeOpenInvite } from "../services/invites";
@@ -97,12 +98,20 @@ users.put("/:id/avatar", async (c) => {
 });
 
 // ── Device push tokens ───────────────────────────────────────
-// The active user registers this device's APNs token; re-registered on switch.
+// The active user registers this device's push address; re-registered on
+// switch. An Apple app sends its APNs token. The Android app sends a Web Push
+// subscription from UnifiedPush: the endpoint URL as token, and its keys.
 
 users.post("/me/device-token", async (c) => {
-  const { token, platform, household_tag } = await c.req.json().catch(() => ({}));
+  const { token, platform, household_tag, keys } = await c.req.json().catch(() => ({}));
   if (!token) return c.json({ error: "token required" }, 400);
-  registerDeviceToken(c.get("userId"), String(token), String(platform || "ios"), household_tag ? String(household_tag) : undefined);
+  let pushKeys: { p256dh: string; auth: string } | undefined;
+  if (keys) {
+    if (typeof keys.p256dh !== "string" || typeof keys.auth !== "string") return c.json({ error: "keys.p256dh and keys.auth required" }, 400);
+    if (!isPushEndpoint(String(token))) return c.json({ error: "a Web Push endpoint must be an https URL" }, 400);
+    pushKeys = { p256dh: keys.p256dh, auth: keys.auth };
+  }
+  registerDeviceToken(c.get("userId"), String(token), String(platform || "ios"), household_tag ? String(household_tag) : undefined, pushKeys);
   return c.json({ ok: true });
 });
 

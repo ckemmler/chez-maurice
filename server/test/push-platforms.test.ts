@@ -42,3 +42,26 @@ test("an Android token is neither sent to APNs nor pruned", async () => {
   // The Apple tokens Apple refused are pruned; the others stay.
   expect(tokens()).toEqual(["tok-android", "tok-carnet-android"]);
 });
+
+test("an Android device with Web Push keys is reached through its endpoint, and pruned when gone", async () => {
+  const live = "https://ntfy.sh/upLive?up=1";
+  const gone = "https://ntfy.sh/upGone?up=1";
+  registerDeviceToken(MEMBER, live, "android", "h1", { p256dh: "BCVx", auth: "BTBZ" });
+  registerDeviceToken(MEMBER, gone, "android", "h1", { p256dh: "BCVx", auth: "BTBZ" });
+
+  const web: { endpoint: string; payload: Record<string, unknown> }[] = [];
+  await pushToUser(
+    MEMBER,
+    { title: "Candide", body: "On part à 8 h ?", conversationId: "c9" },
+    async () => ({ ok: true, status: 200 }),
+    async (endpoint, _p256dh, _auth, payload) => {
+      web.push({ endpoint, payload });
+      return { ok: endpoint === live, status: endpoint === live ? 201 : 410 };
+    },
+  );
+
+  expect(web.map((w) => w.endpoint).sort()).toEqual([gone, live]);
+  expect(web[0].payload).toMatchObject({ title: "Candide", body: "On part à 8 h ?", conversationId: "c9", householdTag: "h1" });
+  expect(tokens()).toContain(live);
+  expect(tokens()).not.toContain(gone);
+});
