@@ -1187,7 +1187,12 @@ private final class ReplyTextEngine {
             shown = s
             changed = true
         }
-        if abs(container.size.width - width) > 0.25 {
+        // UITextView fits its container to its frame when it lays itself
+        // out. Left that short, the container laid out only the lines that
+        // fit, so a reply growing under the stream measured no taller than
+        // the frame it had: the new lines went on below, under the composer,
+        // until a change of width let the whole text through at once.
+        if abs(container.size.width - width) > 0.25 || container.size.height < .greatestFiniteMagnitude {
             container.size = CGSize(width: width, height: .greatestFiniteMagnitude)
             changed = true
         }
@@ -1295,6 +1300,7 @@ final class ReplyUITextView: UITextView, UITextViewDelegate {
         if bounds.width > 0, engine.layOut(width: bounds.width) {
             setNeedsDisplay()
         }
+
         super.layoutSubviews()
         // Beneath the text and its selection, whatever UIKit added since.
         sendSubviewToBack(decorations)
