@@ -18,7 +18,7 @@ covers:
   maurice-applications: '2026-10-20'
   maurice-architecture: '2026-10-20'
   maurice-carnet: '2026-10-21'
-  maurice-chat: '2026-10-21'
+  maurice-chat: '2026-10-22'
   maurice-composer: '2026-10-20'
   maurice-data-model: '2026-10-21'
   maurice-docs: '2026-10-20'
