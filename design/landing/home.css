@@ -231,6 +231,8 @@ a:hover { color: var(--accent-deep); text-decoration: underline; }
   height: 50px; padding: 0 20px; font-size: 16px; cursor: default;
   border: 1px dashed var(--avatar); color: var(--muted);
 }
+/* the second TestFlight button stands beside the first, at its height */
+.apps .btn-outline { height: 50px; padding: 0 20px; font-size: 16px; border-radius: 12px; }
 /* pricing */
 .also { margin-top: 16px; display: flex; flex-direction: column; gap: 20px; }
 .also > div { display: flex; flex-direction: column; gap: 6px; padding-top: 20px; border-top: 1px solid var(--line); }
