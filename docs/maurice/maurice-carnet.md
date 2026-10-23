@@ -1,6 +1,6 @@
 ---
 title: Carnet — the pocket companion
-date: '2026-10-21'
+date: '2026-10-23'
 flags: []
 locale: en
 description: 'The iOS/iPadOS companion to Maurice: log what happened, read books and
@@ -130,7 +130,7 @@ Carnet has two scopes, chosen at compile time by `CarnetScope.current` (`CarnetA
 
 ## Ships vs. exists
 
-Carnet is in daily use at home; the minimal scope is on its way to TestFlight (1.0.0 on the company team's record since 13 October 2026, internal testing only; build 3, uploaded 14 October 2026, is the one prepared for App Review — no location, account deletion and legal links in the member sheet, privacy manifests; external testers and the App Store both wait for Apple's review). Its reading and notes features depend on the Calibre and `garden/*` routes of the [[maurice-server|data-api]]; the domains shelf on the domains, conversations and device-token routes of the chat engine (core, ships); the Log and Dashboards roles depend on the experimental [[maurice-life|life]] tools.
+Carnet is in daily use at home; the minimal scope is on TestFlight (1.0.0 on the company team's record since 13 October 2026; the App Review cut — no location, account deletion and legal links in the member sheet, privacy manifests — since build 3). Since 23 October 2026 anyone can join the **public beta** from the link on the landing (external group « Bêta », build 17 approved by Beta App Review); the App Store version 1.0, with build 17, waits for Apple's review. Its reading and notes features depend on the Calibre and `garden/*` routes of the [[maurice-server|data-api]]; the domains shelf on the domains, conversations and device-token routes of the chat engine (core, ships); the Log and Dashboards roles depend on the experimental [[maurice-life|life]] tools.
 
 ## Gaps & notes
 
@@ -141,7 +141,7 @@ Carnet is in daily use at home; the minimal scope is on its way to TestFlight (1
 - **A companion's conversation is not opened from here**; the book page shows and creates the companion, the conversation itself is the Maurice app's.
 - **English only.** Carnet has no localisation; the briefs are in the member's language, the chrome around them is not.
 - **Flashcards** are server-side only so far; the Flashcards line on each media and the review section are the next tranche.
-- **Parts of the new app were never exercised on a device**, though it is on TestFlight (internal testing; build 3 of 1.0.0 is the one with Apple for review): a note or a shared text actually saved from the phone (each write commits and pushes the notes), a real *Publish*, the iPad, the new screens in the dark palette. The full scope's drawer still shows the earlier navigation. The design and its decisions are in the Carnet repo (`design/STATE.md`, `design/API-CONTRACT.md`).
+- **Parts of the new app were never exercised on a device**, though it is on TestFlight (public beta since 23 October 2026; build 17 of 1.0.0 is the one with Apple for review): a note or a shared text actually saved from the phone (each write commits and pushes the notes), a real *Publish*, the iPad, the new screens in the dark palette. The full scope's drawer still shows the earlier navigation. The design and its decisions are in the Carnet repo (`design/STATE.md`, `design/API-CONTRACT.md`).
 - **Short of the design**: the reader keeps a *Note* button and chapter arrows where the design has the edge of the member's side to pull up; a note cannot be edited or deleted from the phone; no résonance from the entry's note field; no palette picker (the app follows the system, Cream or Studio); Log and Dashboards are not in the member's menu; *Notes* is there (the notes written on entries, not the Markdown notes of the `notes/` collection), without an offline copy.
 - **The selectable text was checked in a debug gallery** (`-ReplyGallery`) on the simulator — rendering, light and dark switched live, a selection dragged through a list, a quote and a table, the copy — not yet in a signed-in thread nor on the phone. Formulas are not drawn, only their TeX.
 - **Reading is iOS-only**; the Mac reads the notes in the browser.

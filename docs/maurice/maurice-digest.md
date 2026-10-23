@@ -1,6 +1,6 @@
 ---
 title: Maurice — the digest
-date: '2026-10-21'
+date: '2026-10-23'
 flags: []
 locale: en
 description: 'The system documentation condensed to what a user needs: everything
@@ -16,8 +16,8 @@ parent: maurice-docs
 digest: true
 covers:
   maurice-applications: '2026-10-20'
-  maurice-architecture: '2026-10-20'
-  maurice-carnet: '2026-10-21'
+  maurice-architecture: '2026-10-23'
+  maurice-carnet: '2026-10-23'
   maurice-chat: '2026-10-22'
   maurice-composer: '2026-10-20'
   maurice-data-model: '2026-10-21'
@@ -82,7 +82,7 @@ There is also a **browser clipper** that saves the page being read into the memb
 - **Hosted households** run on a rented Scaleway machine in Paris, several per machine, each with its own volume behind one Caddy. Scaleway supplies both the machine and the models under one restricted key, so a hosted household needs no API key of the member's, and its data and inference stay in the EU. A hosted household can be paused from outside (its container stays stopped and is skipped by backups).
 - **Self-hosting at home:** TLS and remote access are the operator's (Tailscale or Cloudflare Tunnel); Maurice only needs to be reachable. The developer's own Mac still runs the services as launchd agents.
 - **Backups:** hosted households are backed up nightly, encrypted, to Scaleway Object Storage (14 daily, 8 weekly, 12 monthly snapshots; a restore has been rehearsed). At home the databases are snapshotted nightly and the members' notes rely on git.
-- **The apps** — the Maurice app (iPhone, iPad, Mac) and Carnet — are distributed through **TestFlight**; the App Store versions are in Apple's review. The apps contain **no payment, price or "pay elsewhere"** prompt; subscriptions to a hosted household are handled on the web.
+- **The apps** — the Maurice app (iPhone, iPad, Mac) and Carnet — are distributed through **TestFlight**, as a public beta anyone can join from the links on chezmaurice.eu; the App Store versions (iPhone and iPad, and the Mac app) are in Apple's review. The apps contain **no payment, price or "pay elsewhere"** prompt; subscriptions to a hosted household are handled on the web.
 
 *Detail:* `architecture`, `server`.
 
@@ -334,7 +334,7 @@ Each member has folders and files (5 GB each), in **Settings**: text, images, PD
 
 ## 23. How do I…
 
-- **…join my household on a new phone?** Install the app, enter the server's address, and type the invite code an admin gave you (Settings → Members → New device); then choose your PIN. Carnet joins the same way.
+- **…join my household on a new phone?** Install the app (the TestFlight beta, linked from chezmaurice.eu), enter the server's address, and type the invite code an admin gave you (Settings → Members → New device); then choose your PIN. Carnet joins the same way.
 - **…invite someone who is not a member yet?** As an admin: Settings → Members → invitation (QR code, code or link, single use, 7 days). The person picks a first name and colour and becomes a standard member. A guest is set up in the admin console instead.
 - **…choose which model answers?** The model pill above the message field; the choice becomes your everyday model, or the model of the domain the conversation is bound to. Only models your household has a key for, and that the admin allowed you, are listed.
 - **…add a provider key or change the household's default model?** In the admin console, on the server's machine (the operator does it for a hosted household).
