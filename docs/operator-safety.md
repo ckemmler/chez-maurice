@@ -108,5 +108,5 @@ refuse those categories.
 - Verified 2026-06 against the local fallback model (Qwen): both categories are
   refused on a direct request.
 
-See also: the in-app **Terms of Use** (`design/landing/terms.html`) and the
+See also: the in-app **Terms of Use** (`www.chezmaurice.eu/terms.html`, published from the private `chezmaurice-tower` repository) and the
 two-channel design in agent memory (`shared-rooms-safety-feature`).

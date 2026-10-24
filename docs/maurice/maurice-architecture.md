@@ -1,6 +1,6 @@
 ---
 title: Maurice — architecture overview
-date: '2026-10-23'
+date: '2026-10-24'
 flags: []
 locale: en
 description: The five cooperating parts of Maurice, how a message flows end-to-end,
@@ -282,7 +282,9 @@ paths and a trailing `/*`) into Caddy redirects, serves `/docs` from
 does not validate. It writes no site file for a name that does not point at
 the host yet, because Caddy would ask for a certificate at once and failed
 challenges are rationed; `list` and `remove` are the other two verbs.
-`scripts/deploy-landing.sh` is that command for `design/landing/`. The two
+The landing itself is no longer in this repository: since 24 October 2026 its
+pages live with the hosted-account service in a private repository, which
+publishes them through this same `ops/static-site.sh`. The two
 records are plain A records, unproxied, like the households'. Cloudflare is
 still the zone's DNS, and still what a household at home goes through (the
 tunnel, and Pages for a site on its own domain). Not done: the DNS itself

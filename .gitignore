@@ -110,7 +110,6 @@ data/
 # Real family-photo avatars — never publish faces. Use generic placeholders.
 /design/avatars/*-sq.png
 /design/import_conversations/avatars/*-sq.png
-/design/landing/avatars.jpg
 
 # Built/signed macOS .app bundle — a build artifact (embeds signing profile +
 # device data). app/build is already ignored; this is a separate stray path.

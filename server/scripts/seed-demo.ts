@@ -64,7 +64,7 @@ if (existing > 0) {
 }
 
 const REPO = resolve(import.meta.dir, "../..");
-const AVATARS_SRC = join(REPO, "design/landing/screenshots/avatars");
+const AVATARS_SRC = join(REPO, "design/demo-avatars");
 const GARDENS = gardensRoot();
 
 // ── Members ─────────────────────────────────────────────────────────────────

@@ -16,8 +16,8 @@ load_env
 GARDEN="${GARDEN:-candide}"
 THEME="${THEME:-$GARDEN}"
 
-# Deliberately NOT called CF_PAGES_PROJECT: deploy-landing.sh already reads that
-# name, defaulting to the product landing site. Sharing one variable between two
+# Deliberately NOT called CF_PAGES_PROJECT: the landing's deploy script used to
+# read that name, defaulting to the product landing site. Sharing one variable between two
 # scripts that publish different sites to different projects means a shell that
 # happens to have .env loaded would push the landing page over the personal
 # garden, or the reverse — silently, since wrangler would just accept it.

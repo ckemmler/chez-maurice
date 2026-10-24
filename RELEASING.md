@@ -45,21 +45,16 @@ env vars; nothing secret is committed.
 
 ## 1. The landing site
 
-**The notarized `.pkg` is retired.** Maurice ships as a container image since
-14 September 2026 — one build, one set of assumptions about the host. The
-installer that used to be built here (`infra/installer/build.sh`, signed,
-notarized, stapled, published at `www.chezmaurice.eu/ChezMaurice.pkg`) is no
-longer produced and no longer offered: the site points at the container guide in
-`design/landing/docs.html` instead, and the old download URL is left to 404.
+The site at `www.chezmaurice.eu` — the landing, the pricing, the legal pages the
+apps link to, the self-host guide at `/docs` — is not in this repository. It lives
+with the tower (sign-up, trial, accounts) in the private `chezmaurice-tower`
+repository, under `site/`, and is published from there (`./deploy-site.sh`). It
+was `design/landing/` here until 24 October 2026. What this repository keeps is
+the generic publisher it uses, `ops/static-site.sh`.
 
-### Publish the site
-```
-scripts/deploy-landing.sh          # ops/static-site.sh publish maurice-fleet www.chezmaurice.eu design/landing/
-```
-The landing is plain files on the fleet's host, behind the Caddy that is already
-its door (`ops/static-site.sh`; a Cloudflare Pages project until 9 October 2026).
-It needs ssh access to that host and nothing else: no token, no account.
-`design/landing/_redirects` is read at each publish and becomes Caddy redirects.
+**The notarized `.pkg` is retired.** Maurice ships as a container image since
+14 September 2026; the old `www.chezmaurice.eu/ChezMaurice.pkg` URL redirects to
+the container guide.
 
 ## 2 & 3. macOS + iOS apps → TestFlight
 
@@ -112,24 +107,6 @@ The server signs every push with that one key (`apns.ts`): the key file is
 `.p8` keys live in `~/.appstoreconnect/private_keys/`. To rebuild this Mac (or set
 up CI), re-create/import these. Provisioning profiles install to
 `~/Library/MobileDevice/Provisioning Profiles/<UUID>.{provisionprofile,mobileprovision}`.
-
-## Links on the landing page
-
-`design/landing/index.html` is the hosted household offer (styles in `home.css`;
-`docs.html`, the self-host guide, keeps `landing.css`). Its sign-up buttons —
-*Try it free for 30 days*, in the hero and on the plan card — go to the tower's
-form at `https://account.chezmaurice.eu/?via=landing`. *Get the app* in the nav
-scrolls to the last section, *Apps* (`#apps`), which presents the native apps and
-nothing else — the marketing sections are left alone. Its TestFlight button is
-marked *soon* until the public link is restored after the transfer to the company:
-put the link back there (a real `<a>`), and in the tower's account page, which
-still names the old one. It carries no screenshot yet.
-The stylesheet link is versioned (`home.css?v=…`): bump it when the CSS changes,
-or a browser shows the new page with the old styles.
-`/essai` and `/trial` (`_redirects`) are the short doors to the
-same form, for links shared elsewhere. The tower (sign-up, trial, accounts) lives
-in its own private repository, `chezmaurice-tower`. The self-host guide is linked
-from the footer (*Self-host* → `/docs`).
 
 ## TestFlight: one link for all platforms
 
