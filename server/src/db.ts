@@ -727,6 +727,7 @@ try { db.run(`ALTER TABLE households ADD COLUMN vision_seeded INTEGER NOT NULL D
 try { db.run(`ALTER TABLE models ADD COLUMN thinking TEXT NOT NULL DEFAULT 'none'`); } catch {}
 try { db.run(`ALTER TABLE households ADD COLUMN thinking_seeded INTEGER NOT NULL DEFAULT 0`); } catch {}
 try { db.run(`ALTER TABLE households ADD COLUMN anthropic_roster_gen INTEGER NOT NULL DEFAULT 0`); } catch {}
+try { db.run(`ALTER TABLE households ADD COLUMN scaleway_roster_gen INTEGER NOT NULL DEFAULT 0`); } catch {}
 
 // A persona's choice for a model that reasons optionally: NULL leaves the
 // provider's own default (Z.ai thinks unless told not to; Anthropic 4.6+ does
@@ -1489,6 +1490,51 @@ try {
   }
 } catch (e) {
   console.error("[db] Anthropic roster migration failed:", e);
+}
+
+// Scaleway's roster grows on the same generation-counter pattern, so a model
+// the admin removes afterwards stays removed. Generation 1 (25 October 2026):
+// the two models Scaleway added since the September seed. Both reason by
+// default and take `reasoning_effort: "none"` (probed on the API that day), so
+// they are `optional`, like DeepSeek V4 Flash. Nothing is made a default here.
+// Generation 2 (same day): GLM 5.3 moves from Z.ai to Scaleway, which serves
+// it from Paris as GLM 5.2's replacement (5.2 ends there on 16 November 2026).
+// A model row is keyed by its bare id, so one id travels under one provider:
+// the row is repointed rather than duplicated, and every choice that named it
+// follows. GLM 5.3 Flash stays on Z.ai — Scaleway does not serve it.
+const SCALEWAY_ROSTER_GENERATION = 2;
+try {
+  const gen =
+    (db.query(`SELECT scaleway_roster_gen FROM households WHERE id = 'default'`).get() as
+      | { scaleway_roster_gen: number }
+      | undefined
+    )?.scaleway_roster_gen ?? 0;
+  if (gen < SCALEWAY_ROSTER_GENERATION) {
+    // id, name, vendor, ctx (k), vision, descr, sort
+    const SCW: Array<[string, string, string, number, number, string, number]> = [
+      ["deepseek-v4.1-flash", "DeepSeek V4.1 Flash", "DeepSeek", 256, 1, "The next Flash: fast reasoning, reads images, a cached-input price.", 50],
+      ["qwen3.8-27b",         "Qwen 3.8 27B",        "Qwen",     256, 1, "Mid-size reasoning model with tool use and vision.",                  51],
+    ];
+    db.transaction(() => {
+      for (const [id, name, vendor, ctx, vision, descr, sort] of SCW) {
+        db.run(
+          `INSERT OR IGNORE INTO models (id, name, tier, vendor, ctx, discovered, descr, sort, provider, vision, thinking)
+           VALUES (?, ?, 'cloud', ?, ?, 0, ?, ?, 'scaleway', ?, 'optional')`,
+          [id, name, vendor, ctx, descr, sort, vision],
+        );
+      }
+      if (gen < 2) {
+        db.run(
+          `UPDATE models SET provider = 'scaleway', vendor = 'Z.ai', name = 'GLM 5.3', ctx = 256, vision = 0,
+             thinking = 'optional', descr = 'Z.ai''s flagship, served from Paris. Text only.', sort = 52
+           WHERE id = 'glm-5.3'`,
+        );
+      }
+      db.run(`UPDATE households SET scaleway_roster_gen = ? WHERE id = 'default'`, [SCALEWAY_ROSTER_GENERATION]);
+    })();
+  }
+} catch (e) {
+  console.error("[db] Scaleway roster migration failed:", e);
 }
 
 // Seed default access for standard members who have none yet: the household

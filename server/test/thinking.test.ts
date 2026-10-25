@@ -127,6 +127,20 @@ describe("what reaches the provider", () => {
     expect((db.query(`SELECT thinking FROM models WHERE id = 'deepseek-v4-flash-0731'`).get() as any)?.thinking).toBe("optional");
   });
 
+  test("the models Scaleway added in October take the same switch, and are on the roster", () => {
+    for (const id of ["deepseek-v4.1-flash", "qwen3.8-27b"]) {
+      expect(thinkingBody("scaleway", false, id)).toEqual({ reasoning_effort: "none" });
+      expect(thinkingBody("scaleway", undefined, id)).toBeUndefined();
+      const row = db.query(`SELECT provider, thinking, vision FROM models WHERE id = ?`).get(id) as any;
+      expect(row).toEqual({ provider: "scaleway", thinking: "optional", vision: 1 });
+    }
+    // GLM 5.3 moved over from Z.ai rather than being added twice.
+    expect(thinkingBody("scaleway", false, "glm-5.3")).toEqual({ reasoning_effort: "none" });
+    const glm = db.query(`SELECT provider, vendor, thinking FROM models WHERE id = 'glm-5.3'`).get() as any;
+    expect(glm).toEqual({ provider: "scaleway", vendor: "Z.ai", thinking: "optional" });
+    expect((db.query(`SELECT provider FROM models WHERE id = 'glm-5.3-flash'`).get() as any)?.provider).toBe("zai");
+  });
+
   test("each Anthropic generation is told to answer directly in the form it accepts", () => {
     // As the API answered on 16 October 2026 — every other form is a 400.
     expect(anthropicThinking("claude-opus-5-5", false)).toEqual({ output_config: { effort: "low" } });

@@ -28,7 +28,7 @@ covers:
   maurice-knowledge: '2026-10-20'
   maurice-life: '2026-10-20'
   maurice-personas-hats: '2026-09-19'
-  maurice-server: '2026-10-21'
+  maurice-server: '2026-10-25'
   maurice-shared-gardens: '2026-10-20'
   maurice-tools: '2026-10-20'
   maurice-web-garden: '2026-10-20'
@@ -139,7 +139,7 @@ There is also a **browser clipper** that saves the page being read into the memb
 - **Context window:** when a conversation outgrows the model's window, the oldest turns are dropped, the cut is remembered so later turns stay consistent, and the model is told the beginning is missing.
 - **Provider plugins** can add a provider from outside the repository; none ships.
 
-*Gaps:* no provider failover; the context size is estimated from characters, not counted tokens; caching is invisible on most Scaleway models.
+*Gaps:* no provider failover; the context size is estimated from characters, not counted tokens; caching is invisible on most Scaleway models; Scaleway retires GLM 5.2 on 16 November 2026 (GLM 5.3, on Scaleway too, replaces it).
 
 *Detail:* `server`, `chat`.
 

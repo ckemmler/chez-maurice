@@ -213,10 +213,10 @@ export function docsUpdatedAt(): string | null {
  *  (Sonnet 4.5) is found by the later entries. */
 const DOCS_MODEL_CANDIDATES: Record<string, string[]> = {
   anthropic: ["claude-sonnet-5-5", "claude-sonnet-4-6", "claude-sonnet-4-5-20250929", "claude-opus-5-5", "claude-opus-4-8"],
-  scaleway: ["mistral-medium-3.5-128b", "qwen3.5-397b-a17b", "glm-5.2", "gpt-oss-120b"],
+  scaleway: ["mistral-medium-3.5-128b", "qwen3.5-397b-a17b", "glm-5.3", "glm-5.2", "gpt-oss-120b"],
   mistral: ["mistral-large-latest"],
   openai: ["gpt-4o"],
-  zai: ["glm-5.3"],
+  zai: ["glm-5.3-flash"], // GLM 5.3 itself runs on Scaleway since 25 October 2026
 };
 
 /** The model the documentation is read on for this household: the first

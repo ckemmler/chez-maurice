@@ -21,11 +21,12 @@ beforeAll(() => {
 
 test("the roster is seeded once, vision set where the model reads images", () => {
   const rows = db.query(`SELECT id, vision, vendor FROM models WHERE provider = 'scaleway' ORDER BY sort`).all() as any[];
-  expect(rows.length).toBe(10);
+  expect(rows.length).toBe(13); // the September seed, October's two, and GLM 5.3 from Z.ai
   expect(rows[0].id).toBe("mistral-small-3.2-24b-instruct-2506");
   const byId = Object.fromEntries(rows.map((r) => [r.id, r]));
   expect(byId["mistral-small-3.2-24b-instruct-2506"].vision).toBe(1);
   expect(byId["gpt-oss-120b"].vision).toBe(0);
+  expect(byId["qwen3.8-27b"].vision).toBe(1);
   expect(byId["glm-5.2"].vendor).toBe("Z.ai"); // the maker, not the host
   // Nothing Scaleway has deprecated is offered.
   expect(byId["pixtral-12b-2409"]).toBeUndefined();

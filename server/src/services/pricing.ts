@@ -63,7 +63,6 @@ const PRICES: Record<string, ModelPrice> = {
   // is implicit (no write, no storage fee), so a write is ordinary input; a
   // cached read is the sheet's "Cached Input" column over its "Input" one.
   // GLM-5.3: $1.40 in, $0.26 cached, $4.40 out.
-  "glm-5.3": { input: 1.4, output: 4.4, cacheWrite: 1, cacheRead: 0.26 / 1.4 },
   // GLM-5.3-Flash: list is $0.15 in, $0.03 cached, $0.50 out. The sheet strikes
   // those through and shows half of each through 2026-09-09, and says in as many
   // words that the struck figures are the list prices. Priced at list for the
@@ -82,6 +81,12 @@ const PRICES: Record<string, ModelPrice> = {
   "gemma-4-26b-a4b-it":                  { input: 0.25 * EUR_USD, output: 0.50 * EUR_USD, cacheWrite: 1, cacheRead: 1 },
   "qwen3.6-35b-a3b":                     { input: 0.25 * EUR_USD, output: 1.50 * EUR_USD, cacheWrite: 1, cacheRead: 1 },
   "deepseek-v4-flash-0731":              { input: 0.40 * EUR_USD, output: 0.80 * EUR_USD, cacheWrite: 1, cacheRead: 0.08 / 0.40 },
+  // Read 2026-10-25, same conversion. Both list a cached-input price.
+  "deepseek-v4.1-flash":                 { input: 0.60 * EUR_USD, output: 1.80 * EUR_USD, cacheWrite: 1, cacheRead: 0.12 / 0.60 },
+  "qwen3.8-27b":                         { input: 0.60 * EUR_USD, output: 3.30 * EUR_USD, cacheWrite: 1, cacheRead: 0.12 / 0.60 },
+  // GLM 5.3 runs on Scaleway since 25 October 2026 (it was Z.ai's, at $1.40 /
+  // $4.40); Scaleway lists no cached price for it.
+  "glm-5.3":                             { input: 1.80 * EUR_USD, output: 5.50 * EUR_USD, cacheWrite: 1, cacheRead: 1 },
   "qwen3.5-397b-a17b":                   { input: 0.60 * EUR_USD, output: 3.60 * EUR_USD, cacheWrite: 1, cacheRead: 1 },
   "qwen3-235b-a22b-instruct-2507":       { input: 0.75 * EUR_USD, output: 2.25 * EUR_USD, cacheWrite: 1, cacheRead: 1 },
   "llama-3.3-70b-instruct":              { input: 0.90 * EUR_USD, output: 0.90 * EUR_USD, cacheWrite: 1, cacheRead: 1 },

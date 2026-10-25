@@ -1034,6 +1034,10 @@ export function thinkingBody(provider: string, thinking: boolean | undefined, mo
 /** Scaleway's models with a way to answer without reasoning, and the field. */
 const REASONING_OFF: Record<string, Record<string, unknown>> = {
   "deepseek-v4-flash-0731": { reasoning_effort: "none" },
+  // Probed 25 October 2026: no reasoning tokens, same answer.
+  "deepseek-v4.1-flash": { reasoning_effort: "none" },
+  "qwen3.8-27b": { reasoning_effort: "none" },
+  "glm-5.3": { reasoning_effort: "none" },
 };
 
 /** Agentic loop for an OpenAI-style provider (OpenAI, Mistral, Z.ai, Scaleway). Same shape as
