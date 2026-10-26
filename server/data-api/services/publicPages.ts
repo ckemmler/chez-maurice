@@ -36,35 +36,22 @@ export function publicPagesAvailableOn(): string | null {
   return host;
 }
 
-/** The admin's switch: may the members of this household publish? On by default. */
-export function publicPagesSwitch(): boolean {
-  const row = db.query(`SELECT public_pages FROM households WHERE id = 'default'`).get() as
-    | { public_pages: number | null }
-    | null;
-  return (row?.public_pages ?? 1) !== 0;
-}
-
-export function setPublicPagesSwitch(on: boolean): void {
-  db.run(`UPDATE households SET public_pages = ? WHERE id = 'default'`, [on ? 1 : 0]);
-}
-
-/**
- * The host the public pages are served on, or null: the household is set up
- * for them, and its admin has not turned them off. Turning them off is
- * immediate and whole — nothing is built, no member has an address, and what
- * was published stops being served, though it stays on disk and in each
- * garden, so turning them on again brings it back.
- */
+/** The host the public pages are served on, or null: the household is set up
+ *  for them. Every member publishes there (26 October 2026: there is no
+ *  household-wide switch any more), except a child the admin has not allowed. */
 export function publicPagesHost(): string | null {
-  const host = publicPagesAvailableOn();
-  return host && publicPagesSwitch() ? host : null;
+  return publicPagesAvailableOn();
 }
 
-/** `https://<host>/@<member>` — where a member's pages are, or null. A child's
- *  account does not publish. */
-export function defaultSite(user: { username: string; is_child?: boolean }): string | null {
+/** May this member publish? Always — a child only once the admin allows it. */
+export function mayPublish(user: { is_child?: boolean; may_publish?: boolean }): boolean {
+  return !user.is_child || !!user.may_publish;
+}
+
+/** `https://<host>/@<member>` — where a member's pages are, or null. */
+export function defaultSite(user: { username: string; is_child?: boolean; may_publish?: boolean }): string | null {
   const host = publicPagesHost();
-  if (!host || user.is_child || !memberName(user.username)) return null;
+  if (!host || !mayPublish(user) || !memberName(user.username)) return null;
   return `https://${host}/@${user.username}`;
 }
 
@@ -124,6 +111,12 @@ export function resolvePublicFile(pathname: string): string | null {
 /** The response for a request under `/@…`, or null to let it through. */
 export function servePublicPage(pathname: string): Response | null {
   if (!pathname.startsWith("/@") || !publicPagesHost()) return null;
+  // A child no longer allowed: what they published stays on disk, unserved.
+  const who = pathname.match(/^\/@([^/]+)/)?.[1];
+  const child = who
+    ? (db.query(`SELECT is_child, may_publish FROM users WHERE username = ?`).get(who) as { is_child: number; may_publish: number } | null)
+    : null;
+  if (child && !mayPublish({ is_child: !!child.is_child, may_publish: !!child.may_publish })) return null;
   const file = resolvePublicFile(pathname);
   if (!file) return null;
   return new Response(Bun.file(file), {

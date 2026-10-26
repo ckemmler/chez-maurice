@@ -112,10 +112,11 @@ describe("which file a path names", () => {
 });
 
 describe("who has an address", () => {
-  test("every member of a household that publishes, except a child", () => {
+  test("every member of a household that publishes; a child once allowed", () => {
     expect(publicPagesHost()).toBe("magik.chezmaurice.eu");
     expect(defaultSite({ username: "anna" })).toBe("https://magik.chezmaurice.eu/@anna");
     expect(defaultSite({ username: "anna", is_child: true })).toBeNull();
+    expect(defaultSite({ username: "anna", is_child: true, may_publish: true })).toBe("https://magik.chezmaurice.eu/@anna");
     expect(defaultSite({ username: "vite" })).toBeNull();
   });
 
@@ -135,42 +136,28 @@ describe("who has an address", () => {
   });
 });
 
-describe("the admin's switch", () => {
-  test("off: no address, nothing served, no publishing — and on again brings it all back", async () => {
-    const { publicPagesAvailableOn, publicPagesSwitch, setPublicPagesSwitch } =
-      await import("../data-api/services/publicPages");
-    page("anna", "index.html", "<h1>Anna</h1>");
-    expect(publicPagesSwitch()).toBe(true);   // on unless turned off
-    expect(servePublicPage("/@anna/")).not.toBeNull();
-
-    setPublicPagesSwitch(false);
+describe("a child", () => {
+  test("publishes nothing and is not served until allowed — and allowing brings it all back", async () => {
+    const { setUserChild, setUserMayPublish } = await import("../src/services/users");
+    page(MEMBER.username, "index.html", "<h1>Mine</h1>");
+    setUserChild(MEMBER.id, true);
     try {
-      // Still set up for it; the admin said no.
-      expect(publicPagesAvailableOn()).toBe("magik.chezmaurice.eu");
-      expect(publicPagesHost()).toBeNull();
-      expect(defaultSite({ username: "anna" })).toBeNull();
       expect(siteFor(MEMBER.id)).toBeNull();
       expect(canDeploy(MEMBER.id, garden)).toBe(false);
-      expect(servePublicPage("/@anna/")).toBeNull();
+      expect(servePublicPage(`/@${MEMBER.username}/`)).toBeNull();
       // What was published is kept, not deleted.
-      expect(resolvePublicFile("/@anna/")).not.toBeNull();
-    } finally {
-      setPublicPagesSwitch(true);
-    }
-    expect(await servePublicPage("/@anna/")!.text()).toBe("<h1>Anna</h1>");
-    expect(siteFor(MEMBER.id)).toBe(`https://magik.chezmaurice.eu/@${MEMBER.username}`);
-  });
+      expect(resolvePublicFile(`/@${MEMBER.username}/`)).not.toBeNull();
 
-  test("a member with a domain of their own is not concerned", async () => {
-    const { setPublicPagesSwitch } = await import("../data-api/services/publicPages");
-    db.run(`UPDATE users SET notes_domain = 'example.org' WHERE id = ?`, [MEMBER.id]);
-    setPublicPagesSwitch(false);
-    try {
-      expect(siteFor(MEMBER.id)).toBe("https://example.org");
+      setUserMayPublish(MEMBER.id, true);
+      expect(siteFor(MEMBER.id)).toBe(`https://magik.chezmaurice.eu/@${MEMBER.username}`);
+      expect(canDeploy(MEMBER.id, garden)).toBe(true);
+      expect(await servePublicPage(`/@${MEMBER.username}/`)!.text()).toBe("<h1>Mine</h1>");
     } finally {
-      setPublicPagesSwitch(true);
-      db.run(`UPDATE users SET notes_domain = NULL WHERE id = ?`, [MEMBER.id]);
+      setUserMayPublish(MEMBER.id, false);
+      setUserChild(MEMBER.id, false);
     }
+    // Anyone else always may, whatever the flag says.
+    expect(siteFor(MEMBER.id)).toBe(`https://magik.chezmaurice.eu/@${MEMBER.username}`);
   });
 });
 

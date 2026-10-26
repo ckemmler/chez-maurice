@@ -20,15 +20,15 @@ covers:
   maurice-carnet: '2026-10-23'
   maurice-chat: '2026-10-26'
   maurice-composer: '2026-10-20'
-  maurice-data-model: '2026-10-21'
+  maurice-data-model: '2026-10-26'
   maurice-docs: '2026-10-20'
   maurice-domains: '2026-10-20'
   maurice-files: '2026-06-19'
-  maurice-households-rooms: '2026-10-21'
+  maurice-households-rooms: '2026-10-26'
   maurice-knowledge: '2026-10-20'
   maurice-life: '2026-10-20'
   maurice-personas-hats: '2026-09-19'
-  maurice-server: '2026-10-25'
+  maurice-server: '2026-10-26'
   maurice-shared-gardens: '2026-10-20'
   maurice-tools: '2026-10-20'
   maurice-web-garden: '2026-10-20'
@@ -94,7 +94,7 @@ There is also a **browser clipper** that saves the page being read into the memb
   - **admin** — manages members, keys, models, budgets and the household's identity;
   - **standard** — a full member with a mandatory PIN;
   - **guest** — full capabilities but a limited *reach*: an explicit contact list, checked both ways, and only the domains shared with them. This is how you host someone, or are hosted;
-  - **child** — a flag an admin ticks (the server knows no ages): no public pages, never proposed domains, never sent a conversation Maurice opened. It does not change model access or content rules.
+  - **child** — a flag an admin ticks (the server knows no ages): publishes only once the admin allows it, never proposed domains, never sent a conversation Maurice opened. It does not change model access or content rules.
 - **Login safety:** a PIN is mandatory because the server is on the internet; failures are rate-limited and all answer the same "Invalid credentials". On the phone and the Mac, sessions are kept in the system **Keychain**. A session ended on the server — revoked, or the member removed — sends the device back to the member picker, which says so.
 - **Push notifications** reach the Maurice app and Carnet when someone writes to you, including as a guest in another household: through Apple's service for the Apple apps, and through Web Push for a device that registers a subscription — the Android app, in private testing, via UnifiedPush and a relay such as ntfy. The payload is encrypted to the device: the relay sees that a message passed, not what it says.
 - **Personal tokens** (`maur_…`) let a member connect other clients (see §18).
@@ -313,7 +313,7 @@ Each member has folders and files (5 GB each), in **Settings**: text, images, PD
 
 - **Private view:** each member's site at `/g/<member>/` shows all their notes, rendered from disk on every request, live-reloading when a note changes, in English and French. Wiki-links resolve the way Obsidian does. The owner sees drafts, fiches and a toolbar (public/private/encrypted, delete, reorder, open in Obsidian or Working Copy). Unreviewed notes Maurice wrote carry a *Keep / Throw away* banner; mail person fiches a review panel.
 - **Public, private, encrypted:** a note is published **only with the `public` flag**. An `encrypted` note is encrypted in the page (AES-256-GCM, the password typed in the browser) or withheld. Fiches, drafts, unopened articles, person fiches and other members' content never enter a published build — checked by an automated leak test.
-- **A member's site:** the household's public pages at `/@<member>/`, a static build behind a household switch; or a domain of one's own (today only at home, through Cloudflare Pages).
+- **A member's site:** the household's public pages at `/@<member>/`, a static build every member may publish to at any time (a child once the admin allows it); or a domain of one's own (today only at home, through Cloudflare Pages).
 - **Themes:** manuscript (default), botanical, newsprint, terminal, chosen in the app (Settings → *Your site*).
 - **The notes as a git address:** `https://<household>/git/<member>.git`, for `git clone`, Obsidian (the *Git* plugin) or Working Copy. HTTP Basic: any username, the member's git key as the password; a member clones only their own notes; a push is refused. Notes not yet versioned become a repository at their first clone. The clone is a vault and a near-complete backup (see §6); flashcards, mail and the search index are not in it.
 - **Shared notes:** sharing is a property of a note — its audience. The app lists *My notes*, then one set per audience (*You & Paola / notes*): simply the notes sharing that audience; members can see who reads a note, share it, or leave its audience. A shared note is read inside its owner's site, in the owner's theme.
@@ -325,7 +325,7 @@ Each member has folders and files (5 GB each), in **Settings**: text, images, PD
 ## 22. The night and the operator's tools
 
 - **Night jobs** run inside the server, at home and hosted alike, each catching up if the server was down and each switchable off: 03:00 search reconcile and the mail header walk; 03:30 the export into the notes (highlights, reading, domains, and conversations if asked, written into each member's notes that have been cloned and committed only when something changed); 04:00 domain briefs; 05:00 domain mapping and filing. The night spends from its own allowance.
-- **Admin console** (`/admin`, only from the machine itself; the operator of a hosted household reaches it through an ssh tunnel): members, PINs and invitations, models and their windows, the access grid, provider keys, the Calibre library, caps and budget shares, the night's allowance, background model pins, the public-pages switch, cards for the night's jobs with *run now*, the household export.
+- **Admin console** (`/admin`, only from the machine itself; the operator of a hosted household reaches it through an ssh tunnel): members, PINs and invitations, models and their windows, the access grid, provider keys, the Calibre library, caps and budget shares, the night's allowance, background model pins, which children may publish, cards for the night's jobs with *run now*, the household export.
 - **Health:** `/healthz` answers status and version publicly, and build, database, disk and error counts (never names or content) to a health token.
 - **Documentation refresh:** each server fetches the latest documentation from the public repository once a day.
 - **Fleet:** a hand-kept inventory and terminal tools to check, deploy and restart households; no central registry, by design.

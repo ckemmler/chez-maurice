@@ -225,6 +225,7 @@ try { db.run(`ALTER TABLE households ADD COLUMN fal_api_key TEXT`); } catch {}
 // Whether the members of this household may publish to its public pages
 // (`/@<member>/`, data-api/services/publicPages.ts). On unless the admin turns
 // it off; it only means something where the household serves such pages at all.
+// Unread since 26 October 2026: every member publishes, a child once allowed (users.may_publish).
 try { db.run(`ALTER TABLE households ADD COLUMN public_pages INTEGER NOT NULL DEFAULT 1`); } catch {}
 try { db.run(`ALTER TABLE users ADD COLUMN notes_domain TEXT`); } catch {}
 // Optional photo avatar (a filename served from /api/avatars/<file>); null →
@@ -1156,6 +1157,9 @@ try { db.run(`ALTER TABLE households ADD COLUMN spend_cap_system_daily_usd REAL`
 // household's guard between two openings for one member, in days (null = the
 // default, fifteen; services/openedConversations.ts).
 try { db.run(`ALTER TABLE users ADD COLUMN is_child INTEGER NOT NULL DEFAULT 0`); } catch {}
+// Whether a child may publish (26 October 2026): every other member always may;
+// a child only once the admin allows it on their page in the console.
+try { db.run(`ALTER TABLE users ADD COLUMN may_publish INTEGER NOT NULL DEFAULT 0`); } catch {}
 // When a conversation arrived by import (P4, 19 September 2026): the wall-clock
 // of the import, set by the corpus importer (tools/corpus/src/chat_import.py),
 // null for a conversation lived here. Its messages keep the dates of the

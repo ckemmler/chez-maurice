@@ -10,7 +10,7 @@ import {
   getUserByUsername,
   setUserRole,
   getGuestContacts,
-  setGuestContacts, setUserChild } from "../services/users";
+  setGuestContacts, setUserChild, setUserMayPublish } from "../services/users";
 import { listMaurices, setAccess } from "../services/maurices";
 import { setExperimentalAccess, canUseExperimental } from "../services/toolFamilies";
 import {
@@ -54,7 +54,7 @@ import { corpusNightlyStatus, reconcileCorpus } from "../services/corpusNightly"
 import { briefsNightlyStatus, runDomainBriefs } from "../services/domainBriefs";
 import { mappingNightlyStatus, runDomainMapping } from "../services/domainMapping";
 import { ArchiveError, exportResponse } from "../services/archive";
-import { publicPagesAvailableOn, publicPagesSwitch, setPublicPagesSwitch } from "../../data-api/services/publicPages";
+import { publicPagesAvailableOn } from "../../data-api/services/publicPages";
 import { t, langOf, SUPPORTED } from "../services/i18n";
 import { SYSTEM_SPENDER, spentTodayUsd, spentMonthUsd, memberDailyCap, setMemberDailyCap, setHouseholdDailyCap, setSystemDailyCap } from "../services/budget";
 import { ImportError, importHistory, importStatus, isImportProvider, startImport } from "../services/chatImport";
@@ -920,20 +920,14 @@ web.get("/dashboard", async (c) => {
 });
 
 /**
- * Public pages: the one switch, and where the pages are. A household that is
- * not set up to serve any (at home, by default) is told so rather than shown a
- * switch that would do nothing.
+ * Public pages: where they are. Every member publishes; a child once allowed
+ * on their page (Members). A household that is not set up to serve any (at
+ * home, by default) is told so.
  */
 function publicPagesCard(lang: string): string {
   const host = publicPagesAvailableOn();
   if (!host) return `<div class="card pad"><span class="hint">${escape(t(lang, "publicpages.unavailable"))}</span></div>`;
-  const on = publicPagesSwitch();
-  return `
-        <form method="POST" action="/admin/public-pages" class="card pad">
-          <div class="chips"><label class="chip"><input type="checkbox" name="enabled" ${on ? "checked" : ""} /><span class="cdot"><span class="chk">✓</span></span><span class="clabel">${escape(t(lang, "publicpages.allow"))}</span></label></div>
-          <div class="hint" style="margin:10px 0 14px">${escape(t(lang, on ? "publicpages.hint_on" : "publicpages.hint_off").replace("%@", `https://${host}/@…`))}</div>
-          <button type="submit" class="btn primary">${escape(t(lang, "common.save_changes"))}</button>
-        </form>`;
+  return `<div class="card pad"><span class="hint">${escape(t(lang, "publicpages.hint_on").replace("%@", `https://${host}/@…`))}</span></div>`;
 }
 
 /** A posted spending cap: "" → null (no cap), a non-negative number → itself,
@@ -1138,16 +1132,6 @@ web.post("/settings", async (c) => {
     else if (/^\d+$/.test(raw)) setOpensMinDays(Number(raw));
   }
   return c.redirect("/admin/dashboard?msg=settings_saved#sec-settings");
-});
-
-// ── Public pages (POST) ─────────────────────────────────────────
-// A checkbox posts only when ticked: its absence is the "off".
-web.post("/public-pages", async (c) => {
-  const redir = requireWebAdmin(c);
-  if (redir) return redir;
-  const form = await c.req.parseBody();
-  setPublicPagesSwitch(form.enabled !== undefined);
-  return c.redirect("/admin/dashboard?msg=settings_saved#sec-public-pages");
 });
 
 // ── Ancillary models (POST) ─────────────────────────────────────
@@ -1480,6 +1464,8 @@ web.get("/users/:id/edit", (c) => {
             <div class="access-head"><span class="ttl2">${escape(t(lang, "members.is_child"))}</span></div>
             <div class="hint" style="margin-bottom:8px">${escape(t(lang, "members.is_child_hint"))}</div>
             <div class="chips"><label class="chip"><input type="checkbox" name="is_child" ${user.is_child ? "checked" : ""} /><span class="cdot"><span class="chk">✓</span></span><span class="clab">${escape(t(lang, "members.is_child_label"))}</span></label></div>
+            <div class="chips" style="margin-top:8px"><label class="chip"><input type="checkbox" name="may_publish" ${user.may_publish ? "checked" : ""} /><span class="cdot"><span class="chk">✓</span></span><span class="clab">${escape(t(lang, "members.may_publish_label"))}</span></label></div>
+            <div class="hint" style="margin-top:6px">${escape(t(lang, "members.may_publish_hint"))}</div>
           </div>
           <div class="field"><label class="label">${escape(t(lang, "members.role_label"))}</label>
             <select name="role" onchange="document.getElementById('guestblock').style.display=this.value==='guest'?'block':'none'">
@@ -1590,6 +1576,7 @@ web.post("/users/:id/edit", async (c) => {
     replaceAccess(id, [...fd.getAll("access").map(String), ...accessOutside(id, shown)]);
     setExperimentalAccess(id, fd.get("experimental_tools") != null);
     setUserChild(id, fd.get("is_child") != null);
+    setUserMayPublish(id, fd.get("may_publish") != null);
     const newRole = String(fd.get("role") || "standard") === "guest" ? "guest" : "standard";
     setUserRole(id, newRole);
     if (newRole === "guest") {

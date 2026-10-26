@@ -234,7 +234,12 @@ metadata relay's two lines (`MAURICE_METADATA_RELAY_URL` / `_TOKEN`), which the
 tower wrote into a household's env file but which had never reached the
 container. The relay needs the provider keys on the Mac
 (`~/.maurice/ops/metadata.env`); a household whose env file is kept by hand
-gets its relay lines from the tower's `cli.ts relay-token <name>`.
+gets its relay lines from the tower's `cli.ts relay-token <name>`. A value
+with a `$` in `metadata.env` goes between single quotes, or Compose reads it as
+a variable (Podcast Index's secret has one). The same day the compose file
+started passing `MAURICE_PUBLIC_PAGES` (default `1`): no hosted household had
+it, so a member with no domain of their own had nowhere to publish and Carnet
+showed no *Publish* button.
 
 **And a primitive that was simply missing.** `createUser` creates a row in `maurice.db` and stops: no notes directory under the gardens root, no `gardens.json` entry — and *nothing in the repo writes that manifest*, it is read by three places and maintained by hand. So on a fresh install a member exists, can log in, and `/g/<them>` answers "Site not available". `scripts/provision-member.ts` is the missing half. Related: `start-web.sh` hardcoded `candide` as the member whose site it serves, which is correct on exactly one machine in the world; it now reads `MAURICE_DEFAULT_GARDEN`.
 

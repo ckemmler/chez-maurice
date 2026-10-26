@@ -57,6 +57,11 @@ services:
       # posters and no identities.
       MAURICE_METADATA_RELAY_URL: ${MAURICE_METADATA_RELAY_URL:-}
       MAURICE_METADATA_RELAY_TOKEN: ${MAURICE_METADATA_RELAY_TOKEN:-}
+      # Members' public pages (`/@<member>/`, publicPages.ts) on the
+      # household's host: what Carnet publishes to for a member with no domain
+      # of their own. A hosted household publishes; the admin's switch in the
+      # console still turns it off. `0` in the env file opts a household out.
+      MAURICE_PUBLIC_PAGES: ${MAURICE_PUBLIC_PAGES:-1}
       # The spending fuse (server/src/services/budget.ts): off unless set. For
       # a household that thinks on the operator's key rather than its own —
       # set it in the household's env file, or in defaults.env for all.

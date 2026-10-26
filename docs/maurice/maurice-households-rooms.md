@@ -1,6 +1,6 @@
 ---
 title: Households, rooms & devices
-date: '2026-10-21'
+date: '2026-10-26'
 flags: []
 locale: en
 description: Members and roles, guests, multi-person rooms, device pairing and PINs,
@@ -39,7 +39,7 @@ Invite codes (`server/src/services/auth.ts`) are 8 characters from an unambiguou
 
 ## Members, roles & guests
 
-Three roles (`server/src/services/users.ts`): **admin** (manages members and household identity), **standard** (full member, PIN-protected), and **guest** (full capabilities but a *limited reach*). Orthogonal to the role, a member can be marked a **child** (`users.is_child`, a box on the console's member page, 19 September 2026): Maurice never opens a conversation on his own for a child, and the night proposes nothing to them — a flag the admin sets, not an age the server knows. A guest's reach is an explicit allow-list — `guest_contacts`, checked **both directions** by `guestCanReach()` — so a guest sees only themselves plus their contacts in the roster, and can only share rooms with them. Guests get curated [[maurice-personas-hats|Maurices]] through each persona's own access list. This is how you safely **host a guest, or be a guest** in another household.
+Three roles (`server/src/services/users.ts`): **admin** (manages members and household identity), **standard** (full member, PIN-protected), and **guest** (full capabilities but a *limited reach*). Orthogonal to the role, a member can be marked a **child** (`users.is_child`, a box on the console's member page, 19 September 2026): Maurice never opens a conversation on his own for a child, and the night proposes nothing to them — a flag the admin sets, not an age the server knows. A child publishes to the household's public pages only once the admin ticks *This child may publish* on the same page (`users.may_publish`, 26 October 2026); every other member always may. A guest's reach is an explicit allow-list — `guest_contacts`, checked **both directions** by `guestCanReach()` — so a guest sees only themselves plus their contacts in the roster, and can only share rooms with them. Guests get curated [[maurice-personas-hats|Maurices]] through each persona's own access list. This is how you safely **host a guest, or be a guest** in another household.
 
 ## Foyer switching (multiple households)
 
