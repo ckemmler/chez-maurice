@@ -14,7 +14,7 @@ import { gardensRoot } from "../src/services/gardensRoot";
 //
 // Run: bun test server/test/composer-isolation.test.ts  (server must be up)
 
-const BASE = "https://localhost:3001/api/v1/composer";
+const BASE = `${process.env.MAURICE_LIVE_BASE || "http://localhost:3001"}/api/v1/composer`;
 const tls = { rejectUnauthorized: false } as any;
 
 // This suite acts on the RUNNING household: it signs in as two real members,

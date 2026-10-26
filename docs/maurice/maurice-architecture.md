@@ -323,7 +323,7 @@ between a sovereignty *argument* and a sovereignty *product*: one contract,
 one jurisdiction, nothing to explain to a buyer's legal department. It also
 makes the demo fleet possible at all — see below.
 
-The server is meant to run on hardware the household owns (the home Mac). It does not manage TLS or remote access itself — that is **deployment plumbing the operator chooses**, not part of Maurice. The two known options are **Tailscale** (private mesh; at home the server serves HTTPS straight off a Tailscale certificate) and a **Cloudflare Tunnel** (public hostname). Clients require the server to be reachable; there is no cloud account, no analytics, no email. The data stays where the household put it. This is the sovereignty story from the [[maurice|vision]], made concrete.
+The server is meant to run on hardware the household owns (the home Mac). It does not manage TLS or remote access itself — that is **deployment plumbing the operator chooses**, not part of Maurice. The two known options are **Tailscale** (private mesh; the server serves HTTPS straight off a `tailscale cert` pair, which the operator must renew) and a **Cloudflare Tunnel** (public hostname). The home Mac uses the tunnel alone since 26 October 2026: the server listens on `127.0.0.1` only (`MAURICE_BIND_HOST`) in plain HTTP, and `cloudflared` reaches it at `http://localhost:3001` with nothing to verify — the Tailscale certificate it used to serve had expired in August, unnoticed, behind `noTLSVerify`. Clients require the server to be reachable; there is no cloud account, no analytics, no email. The data stays where the household put it. This is the sovereignty story from the [[maurice|vision]], made concrete.
 
 ### Demo servers, so anyone can actually try it
 

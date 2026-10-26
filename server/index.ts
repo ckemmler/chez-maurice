@@ -968,7 +968,9 @@ let server: ReturnType<typeof Bun.serve>;
 try {
   server = Bun.serve({
     port,
-    hostname: "0.0.0.0",
+    // 127.0.0.1 when a tunnel or proxy on the same machine is the only way in;
+    // the container keeps 0.0.0.0 so its published port reaches it.
+    hostname: process.env.MAURICE_BIND_HOST || "0.0.0.0",
     idleTimeout: 255,
     // Bun defaults to a 128 MB request body cap; ChatGPT/Claude data exports
     // bundle all media and routinely exceed that, which surfaces in the browser

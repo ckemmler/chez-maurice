@@ -29,10 +29,9 @@
 
 instances:
   - name: home
-    url: https://localhost:3001
+    url: http://localhost:3001
     owner: Candide
     since: 2026-03-01
-    insecure: true
     # launchd runs the checkout itself: deploying is restarting on main, so
     # the two commands are the same line here.
     deploy: scripts/service.sh restart api

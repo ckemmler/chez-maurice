@@ -10,7 +10,7 @@ import { join } from "node:path";
 // Integration test against the running server on :3001 (restart it after the
 // migration). Run: bun test server/test/safety.test.ts
 
-const BASE = "https://localhost:3001/api";
+const BASE = `${process.env.MAURICE_LIVE_BASE || "http://localhost:3001"}/api`;
 const tls = { rejectUnauthorized: false } as any;
 
 // This suite acts on the RUNNING household: it signs in as two real members,
