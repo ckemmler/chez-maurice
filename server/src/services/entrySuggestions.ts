@@ -167,9 +167,9 @@ Each subject: {"kind": "movies|series|books|music|podcasts|games|people", "title
 - "creator": the author, the artist, the director — when the exchange or common knowledge gives it. Omit for people.
 - "track": for music only, when the exchange is about a song rather than an album: the song's title. "title" is then its album when you are sure of it, the song's title otherwise; "year" is omitted; the note names the song.
 - "public": for people only. true for a public figure, false for someone from the person's own life.
-- "note": one to three sentences, in the language the person wrote in (French if they wrote French, whatever the language of these instructions), addressed to them: "you" in English; in French "tu" or "vous", as the assistant addresses them. Never "the person", "the user", "they".
+- "note": one to three sentences, in the language THE PERSON wrote in — English if they wrote English, French if they wrote French — whatever the language of the examples below or of a name in the exchange; addressed to them: "you" in English; in French "tu" or "vous", as the assistant addresses them. Never "the person", "the user", "they".
   The note keeps what will be worth rereading in a year:
-  - When the person brings something of their own to the subject — a work they read, watched or listened to, someone they met — and says what it stirred in them, the note says that first: why it struck them, what it brought back or made them think about, in their own terms and with the particulars they gave — their work, their practice, the people in their life they mentioned; then what the exchange made of it. Not a summary of the work: they know what it is about. For someone who wrote that a novel about a cook made them think of their grandmother's kitchen and of quitting their office job: "Tu as lu ce roman en pensant à la cuisine de ta grand-mère et à ton envie de quitter le bureau ; …" — not "This novel tells the story of a cook".
+  - When the person brings something of their own to the subject — a work they read, watched or listened to, someone they met — and says what it stirred in them, the note says that first: why it struck them, what it brought back or made them think about, in their own terms and with the particulars they gave — their work, their practice, the people in their life they mentioned; then what the exchange made of it. Not a summary of the work: they know what it is about. For someone who wrote that a novel about a cook made them think of their grandmother's kitchen and of quitting their office job: "You read this novel thinking of your grandmother's kitchen and of wanting to leave your office job; …" (in French: "Tu as lu ce roman en pensant à la cuisine de ta grand-mère… ") — not "This novel tells the story of a cook".
   - When they asked for facts, the facts the reply gave, with the names and dates that make them worth rereading.
   Only what the exchange holds; add nothing of your own. Never "the exchange confirms", "the reply says", "the conversation" — the note is read without them.
 
@@ -245,7 +245,11 @@ async function nameSubjects(
   const prompt =
     about +
     (already.length ? `Already suggested: ${already.join("; ")}\n\n` : "") +
-    `THE PERSON:\n${question.slice(0, 2000)}\n\nTHE ASSISTANT:\n${reply.slice(0, 6000)}`;
+    `THE PERSON:\n${question.slice(0, 2000)}\n\nTHE ASSISTANT:\n${reply.slice(0, 6000)}` +
+    // Read last: with reasoning off, a small model otherwise takes the
+    // language of the instructions' one example (26 October 2026: an English
+    // exchange about Totoro got a French note).
+    `\n\nWrite each "note" in the language of THE PERSON's message above.`;
   const result = await completeWith({
     invocation: "entry_suggest",
     system: SYSTEM,

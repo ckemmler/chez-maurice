@@ -264,6 +264,13 @@ describe("resolution", () => {
   });
 });
 
+describe("the note's language", () => {
+  test("the pass is told last to write in the person's language", async () => {
+    await turn("We watched My Neighbor Totoro last night with the kids.", "A lovely choice.");
+    expect(lastPrompt.trim().endsWith(`Write each "note" in the language of THE PERSON's message above.`)).toBe(true);
+  });
+});
+
 describe("one list per conversation", () => {
   test("a second mention updates the row; the pass is told what it already named", async () => {
     modelSays = { subjects: [{ kind: "series", title: "Sugar", note: "Première note." }] };
