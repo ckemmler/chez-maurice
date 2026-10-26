@@ -1,6 +1,6 @@
 ---
 title: Maurice — architecture overview
-date: '2026-10-24'
+date: '2026-10-26'
 flags: []
 locale: en
 description: The five cooperating parts of Maurice, how a message flows end-to-end,
@@ -223,6 +223,18 @@ through Calibre-Web on a hosted household had never reached Carnet.
 The App Review household carries nine public-domain classics from Project
 Gutenberg in that library (`compose.household.yml` passes the flag through,
 default `1`, for a host that does give a household `calibredb`).
+
+**Fiches and posters on a hosted household, closed on 26 October 2026.** The
+image sets `MAURICE_GARDEN_PROFILE=public`, the `.pkg`'s profile, which keeps
+the garden tool to its note tools: on every hosted household `open_fiche` and
+the media searches answered "not available in this build", so *Keep* on a
+suggestion failed and no poster was ever found. `compose.household.yml` now
+passes `MAURICE_GARDEN_PROFILE` through, default `full`, and with it the
+metadata relay's two lines (`MAURICE_METADATA_RELAY_URL` / `_TOKEN`), which the
+tower wrote into a household's env file but which had never reached the
+container. The relay needs the provider keys on the Mac
+(`~/.maurice/ops/metadata.env`); a household whose env file is kept by hand
+gets its relay lines from the tower's `cli.ts relay-token <name>`.
 
 **And a primitive that was simply missing.** `createUser` creates a row in `maurice.db` and stops: no notes directory under the gardens root, no `gardens.json` entry — and *nothing in the repo writes that manifest*, it is read by three places and maintained by hand. So on a fresh install a member exists, can log in, and `/g/<them>` answers "Site not available". `scripts/provision-member.ts` is the missing half. Related: `start-web.sh` hardcoded `candide` as the member whose site it serves, which is correct on exactly one machine in the world; it now reads `MAURICE_DEFAULT_GARDEN`.
 

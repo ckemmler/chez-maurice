@@ -47,6 +47,16 @@ services:
       # whose host does give it `calibredb` sets this to an empty value in its
       # env file. `-` and not `:-`: empty must stay empty.
       MAURICE_CALIBRE_DISABLED: ${MAURICE_CALIBRE_DISABLED-1}
+      # A hosted household gets the whole garden tool — fiches, media entries,
+      # people — which the suggestions' "Keep" and Carnet stand on. The image
+      # defaults to `public` (note tools only) for a bare `docker run`.
+      MAURICE_GARDEN_PROFILE: ${MAURICE_GARDEN_PROFILE:-full}
+      # The metadata relay (TMDB, Google Books, IGDB, Podcast Index,
+      # MusicBrainz): the tower writes these two lines into the household's
+      # env file. Without them a household with no keys of its own finds no
+      # posters and no identities.
+      MAURICE_METADATA_RELAY_URL: ${MAURICE_METADATA_RELAY_URL:-}
+      MAURICE_METADATA_RELAY_TOKEN: ${MAURICE_METADATA_RELAY_TOKEN:-}
       # The spending fuse (server/src/services/budget.ts): off unless set. For
       # a household that thinks on the operator's key rather than its own —
       # set it in the household's env file, or in defaults.env for all.

@@ -16,7 +16,7 @@ parent: maurice-docs
 digest: true
 covers:
   maurice-applications: '2026-10-20'
-  maurice-architecture: '2026-10-24'
+  maurice-architecture: '2026-10-26'
   maurice-carnet: '2026-10-23'
   maurice-chat: '2026-10-22'
   maurice-composer: '2026-10-20'
