@@ -7,6 +7,8 @@ import { rmSync } from "node:fs";
 import { join } from "node:path";
 import { createApiToken, getRawApiToken, listApiTokens, requireAuth, revokeApiToken } from "../middleware/auth";
 import { ArchiveError } from "../services/archive";
+import { listAccountEvents, markAccountEventsSeen } from "../services/accountEvents";
+import db from "../db";
 import { verifyPassword, verifyPin } from "../services/auth";
 import { usageFor } from "../services/budget";
 import { gardensRoot } from "../services/gardensRoot";
@@ -35,6 +37,16 @@ me.get("/usage", (c) => c.json(usageFor(c.get("userId"))));
 /** An API token (`maur_…`) is what a connected tool holds. It reads as the
  *  member; it does not get to bring data in or erase it. */
 const viaApiToken = (c: Context) => (c.req.header("Authorization") ?? "").startsWith("Bearer maur_");
+
+// GET /api/me/events — what the admin did that reached into this account (a
+// device in by their code, the household exported): { events: [{ id, kind,
+// created_at, seen_at }] }, newest first. POST /api/me/events/seen dismisses
+// the unseen ones. services/accountEvents.ts.
+me.get("/events", (c) => c.json({ events: listAccountEvents(db, c.get("userId")) }));
+me.post("/events/seen", (c) => {
+  markAccountEventsSeen(db, c.get("userId"));
+  return c.json({ ok: true });
+});
 
 // GET /api/me/export — the member archive (`maurice-member-archive` v1), a
 // gzipped tar streamed as it is produced.

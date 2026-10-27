@@ -18,6 +18,8 @@ import {
 } from "../services/users";
 import { isOpenInvite, redeemOpenInvite } from "../services/invites";
 import { requireAuth } from "../middleware/auth";
+import { accountInUse, recordAccountEvent } from "../services/accountEvents";
+import db from "../db";
 import type { Context } from "hono";
 
 const auth = new Hono();
@@ -74,7 +76,7 @@ function makeLimiter(windowMs: number, perIp: number, global: number) {
 }
 
 const enrollLimiter = makeLimiter(10 * 60 * 1000, 10, 100); // invite codes: 10/IP, 100 global, 10 min
-const loginLimiter = makeLimiter(15 * 60 * 1000, 10, 200);  // PINs: 10/IP, 200 global, 15 min
+const loginLimiter = makeLimiter(15 * 60 * 1000, 10, 200);  // PINs and the admin password: 10/IP, 200 global, 15 min
 
 // ── POST /api/auth/setup ────────────────────────────────────────
 // First-run: create the admin account. Only works if no admin exists.
@@ -108,15 +110,25 @@ auth.post("/setup", async (c) => {
 auth.post("/login", async (c) => {
   const body = await c.req.json();
 
-  // Admin login: username + password
+  // Admin login: username + password. Under the same brake as the PINs: it
+  // is reachable from the public internet too, and was not limited until
+  // 27 October 2026.
   if (body.username && body.password) {
+    const ip = clientIp(c);
+    const retry = loginLimiter.retryAfter(ip);
+    if (retry !== null) {
+      c.header("Retry-After", String(retry));
+      return c.json({ error: "Too many attempts. Try again later." }, 429);
+    }
     const record = getUserByUsername(body.username);
     if (!record || record.role !== "admin" || !record.password_hash) {
+      loginLimiter.recordFailure(ip);
       return c.json({ error: "Invalid credentials" }, 401);
     }
 
     const valid = await verifyPassword(body.password, record.password_hash);
     if (!valid) {
+      loginLimiter.recordFailure(ip);
       return c.json({ error: "Invalid credentials" }, 401);
     }
 
@@ -200,6 +212,10 @@ auth.post("/enroll", async (c) => {
     enrollLimiter.recordFailure(ip);
     return c.json({ error: "User not found" }, 404);
   }
+  // Every such code is the admin's (POST /api/users/:id/invite, the console).
+  // Into an account already in use, the member is told — written before the
+  // session exists, so no device gets in untold (services/accountEvents.ts).
+  if (accountInUse(db, user.id)) recordAccountEvent(db, user.id, "device_by_code");
   const { token } = createSession(user.id, device_id);
   return c.json({ user_id: user.id, token, role: user.role, needs_pin: user.role !== "guest" });
 });

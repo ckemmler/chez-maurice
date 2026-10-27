@@ -63,13 +63,17 @@ export type ExportOptions = {
   gardensDir?: string;
   /** Where the staging dir and the tarball go. A temp dir by default. */
   outDir?: string;
+  /** The archive an admin takes away: no session, token, PIN hash or
+   *  provider key in it (withoutCredentials). */
+  forAdmin?: boolean;
 };
 
 export class ArchiveError extends Error {}
 
 /** The app-dir entries that travel as they are, when they exist. `secret.key`
- *  opens the mail passwords in maurice.db (services/mailAccounts.ts): without
- *  it a moved household keeps its accounts and loses every password. */
+ *  still travels: it opens the mail stores' sealed subjects and readings,
+ *  which a moved household would otherwise lose (and pay for again). The
+ *  passwords it used to open no longer travel — see withoutPasswords. */
 const LIVE_ENTRIES = ["images", "files", "uploads", "avatars", "config.toml", "secret.key"];
 
 /** Patterns tar leaves out of every directory it reads. WAL sidecars belong
@@ -166,6 +170,73 @@ function describe(mauriceDb: string): Pick<ArchiveManifest, "household" | "membe
   }
 }
 
+/** The mail and address-book passwords, emptied in the snapshot (27 October
+ *  2026): the whole-household archive is the admin's, and a member's password
+ *  is not. Each account arrives marked to be reconnected; its member types the
+ *  password again. secure_delete, so the sealed value does not linger in a
+ *  freed page of the copy. */
+export const RECONNECT_NOTE = "moved with the household archive: enter the password again";
+
+export function withoutPasswords(snapshot: string): void {
+  if (statSync(snapshot).size === 0) return;
+  const db = new Database(snapshot);
+  try {
+    db.run("PRAGMA secure_delete = ON");
+    for (const table of ["mail_accounts", "contact_accounts"]) {
+      const exists = db.query(`SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?`).get(table);
+      if (!exists) continue;
+      db.run(`UPDATE ${table} SET secret = '', state = 'error', last_error = ?`, [RECONNECT_NOTE]);
+    }
+    // A member's Cloudflare token (their own domain) is theirs as well.
+    if (hasColumn(db, "users", "cloudflare_token")) db.run(`UPDATE users SET cloudflare_token = NULL`);
+  } finally {
+    db.close();
+  }
+}
+
+function hasColumn(db: Database, table: string, column: string): boolean {
+  return !!db.query(`SELECT 1 FROM pragma_table_info(?) WHERE name = ?`).get(table, column);
+}
+
+/** The household's provider keys — on a hosted household, the operator's:
+ *  the Scaleway key every trial shares among them (chezmaurice-tower,
+ *  stats.ts). */
+const PROVIDER_KEY_COLUMNS = [
+  "api_key", "fal_api_key", "openai_api_key", "mistral_api_key", "zai_api_key", "scaleway_api_key",
+  "tmdb_api_key", "google_books_api_key", "podcastindex_api_key", "podcastindex_api_secret", "igdb_client_secret",
+];
+
+/**
+ * The archive an admin takes away (scripts/export-household.ts), on top of
+ * withoutPasswords: nothing in it opens anything on the live household or
+ * anywhere else. Every session (`sessions.id` is the bearer token, and it
+ * never expires), every API token in clear, every pairing token, every PIN
+ * hash (a 4–6 digit PIN falls to an offline search in seconds), and the
+ * provider keys. In the new home each member signs in again with a code and
+ * sets a PIN, and the admin enters their own keys. The console's and the
+ * CLI's archives keep these: they are the machine owner's, made to move the
+ * household as it is.
+ */
+export function withoutCredentials(snapshot: string): void {
+  if (statSync(snapshot).size === 0) return;
+  const db = new Database(snapshot);
+  try {
+    db.run("PRAGMA secure_delete = ON");
+    const has = (t: string) => !!db.query(`SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?`).get(t);
+    if (has("sessions")) db.run(`DELETE FROM sessions`);
+    if (has("api_tokens") && hasColumn(db, "api_tokens", "token_plain")) db.run(`UPDATE api_tokens SET token_plain = NULL`);
+    if (has("devices") && hasColumn(db, "devices", "pairing_token")) db.run(`UPDATE devices SET pairing_token = NULL`);
+    if (has("invite_codes")) db.run(`DELETE FROM invite_codes`);
+    if (has("users") && hasColumn(db, "users", "pin_hash")) db.run(`UPDATE users SET pin_hash = NULL`);
+    if (has("households")) {
+      const cols = PROVIDER_KEY_COLUMNS.filter((c) => hasColumn(db, "households", c));
+      if (cols.length) db.run(`UPDATE households SET ${cols.map((c) => `${c} = NULL`).join(", ")}`);
+    }
+  } finally {
+    db.close();
+  }
+}
+
 // ── tar ─────────────────────────────────────────────────────────
 
 /** macOS ships bsdtar, the image GNU tar. They agree on everything used here
@@ -205,6 +276,8 @@ function prepare(opts: ExportOptions): Prepared {
 
   try {
     snapshotDb(mauriceDb, join(staging, "maurice.db"));
+    withoutPasswords(join(staging, "maurice.db"));
+    if (opts.forAdmin) withoutCredentials(join(staging, "maurice.db"));
     checkDb(join(staging, "maurice.db"));
 
     // Every database of the data dir, one level deep: life.db, compte.db,

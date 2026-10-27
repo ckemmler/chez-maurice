@@ -41,6 +41,18 @@ beforeAll(() => {
                         created_at TEXT DEFAULT (datetime('now')));
     INSERT INTO users (id, username, display_name, role) VALUES
       ('u1', 'theo', 'Théo', 'admin'), ('u2', 'mei', 'Mei', 'standard');
+    CREATE TABLE mail_accounts (id TEXT PRIMARY KEY, member_id TEXT, secret TEXT NOT NULL,
+                                state TEXT NOT NULL DEFAULT 'ok', last_error TEXT);
+    INSERT INTO mail_accounts (id, member_id, secret) VALUES ('a1', 'u2', 'v1:SEALED-PASSWORD');
+    ALTER TABLE users ADD COLUMN pin_hash TEXT;
+    ALTER TABLE users ADD COLUMN cloudflare_token TEXT;
+    UPDATE users SET pin_hash = 'PIN-HASH', cloudflare_token = 'CF-TOKEN' WHERE id = 'u2';
+    ALTER TABLE households ADD COLUMN scaleway_api_key TEXT;
+    UPDATE households SET scaleway_api_key = 'SCW-OPERATOR-KEY';
+    CREATE TABLE sessions (id TEXT PRIMARY KEY, user_id TEXT);
+    INSERT INTO sessions VALUES ('LIVE-SESSION-TOKEN', 'u2');
+    CREATE TABLE api_tokens (id TEXT PRIMARY KEY, user_id TEXT, token_hash TEXT, token_plain TEXT);
+    INSERT INTO api_tokens VALUES ('t1', 'u2', 'h', 'maur_PLAIN-TOKEN');
     PRAGMA user_version = 7;
   `);
   db.close();
@@ -151,7 +163,24 @@ describe("household archive", () => {
     const db = new Database(path.join(into, "maurice.db"), { readonly: true });
     expect((db.query("SELECT COUNT(*) n FROM users").get() as any).n).toBe(2);
     expect((db.query("PRAGMA user_version").get() as any).user_version).toBe(7);
+    // A member's mail password is not the admin's to carry: emptied, the
+    // account marked to be reconnected — and not left in a freed page either.
+    const acct = db.query("SELECT secret, state, last_error FROM mail_accounts").get() as any;
+    expect(acct.secret).toBe("");
+    expect(acct.state).toBe("error");
+    expect(acct.last_error).toContain("enter the password again");
     db.close();
+    expect(fs.readFileSync(path.join(into, "maurice.db")).includes("SEALED-PASSWORD")).toBe(false);
+    // The live database keeps it.
+    const live = new Database(path.join(HOME, "maurice.db"), { readonly: true });
+    expect((live.query("SELECT secret FROM mail_accounts").get() as any).secret).toBe("v1:SEALED-PASSWORD");
+    live.close();
+    // The machine owner's archive moves the household as it is: sessions and
+    // keys travel; a member's Cloudflare token does not.
+    const bytes = fs.readFileSync(path.join(into, "maurice.db"));
+    expect(bytes.includes("LIVE-SESSION-TOKEN")).toBe(true);
+    expect(bytes.includes("SCW-OPERATOR-KEY")).toBe(true);
+    expect(bytes.includes("CF-TOKEN")).toBe(false);
     const life = new Database(path.join(into, "data", "life.db"), { readonly: true });
     expect((life.query("SELECT title FROM tasks").get() as any).title).toBe("water the plants");
     life.close();
@@ -191,6 +220,23 @@ describe("household archive", () => {
     const stranger = path.join(OUT, "stranger.tar.gz");
     Bun.spawnSync(["tar", "-czf", stranger, "-C", bad, "maurice.db"]);
     await expect(importHousehold(stranger, { into })).rejects.toBeInstanceOf(ArchiveError);
+  });
+
+  test("export for the admin: nothing in it opens anything", async () => {
+    const { exportHousehold } = await import("../src/services/archive");
+    const outDir = path.join(TMP, "admin-out");
+    const { path: out } = await exportHousehold({ appDir: HOME, dataDir: DATA, gardensDir: GARDENS, outDir, forAdmin: true });
+    const x = path.join(TMP, "admin-x");
+    fs.mkdirSync(x, { recursive: true });
+    Bun.spawnSync(["tar", "-xzf", out, "-C", x, "maurice.db"]);
+    const bytes = fs.readFileSync(path.join(x, "maurice.db"));
+    for (const secret of ["LIVE-SESSION-TOKEN", "maur_PLAIN-TOKEN", "PIN-HASH", "SCW-OPERATOR-KEY", "CF-TOKEN", "SEALED-PASSWORD"]) {
+      expect(bytes.includes(secret)).toBe(false);
+    }
+    const db = new Database(path.join(x, "maurice.db"), { readonly: true });
+    expect((db.query("SELECT COUNT(*) n FROM users").get() as any).n).toBe(2);   // the members stay
+    expect((db.query("SELECT COUNT(*) n FROM api_tokens").get() as any).n).toBe(1); // the row, not the token
+    db.close();
   });
 
   test("export: the default dirs follow MAURICE_DATA_DIR and MAURICE_GARDENS_DIR", async () => {

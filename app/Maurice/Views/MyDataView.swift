@@ -46,6 +46,58 @@ private struct GitExportSetting: Codable {
 
 private struct NoBody: Encodable {}
 
+// MARK: - What the admin did in this account
+
+/// GET /api/me/events — a device that came in by the admin's code, the whole
+/// household exported (server: services/accountEvents.ts). The admin keeps
+/// both powers; the member is told, here and once in an alert.
+struct AccountEvent: Decodable, Identifiable {
+    let id: Int
+    let kind: String
+    let created_at: String
+    let seen_at: String?
+
+    @MainActor func sentence(_ session: SessionStore) -> String {
+        let when = parseServerDate(created_at).map { $0.formatted(date: .long, time: .shortened) } ?? created_at
+        return session.localized(kind == "household_export" ? "account_events.export" : "account_events.device", when)
+    }
+}
+
+private struct AccountEventsAnswer: Decodable { let events: [AccountEvent] }
+private struct OkAnswer: Decodable { let ok: Bool }
+
+/// The alert, on the root view: when the app opens or comes back, any event
+/// the member has not dismissed is shown once; "Understood" dismisses them.
+struct AccountEventsNotice: ViewModifier {
+    @Environment(SessionStore.self) private var session
+    @Environment(\.scenePhase) private var scenePhase
+    @State private var unseen: [AccountEvent] = []
+
+    func body(content: Content) -> some View {
+        content
+            .task(id: session.activeUserId) { await load() }
+            .onChange(of: scenePhase) { if scenePhase == .active { Task { await load() } } }
+            .alert(session.localized("account_events.alert"),
+                   isPresented: Binding(get: { !unseen.isEmpty }, set: { if !$0 { Task { await dismiss() } } })) {
+                Button(session.localized("account_events.ok")) {}
+            } message: {
+                Text((unseen.map { $0.sentence(session) } + [session.localized("account_events.hint")]).joined(separator: "\n\n"))
+            }
+    }
+
+    private func load() async {
+        guard session.hasActiveSession, let url = session.serverURL, let token = session.tokenForActiveUser else { return }
+        guard let a: AccountEventsAnswer = try? await APIClient(baseURL: url).get("/api/me/events", token: token) else { return }
+        unseen = a.events.filter { $0.seen_at == nil }
+    }
+
+    private func dismiss() async {
+        unseen = []
+        guard let url = session.serverURL, let token = session.tokenForActiveUser else { return }
+        let _: OkAnswer? = try? await APIClient(baseURL: url).post("/api/me/events/seen", body: NoBody(), token: token)
+    }
+}
+
 private struct EraseRequest: Encodable {
     let scope: String
     let confirm: String
@@ -81,6 +133,7 @@ struct MyDataView: View {
     @State private var copied: String?
     @State private var rotated = false
     @State private var exportConversations = false
+    @State private var accountEvents: [AccountEvent]?
 
     private var api: APIClient? { session.serverURL.map { APIClient(baseURL: $0) } }
     private var token: String? { session.tokenForActiveUser }
@@ -156,6 +209,14 @@ struct MyDataView: View {
                 guard case .success(let urls) = result, let url = urls.first else { return }
                 Task { await upload(url) }
             }
+
+            card(title: session.localized("account_events.title"), text: session.localized("account_events.text")) {
+                if let events = accountEvents {
+                    if events.isEmpty { line(session.localized("account_events.none")) }
+                    ForEach(events) { e in line(e.sentence(session)).fixedSize(horizontal: false, vertical: true) }
+                }
+            }
+            .task { await loadAccountEvents() }
 
             card(title: session.localized("mydata.erase.title"), text: session.localized("mydata.erase.text")) {
                 action(icon: "eraser", label: session.localized("mydata.erase.button"), destructive: true) { erasing = .data }
@@ -262,6 +323,12 @@ struct MyDataView: View {
         } catch {
             exportPhase = .failed(error.localizedDescription)
         }
+    }
+
+    private func loadAccountEvents() async {
+        guard let api, let token else { return }
+        let a: AccountEventsAnswer? = try? await api.get("/api/me/events", token: token)
+        accountEvents = a?.events
     }
 
     private func loadGit(rotate: Bool) async {

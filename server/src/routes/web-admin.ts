@@ -54,6 +54,7 @@ import { corpusNightlyStatus, reconcileCorpus } from "../services/corpusNightly"
 import { briefsNightlyStatus, runDomainBriefs } from "../services/domainBriefs";
 import { mappingNightlyStatus, runDomainMapping } from "../services/domainMapping";
 import { ArchiveError, exportResponse } from "../services/archive";
+import { recordHouseholdExport } from "../services/accountEvents";
 import { publicPagesAvailableOn } from "../../data-api/services/publicPages";
 import { t, langOf, SUPPORTED } from "../services/i18n";
 import { SYSTEM_SPENDER, spentTodayUsd, spentMonthUsd, memberDailyCap, setMemberDailyCap, setHouseholdDailyCap, setSystemDailyCap } from "../services/budget";
@@ -1073,14 +1074,18 @@ web.post("/briefs/run", (c) => {
 });
 
 // ── Export (GET) ────────────────────────────────────────────────
-// The household archive from the console — the same stream as
-// GET /api/admin/export, behind the admin cookie instead of a bearer token.
-// See docs/household-archive.md.
+// The household archive from the console, streamed. The console is reachable
+// from the machine alone, which is the point: the archive carries every
+// member's notes and conversations. Every member is told it left
+// (services/accountEvents.ts), before the first byte does. See
+// docs/household-archive.md.
 web.get("/export", (c) => {
   const redir = requireWebAdmin(c);
   if (redir) return redir;
   try {
-    return exportResponse();
+    const res = exportResponse();
+    recordHouseholdExport(db);
+    return res;
   } catch (e: any) {
     console.error(`[archive] export refused: ${e?.message ?? e}`);
     return c.text(t(langOf(c), "archive.failed", e instanceof ArchiveError ? e.message : ""), 500);

@@ -1160,6 +1160,38 @@ try { db.run(`ALTER TABLE users ADD COLUMN is_child INTEGER NOT NULL DEFAULT 0`)
 // Whether a child may publish (26 October 2026): every other member always may;
 // a child only once the admin allows it on their page in the console.
 try { db.run(`ALTER TABLE users ADD COLUMN may_publish INTEGER NOT NULL DEFAULT 0`); } catch {}
+// What the admin did that reached into a member's account (27 October 2026):
+// a device that came into it by a code the admin made, the whole household
+// exported. The admin keeps both powers; the member is told, here, before
+// anything else — the push that follows is a courtesy and may be lost
+// (services/accountEvents.ts). `pushed_at` = the server sent that push (it
+// sends it for rows another process wrote too); `seen_at` = the member
+// dismissed the line in the app.
+db.run(`
+  CREATE TABLE IF NOT EXISTS account_events (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id    TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    kind       TEXT NOT NULL CHECK (kind IN ('device_by_code', 'household_export')),
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    pushed_at  TEXT,
+    seen_at    TEXT
+  )
+`);
+db.run(`CREATE INDEX IF NOT EXISTS idx_account_events_user ON account_events(user_id, created_at)`);
+// A whole-household archive waiting to be downloaded (27 October 2026): made
+// by scripts/export-household.ts, served once at /export/<token>, deleted on
+// download or expiry (services/householdExportLinks.ts). Only the token's hash
+// is kept.
+db.run(`
+  CREATE TABLE IF NOT EXISTS household_exports (
+    token_hash TEXT PRIMARY KEY,
+    path       TEXT NOT NULL,
+    filename   TEXT NOT NULL,
+    bytes      INTEGER NOT NULL,
+    expires_at TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  )
+`);
 // When a conversation arrived by import (P4, 19 September 2026): the wall-clock
 // of the import, set by the corpus importer (tools/corpus/src/chat_import.py),
 // null for a conversation lived here. Its messages keep the dates of the

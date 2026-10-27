@@ -27,9 +27,30 @@ images/  files/  uploads/  avatars/
 config.toml  secret.key
 ```
 
-`secret.key` opens the mail and address-book passwords in `maurice.db` and
-the sealed subjects of the mail stores; without it a moved household keeps
-its accounts and loses every password.
+`secret.key` opens the sealed subjects and readings of the mail stores;
+without it a moved household would lose them, and the readings cost money
+to make again. It no longer opens any password: since 27 October 2026 the
+mail and address-book passwords are emptied in the archive's copy of
+`maurice.db` (`secret = ''`, `state = 'error'`, `last_error` = *moved with
+the household archive: enter the password again*). The archive is the
+admin's to carry; a member's password is not. A member's Cloudflare token
+(`users.cloudflare_token`, their own domain) is emptied too. After a move,
+each member reconnects their mailbox and address book in the app. The live
+database is untouched.
+
+The archive an **admin** takes away (`scripts/export-household.ts`, below)
+leaves more behind, so that nothing in it opens anything on the live
+household or elsewhere: every session (`sessions.id` is the bearer token
+itself, and sessions do not expire), the API tokens in clear
+(`api_tokens.token_plain`), the pairing tokens, the device codes, the PIN
+hashes (a 4–6 digit PIN falls to an offline search in seconds), and the
+provider keys in `households`. On a hosted household those keys are the
+operator's: the tower writes the Scaleway key that the trial households
+share. In the new home each member joins again with a code and sets a PIN,
+and the admin enters their own keys. The console's and the CLI's archives
+keep all of these: they belong to the machine's owner, and are made to move
+the household as it is. They are secrets (`services/archive.ts`,
+`withoutPasswords`, `withoutCredentials`).
 
 One member's data, asked for by that member, is another file:
 [member-data.md](member-data.md).
@@ -75,15 +96,35 @@ too: the archive is an allow-list, not the data dir minus exclusions.
 - **Admin console**: `/admin`, section 07 · Archive, "Export this household".
   The download is produced as it streams — the first bytes leave before the
   uploads are read, so a big household never sits silent past the server's
-  idle timeout. Same stream at `GET /api/admin/export` with an admin bearer
-  token (`application/gzip`, `Content-Disposition: attachment`).
+  idle timeout. The console answers from the machine alone. There is no
+  API route any more: `GET /api/admin/export` took an admin's app session
+  and was reachable from the internet, and the archive carries every
+  member's notes and conversations (removed 27 October 2026).
 - **Command line**, where the data is local:
   `scripts/export-household.sh [dest-dir]` (default
   `~/.maurice/backups/archive`). Inside a container:
   `scripts/container.sh shell`, then the same script.
-- **A hosted household** on the fleet: the console through its tunnel
+- **A hosted household, asked for by its admin**: on their Chez Maurice
+  account page, after giving their password again. The tower runs
+  `bun run /app/scripts/export-household.ts --ttl 6h` in the container
+  (`docker exec`). The script writes the archive into the household's own
+  volume (`<app dir>/household-exports/`, left out of the backups) and prints
+  one JSON line: `{ ok, url, expires_at, bytes }`, or `{ ok: false, error }`
+  with a non-zero exit. The tower mails the link to the admin. The household
+  serves it once at `/export/<token>`; the token is 32 random bytes, kept
+  only as its SHA-256. The file is deleted when sent, or at expiry by the
+  hourly sweep. A new export replaces the one waiting. The archive never
+  passes through the tower. `--ttl` takes `90m`, `6h` or `1d`, from 10 minutes
+  to 2 days.
+- **A hosted household, by the operator**: the console through its tunnel
   (`ops/admin.ts <name>`, or `ssh -L <port>:localhost:<port> <host>`) and the
-  button. The operator never has to touch the volume.
+  button.
+
+**Every export is told to every member**, whichever way it was made: the
+console, `scripts/export-household.ts`, or `server/scripts/archive.ts export`
+(the CLI behind `scripts/export-household.sh`). The app shows *The admin exported the whole household* on
+the date, once in an alert and then under Settings → My data, with a push
+when one can be sent (`account_events`, `server/src/services/accountEvents.ts`).
 
 ## Importing
 

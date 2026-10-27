@@ -864,6 +864,14 @@
 "mydata.delete.text" = "Alles wird gelöscht, dann das Konto selbst. Die geteilten Räume bleiben den anderen, ohne deine Nachrichten. Das ist endgültig.";
 "mydata.delete.button" = "Mein Konto löschen…";
 "mydata.backups" = "Die lokalen Sicherungen der Nacht werden beim Löschen ohne dich neu geschrieben. Wird dieser Haushalt gehostet, laufen die externen Sicherungen des Hosters von selbst ab, nach dessen Zeitplan.";
+"account_events.title" = "Was der Admin in deinem Konto getan hat";
+"account_events.text" = "Der Admin deines Haushalts verwaltet die Konten. Ein Code des Admins kann ein Gerät in deines bringen, und der Admin kann den ganzen Haushalt exportieren, deine Notizen und Gespräche eingeschlossen. Jedes Mal steht es hier.";
+"account_events.none" = "Nichts in den letzten 90 Tagen.";
+"account_events.device" = "%@ — ein neues Gerät ist mit einem Code des Admins in dein Konto gekommen.";
+"account_events.export" = "%@ — der Admin hat den ganzen Haushalt exportiert.";
+"account_events.alert" = "Der Admin deines Haushalts hat in dein Konto eingegriffen";
+"account_events.ok" = "Verstanden";
+"account_events.hint" = "Wenn du es nicht warst oder es nicht erwartet war, sprich mit dem Admin. Du findest das auch unter Einstellungen → Meine Daten.";
 "mydata.clone.title" = "Meine Notizen klonen";
 "mydata.clone.text" = "Deine Notizen haben eine Git-Adresse: Klone sie in Obsidian, Working Copy oder ein Terminal und halte eine aktuelle Kopie. Vorerst nur lesend: Was du dort änderst, kommt nicht hierher zurück.";
 "mydata.clone.button" = "Adresse anzeigen";

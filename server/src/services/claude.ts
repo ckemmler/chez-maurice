@@ -501,7 +501,13 @@ function logToolCall(
       tool: name,
       ms: Math.round(ms),
       ok: !failed,
-      args: truncate(input),
+      // The arguments' names and size, not their values (27 October 2026): a
+      // search, a title, a note's text are the member's words, and the
+      // operator who reads these lines is not meant to (the site says the
+      // logs hold no message content). The error text stays — it is the
+      // tool's own, and the one thing an autopsy cannot rebuild.
+      args: input && typeof input === "object" && !Array.isArray(input) ? Object.keys(input) : typeof input,
+      args_chars: JSON.stringify(input ?? null).length,
       // The MCP-protocol error text if there is one; else the tool's own
       // {error: "..."} field, which is where update_resource_entry-style
       // soft failures actually put their message.

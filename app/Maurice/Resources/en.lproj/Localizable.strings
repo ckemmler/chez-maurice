@@ -864,6 +864,14 @@
 "mydata.delete.text" = "Everything is erased, then the account itself. The rooms you shared stay with the others, without your messages. This cannot be undone.";
 "mydata.delete.button" = "Delete my account…";
 "mydata.backups" = "The night’s local backups are rewritten without you when you erase. If this household is hosted, the host’s off-site backups expire on their own, on the host’s schedule.";
+"account_events.title" = "What the admin did in your account";
+"account_events.text" = "Your household’s admin manages the accounts. A code the admin makes can bring a device into yours, and the admin can export the whole household, your notes and conversations included. Each time, it is written here.";
+"account_events.none" = "Nothing in the last 90 days.";
+"account_events.device" = "%@ — a new device came into your account with a code made by the admin.";
+"account_events.export" = "%@ — the admin exported the whole household.";
+"account_events.alert" = "Your household’s admin reached into your account";
+"account_events.ok" = "Understood";
+"account_events.hint" = "If it was not you or not expected, talk to the admin. You can also see this under Settings → My data.";
 "mydata.clone.title" = "Clone my notes";
 "mydata.clone.text" = "Your notes have a git address: clone them into Obsidian, Working Copy or a terminal, and keep an up-to-date copy. Read-only for now: what you change there does not come back here.";
 "mydata.clone.button" = "Show the address";

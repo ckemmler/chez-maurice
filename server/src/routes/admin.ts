@@ -4,7 +4,6 @@ import { requireAuth, requireAdmin } from "../middleware/auth";
 import { createPairingToken } from "../services/auth";
 import { SYSTEM_SPENDER, usageFor } from "../services/budget";
 import { docsStatus } from "../services/mauriceDocsRefresh";
-import { ArchiveError, exportResponse } from "../services/archive";
 import { openConversation, openingGuard } from "../services/openedConversations";
 import { mapMember, mappingNightlyStatus, runDomainMapping } from "../services/domainMapping";
 import { corpusNightlyStatus, reconcileCorpus } from "../services/corpusNightly";
@@ -161,21 +160,11 @@ admin.post("/pairing-token", (c) => {
   return c.json({ device_id: deviceId, pairing_token: pairingToken }, 201);
 });
 
-// ── GET /api/admin/export ───────────────────────────────────────
-// The whole household as one `maurice-archive` tarball (docs/household-archive.md),
-// streamed as tar produces it: the first bytes leave before the uploads are
-// read, so a big household never sits silent past the server's idle timeout.
-// The archive carries the provider keys with the rest of maurice.db — admin
-// only, and the response is marked not to be cached anywhere.
-
-admin.get("/export", (c) => {
-  try {
-    return exportResponse();
-  } catch (e: any) {
-    console.error(`[archive] export refused: ${e?.message ?? e}`);
-    return c.json({ error: e instanceof ArchiveError ? e.message : "Export failed" }, 500);
-  }
-});
+// The whole-household archive is not here (27 October 2026): an admin session
+// in the app no longer suffices to carry every member's notes and
+// conversations away. It is made on the machine — the console's /admin/export,
+// or scripts/export-household.ts, which a hosted household's tower runs after
+// the admin has given their password again (services/householdExportLinks.ts).
 
 // ── The mail reading, by hand (lot 4, services/mailReading.ts) ─────────
 // POST /api/admin/mail/reading/run { member_id | username, limit?, wait? }

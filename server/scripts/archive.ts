@@ -11,7 +11,10 @@
 // safe: export reads snapshots, import only ever writes into an empty dir.
 // ============================================================================
 import { resolve } from "node:path";
+import { Database } from "bun:sqlite";
 import { exportHousehold, importHousehold, ArchiveError } from "../src/services/archive";
+import { recordHouseholdExport } from "../src/services/accountEvents";
+import { getMauriceDbPath } from "../lib/appDir";
 
 const [cmd, ...rest] = process.argv.slice(2);
 
@@ -24,6 +27,15 @@ try {
   if (cmd === "export") {
     const outDir = resolve(rest[0] ?? process.cwd());
     const { path, manifest } = await exportHousehold({ outDir });
+    // Every member is told the household left as one file
+    // (services/accountEvents.ts), whoever ran this.
+    const live = new Database(getMauriceDbPath());
+    try {
+      live.run("PRAGMA busy_timeout = 10000");
+      recordHouseholdExport(live);
+    } finally {
+      live.close();
+    }
     console.log(`✓ ${path}`);
     console.log(`  ${manifest.household.name} — ${manifest.members.length} member(s), schema ${manifest.schema_version}, server ${manifest.server_version}`);
     console.log(`  ${manifest.contents.join("  ")}`);

@@ -1,4 +1,4 @@
-import { readFileSync, existsSync, readdirSync, statSync } from "node:fs";
+import { readFileSync, existsSync, readdirSync, rmSync, statSync } from "node:fs";
 import { resolve, join, extname } from "node:path";
 import { gardensRoot } from "./src/services/gardensRoot";
 
@@ -73,7 +73,10 @@ import toolFamilies from "./src/routes/toolFamilies";
 import { adminExists, getUser, getUserByUsername, householdName, householdInfo } from "./src/services/users";
 import { pinNewInvocations, refreshAutoPins, seedAncillaryPinsOnce } from "./src/services/ancillary";
 import ancillaryRoute from "./src/routes/ancillary";
-import { dataDir } from "./src/db";
+import db, { dataDir } from "./src/db";
+import { getAppDir } from "./lib/appDir";
+import { EXPORTS_DIRNAME, sweepExports, takeExport } from "./src/services/householdExportLinks";
+import { pushPendingAccountEvents } from "./src/services/accountEventsPush";
 import { imagesDir } from "./src/services/images";
 import { avatarsDir } from "./src/services/avatars";
 import { proxyAuth, validateApiTokenRaw, validateHealthToken } from "./src/middleware/auth";
@@ -169,6 +172,36 @@ app.use(
   }),
 );
 
+// The whole-household archive, fetched once by the link the admin was mailed
+// (scripts/export-household.ts, services/householdExportLinks.ts). Before
+// proxyAuth: the token is the credential, and a stale cookie in the browser
+// that follows the link must not answer 401 first. The row is taken when the
+// request arrives; the file goes once the response has been sent, or the
+// client hung up.
+app.get("/export/:token", (c) => {
+  const found = takeExport(db, c.req.param("token"));
+  if (!found) return c.text("This link has expired or was already used.", 404);
+  const drop = () => { try { rmSync(found.path, { force: true }); } catch {} };
+  const reader = Bun.file(found.path).stream().getReader();
+  const body = new ReadableStream<Uint8Array>({
+    async pull(ctrl) {
+      const { value, done } = await reader.read();
+      if (done) { ctrl.close(); drop(); return; }
+      ctrl.enqueue(value);
+    },
+    cancel() { reader.cancel().catch(() => {}); drop(); },
+  });
+  console.log(`[household-export] fetched ${found.filename} (${found.bytes} bytes)`);
+  return new Response(body, {
+    headers: {
+      "Content-Type": "application/gzip",
+      "Content-Disposition": `attachment; filename="${found.filename}"`,
+      "Content-Length": String(found.bytes),
+      "Cache-Control": "no-store",
+    },
+  });
+});
+
 app.use("/*", proxyAuth);
 
 // ── Require authentication for all data routes ───────────────────
@@ -255,6 +288,23 @@ scheduleGardenExport();
 // entry's fiche once the conversation has settled, twenty minutes after its
 // last message (see data-api/services/entryConversations.ts).
 scheduleConversationSummaries();
+// A whole-household archive nobody fetched goes at expiry: swept now and
+// hourly (services/householdExportLinks.ts). The push after an account event
+// — whichever process wrote it — is sent within the minute
+// (services/accountEventsPush.ts).
+{
+  const sweep = () => {
+    try {
+      const n = sweepExports(db, join(getAppDir(), EXPORTS_DIRNAME));
+      if (n) console.log(`[household-export] swept ${n}`);
+    } catch (e) {
+      console.error(`[household-export] sweep failed: ${(e as Error).message}`);
+    }
+  };
+  sweep();
+  setInterval(sweep, 3600_000).unref?.();
+  setInterval(() => { pushPendingAccountEvents().catch(() => {}); }, 60_000).unref?.();
+}
 // One domain per name (services/domainMerge.ts): whatever same-named domains
 // a household made before the rule are folded into the oldest of each, once.
 {

@@ -99,7 +99,11 @@ backup_one() { # <name>
   fi
   local excludes=(--exclude /data/logs --exclude /data/run --exclude /data/app/logs \
                   --exclude /data/app/data/tmp --exclude /data/data/qdrant --exclude '/data/**/*.db-wal' \
-                  --exclude '/data/**/*.db-shm' --exclude '._*' --exclude .DS_Store)
+                  --exclude '/data/**/*.db-shm' --exclude '._*' --exclude .DS_Store \
+                  --exclude '/data/**/household-exports')
+  # household-exports: a whole-household archive waiting for its one download
+  # (scripts/export-household.ts) — a copy of what is backed up anyway, which
+  # must not outlive its link by twelve months in the snapshots.
   local rel; while IFS= read -r rel; do [ -n "$rel" ] && excludes+=(--exclude "/data/$rel"); done <<<"$live"
   say "$name: uploading…"
   if restic -v "$volume:/data:ro" "$RESTIC_IMAGE" backup /data \

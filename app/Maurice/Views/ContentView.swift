@@ -112,6 +112,8 @@ struct ContentView: View {
         }
         .environment(\.mauriceTheme, theme)
         .preferredColorScheme(MauriceTheme.colorSchemeOverride(for: session.palette))
+        // What the admin did in this account, told once (MyDataView.swift).
+        .modifier(AccountEventsNotice())
         // Blocking connect disclosure (once per non-owned server host). Sits over
         // everything; "Cancel" disconnects.
         .overlay {

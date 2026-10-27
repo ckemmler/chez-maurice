@@ -864,6 +864,14 @@
 "mydata.delete.text" = "Tout est effacé, puis le compte lui-même. Les salons que vous partagiez restent aux autres, sans vos messages. C’est définitif.";
 "mydata.delete.button" = "Supprimer mon compte…";
 "mydata.backups" = "Les sauvegardes locales de la nuit sont réécrites sans vous au moment de l’effacement. Si ce foyer est hébergé, les sauvegardes hors site de l’hébergeur s’éteignent d’elles-mêmes, selon son calendrier.";
+"account_events.title" = "Ce que l’admin a fait dans votre compte";
+"account_events.text" = "L’admin de votre foyer gère les comptes. Un code créé par l’admin peut faire entrer un appareil dans le vôtre, et l’admin peut exporter le foyer entier, vos notes et vos conversations comprises. Chaque fois, c’est écrit ici.";
+"account_events.none" = "Rien ces 90 derniers jours.";
+"account_events.device" = "%@ — un nouvel appareil est entré dans votre compte avec un code créé par l’admin.";
+"account_events.export" = "%@ — l’admin a exporté le foyer entier.";
+"account_events.alert" = "L’admin de votre foyer est intervenu dans votre compte";
+"account_events.ok" = "Compris";
+"account_events.hint" = "Si ce n’était pas vous, ou pas prévu, parlez-en avec l’admin. Vous retrouvez ceci dans Réglages → Mes données.";
 "mydata.clone.title" = "Cloner mes notes";
 "mydata.clone.text" = "Vos notes ont une adresse git : clonez-les dans Obsidian, Working Copy ou un terminal, et gardez-en une copie à jour. En lecture seule pour l’instant : ce que vous y changez ne revient pas ici.";
 "mydata.clone.button" = "Afficher l’adresse";

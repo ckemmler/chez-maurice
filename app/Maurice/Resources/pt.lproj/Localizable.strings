@@ -864,6 +864,14 @@
 "mydata.delete.text" = "Tudo é apagado e depois a própria conta. As salas que partilhava ficam para os outros, sem as suas mensagens. É definitivo.";
 "mydata.delete.button" = "Eliminar a minha conta…";
 "mydata.backups" = "As cópias locais da noite são reescritas sem si no momento do apagamento. Se esta casa estiver alojada, as cópias externas do alojador expiram por si, segundo o calendário dele.";
+"account_events.title" = "O que o admin fez na sua conta";
+"account_events.text" = "O admin da sua casa gere as contas. Um código do admin pode fazer entrar um dispositivo na sua, e o admin pode exportar a casa inteira, as suas notas e conversas incluídas. De cada vez, fica escrito aqui.";
+"account_events.none" = "Nada nos últimos 90 dias.";
+"account_events.device" = "%@ — um novo dispositivo entrou na sua conta com um código criado pelo admin.";
+"account_events.export" = "%@ — o admin exportou a casa inteira.";
+"account_events.alert" = "O admin da sua casa interveio na sua conta";
+"account_events.ok" = "Entendido";
+"account_events.hint" = "Se não foi você, ou não era esperado, fale com o admin. Também vê isto em Definições → Os meus dados.";
 "mydata.clone.title" = "Clonar as minhas notas";
 "mydata.clone.text" = "As suas notas têm um endereço git: clone-as no Obsidian, no Working Copy ou num terminal e mantenha uma cópia atualizada. Por agora só de leitura: o que mudar lá não volta para aqui.";
 "mydata.clone.button" = "Mostrar o endereço";

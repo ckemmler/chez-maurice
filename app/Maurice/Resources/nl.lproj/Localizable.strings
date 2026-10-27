@@ -864,6 +864,14 @@
 "mydata.delete.text" = "Alles wordt gewist, daarna het account zelf. De kamers die je deelde blijven bij de anderen, zonder je berichten. Dit is definitief.";
 "mydata.delete.button" = "Mijn account verwijderen…";
 "mydata.backups" = "De lokale back-ups van de nacht worden bij het wissen zonder jou herschreven. Als dit huishouden gehost wordt, verlopen de externe back-ups van de host vanzelf, volgens diens schema.";
+"account_events.title" = "Wat de admin in je account deed";
+"account_events.text" = "De admin van je huishouden beheert de accounts. Een code van de admin kan een apparaat in het jouwe brengen, en de admin kan het hele huishouden exporteren, je notities en gesprekken inbegrepen. Elke keer staat het hier.";
+"account_events.none" = "Niets in de laatste 90 dagen.";
+"account_events.device" = "%@ — een nieuw apparaat kwam in je account met een code van de admin.";
+"account_events.export" = "%@ — de admin heeft het hele huishouden geëxporteerd.";
+"account_events.alert" = "De admin van je huishouden kwam in je account";
+"account_events.ok" = "Begrepen";
+"account_events.hint" = "Was jij het niet, of was het niet verwacht, praat dan met de admin. Je ziet dit ook onder Instellingen → Mijn gegevens.";
 "mydata.clone.title" = "Mijn notities klonen";
 "mydata.clone.text" = "Je notities hebben een git-adres: kloon ze in Obsidian, Working Copy of een terminal en houd een actuele kopie bij. Voorlopig alleen-lezen: wat je daar wijzigt, komt hier niet terug.";
 "mydata.clone.button" = "Adres tonen";

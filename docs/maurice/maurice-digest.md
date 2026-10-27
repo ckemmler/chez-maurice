@@ -20,15 +20,15 @@ covers:
   maurice-carnet: '2026-10-23'
   maurice-chat: '2026-10-26'
   maurice-composer: '2026-10-20'
-  maurice-data-model: '2026-10-26'
+  maurice-data-model: '2026-10-27'
   maurice-docs: '2026-10-20'
   maurice-domains: '2026-10-20'
   maurice-files: '2026-06-19'
-  maurice-households-rooms: '2026-10-26'
+  maurice-households-rooms: '2026-10-27'
   maurice-knowledge: '2026-10-20'
   maurice-life: '2026-10-20'
   maurice-personas-hats: '2026-09-19'
-  maurice-server: '2026-10-26'
+  maurice-server: '2026-10-27'
   maurice-shared-gardens: '2026-10-20'
   maurice-tools: '2026-10-20'
   maurice-web-garden: '2026-10-20'
@@ -89,7 +89,7 @@ There is also a **browser clipper** that saves the page being read into the memb
 ## 5. Households, members, devices
 
 - **One server is one household**; a device can hold several households, each with its own session, switched from a pill with an unread badge.
-- **Joining:** enter the server's address; the app shows the household's name, icon and colour. A **fresh device joins with an invite code** given by an admin (8 characters, about 7 days, reusable within that window, rate-limited), then the member sets a PIN. An admin can also issue an **open invitation** — QR code, typed code or link, single use, 7 days — with which a newcomer gives a first name and colour and becomes a standard member. Once a member is signed in on a device, the device shows the household's members, and switching is a tap plus a PIN; a member without a PIN comes back on a device only with an invite code. The admin signs in with a username and password.
+- **Joining:** enter the server's address; the app shows the household's name, icon and colour. A **fresh device joins with an invite code** given by an admin (8 characters, about 7 days, reusable within that window, rate-limited), then the member sets a PIN. An admin can also issue an **open invitation** — QR code, typed code or link, single use, 7 days — with which a newcomer gives a first name and colour and becomes a standard member. Once a member is signed in on a device, the device shows the household's members, and switching is a tap plus a PIN; a member without a PIN comes back on a device only with an invite code. The admin signs in with a username and password. A code the admin makes for someone who already uses their account is **told to that member** (an alert in the app, a line under *My data*, a push).
 - **Roles:**
   - **admin** — manages members, keys, models, budgets and the household's identity;
   - **standard** — a full member with a mandatory PIN;
@@ -119,11 +119,12 @@ There is also a **browser clipper** that saves the page being read into the memb
 - **Model providers** receive the prompt and context of each turn, nothing more.
 - **Dictation audio** stays on the device with Apple's on-device recognisers. Sent to the household's server, it is transcribed there by whisper.cpp when the server has it (it then never leaves the house) or, on a hosted household, by the provider's Whisper — the default, which a member turns off in Settings → Dictation to keep the audio on the device; the server keeps neither the clip nor the words. Apple's servers hear it only for a language with no local model, after the member allowed it — the mic shows a cloud.
 - **Members are separated**: every tool call carries the member's id; one member's notes, search, mail and briefs are not reachable by another. In a room, Maurice cannot use anyone's memory, mail or briefs.
+- **The admin is the exception, and it is said:** a Maurice belongs to whoever opens it. The admin manages the accounts and can, if need be, get into a member's — a device brought in with a code — or export the whole household. Each time the member is told: an alert when the app opens, the date under Settings → *My data* → *What the admin did in your account*, and a push. The app itself shows the admin nobody's conversations, notes or mail, but it does show what each member spends. Join the Maurice of someone you trust.
 - **Mail passwords** are sealed with the household key, never returned by any route, readable only by the email tool through a local route.
 - **The operator** (whoever runs the server) can see the admin console from the machine itself — provider keys, member settings, per-member spend, reports filed in shared rooms, health counters, logs of model rounds and tool calls. They cannot see mail passwords, reports on private one-to-one conversations (those cannot be reported), or names and content through the health probe. This is policy and plumbing, not encryption against the operator: whoever runs the server runs its storage.
 - **Your data, your copy:** *My data* in the app exports a member archive (conversations, rows, notes with their history, files, mail store — no credentials), imports one, and **erases** — the member's data, or the whole account — everywhere the server reaches, including nightly local snapshots. The answer lists what it cannot reach: a copy of the notes on a remote elsewhere, a published site, archives an admin already exported, and a hosted household's off-site backups (kept up to 12 months; restoring one would bring the member back). Carnet offers the same *Delete my account*.
 - **Your notes as a git clone:** each member can clone their own notes (Settings → *My data* → *Clone my notes*), read-only, with a key that opens nothing else. The clone holds the notes, fiches and their history, and every night Maurice writes into it, under `_maurice/`, the member's highlights, reading positions, archived entries and domains (brief, instructions, context, what is filed in each), and their conversations if they turn that on. It is **not encrypted**: notes marked encrypted are in clear text in it, as they are on the server's disk.
-- **Household archive:** the admin can export the whole household (databases, every member's notes with their history, files, configuration, the household key) to move it elsewhere. It contains provider keys and is a secret.
+- **Household archive:** the whole household as one file (databases, every member's notes with their history, files, configuration, the household key) to move it elsewhere. No password is in it: each member reconnects their mailbox after a move. At home it comes from the admin console on the machine. A hosted household's admin asks for it on their Chez Maurice account, with their password, and gets a link by mail that works once, for a few hours. That copy holds no session, PIN or provider key either: in the new home everyone joins again with a code.
 
 *Detail:* `data-model`, `server`, `architecture`.
 

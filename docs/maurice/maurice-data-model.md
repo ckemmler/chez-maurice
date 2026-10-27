@@ -1,6 +1,6 @@
 ---
 title: The data model
-date: '2026-10-26'
+date: '2026-10-27'
 flags: []
 locale: en
 description: 'The SQLite schema behind the chat engine: identity, conversations, files,
@@ -36,6 +36,8 @@ Anthropic's key stays in `households.api_key`; the other providers got their own
 | `sessions` | `id`, `user_id`, `device_id`, `expires_at` | Opaque session tokens. |
 | `api_tokens` | `id`, `user_id`, `token_hash` (unique), `token_plain` (self-service only), `label`, `scope ∈ {mcp,health,full,git}` | `maur_*` bearer tokens; the self-service MCP token is recoverable so all of a member's devices show the same one, and so is the `git` token (label `git-clone`, 17 October 2026), which opens the clone of the member's notes and nothing else. |
 | `invite_codes` | `code` (PK), `user_id`, `expires_at` | Admin hands one to a member to enroll a device; reusable within the window, revocable by deleting the row. |
+| `account_events` | `id`, `user_id` (cascade), `kind ∈ {device_by_code, household_export}`, `created_at`, `pushed_at`, `seen_at` | What the admin did that reached into a member's account, told to the member (27 October 2026; `services/accountEvents.ts`). |
+| `household_exports` | `token_hash` (PK), `path`, `filename`, `bytes`, `expires_at` | The one whole-household archive waiting for its single download (`services/householdExportLinks.ts`). |
 | `household_invites` | `code` (PK), `created_by`, `expires_at`, `used_by`, `used_at` | An open invitation: brings someone who isn't a member yet, who names themselves on arrival. Single use; the row stays as the record of who came in by it. |
 | `mail_accounts` | `id`, `member_id` (cascade), `address` (unique per member), `name`, `provider`, `host`, `port`, `security`, `username` (all optional — the `email` tool guesses them from the domain), `secret`, `state` ∈ `unchecked`/`ok`/`error`, `last_error`, `checked_at`, `created_at`, `updated_at` | A member's mailbox, added by the member themselves (25 September 2026, `services/mailAccounts.ts`). `secret` is the password sealed with AES-256-GCM (`v1:` + base64 of IV, tag, ciphertext) under the **household key**: `MAURICE_SECRET_KEY` (32 bytes, hex or base64) when set, else `secret.key` in the app dir, created on first use, mode 0600. A copy of `maurice.db` without the key carries no usable password; the household archive carries the key. No route returns `secret`; only the loopback route the tool reads decrypts it. |
 | `contact_accounts` | `id`, `member_id` (cascade), `url` (null = the provider's own address), `username`, `name`, `provider`, `secret`, `state` ∈ `unchecked`/`ok`/`error`, `last_error`, `checked_at`, `synced_at`, `cards`, `created_at`, `updated_at` | A member's address book, a CardDAV login added by the member (27 September 2026, lot 2 of `specs/contacts.md`, `services/contactAccounts.ts`). `secret` sealed exactly as `mail_accounts.secret`, never returned. |
