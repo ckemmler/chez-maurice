@@ -223,7 +223,9 @@ behind it (`householdBudget()`, `services/budget.ts`):
   allowance was last raised and runs down from there: the server keeps the
   allowance it last saw and what was left at that moment
   (`households.ring_cap_eur`, `ring_full_eur`). The first reading counts from
-  the whole allowance; each later change (a top-up) fills the ring again.
+  the whole allowance; each later rise (a top-up, a paid month's reserve)
+  fills the ring again, while a fall (a household that stopped paying) keeps
+  it counted from the last full, so a small remainder never reads as full.
 - **A monthly budget**, set in the console's *Budget* section
   (`households.budget_monthly_eur`, in euros and named so): over the calendar
   month (UTC), counted over the whole household, the night's work included.

@@ -326,6 +326,12 @@ test("a prepaid balance: full at first sight, refilled by a top-up, counted from
 
   b.recordSpend(turn(4.195), BEN);
   expect(b.householdBudget().left).toBeCloseTo(0.5, 5);
+
+  // The household stops paying and the allowance falls: no refill.
+  process.env.MAURICE_SPEND_CAP_USD = "5.895";
+  ring = b.householdBudget(true);
+  expect(ring.left_eur).toBeCloseTo(0.2, 5);
+  expect(ring.left).toBeCloseTo(0.2 / 8.39, 5);
 });
 
 test("both set: the ring shows the emptier", async () => {

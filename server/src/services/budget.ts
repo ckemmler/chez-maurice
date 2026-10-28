@@ -177,7 +177,8 @@ export function capped(userId?: string | null): boolean {
 //     ring is full when the allowance was last raised and runs down from
 //     there: `ring_cap_eur` is the allowance last seen, `ring_full_eur` what
 //     was left at that moment. The first reading counts from the whole
-//     allowance; each later change of it (a top-up) fills the ring again.
+//     allowance; each later rise of it (a top-up) fills the ring again, and a
+//     fall leaves it counted from the last full.
 //   the monthly budget — households.budget_monthly_eur, set in the console:
 //     over the calendar month (UTC), counted over the whole household, the
 //     night's work included. It is a layer of the verdict too.
@@ -211,9 +212,11 @@ function balanceFull(cap: number, spent: number): number {
     )
     .get();
   if (row?.cap != null && row.full != null && Math.abs(row.cap - cap) < 1e-9) return row.full;
-  // Never seen: count from the whole allowance. Seen and moved: from what is
-  // left now — the top-up fills the ring.
-  const full = row?.cap == null ? cap : Math.max(0, cap - spent);
+  // Never seen: count from the whole allowance. Raised (a top-up, a month's
+  // reserve): from what is left now — the ring fills. Lowered (a household
+  // that stopped paying): from the last full, so a small remainder never
+  // reads as a full ring.
+  const full = row?.cap == null || row.full == null ? cap : cap > row.cap ? Math.max(0, cap - spent) : row.full;
   db.run(`UPDATE households SET ring_cap_eur = ?, ring_full_eur = ? WHERE id = 'default'`, [cap, full]);
   return full;
 }
