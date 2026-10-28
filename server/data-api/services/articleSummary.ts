@@ -298,7 +298,7 @@ async function summarize(
   const make = async (length: SummaryLength): Promise<string> => {
     const made = await summarizeArticleText({ ...input, length });
     if (typeof made === "string") return made;
-    recordSpend(made.usage, memberId);
+    recordSpend(made.usage, memberId, null, "articles");
     return made.text;
   };
   const [summary, summaryLong] = await Promise.all([

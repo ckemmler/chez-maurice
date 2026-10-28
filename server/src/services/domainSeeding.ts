@@ -399,7 +399,7 @@ export async function seedDomain(domain: Maurice, memberId: string): Promise<See
     console.warn(`[seeding] "${domain.name}": model call failed: ${error}`);
     return { outcome: "failed", notes: [], sources: sources.length, cost_usd: null, error };
   }
-  recordSpend(r.usage, memberId);
+  recordSpend(r.usage, memberId, null, "domains");
   const cost = r.usage?.cost ?? null;
 
   const seed = r.stop === "refusal" ? null : parseSeed(r.text, sources.length);

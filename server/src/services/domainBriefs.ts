@@ -718,7 +718,7 @@ async function doRefresh(domain: Maurice, memberId: string): Promise<RefreshResu
     return { outcome: "failed", brief: previous, sources: material.length, cost_usd: null, error };
   }
   // What it cost is the household's, on nobody's turn.
-  recordSpend(result.usage, SYSTEM_SPENDER);
+  recordSpend(result.usage, SYSTEM_SPENDER, null, "domains");
   const cost = result.usage?.cost ?? null;
 
   if (result.stop === "refusal" || result.stop === "max_tokens" || !result.text.trim()) {
@@ -785,7 +785,7 @@ export async function writeSummary(domain: Maurice, memberId: string, brief: str
       maxTokens: 200,
       temperature: 0.2,
     });
-    recordSpend(result.usage, SYSTEM_SPENDER);
+    recordSpend(result.usage, SYSTEM_SPENDER, null, "domains");
     const line = result.text.replace(/\s+/g, " ").trim().replace(/^["'«]|["'»]$/g, "");
     if (!line) return;
     storeSummary(domain.id, memberId, line.length > SUMMARY_CHARS ? line.slice(0, SUMMARY_CHARS).trimEnd() + "…" : line);
@@ -833,7 +833,7 @@ export async function ensureDomainIcon(domain: Maurice, memberId: string): Promi
         maxTokens: 600,
         temperature: 0,
       });
-      recordSpend(result.usage, SYSTEM_SPENDER);
+      recordSpend(result.usage, SYSTEM_SPENDER, null, "domains");
       icon = parseIconAnswer(result.text);
     }
   } catch (err) {

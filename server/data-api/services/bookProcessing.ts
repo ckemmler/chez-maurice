@@ -220,7 +220,7 @@ export async function summarizeChapters(
         await wait(RETRY_WAITS_MS[attempt]!);
       }
     }
-    recordSpend(r.usage, memberId, jobId);
+    recordSpend(r.usage, memberId, jobId, "books");
     if (r.stop === "refusal") throw new BookProcessingError(`${r.model} declined to summarize this chapter.`, 502);
     if (!r.text.trim()) throw new BookProcessingError(`${r.model} returned an empty summary.`, 502);
     return r.text.trim();

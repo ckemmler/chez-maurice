@@ -424,7 +424,7 @@ async function call(invocation: string, system: string, prompt: string, temperat
   } catch (err) {
     return { failed: (err as Error).message, cost: 0 };
   }
-  recordSpend(r.usage, SYSTEM_SPENDER);
+  recordSpend(r.usage, SYSTEM_SPENDER, null, "domains");
   const cost = r.usage?.cost ?? 0;
   // A reply with nothing usable was still billed: the ledger has it, and so
   // does the night's count.

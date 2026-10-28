@@ -145,7 +145,7 @@ export async function askMauriceDocs(
       temperature: 0.3,
       cacheSystem: true,
     });
-    recordSpend(r.usage, memberId ?? null);
+    recordSpend(r.usage, memberId ?? null, null, "docs");
     if (r.stop === "refusal" || !r.text) {
       return { text: "The documentation could not be consulted for this question.", isError: true, usage: r.usage, model: r.model };
     }

@@ -193,7 +193,7 @@ export async function judgeFact(text: string, memberId: string | null): Promise<
       maxTokens: 300,
       temperature: 0,
     });
-    recordSpend(result.usage, memberId);
+    recordSpend(result.usage, memberId, null, "life");
     const line = result.text.replace(/\s+/g, " ").trim();
     const drop = /^\s*DROP\b[:\-\s]*/i.exec(line);
     if (drop) return { ok: false, text, why: line.slice(drop[0].length).trim() || "not a lasting fact" };

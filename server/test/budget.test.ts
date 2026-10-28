@@ -262,3 +262,13 @@ test("a job's spend is kept apart from chat: job_id on the row, summed by spentO
   expect(b.spentTodayUsd(ANNA)).toBeCloseTo(0.6, 5);
   expect(b.spentTodayUsd()).toBeCloseTo(1.0, 5);
 });
+
+test("the ledger says what each row was spent on", async () => {
+  const b = await budget();
+  const db = (await import("../src/db")).default;
+  b.recordSpend(turn(0.4), ANNA, null, "chat");
+  b.recordSpend(turn(0.3), ANNA, "job-1", "mail");
+  b.recordSpend(turn(0.2));
+  const rows = db.query("SELECT purpose, job_id FROM spend_ledger ORDER BY id").all() as { purpose: string | null; job_id: string | null }[];
+  expect(rows).toEqual([{ purpose: "chat", job_id: null }, { purpose: "mail", job_id: "job-1" }, { purpose: null, job_id: null }]);
+});

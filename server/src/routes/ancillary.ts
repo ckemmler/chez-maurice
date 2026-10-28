@@ -117,7 +117,7 @@ ancillary.post("/", async (c) => {
       images: images.length ? images : undefined,
       reasoning: body?.reasoning === "none" ? "none" : undefined,
     });
-    if (memberId) recordSpend(result.usage, memberId);
+    if (memberId) recordSpend(result.usage, memberId, null, "ancillary");
     return c.json(result);
   } catch (err) {
     if (err instanceof AncillaryError) {

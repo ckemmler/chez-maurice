@@ -407,7 +407,7 @@ async function transcribeWithScaleway(input: TranscribeInput): Promise<Transcrib
     input: 0, output: 0, cache_read: 0, cache_write: 0,
     cost, cost_uncached: cost,
   };
-  recordSpend(usage, input.memberId);
+  recordSpend(usage, input.memberId, null, "dictation");
   return { text: cleanTranscript(body.text ?? ""), engine: "scaleway", seconds, cost };
 }
 

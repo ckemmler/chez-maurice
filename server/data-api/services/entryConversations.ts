@@ -317,7 +317,7 @@ async function writeSummary(
     entryTitle, conversationTitle, transcript,
     memberName: member?.display_name || member?.username || "the member",
   });
-  recordSpend(made.usage, memberId);
+  recordSpend(made.usage, memberId, null, "carnet");
 
   // Where it goes: over its own previous version — the link written after the
   // first exchange, or an older summary — so a conversation keeps one fragment

@@ -676,7 +676,7 @@ async function documentsPass(memberId: string, d: MailDocumentsDeps): Promise<Do
     // On the ledger as the member, under the reading job's id: the
     // documents are the reading's last step, and the operator sees them
     // with it.
-    recordSpend(r.usage, memberId, readingJobId);
+    recordSpend(r.usage, memberId, readingJobId, "mail");
     run.cost += r.usage?.cost ?? 0;
     return r;
   };

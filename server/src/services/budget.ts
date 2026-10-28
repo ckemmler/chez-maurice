@@ -184,18 +184,31 @@ db.run(`CREATE INDEX IF NOT EXISTS idx_spend_ledger_user_at ON spend_ledger(user
 // (the `email` tool's per-member store), and only its id crosses over.
 try { db.run(`ALTER TABLE spend_ledger ADD COLUMN job_id TEXT`); } catch {}
 db.run(`CREATE INDEX IF NOT EXISTS idx_spend_ledger_job_at ON spend_ledger(job_id, at)`);
+// What it was spent on (28 October 2026): "chat" for a member's turn, and for
+// the work Maurice does on his own its kind — mail, domains, suggestions,
+// articles, books, life, carnet, dictation, docs, ancillary. Null on rows from
+// before. The household's own figures and the hosted fleet's counters split
+// the spend by it: a household nobody writes in can still spend, at night,
+// on what it asked Maurice to read.
+try { db.run(`ALTER TABLE spend_ledger ADD COLUMN purpose TEXT`); } catch {}
 
-/** Record what a completed turn cost, whose turn it was, and — for a night's
- *  job rather than a turn — which job. Called wherever usage is persisted,
- *  so every turn is counted once regardless of which route produced it. */
-export function recordSpend(u: TurnUsage | null | undefined, spenderId?: string | null, jobId?: string | null): void {
+/** What a ledger row was spent on: a member's turn, or a kind of Maurice's own work. */
+export type SpendPurpose =
+  | "chat" | "mail" | "domains" | "suggestions" | "articles" | "books"
+  | "life" | "carnet" | "dictation" | "docs" | "ancillary";
+
+/** Record what a completed turn cost, whose turn it was, for a night's job
+ *  rather than a turn which job, and what it was for. Called wherever usage is
+ *  persisted, so every turn is counted once regardless of which route produced it. */
+export function recordSpend(u: TurnUsage | null | undefined, spenderId?: string | null, jobId?: string | null, purpose?: SpendPurpose | null): void {
   if (!u || u.cost == null || u.cost <= 0) return;
-  db.run(`INSERT INTO spend_ledger (provider, model, cost_usd, user_id, job_id) VALUES (?, ?, ?, ?, ?)`, [
+  db.run(`INSERT INTO spend_ledger (provider, model, cost_usd, user_id, job_id, purpose) VALUES (?, ?, ?, ?, ?, ?)`, [
     u.provider,
     u.model,
     u.cost,
     spenderId ?? null,
     jobId ?? null,
+    purpose ?? null,
   ]);
 }
 

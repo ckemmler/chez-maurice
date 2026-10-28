@@ -258,7 +258,7 @@ async function nameSubjects(
     temperature: 0,
     reasoning: "none",
   });
-  recordSpend(result.usage, memberId);
+  recordSpend(result.usage, memberId, null, "suggestions");
   return parseNamed(result.text);
 }
 
@@ -1108,7 +1108,7 @@ async function pickEpisode(memberId: string, s: EntrySuggestion, episodes: Episo
     const result = await completeWith({
       invocation: "entry_suggest_episode", system: PICK_EPISODE, prompt, maxTokens: 100, temperature: 0, reasoning: "none",
     });
-    recordSpend(result.usage, memberId);
+    recordSpend(result.usage, memberId, null, "suggestions");
     const start = result.text.indexOf("{");
     const end = result.text.lastIndexOf("}");
     const id = start >= 0 && end > start ? JSON.parse(result.text.slice(start, end + 1))?.episode : null;
@@ -1202,7 +1202,7 @@ async function refineQuery(memberId: string, s: EntrySuggestion): Promise<string
     const result = await completeWith({
       invocation: "entry_suggest_refine", system: REFINE, prompt, maxTokens: 200, temperature: 0, reasoning: "none",
     });
-    recordSpend(result.usage, memberId);
+    recordSpend(result.usage, memberId, null, "suggestions");
     const start = result.text.indexOf("{");
     const end = result.text.lastIndexOf("}");
     const q = start >= 0 && end > start ? String(JSON.parse(result.text.slice(start, end + 1))?.query ?? "") : "";
