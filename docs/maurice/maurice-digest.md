@@ -152,7 +152,7 @@ There is also a **browser clipper** that saves the page being read into the memb
 - **Who pays what:** a member's own turns, the documentation tool, scanned-attachment transcription, mail reading and its documents, a domain's first notes, chapter and article summaries and the summaries of conversations on a fiche are charged to that member; the night's briefs and domain mapping to the household's *system* spender.
 - **Orders of magnitude:** a short classic summarized chapter by chapter costs a cent or two, a long novel some tens of cents; writing a domain's first notes under a cent; a night's domain mapping a few cents per member.
 
-*Gaps:* no payment (card top-up is a stub); flashcards and signal parsing are not recorded in the ledger; the documentation tool's cost is not in the chat's displayed figure.
+*Gaps:* no payment — a member cannot top up their share, and when they can it will be on the web, never in the apps; flashcards and signal parsing are not recorded in the ledger; the documentation tool's cost is not in the chat's displayed figure.
 
 *Detail:* `server`, `chat`.
 

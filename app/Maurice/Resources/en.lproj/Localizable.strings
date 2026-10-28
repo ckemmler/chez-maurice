@@ -955,3 +955,14 @@
 "article.link_only" = "Link only";
 "article.open" = "Open the page";
 "article.reading" = "Reading…";
+
+/* Budget — the member's share of the household's monthly budget */
+"budget.title" = "Budget";
+"budget.group" = "BUDGET";
+"budget.value.unlimited" = "No limit";
+"budget.value.left" = "%d %% left";
+"budget.pane.unlimited" = "This household has set no budget: nothing limits you.";
+"budget.pane.left" = "%d %% of your share of this month's budget is left.";
+"budget.pane.resets" = "It starts afresh on %@.";
+"budget.caption" = "Your share of the household's budget is set by whoever runs it. The ring beside your name shows what is left; you are told at 20, 10 and 5 %.";
+"budget.toast.title" = "%d %% of your budget left";

@@ -19,6 +19,7 @@ struct ContentView: View {
     @Environment(MauriceStore.self) private var maurices
     @Environment(DomainsState.self) private var domains
     @Environment(GardensStore.self) private var gardens
+    @Environment(BudgetStore.self) private var budget
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.scenePhase) private var scenePhase
     #if os(iOS)
@@ -154,6 +155,7 @@ struct ContentView: View {
         .onChange(of: scenePhase) {
             chat.appActive = (scenePhase == .active)
             if scenePhase == .active { showChatForSharedPage() }
+            if scenePhase == .active, session.hasActiveSession { Task { await budget.refresh(session) } }
         }
         #if os(iOS)
         .onChange(of: ShareArrivals.shared.token) { showChatForSharedPage() }
@@ -164,6 +166,33 @@ struct ContentView: View {
             gardens.openGardenId = nil
             preferredColumn = .detail
         }
+        // The budget ring: read for whoever is signed in, and again after every
+        // turn, which is what spends it — crossing 20, 10 or 5 % raises a toast.
+        .task(id: session.hasActiveSession ? session.activeUserId : nil) {
+            if session.hasActiveSession { await budget.refresh(session) }
+        }
+        .onChange(of: chat.isStreaming) { was, now in
+            if was && !now { Task { await budget.refresh(session) } }
+        }
+        .overlay(alignment: .top) {
+            if session.hasActiveSession, !isLoading, let percent = budget.alert {
+                BudgetToast(percent: percent)
+                    .padding(.top, 8).padding(.horizontal, 16)
+                    .transition(.move(edge: .top).combined(with: .opacity))
+            }
+        }
+        .animation(.spring(duration: 0.4, bounce: 0.2), value: budget.alert)
+        // The ring and the toast both lead here: Settings, opened on Budget.
+        .sheet(isPresented: budgetSettingsBinding) {
+            SettingsView(initialPane: .budget)
+                .environment(session)
+                .environment(budget)
+                .environment(\.mauriceTheme, theme)
+        }
+    }
+
+    private var budgetSettingsBinding: Binding<Bool> {
+        Binding(get: { budget.showSettings }, set: { budget.showSettings = $0 })
     }
 
     /// A page shared from another app waits for the composer, which takes it

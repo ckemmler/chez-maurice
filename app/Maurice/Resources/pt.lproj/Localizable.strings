@@ -942,3 +942,14 @@
 "article.link_only" = "Só a ligação";
 "article.open" = "Abrir a página";
 "article.reading" = "A ler…";
+
+/* Budget — the member's share of the household's monthly budget */
+"budget.title" = "Orçamento";
+"budget.group" = "ORÇAMENTO";
+"budget.value.unlimited" = "Sem limite";
+"budget.value.left" = "Resta %d %%";
+"budget.pane.unlimited" = "Esta casa não definiu nenhum orçamento: nada o limita.";
+"budget.pane.left" = "Resta-lhe %d %% da sua parte do orçamento do mês.";
+"budget.pane.resets" = "Recomeça do zero a %@.";
+"budget.caption" = "A sua parte do orçamento da casa é definida por quem a administra. O anel ao lado do seu nome mostra o que resta; recebe um aviso aos 20, 10 e 5 %.";
+"budget.toast.title" = "Resta só %d %% do seu orçamento";

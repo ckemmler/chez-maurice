@@ -1633,6 +1633,14 @@ try {
   }
 } catch {}
 
+// The household's monthly budget and each member's share of it (28 October
+// 2026, services/budget.ts, "The monthly budget"). The budget is in euros —
+// named `_eur`, unlike the older `_usd` caps that hold euros too. A member's
+// share is a percentage; null = not allocated, and the unallocated members
+// split what the allocated ones leave. No budget = nobody is limited by it.
+try { db.run(`ALTER TABLE households ADD COLUMN budget_monthly_eur REAL`); } catch {}
+try { db.run(`ALTER TABLE users ADD COLUMN budget_share_pct REAL`); } catch {}
+
 // Schema version, stamped in the file's PRAGMA user_version so an operator can
 // see from /healthz which shape of database an instance runs. Bump it by hand
 // whenever a migration above changes the schema; the number is descriptive,

@@ -13,8 +13,15 @@ struct SettingsView: View {
     @Environment(\.mauriceTheme) private var theme
     @Environment(\.dismiss) private var dismiss
 
-    enum Pane: Hashable { case appearance, language, household, members, garden, token, files, importChats, mail, contacts, myData }
+    enum Pane: Hashable { case appearance, language, household, members, garden, token, files, importChats, mail, contacts, myData, budget }
     @State private var pane: Pane? = nil
+    @Environment(BudgetStore.self) private var budget
+
+    /// `initialPane` opens straight on a pane — the budget ring and its toast
+    /// open Settings on Budget; back still leads to the index.
+    init(initialPane: Pane? = nil) {
+        _pane = State(initialValue: initialPane)
+    }
 
     // MCP token (loaded once; the root row copies, the token pane manages).
     @State private var token: String? = nil
@@ -209,6 +216,18 @@ struct SettingsView: View {
                         SetCaption(session.localized("settings.mcp.copyhint"))
                     }
 
+                    // What is left of the member's share of the household's
+                    // monthly budget — never an amount; ∞ when there is none.
+                    SetGroup(session.localized("budget.group")) {
+                        SetCard {
+                            IndexRow(icon: "chart.pie", label: session.localized("budget.title"),
+                                     value: budgetValue, accent: accent,
+                                     trailing: AnyView(BudgetRing(left: budget.left, accent: accent, size: 18))) {
+                                pane = .budget
+                            }
+                        }
+                    }
+
                     SetGroup("USAGE") {
                         SetCard {
                             SetCheckRow(label: "Show what each reply cost",
@@ -352,12 +371,19 @@ struct SettingsView: View {
                     case .mail:       MailPane(accent: accent, accounts: $mailAccounts)
                     case .contacts:   ContactsPane(accent: accent, accounts: $contactAccounts)
                     case .myData:     MyDataView(accent: accent, close: { dismiss() })
+
+                    case .budget:     BudgetPane(accent: accent)
                     }
                 }
                 .padding(.horizontal, 18).padding(.top, 14).padding(.bottom, 18)
             }
             footer
         }
+    }
+
+    private var budgetValue: String {
+        guard let left = budget.left else { return session.localized("budget.value.unlimited") }
+        return session.localized("budget.value.left", Int((left * 100).rounded()))
     }
 
     private var mailValue: String? {
@@ -399,6 +425,8 @@ struct SettingsView: View {
         case .mail:       return session.localized("mail.title")
         case .contacts:   return session.localized("contacts.title")
         case .myData:     return session.localized("mydata.title")
+
+        case .budget:     return session.localized("budget.title")
         }
     }
 
@@ -1078,6 +1106,56 @@ enum MailProvider: Equatable {
 /// nothing else — he never sends, moves, deletes or marks anything read, and
 /// never in a conversation with someone else. Adding one logs in first: a
 /// password the mailbox refuses is not kept, and its reason is shown here.
+// MARK: - Budget
+
+/// The member's share of the household's monthly budget: the ring, large, what
+/// is left in words and when it starts afresh. Never an amount — the admin sets
+/// the budget and the shares in the console, and a member reads only the
+/// fraction left — and no way to pay: topping up is on the web, never in the app.
+private struct BudgetPane: View {
+    @Environment(SessionStore.self) private var session
+    @Environment(BudgetStore.self) private var budget
+    @Environment(\.mauriceTheme) private var theme
+    let accent: Color
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            HStack {
+                Spacer()
+                BudgetRing(left: budget.left, accent: accent, size: 132, showsPercent: true)
+                Spacer()
+            }
+            .padding(.vertical, 8)
+
+            SetCard {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(statusText)
+                        .font(.system(size: 14.5, weight: .medium)).foregroundStyle(theme.ink)
+                    if let resets = resetsText {
+                        Text(resets).font(.system(size: 12.5)).foregroundStyle(theme.inkSoft)
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 16).padding(.vertical, 14)
+            }
+
+            SetCaption(session.localized("budget.caption"))
+        }
+        .task { await budget.refresh(session) }
+    }
+
+    private var statusText: String {
+        guard let left = budget.left else { return session.localized("budget.pane.unlimited") }
+        return session.localized("budget.pane.left", Int((left * 100).rounded()))
+    }
+
+    private var resetsText: String? {
+        guard budget.left != nil, let date = budget.budget?.resetsAt else { return nil }
+        let day = date.formatted(Date.FormatStyle(date: .long, time: .omitted, locale: session.resolvedLocale, timeZone: .gmt))
+        return session.localized("budget.pane.resets", day)
+    }
+}
+
 private struct MailPane: View {
     @Environment(SessionStore.self) private var session
     @Environment(\.mauriceTheme) private var theme

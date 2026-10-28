@@ -942,3 +942,14 @@
 "article.link_only" = "Alleen de link";
 "article.open" = "Pagina openen";
 "article.reading" = "Bezig met lezen…";
+
+/* Budget — the member's share of the household's monthly budget */
+"budget.title" = "Budget";
+"budget.group" = "BUDGET";
+"budget.value.unlimited" = "Onbeperkt";
+"budget.value.left" = "%d %% over";
+"budget.pane.unlimited" = "Dit huishouden heeft geen budget ingesteld: niets beperkt je.";
+"budget.pane.left" = "Er is nog %d %% over van jouw deel van het maandbudget.";
+"budget.pane.resets" = "Het begint opnieuw op %@.";
+"budget.caption" = "Jouw deel van het budget van het huishouden wordt ingesteld door wie het beheert. De ring naast je naam toont wat er over is; je krijgt een melding bij 20, 10 en 5 %.";
+"budget.toast.title" = "Nog maar %d %% van je budget";

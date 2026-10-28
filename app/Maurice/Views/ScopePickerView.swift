@@ -27,6 +27,7 @@ struct SidebarView: View {
     @Environment(MauriceStore.self) private var maurices
     @Environment(DomainsState.self) private var domains
     @Environment(GardensStore.self) private var gardens
+    @Environment(BudgetStore.self) private var budget
     @Environment(\.mauriceTheme) private var theme
     @State private var showSettings = false
     @State private var gardensExpanded = true
@@ -268,6 +269,7 @@ struct SidebarView: View {
         .sheet(isPresented: $showSettings) {
             SettingsView()
                 .environment(session)
+                .environment(budget)
         }
         .navigationTitle("")
         #if os(iOS)
@@ -312,6 +314,7 @@ struct SidebarView: View {
                     searchField
                 } else {
                     userChip
+                    budgetButton
                     Spacer(minLength: 8)
                     searchButton
                 }
@@ -417,6 +420,25 @@ struct SidebarView: View {
         .buttonStyle(.plain)
         .glassControl(theme, in: Capsule())
         .help(session.localized("settings.title"))
+    }
+
+    /// What is left of the member's share of the monthly budget — full with ∞
+    /// when the household holds none. A tap opens Settings → Budget.
+    private var budgetButton: some View {
+        Button { budget.openSettings() } label: {
+            BudgetRing(left: budget.left, accent: accent, size: searchControlSize * 0.5)
+                .frame(width: searchControlSize, height: searchControlSize)
+                .contentShape(Circle())
+        }
+        .buttonStyle(.plain)
+        .glassControl(theme, in: Circle())
+        .help(session.localized("budget.title"))
+        .accessibilityLabel(budgetAccessibilityLabel)
+    }
+
+    private var budgetAccessibilityLabel: String {
+        guard let left = budget.left else { return session.localized("budget.value.unlimited") }
+        return session.localized("budget.value.left", Int((left * 100).rounded()))
     }
 
     private var chipAvatar: some View {

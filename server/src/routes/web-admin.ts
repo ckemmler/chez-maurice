@@ -57,7 +57,7 @@ import { ArchiveError, exportResponse } from "../services/archive";
 import { recordHouseholdExport } from "../services/accountEvents";
 import { publicPagesAvailableOn } from "../../data-api/services/publicPages";
 import { t, langOf, SUPPORTED } from "../services/i18n";
-import { SYSTEM_SPENDER, spentTodayUsd, spentMonthUsd, memberDailyCap, setMemberDailyCap, setHouseholdDailyCap, setSystemDailyCap } from "../services/budget";
+import { SYSTEM_SPENDER, spentTodayUsd, spentMonthUsd, memberDailyCap, setMemberDailyCap, setHouseholdDailyCap, setSystemDailyCap, householdMonthlyBudget, setHouseholdMonthlyBudget, budgetShares, setMemberBudgetShare, sharesFit } from "../services/budget";
 import { ImportError, importHistory, importStatus, isImportProvider, startImport } from "../services/chatImport";
 import { providerPlugin } from "../services/providerPlugins";
 import { mkdirSync, readFileSync, existsSync } from "fs";
@@ -606,6 +606,35 @@ web.get("/dashboard", async (c) => {
       </div>
     </div>`).join("");
 
+  // ── 02 budget ──
+  // The household's monthly budget and each member's share of it, on the main
+  // screen: one form, the budget above, a percentage per member below. A share
+  // left empty is "auto" — that member splits what the set shares leave, and
+  // the placeholder says how much that comes to today.
+  const budget = householdMonthlyBudget();
+  const shares = new Map(budgetShares().map((s) => [s.userId, s]));
+  const pctText = (n: number) => (Math.round(n * 10) / 10).toString();
+  const setSum = [...shares.values()].reduce((a, s) => a + (s.setPct ?? 0), 0);
+  const autoCount = [...shares.values()].filter((s) => s.setPct == null).length;
+  const budgetRows = users.map((u) => {
+    const sh = shares.get(u.id);
+    const pct = sh?.pct ?? 0;
+    const month = spentMonthUsd(u.id);
+    const figures = budget != null
+      ? t(lang, "budget.allowance", ((budget * pct) / 100).toFixed(2), month.toFixed(2))
+      : t(lang, "budget.spent_month", month.toFixed(2));
+    return `
+    <div class="member">
+      ${avatarHtml(u, 30)}
+      <div class="who"><div class="nm">${escape(u.display_name)}</div><div class="hd">${escape(figures)}</div></div>
+      <label class="pin" style="gap:6px">
+        <input type="number" name="share:${escape(u.id)}" min="0" max="100" step="0.1" style="width:90px"
+          value="${sh?.setPct ?? ""}" placeholder="${escape(t(lang, "budget.auto", pctText(pct)))}" /> %
+      </label>
+    </div>`;
+  }).join("");
+  const budgetSummary = t(lang, "budget.allocated", pctText(setSum), pctText(Math.max(0, 100 - setSum)), String(autoCount));
+
   // ── 03 model rows ──
   const modelRow = (m: Model, removable: boolean) => `
     <div class="model-row">
@@ -745,6 +774,22 @@ web.get("/dashboard", async (c) => {
         ${sectionHead(t(lang, "dashboard.kicker_household"), t(lang, "members.title"), t(lang, "members.desc"),
           `<a href="/admin/users/new" class="btn primary sm">+ ${escape(t(lang, "members.add"))}</a>`)}
         <div class="card flush">${memberRows || `<div class="empty">${escape(t(lang, "members.empty"))}</div>`}</div>
+      </section>
+
+      <section id="sec-budget">
+        ${sectionHead(t(lang, "dashboard.kicker_household"), t(lang, "budget.title"), t(lang, "budget.desc"))}
+        <form method="POST" action="/admin/budget" class="card flush">
+          <div style="padding:18px">
+            <div class="field" style="max-width:240px"><label class="label">${escape(t(lang, "budget.monthly"))}</label>
+              <input type="number" name="budget_monthly_eur" min="0" step="0.01" value="${budget ?? ""}" placeholder="∞" />
+              <span class="hint">${escape(t(lang, "budget.monthly_hint"))}</span></div>
+          </div>
+          ${budgetRows}
+          <div style="padding:14px 18px;border-top:0.5px solid var(--rule)">
+            <span class="hint">${escape(budgetSummary)}</span>
+            <div class="grid-actions"><button type="submit" class="btn primary">${escape(t(lang, "budget.save"))}</button></div>
+          </div>
+        </form>
       </section>
 
       <section id="sec-settings">
@@ -1137,6 +1182,30 @@ web.post("/settings", async (c) => {
     else if (/^\d+$/.test(raw)) setOpensMinDays(Number(raw));
   }
   return c.redirect("/admin/dashboard?msg=settings_saved#sec-settings");
+});
+
+// ── Budget (POST) ───────────────────────────────────────────────
+// The monthly budget and every member's share, posted together. Nothing is
+// written unless all of it holds: a share outside 0…100, or set shares adding
+// up to more than 100, sends the form back untouched.
+web.post("/budget", async (c) => {
+  const redir = requireWebAdmin(c);
+  if (redir) return redir;
+  const form = await c.req.parseBody();
+  const budget = parseCapUsd(form.budget_monthly_eur);
+  if (budget === undefined) return c.redirect("/admin/dashboard?msg=budget_invalid#sec-budget");
+  const shares: Array<[string, number | null]> = [];
+  for (const u of listUsers()) {
+    const raw = String(form[`share:${u.id}`] ?? "").trim();
+    if (raw === "") { shares.push([u.id, null]); continue; }
+    const n = Number(raw);
+    if (!Number.isFinite(n) || n < 0 || n > 100) return c.redirect("/admin/dashboard?msg=budget_invalid#sec-budget");
+    shares.push([u.id, n]);
+  }
+  if (!sharesFit(shares.map(([, p]) => p))) return c.redirect("/admin/dashboard?msg=budget_over#sec-budget");
+  setHouseholdMonthlyBudget(budget);
+  for (const [id, pct] of shares) setMemberBudgetShare(id, pct);
+  return c.redirect("/admin/dashboard?msg=budget_saved#sec-budget");
 });
 
 // ── Ancillary models (POST) ─────────────────────────────────────

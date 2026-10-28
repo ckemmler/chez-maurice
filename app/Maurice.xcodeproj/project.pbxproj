@@ -9,6 +9,7 @@
 /* Begin PBXBuildFile section */
 		01BF41C8D7454D75BCFE569A /* MauriceApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A0683126686701347E9871B /* MauriceApp.swift */; };
 		036F8670BB903EA771E48BF9 /* PersonReviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E787764ABF2A58E353CC45C2 /* PersonReviewView.swift */; };
+		0E7FF7906B6E446D403E0BF4 /* BudgetStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = E426EF47C1F4A6CE4105AA44 /* BudgetStore.swift */; };
 		13534AB1DC9B63D211D638DA /* SortMenu.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC55EBC69472BBED58BC1614 /* SortMenu.swift */; };
 		13D7AEF70186BD458531FA85 /* PairingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00B700626149A3D1C0D6D5CB /* PairingView.swift */; };
 		159E0D9DFBCB74432ABCE781 /* DomainEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0D1A322B73BEA06F034F1718 /* DomainEditorView.swift */; };
@@ -16,6 +17,7 @@
 		1EDBAD0EE35437F751F1020F /* ReplyText.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6CBC2BEE43BAA75E37C89569 /* ReplyText.swift */; };
 		22273DE6923544F195C76CAD /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 462A7ECD4C83B5ADC43A81CB /* ContentView.swift */; };
 		2340BD7CC5C127A91D4E04CF /* ShareInbox.swift in Sources */ = {isa = PBXBuildFile; fileRef = F6819EDCDB3EE127E1D35CAB /* ShareInbox.swift */; };
+		272361308311D10B864B3FD4 /* BudgetViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 475D8D96ACDB87A322874BFA /* BudgetViews.swift */; };
 		2A90B07E5E28A6BBC4C8F40B /* SourcesCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 988F2B4726342A3066B8B593 /* SourcesCard.swift */; };
 		2B268BBE8FAF1C5EE355B1D4 /* Localizable.strings in Resources */ = {isa = PBXBuildFile; fileRef = 64254BB6519693E70459014E /* Localizable.strings */; };
 		32D68A2ACC7ECFB3E37DE97F /* ScopePickerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 68242686E76201D100B8C3A9 /* ScopePickerView.swift */; };
@@ -71,6 +73,7 @@
 		B732DCB9E5F61EAEC2D7F191 /* CarnetSuggestions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 128CD9E8B27DD3AD93E49524 /* CarnetSuggestions.swift */; };
 		B80161B44335BB6CEC01F7DA /* YoungSerif-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 723F14E6AB7B2EAB08CC94EF /* YoungSerif-Regular.ttf */; };
 		BA51E568256E682B32B4FD40 /* ThinkingPulse.swift in Sources */ = {isa = PBXBuildFile; fileRef = 60C505B6E7E7122F0D8C38C4 /* ThinkingPulse.swift */; };
+		C3F16250A82E93FC469EAA89 /* BudgetViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 475D8D96ACDB87A322874BFA /* BudgetViews.swift */; };
 		C75DA94A1212FB984F5CDC62 /* DomainEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0D1A322B73BEA06F034F1718 /* DomainEditorView.swift */; };
 		C8C934C400A253AFC27851C2 /* SearchKeyboard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 437B5ED8350A54E9167D4BF5 /* SearchKeyboard.swift */; };
 		CAF942F37AE2F3E45A4761D0 /* Hats.swift in Sources */ = {isa = PBXBuildFile; fileRef = DCDEAA0E48CC14C7C18BE8FD /* Hats.swift */; };
@@ -92,6 +95,7 @@
 		EE60CB5C6953EB6207373CBA /* MauriceStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8C96937F0554878BAF247D3F /* MauriceStore.swift */; };
 		EEF2722A0817C78F1649422B /* Glass.swift in Sources */ = {isa = PBXBuildFile; fileRef = C5ABD3D073D2DB74064F5A13 /* Glass.swift */; };
 		F48AE829445AE2B014A9A7B4 /* ThinkingPulse.swift in Sources */ = {isa = PBXBuildFile; fileRef = 60C505B6E7E7122F0D8C38C4 /* ThinkingPulse.swift */; };
+		F4CE792418674D3840BAEDC6 /* BudgetStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = E426EF47C1F4A6CE4105AA44 /* BudgetStore.swift */; };
 		F53DE7BF783660C7008CC8D2 /* ReplyText.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6CBC2BEE43BAA75E37C89569 /* ReplyText.swift */; };
 		F6BC32800FA70AEE6D0B42FA /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 2FF2F9C47247C82E89055A04 /* PrivacyInfo.xcprivacy */; };
 		F8D5EA6FB79DA0781074F0DA /* ScopePickerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 68242686E76201D100B8C3A9 /* ScopePickerView.swift */; };
@@ -144,6 +148,7 @@
 		40C3C59BAE8DC75C09105B63 /* it */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = it; path = it.lproj/Localizable.strings; sourceTree = "<group>"; };
 		437B5ED8350A54E9167D4BF5 /* SearchKeyboard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SearchKeyboard.swift; sourceTree = "<group>"; };
 		462A7ECD4C83B5ADC43A81CB /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+		475D8D96ACDB87A322874BFA /* BudgetViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BudgetViews.swift; sourceTree = "<group>"; };
 		4E01BB325D88F4E74B3571BC /* ChatView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatView.swift; sourceTree = "<group>"; };
 		4E0D0DF979284275260F31D2 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		51780E1D57A085038F7AB3A4 /* OFL.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = OFL.txt; sourceTree = "<group>"; };
@@ -180,6 +185,7 @@
 		D8EA76446DB39E558173EA2A /* de */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = de; path = de.lproj/Localizable.strings; sourceTree = "<group>"; };
 		D91B47992093B9201D94B7D7 /* Maurice_iOS.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Maurice_iOS.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		DCDEAA0E48CC14C7C18BE8FD /* Hats.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Hats.swift; sourceTree = "<group>"; };
+		E426EF47C1F4A6CE4105AA44 /* BudgetStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BudgetStore.swift; sourceTree = "<group>"; };
 		E76EA458EBA05810D312BA7F /* SharedArticles.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedArticles.swift; sourceTree = "<group>"; };
 		E787764ABF2A58E353CC45C2 /* PersonReviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PersonReviewView.swift; sourceTree = "<group>"; };
 		EC8F39C1E181257A07AA5B05 /* Info-Generated.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = "Info-Generated.plist"; sourceTree = "<group>"; };
@@ -286,6 +292,7 @@
 			isa = PBXGroup;
 			children = (
 				EE3170FDE5751A81E295CF2E /* BoaterHat.swift */,
+				475D8D96ACDB87A322874BFA /* BudgetViews.swift */,
 				128CD9E8B27DD3AD93E49524 /* CarnetSuggestions.swift */,
 				0093E2B2C16E646EA2A8E856 /* ChatSnippets.swift */,
 				4E01BB325D88F4E74B3571BC /* ChatView.swift */,
@@ -326,6 +333,7 @@
 			isa = PBXGroup;
 			children = (
 				815355ED837E18AB9BEFDC83 /* APIClient.swift */,
+				E426EF47C1F4A6CE4105AA44 /* BudgetStore.swift */,
 				EDFA39C22354B093CDDBB691 /* ChatService.swift */,
 				70240FCC64F152DDCEC0F0E2 /* ComposerStore.swift */,
 				CEB5E21AE21611A0C6FC115B /* DictateIntent.swift */,
@@ -510,6 +518,8 @@
 			files = (
 				79A6D1DBFB049245E3D239D6 /* APIClient.swift in Sources */,
 				52B02D3D7EF2D7154BDB5FD8 /* BoaterHat.swift in Sources */,
+				0E7FF7906B6E446D403E0BF4 /* BudgetStore.swift in Sources */,
+				272361308311D10B864B3FD4 /* BudgetViews.swift in Sources */,
 				B732DCB9E5F61EAEC2D7F191 /* CarnetSuggestions.swift in Sources */,
 				CCEF2532174820F615C4C61F /* ChatService.swift in Sources */,
 				D0B48FA211BB0DB5BB28B7EA /* ChatSnippets.swift in Sources */,
@@ -563,6 +573,8 @@
 			files = (
 				B1ED9211E2F19D6C411ADE78 /* APIClient.swift in Sources */,
 				B124B0C5C8B1A67C94E9A4FE /* BoaterHat.swift in Sources */,
+				F4CE792418674D3840BAEDC6 /* BudgetStore.swift in Sources */,
+				C3F16250A82E93FC469EAA89 /* BudgetViews.swift in Sources */,
 				3E96FF24D227953BEB5EA28F /* CarnetSuggestions.swift in Sources */,
 				D050F6CF74E2684FAF9E78A2 /* ChatService.swift in Sources */,
 				79D972E8244DCF5442DB6922 /* ChatSnippets.swift in Sources */,

@@ -955,3 +955,14 @@
 "article.link_only" = "Nur der Link";
 "article.open" = "Seite öffnen";
 "article.reading" = "Wird gelesen …";
+
+/* Budget — the member's share of the household's monthly budget */
+"budget.title" = "Budget";
+"budget.group" = "BUDGET";
+"budget.value.unlimited" = "Unbegrenzt";
+"budget.value.left" = "%d %% übrig";
+"budget.pane.unlimited" = "Dieser Haushalt hat kein Budget festgelegt: Nichts begrenzt dich.";
+"budget.pane.left" = "Von deinem Anteil am Monatsbudget sind noch %d %% übrig.";
+"budget.pane.resets" = "Er beginnt am %@ von vorn.";
+"budget.caption" = "Deinen Anteil am Haushaltsbudget legt fest, wer den Haushalt verwaltet. Der Ring neben deinem Namen zeigt, was übrig ist; du wirst bei 20, 10 und 5 % benachrichtigt.";
+"budget.toast.title" = "Nur noch %d %% deines Budgets";

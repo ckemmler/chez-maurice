@@ -28,6 +28,9 @@ beforeEach(async () => {
     );
   }
   db.run("UPDATE users SET spend_cap_daily_usd = NULL WHERE id IN (?, ?)", [ANNA, BEN]);
+  // The monthly budget: none, and every share back on auto.
+  db.run("UPDATE households SET budget_monthly_eur = NULL WHERE id = 'default'");
+  db.run("UPDATE users SET budget_share_pct = NULL");
 });
 
 afterEach(() => {
@@ -271,4 +274,71 @@ test("the ledger says what each row was spent on", async () => {
   b.recordSpend(turn(0.2));
   const rows = db.query("SELECT purpose, job_id FROM spend_ledger ORDER BY id").all() as { purpose: string | null; job_id: string | null }[];
   expect(rows).toEqual([{ purpose: "chat", job_id: null }, { purpose: "mail", job_id: "job-1" }, { purpose: null, job_id: null }]);
+});
+
+// ── The monthly budget ──────────────────────────────────────────────────────
+
+/** Other tests leave users behind; give each of them a share of zero so the
+ *  split below is between Anna and Ben alone. */
+async function onlyAnnaAndBen() {
+  const db = (await import("../src/db")).default;
+  db.run("UPDATE users SET budget_share_pct = 0 WHERE id NOT IN (?, ?)", [ANNA, BEN]);
+}
+
+test("no monthly budget: nobody is limited, the ring is full", async () => {
+  const b = await budget();
+  expect(b.budgetFor(ANNA)).toEqual({ limited: false, left: null, resets_at: null, can_top_up: false });
+  expect(b.monthlyAllowance(ANNA)).toBe(null);
+  expect(b.capped(ANNA)).toBe(false);
+});
+
+test("an unset share takes its part of what the set shares leave", async () => {
+  const b = await budget();
+  await onlyAnnaAndBen();
+  b.setHouseholdMonthlyBudget(10);
+  b.setMemberBudgetShare(ANNA, 30);
+  expect(b.monthlyAllowance(ANNA)).toBeCloseTo(3, 5);
+  expect(b.monthlyAllowance(BEN)).toBeCloseTo(7, 5);
+});
+
+test("a member's share trips for them, names no amount, and leaves the others alone", async () => {
+  const b = await budget();
+  await onlyAnnaAndBen();
+  b.setHouseholdMonthlyBudget(10);
+  b.setMemberBudgetShare(ANNA, 30);
+  b.setMemberBudgetShare(BEN, 70);
+
+  b.recordSpend(turn(1.5), ANNA);
+  expect(b.budgetFor(ANNA).left).toBeCloseTo(0.5, 5);
+  expect(b.verdict("anthropic", "claude-sonnet-5", 0, ANNA).ok).toBe(true);
+
+  b.recordSpend(turn(1.6), ANNA);
+  const v = b.verdict("anthropic", "claude-sonnet-5", 0, ANNA);
+  expect(v.ok).toBe(false);
+  expect(v.reason).toContain("share");
+  expect(v.reason).not.toMatch(/[€$]|\d/);
+  expect(b.budgetFor(ANNA).left).toBe(0);
+
+  expect(b.verdict("anthropic", "claude-sonnet-5", 0, BEN).ok).toBe(true);
+  expect(b.budgetFor(BEN).left).toBe(1);
+  // The night spends on nobody's share.
+  expect(b.verdict("anthropic", "claude-sonnet-5", 0, b.SYSTEM_SPENDER).ok).toBe(true);
+});
+
+test("shares over 100 are refused by the console and scaled down if stored anyway", async () => {
+  const b = await budget();
+  await onlyAnnaAndBen();
+  expect(b.sharesFit([60, 40, null])).toBe(true);
+  expect(b.sharesFit([60, 50])).toBe(false);
+  const db = (await import("../src/db")).default;
+  b.setHouseholdMonthlyBudget(10);
+  db.run("UPDATE users SET budget_share_pct = 100 WHERE id IN (?, ?)", [ANNA, BEN]);
+  expect(b.monthlyAllowance(ANNA)).toBeCloseTo(5, 5);
+  expect(b.monthlyAllowance(BEN)).toBeCloseTo(5, 5);
+});
+
+test("the month starts afresh on the first, UTC", async () => {
+  const b = await budget();
+  expect(b.monthResetsAt(new Date("2026-09-29T22:00:00Z"))).toBe("2026-10-01T00:00:00.000Z");
+  expect(b.monthResetsAt(new Date("2026-12-31T23:59:59Z"))).toBe("2027-01-01T00:00:00.000Z");
 });

@@ -955,3 +955,14 @@
 "article.link_only" = "Solo el enlace";
 "article.open" = "Abrir la página";
 "article.reading" = "Leyendo…";
+
+/* Budget — the member's share of the household's monthly budget */
+"budget.title" = "Presupuesto";
+"budget.group" = "PRESUPUESTO";
+"budget.value.unlimited" = "Sin límite";
+"budget.value.left" = "Queda un %d %%";
+"budget.pane.unlimited" = "Este hogar no ha fijado ningún presupuesto: nada te limita.";
+"budget.pane.left" = "Te queda un %d %% de tu parte del presupuesto del mes.";
+"budget.pane.resets" = "Vuelve a empezar el %@.";
+"budget.caption" = "Tu parte del presupuesto del hogar la fija quien lo administra. El anillo junto a tu nombre muestra lo que queda; se te avisa al 20, 10 y 5 %.";
+"budget.toast.title" = "Solo queda un %d %% de tu presupuesto";

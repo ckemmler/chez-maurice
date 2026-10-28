@@ -955,3 +955,14 @@
 "article.link_only" = "Lien seul";
 "article.open" = "Ouvrir la page";
 "article.reading" = "Lecture…";
+
+/* Budget — the member's share of the household's monthly budget */
+"budget.title" = "Budget";
+"budget.group" = "BUDGET";
+"budget.value.unlimited" = "Sans limite";
+"budget.value.left" = "%d %% restant";
+"budget.pane.unlimited" = "Ce foyer n’a fixé aucun budget : rien ne vous limite.";
+"budget.pane.left" = "Il vous reste %d %% de votre part du budget du mois.";
+"budget.pane.resets" = "Elle repart à neuf le %@.";
+"budget.caption" = "Votre part du budget du foyer est fixée par la personne qui l’administre. L’anneau à côté de votre nom montre ce qui reste ; une alerte arrive à 20, 10 et 5 %.";
+"budget.toast.title" = "Plus que %d %% de votre budget";

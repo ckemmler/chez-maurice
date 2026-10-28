@@ -210,7 +210,7 @@ recorded whether the brief was kept or not. `GET /api/admin/usage` lists the
 night last, as "Maurice, at night", and the briefs card shows what it spent
 today and this month.
 
-**Since 29 September 2026 a household can hold a monthly budget, and each
+**Since 28 October 2026 a household can hold a monthly budget, and each
 member a share of it.** `households.budget_monthly_eur` (in euros, and named
 so — unlike the older `_usd` columns, which hold euros too) is set on the
 console's main screen, in the *Budget* section under the members, together
@@ -233,11 +233,12 @@ shrinking as the share is spent, orange from 20 %, red from 5 %. They re-read
 it at sign-in, on return to the foreground and after every turn, and raise a
 toast when the share falls to 20, 10 and 5 % — each once per member and month,
 remembered on the device; a member who drops past two thresholds in one turn
-hears only the deeper one. The ring, the toast and a new *Budget* row in
-Settings all open the *Budget* pane: the ring large with the percentage, the
-reset date, and a "Top up by card" button. **Topping up is a stub**: Stripe
-is not wired, the button says card payment is coming, `can_top_up` is always
-false, and nothing records a top-up yet.
+hears only the deeper one. The ring, the toast and a *Budget* row in
+Settings all open the *Budget* pane: the ring large with the percentage and
+the reset date. **There is no way to top up**, and when there is one it will
+be on the web, never in the apps (no payment, price or "pay elsewhere" in an
+app — Apple's rules): `can_top_up` is always false and nothing records a
+top-up.
 
 ## Prompt caching
 
@@ -383,7 +384,7 @@ The **chat engine** (`server/src`) is core and ships with the server app, as do 
 - **Erasure stops at the machine (3 October 2026).** What a member erases is gone from the server and its local snapshots, not from what the server cannot reach, which it lists instead (`residual`): a remote copy of the member's notes elsewhere, a published site, household archives an admin exported, and a hosted household's off-site backups, which keep the member until the last snapshot holding them expires (12 months at most). A restore from such a snapshot brings an erased member back, and nothing replays the erasures made since: the `erasures` register lives in the database that gets restored. The private tools' own stores (the overlay) are untouched by the walk unless they sit in a data-api table with a `member_id`. No route erases or exports a whole household over HTTP beyond the admin archive; the member archive's mail store is not re-imported (the mailboxes are connected again and it rebuilds).
 - **Git runtime.** The server performs git operations on the members' notes repositories, and since 17 October 2026 serves them with `git http-backend`. git is assumed present on the host: the image installs Debian's, the Mac uses Xcode's. Nothing bundles it — see [[maurice-architecture]].
 - **Two writers, one repository, and no lock between them but git's.** Both commit only their own paths and wait out `index.lock` for half a second (17 October 2026); a commit that loses the lock for longer still fails with a warning and leaves its files on disk, uncommitted until the next write touches them. The server's own callers that do not pass `only` still commit the whole index.
-- **The fuse knows the member since 19 September 2026** — per-member and per-household daily caps, and a usage view for each member and for the admin (see *The spending fuse*); since 29 September a monthly budget split into shares, which the member sees as a ring. Still missing: paying — Stripe, a top-up that adds to a share (and whether it outlives the month), a statement — see §4 of [[maurice-commercialisation]]. A top-up in the middle of a month will not raise the 20/10/5 % toasts again for thresholds already told that month.
+- **The fuse knows the member since 19 September 2026** — per-member and per-household daily caps, and a usage view for each member and for the admin (see *The spending fuse*); since 28 October a monthly budget split into shares, which the member sees as a ring. Still missing: paying — a provider, a top-up on the web that adds to a share (and whether it outlives the month), a statement — see §4 of [[maurice-commercialisation]]. A top-up in the middle of a month will not raise the 20/10/5 % toasts again for thresholds already told that month.
 - **Some ancillary calls made for a member are charged to nobody.** The ledger knows the member's turns, the night's briefs, the documentation tool's sub-turn (recorded under the member who asked, since 19 September 2026), the mail reading and its documents, the first notes written for a domain, and — since 15 October 2026 — chapter summaries (`chapter_summary`, job `chapter-summary:<book>`). Article summaries, flashcards and signal parses a member's action triggers still go through `ancillaryComplete` without a spender, so they cost money the ledger never sees. The fix is one field on the ancillary request and a `recordSpend` in the door. And the sub-turn's cost, while in the ledger, is **not in the turn's own usage figure** (the meter the app shows is one provider and one model): a question about Maurice looks like a tenth of a cent in the chat and eight cents in the ledger.
 - **Scaleway's cache is invisible on nine models out of ten.** Measured 18 September 2026: only DeepSeek V4 Flash reports cached tokens, and only a hot, shared prefix hits; the other models' usage carries no cache detail, so their meter figure is the uncached one whatever Scaleway bills. Cockpit is the only place to see it.
 - **A model can imitate the tool trail** (closed 24 September 2026). It was appended to the assistant's own turns, and GLM-5.3-Flash reproduced the bracketed block at the end of a reply, where the app displayed it. The trail now rides on the following user turn as a system-reminder — the clock has ridden there from the start and, over twenty thousand replies, has never been echoed back. Nothing strips an echo should one still happen.

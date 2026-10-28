@@ -10,7 +10,7 @@ import { ArchiveError } from "../services/archive";
 import { listAccountEvents, markAccountEventsSeen } from "../services/accountEvents";
 import db from "../db";
 import { verifyPassword, verifyPin } from "../services/auth";
-import { usageFor } from "../services/budget";
+import { budgetFor, usageFor } from "../services/budget";
 import { gardensRoot } from "../services/gardensRoot";
 import { isGardenDir } from "../services/gitHttp";
 import { exportsConversations, setExportsConversations } from "../services/gardenExport";
@@ -18,6 +18,7 @@ import { uploadsDir } from "../services/chatImport";
 import { importMember, memberExportResponse } from "../services/memberArchive";
 import { EraseError, eraseMember, type EraseScope } from "../services/memberErase";
 import { getUserById, getUser } from "../services/users";
+
 
 const me = new Hono();
 
@@ -167,5 +168,13 @@ me.put("/git/export", async (c) => {
   setExportsConversations(c.get("userId"), body.conversations);
   return c.json({ export_conversations: exportsConversations(c.get("userId")) });
 });
+
+// ── GET /api/me/budget ──────────────────────────────────────────
+// This member's share of the household's monthly budget, as the app's ring
+// shows it: whether one applies, the fraction of it left (0…1), when it starts
+// afresh, and whether topping up is on offer. Never an amount in euros.
+// {limited:false, left:null, …} when the household holds no budget.
+
+me.get("/budget", (c) => c.json(budgetFor(c.get("userId"))));
 
 export default me;
