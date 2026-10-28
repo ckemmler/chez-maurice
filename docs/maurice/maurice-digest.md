@@ -147,12 +147,12 @@ There is also a **browser clipper** that saves the page being read into the memb
 ## 8. Costs and budgets
 
 - **Prices are in euros.** Every turn records its cost on the message. A member can turn on **"Show what each reply cost"**: a coin under each reply (cost, cached share, a breakdown on tap) and a *Cost and tokens* section per conversation. An unpriced model shows token counts, never a false zero.
-- **Members are never asked spending questions and never shown euros for their budget.** They see a **ring** in the sidebar (∞ with no budget, orange then red as it runs low, with three gentle warnings a month) and a *Budget* pane with its reset date.
-- **The operator sets the limits**, all optional, the tightest winning: an instance total or rolling-day cap (the hosted fleet's default is 10 € a day per household), a household daily cap, a member daily cap, a monthly household budget split into member shares, and a separate allowance for the night's automatic work. Caps are checked before every model round, not once per turn. Under a cap an unpriced model is refused; local models are exempt.
+- **One budget for the household, the same for every member, never shown to members in euros.** Everyone sees a **ring** in the sidebar: on a hosted Maurice the prepaid balance, full after each top-up and running down from there; at home the monthly budget the admin may set, starting afresh each month; ∞ with neither. It turns orange then red as it runs low, with three gentle warnings (20, 10, 5 %), and opens a *Budget* pane; the admin, who pays, also reads the amount left there. Nothing is ever paid in the apps: topping up is on the web.
+- **The operator sets the limits**, all optional, the tightest winning: an instance total or rolling-day cap (the hosted fleet's default is 10 € a day per household), a household daily cap, a member daily cap, a monthly household budget, and a separate allowance for the night's automatic work. Caps are checked before every model round, not once per turn. Under a cap an unpriced model is refused; local models are exempt.
 - **Who pays what:** a member's own turns, the documentation tool, scanned-attachment transcription, mail reading and its documents, a domain's first notes, chapter and article summaries and the summaries of conversations on a fiche are charged to that member; the night's briefs and domain mapping to the household's *system* spender.
 - **Orders of magnitude:** a short classic summarized chapter by chapter costs a cent or two, a long novel some tens of cents; writing a domain's first notes under a cent; a night's domain mapping a few cents per member.
 
-*Gaps:* no payment — a member cannot top up their share, and when they can it will be on the web, never in the apps; flashcards and signal parsing are not recorded in the ledger; the documentation tool's cost is not in the chat's displayed figure.
+*Gaps:* online payment is not open yet — when it is, the admin tops up on the web, never in the apps; flashcards and signal parsing are not recorded in the ledger; the documentation tool's cost is not in the chat's displayed figure.
 
 *Detail:* `server`, `chat`.
 

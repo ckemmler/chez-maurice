@@ -1,7 +1,7 @@
 import SwiftUI
 
-/// The member's budget as a ring: full when nothing is spent, shrinking as the
-/// share runs down; full with ∞ in the middle when the household holds no
+/// The household's budget as a ring: full when it was last filled, shrinking
+/// as it is spent; full with ∞ in the middle when the household holds no
 /// budget. `left` is the fraction left (0…1), nil for "no budget". Warm below
 /// 20 %, red below 5 % — the same thresholds the toasts speak at.
 struct BudgetRing: View {
@@ -45,7 +45,7 @@ struct BudgetRing: View {
     }
 }
 
-/// The toast raised when the share falls to 20, 10 or 5 %. A tap opens
+/// The toast raised when the household's budget falls to 20, 10 or 5 %. A tap opens
 /// Settings → Budget; it goes away on its own.
 struct BudgetToast: View {
     @Environment(SessionStore.self) private var session

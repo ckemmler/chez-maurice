@@ -24,9 +24,9 @@
 //                                  next (a hosted trial's allowance, say)
 //   the household's — households.spend_cap_daily_usd, its own choice, counted
 //     over the whole household
-//   the member's — users.spend_cap_daily_usd, counted over that member alone,
-//     and their share of the household's monthly budget (below, "The monthly
-//     budget"), counted over their own turns this calendar month
+//   the household's monthly budget — households.budget_monthly_eur, counted
+//     over the whole household this calendar month (below, "The ring")
+//   the member's — users.spend_cap_daily_usd, counted over that member alone
 //   the night's — households.spend_cap_system_daily_usd, counted over what
 //     Maurice spends on nobody's turn (the domain briefs, later the mapping),
 //     recorded under the "system" spender below
@@ -159,30 +159,30 @@ export function capped(userId?: string | null): boolean {
     c.dailyUsd != null ||
     c.householdDailyUsd != null ||
     c.memberDailyUsd != null ||
-    (userId != null && !isSystemSpender(userId) && monthlyAllowance(userId) != null)
+    householdMonthlyBudget() != null
   );
 }
 
-// ── The monthly budget ──────────────────────────────────────────────────────
+// ── The ring ────────────────────────────────────────────────────────────────
 //
-// Since 28 October 2026 a household can hold a monthly budget, set in the
-// console's main screen, and hand each member a share of it as a percentage.
-// A member whose share is not set splits, with the others in that case, what
-// the set shares leave — so a new member is never born at zero, and a
-// household that sets no share at all splits evenly. The shares set by hand
-// never add up to more than 100: the console refuses it, and the reader below
-// scales them down if a hand-edited database says otherwise.
+// What the apps draw beside the member's name: how much of the household's
+// budget is left, as a fraction — the same figure for every member, since the
+// household is the one that pays (its admin, on the web; never in the apps).
+// A member never reads euros; the admin, who pays, is also given the amount.
+// Two budgets can be behind it, the operator's or the household's own:
 //
-// A member's allowance is their share of the budget over the calendar month,
-// counted on their own turns (spentMonthUsd). It is one more layer of the
-// verdict, the member's own, and what the app's ring shows — as a fraction
-// left, never as euros. What Maurice spends at night is the household's and
-// counts against no member's share.
+//   the prepaid balance — a hosted household's: MAURICE_SPEND_CAP_USD, the
+//     total the tower allows it (the trial's allowance plus every top-up),
+//     less everything ever spent. A balance has no natural "full", so the
+//     ring is full when the allowance was last raised and runs down from
+//     there: `ring_cap_eur` is the allowance last seen, `ring_full_eur` what
+//     was left at that moment. The first reading counts from the whole
+//     allowance; each later change of it (a top-up) fills the ring again.
+//   the monthly budget — households.budget_monthly_eur, set in the console:
+//     over the calendar month (UTC), counted over the whole household, the
+//     night's work included. It is a layer of the verdict too.
 //
-// No budget set = the layer is off and the ring stays full, with ∞ in it.
-//
-// TODO(payment): a member will top up their share — on the web, never in the
-// apps. The top-ups will add to their allowance; nothing records them yet.
+// Both set: the ring shows the emptier. Neither: no ring to run down, ∞.
 
 export function householdMonthlyBudget(): number | null {
   const row = db
@@ -196,77 +196,73 @@ export function setHouseholdMonthlyBudget(eur: number | null): void {
   db.run(`UPDATE households SET budget_monthly_eur = ? WHERE id = 'default'`, [stored(eur)]);
 }
 
-function storedPct(v: unknown): number | null {
-  const n = stored(v);
-  return n != null && n <= 100 ? n : null;
-}
-
-/** Set (or clear with null, "not allocated") a member's share, in percent. */
-export function setMemberBudgetShare(userId: string, pct: number | null): void {
-  db.run(`UPDATE users SET budget_share_pct = ? WHERE id = ?`, [storedPct(pct), userId]);
-}
-
-export interface BudgetShare {
-  userId: string;
-  /** What the console stored: a percentage, or null when not allocated. */
-  setPct: number | null;
-  /** What applies: the stored share, or this member's part of the rest. */
-  pct: number;
-}
-
-/** Every member's share of the monthly budget, set or derived. */
-export function budgetShares(): BudgetShare[] {
-  const rows = db
-    .query<{ id: string; pct: number | null }, []>(`SELECT id, budget_share_pct AS pct FROM users ORDER BY created_at`)
-    .all();
-  const set = rows.map((r) => storedPct(r.pct));
-  const setSum = set.reduce<number>((a, p) => a + (p ?? 0), 0);
-  // More than 100 by hand: scale the set shares down to fit, leave no rest.
-  const scale = setSum > 100 ? 100 / setSum : 1;
-  const unset = set.filter((p) => p == null).length;
-  const rest = unset ? Math.max(0, 100 - setSum) / unset : 0;
-  return rows.map((r, i) => ({ userId: r.id, setPct: set[i] ?? null, pct: set[i] != null ? set[i]! * scale : rest }));
-}
-
-/** The shares posted by the console: is their sum at most 100? The unset
- *  ones (null) do not count — they take what is left. */
-export function sharesFit(pcts: Array<number | null>): boolean {
-  return pcts.reduce<number>((a, p) => a + (p ?? 0), 0) <= 100 + 1e-9;
-}
-
-/** A member's allowance for the month, in euros, or null when the household
- *  holds no budget (or the member is unknown). */
-export function monthlyAllowance(userId: string): number | null {
-  const budget = householdMonthlyBudget();
-  if (budget == null) return null;
-  const share = budgetShares().find((s) => s.userId === userId);
-  return share ? (budget * share.pct) / 100 : null;
-}
-
-/** The first instant of next month, UTC — when every share starts afresh.
- *  The ledger's "start of month" is SQLite's, on UTC, so this is too. */
+/** The first instant of next month, UTC — when the monthly budget starts
+ *  afresh. The ledger's "start of month" is SQLite's, on UTC, so this is too. */
 export function monthResetsAt(now = new Date()): string {
   return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1)).toISOString();
 }
 
-export interface MemberBudget {
-  /** False when the household holds no budget: the ring is full, with ∞. */
+/** The prepaid balance's "full": what was left when the allowance last
+ *  moved. Moved here, on reading, when the allowance is not the one last seen. */
+function balanceFull(cap: number, spent: number): number {
+  const row = db
+    .query<{ cap: number | null; full: number | null }, []>(
+      `SELECT ring_cap_eur AS cap, ring_full_eur AS full FROM households WHERE id = 'default'`,
+    )
+    .get();
+  if (row?.cap != null && row.full != null && Math.abs(row.cap - cap) < 1e-9) return row.full;
+  // Never seen: count from the whole allowance. Seen and moved: from what is
+  // left now — the top-up fills the ring.
+  const full = row?.cap == null ? cap : Math.max(0, cap - spent);
+  db.run(`UPDATE households SET ring_cap_eur = ?, ring_full_eur = ? WHERE id = 'default'`, [cap, full]);
+  return full;
+}
+
+export interface HouseholdBudget {
+  /** False when nothing limits the household: the ring is full, with ∞. */
   limited: boolean;
-  /** What is left of the member's share this month, 0…1; null when unlimited. */
+  /** "balance" (prepaid) or "monthly"; null when unlimited. */
+  kind: "balance" | "monthly" | null;
+  /** What is left, 0…1; null when unlimited. */
   left: number | null;
-  /** When the share starts afresh (ISO, UTC); null when unlimited. */
+  /** When a monthly budget starts afresh (ISO, UTC); null otherwise. */
   resets_at: string | null;
+  /** Changes when the ring is filled again (a new month, a top-up): the
+   *  apps tell each 20/10/5 % threshold once per period. Null when unlimited. */
+  period: string | null;
+  /** What is left in euros — given to the admin only; null for a member. */
+  left_eur: number | null;
   /** Whether topping up is on offer (on the web). False until payment is wired. */
   can_top_up: boolean;
 }
 
-/** A member's budget as the app shows it — a fraction, never an amount. */
-export function budgetFor(userId: string): MemberBudget {
-  const allowance = monthlyAllowance(userId);
-  if (allowance == null) return { limited: false, left: null, resets_at: null, can_top_up: false };
-  const spent = spentMonthUsd(userId);
-  const left = allowance > 0 ? Math.min(1, Math.max(0, 1 - spent / allowance)) : 0;
-  return { limited: true, left, resets_at: monthResetsAt(), can_top_up: false };
+/** The household's budget as the apps show it. `forAdmin` adds the amount. */
+export function householdBudget(forAdmin = false): HouseholdBudget {
+  const views: Array<{ kind: "balance" | "monthly"; left: number; leftEur: number; resets: string | null; period: string }> = [];
+  const cap = caps().totalUsd;
+  if (cap != null) {
+    const spent = spentTotalUsd();
+    const leftEur = Math.max(0, cap - spent);
+    const full = balanceFull(cap, spent);
+    views.push({ kind: "balance", left: full > 0 ? Math.min(1, leftEur / full) : 0, leftEur, resets: null, period: `balance:${cap}` });
+  }
+  const monthly = householdMonthlyBudget();
+  if (monthly != null) {
+    const leftEur = Math.max(0, monthly - spentMonthUsd());
+    const resets = monthResetsAt();
+    views.push({ kind: "monthly", left: monthly > 0 ? Math.min(1, leftEur / monthly) : 0, leftEur, resets, period: resets });
+  }
+  if (!views.length) return { limited: false, kind: null, left: null, resets_at: null, period: null, left_eur: null, can_top_up: false };
+  const v = views.reduce((a, b) => (b.left < a.left ? b : a));
+  return {
+    limited: true,
+    kind: v.kind,
+    left: v.left,
+    resets_at: v.resets,
+    period: v.period,
+    left_eur: forAdmin ? Math.round(v.leftEur * 100) / 100 : null,
+    can_top_up: false,
+  };
 }
 
 // ── The ledger ──────────────────────────────────────────────────────────────
@@ -363,8 +359,8 @@ export function spentTodayUsd(userId?: string | null): number {
   return spentSince(`datetime('now', '-1 day')`, userId);
 }
 
-/** The calendar month so far, on the server's clock (UTC) — what a member's
- *  share of the monthly budget is counted against. */
+/** The calendar month so far, on the server's clock (UTC) — what the
+ *  household's monthly budget is counted against. */
 export function spentMonthUsd(userId?: string | null): number {
   return spentSince(`datetime('now', 'start of month')`, userId);
 }
@@ -395,7 +391,7 @@ function totalCapMessage(cap: string): string | null {
 /** The caps that apply to a member, most specific first, so that when more
  *  than one is reached the refusal names the one closest to the person reading
  *  it. Each layer is counted over what its cap covers: the member's own turns
- *  for their cap, the whole household's for the other three. */
+ *  for their cap, the whole household's for the others. */
 function layers(userId?: string | null): Layer[] {
   const c = capsFor(userId);
   // Euros since 24 September 2026, whatever the `Usd` in the names says.
@@ -412,17 +408,18 @@ function layers(userId?: string | null): Layer[] {
           `It resets as the day rolls forward; nothing here is lost in the meantime.`,
     });
   }
-  // The member's share of the household's monthly budget. Its prose names no
-  // amount: a member never reads euros (specs/mail-import.md, "No money in
-  // front of a member") — they see how much of their share is left, as a ring.
-  const allowance = userId && !isSystemSpender(userId) ? monthlyAllowance(userId) : null;
-  if (allowance != null && userId) {
+  // The household's monthly budget. Its prose names no amount: a member never
+  // reads euros (specs/mail-import.md, "No money in front of a member") — they
+  // see what is left as a ring. The night's work counts against it too.
+  const monthly = householdMonthlyBudget();
+  if (monthly != null) {
     out.push({
-      capUsd: allowance,
-      spentUsd: spentMonthUsd(userId),
-      reason:
-        `Your share of this month's budget is used up. ` +
-        `It starts afresh with the new month — or ask whoever runs the household; nothing here is lost in the meantime.`,
+      capUsd: monthly,
+      spentUsd: spentMonthUsd(),
+      reason: isSystemSpender(userId)
+        ? `The household's budget for this month is used up; the night's work waits for the new month.`
+        : `This household's budget for this month is used up. ` +
+          `It starts afresh with the new month — or ask whoever runs the household; nothing here is lost in the meantime.`,
     });
   }
   if (c.householdDailyUsd != null) {

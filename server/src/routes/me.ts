@@ -10,7 +10,7 @@ import { ArchiveError } from "../services/archive";
 import { listAccountEvents, markAccountEventsSeen } from "../services/accountEvents";
 import db from "../db";
 import { verifyPassword, verifyPin } from "../services/auth";
-import { budgetFor, usageFor } from "../services/budget";
+import { householdBudget, usageFor } from "../services/budget";
 import { gardensRoot } from "../services/gardensRoot";
 import { isGardenDir } from "../services/gitHttp";
 import { exportsConversations, setExportsConversations } from "../services/gardenExport";
@@ -170,11 +170,13 @@ me.put("/git/export", async (c) => {
 });
 
 // ── GET /api/me/budget ──────────────────────────────────────────
-// This member's share of the household's monthly budget, as the app's ring
-// shows it: whether one applies, the fraction of it left (0…1), when it starts
-// afresh, and whether topping up is on offer. Never an amount in euros.
-// {limited:false, left:null, …} when the household holds no budget.
+// The household's budget, as the app's ring shows it: whether one applies,
+// the fraction of it left (0…1), what kind it is (a prepaid balance or a
+// monthly budget), when a monthly one starts afresh, and the period the app's
+// 20/10/5 % alerts are counted in. The same for every member, never an amount
+// in euros — except to the admin, who pays, and is given `left_eur`.
+// {limited:false, left:null, …} when nothing limits the household.
 
-me.get("/budget", (c) => c.json(budgetFor(c.get("userId"))));
+me.get("/budget", (c) => c.json(householdBudget(getUser(c.get("userId"))?.role === "admin")));
 
 export default me;

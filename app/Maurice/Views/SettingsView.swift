@@ -216,8 +216,8 @@ struct SettingsView: View {
                         SetCaption(session.localized("settings.mcp.copyhint"))
                     }
 
-                    // What is left of the member's share of the household's
-                    // monthly budget — never an amount; ∞ when there is none.
+                    // What is left of the household's budget — never an
+                    // amount here; ∞ when there is none.
                     SetGroup(session.localized("budget.group")) {
                         SetCard {
                             IndexRow(icon: "chart.pie", label: session.localized("budget.title"),
@@ -1108,10 +1108,11 @@ enum MailProvider: Equatable {
 /// password the mailbox refuses is not kept, and its reason is shown here.
 // MARK: - Budget
 
-/// The member's share of the household's monthly budget: the ring, large, what
-/// is left in words and when it starts afresh. Never an amount — the admin sets
-/// the budget and the shares in the console, and a member reads only the
-/// fraction left — and no way to pay: topping up is on the web, never in the app.
+/// The household's budget: the ring, large, what is left in words, when a
+/// monthly budget starts afresh or that a prepaid one is filled by whoever runs
+/// the household. The same for every member and never an amount — except to
+/// the admin, who pays and reads what is left in euros. No way to pay here:
+/// topping up is on the web, never in the app.
 private struct BudgetPane: View {
     @Environment(SessionStore.self) private var session
     @Environment(BudgetStore.self) private var budget
@@ -1131,8 +1132,12 @@ private struct BudgetPane: View {
                 VStack(alignment: .leading, spacing: 6) {
                     Text(statusText)
                         .font(.system(size: 14.5, weight: .medium)).foregroundStyle(theme.ink)
-                    if let resets = resetsText {
-                        Text(resets).font(.system(size: 12.5)).foregroundStyle(theme.inkSoft)
+                    if let amount = amountText {
+                        Text(amount).font(.system(size: 13, weight: .medium)).foregroundStyle(theme.ink)
+                            .monospacedDigit()
+                    }
+                    if let detail = detailText {
+                        Text(detail).font(.system(size: 12.5)).foregroundStyle(theme.inkSoft)
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -1149,8 +1154,17 @@ private struct BudgetPane: View {
         return session.localized("budget.pane.left", Int((left * 100).rounded()))
     }
 
-    private var resetsText: String? {
-        guard budget.left != nil, let date = budget.budget?.resetsAt else { return nil }
+    /// The admin's only: what is left, in euros.
+    private var amountText: String? {
+        guard budget.left != nil, let eur = budget.budget?.left_eur else { return nil }
+        let amount = eur.formatted(.currency(code: "EUR").locale(session.resolvedLocale))
+        return session.localized("budget.pane.admin_left", amount)
+    }
+
+    private var detailText: String? {
+        guard budget.left != nil, let b = budget.budget else { return nil }
+        if b.kind == "balance" { return session.localized("budget.pane.balance") }
+        guard let date = b.resetsAt else { return nil }
         let day = date.formatted(Date.FormatStyle(date: .long, time: .omitted, locale: session.resolvedLocale, timeZone: .gmt))
         return session.localized("budget.pane.resets", day)
     }

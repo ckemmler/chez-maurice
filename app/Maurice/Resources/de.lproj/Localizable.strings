@@ -962,7 +962,9 @@
 "budget.value.unlimited" = "Unbegrenzt";
 "budget.value.left" = "%d %% übrig";
 "budget.pane.unlimited" = "Dieser Haushalt hat kein Budget festgelegt: Nichts begrenzt dich.";
-"budget.pane.left" = "Von deinem Anteil am Monatsbudget sind noch %d %% übrig.";
-"budget.pane.resets" = "Er beginnt am %@ von vorn.";
-"budget.caption" = "Deinen Anteil am Haushaltsbudget legt fest, wer den Haushalt verwaltet. Der Ring neben deinem Namen zeigt, was übrig ist; du wirst bei 20, 10 und 5 % benachrichtigt.";
-"budget.toast.title" = "Nur noch %d %% deines Budgets";
+"budget.pane.left" = "Vom Budget des Haushalts sind noch %d %% übrig.";
+"budget.pane.resets" = "Es beginnt am %@ neu.";
+"budget.pane.admin_left" = "Übrig: %@";
+"budget.pane.balance" = "Es erneuert sich nicht von selbst: Wer den Haushalt verwaltet, füllt es auf.";
+"budget.caption" = "Das ist das Budget des ganzen Haushalts, für alle Mitglieder dasselbe. Der Ring neben deinem Namen zeigt, was davon übrig ist; du wirst bei 20, 10 und 5 % benachrichtigt.";
+"budget.toast.title" = "Nur noch %d %% des Haushaltsbudgets";

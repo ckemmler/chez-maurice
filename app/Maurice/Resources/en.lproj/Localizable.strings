@@ -962,7 +962,9 @@
 "budget.value.unlimited" = "No limit";
 "budget.value.left" = "%d %% left";
 "budget.pane.unlimited" = "This household has set no budget: nothing limits you.";
-"budget.pane.left" = "%d %% of your share of this month's budget is left.";
+"budget.pane.left" = "%d %% of the household's budget is left.";
 "budget.pane.resets" = "It starts afresh on %@.";
-"budget.caption" = "Your share of the household's budget is set by whoever runs it. The ring beside your name shows what is left; you are told at 20, 10 and 5 %.";
-"budget.toast.title" = "%d %% of your budget left";
+"budget.pane.admin_left" = "Left: %@";
+"budget.pane.balance" = "It does not renew on its own: whoever runs the household fills it.";
+"budget.caption" = "This is the whole household's budget, the same for each of its members. The ring beside your name shows what is left of it; you are told at 20, 10 and 5 %.";
+"budget.toast.title" = "Only %d %% of the household's budget left";

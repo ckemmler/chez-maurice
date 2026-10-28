@@ -422,7 +422,7 @@ struct SidebarView: View {
         .help(session.localized("settings.title"))
     }
 
-    /// What is left of the member's share of the monthly budget — full with ∞
+    /// What is left of the household's budget — full with ∞
     /// when the household holds none. A tap opens Settings → Budget.
     private var budgetButton: some View {
         Button { budget.openSettings() } label: {

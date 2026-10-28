@@ -28,9 +28,8 @@ beforeEach(async () => {
     );
   }
   db.run("UPDATE users SET spend_cap_daily_usd = NULL WHERE id IN (?, ?)", [ANNA, BEN]);
-  // The monthly budget: none, and every share back on auto.
-  db.run("UPDATE households SET budget_monthly_eur = NULL WHERE id = 'default'");
-  db.run("UPDATE users SET budget_share_pct = NULL");
+  // The monthly budget: none, and the ring's memory of the balance wiped.
+  db.run("UPDATE households SET budget_monthly_eur = NULL, ring_cap_eur = NULL, ring_full_eur = NULL WHERE id = 'default'");
 });
 
 afterEach(() => {
@@ -276,65 +275,67 @@ test("the ledger says what each row was spent on", async () => {
   expect(rows).toEqual([{ purpose: "chat", job_id: null }, { purpose: "mail", job_id: "job-1" }, { purpose: null, job_id: null }]);
 });
 
-// ── The monthly budget ──────────────────────────────────────────────────────
+// ── The ring ────────────────────────────────────────────────────────────────
 
-/** Other tests leave users behind; give each of them a share of zero so the
- *  split below is between Anna and Ben alone. */
-async function onlyAnnaAndBen() {
-  const db = (await import("../src/db")).default;
-  db.run("UPDATE users SET budget_share_pct = 0 WHERE id NOT IN (?, ?)", [ANNA, BEN]);
-}
-
-test("no monthly budget: nobody is limited, the ring is full", async () => {
+test("nothing set: nobody is limited, the ring is full", async () => {
   const b = await budget();
-  expect(b.budgetFor(ANNA)).toEqual({ limited: false, left: null, resets_at: null, can_top_up: false });
-  expect(b.monthlyAllowance(ANNA)).toBe(null);
+  expect(b.householdBudget()).toEqual({ limited: false, kind: null, left: null, resets_at: null, period: null, left_eur: null, can_top_up: false });
   expect(b.capped(ANNA)).toBe(false);
 });
 
-test("an unset share takes its part of what the set shares leave", async () => {
+test("the monthly budget is the household's: anyone's spend runs it down for all, and its refusal names no amount", async () => {
   const b = await budget();
-  await onlyAnnaAndBen();
   b.setHouseholdMonthlyBudget(10);
-  b.setMemberBudgetShare(ANNA, 30);
-  expect(b.monthlyAllowance(ANNA)).toBeCloseTo(3, 5);
-  expect(b.monthlyAllowance(BEN)).toBeCloseTo(7, 5);
+  b.recordSpend(turn(3), ANNA);
+  b.recordSpend(turn(2), BEN);
+  b.recordSpend(turn(1), b.SYSTEM_SPENDER);
+  const ring = b.householdBudget();
+  expect(ring.kind).toBe("monthly");
+  expect(ring.left).toBeCloseTo(0.4, 5);
+  expect(ring.resets_at).toBe(b.monthResetsAt());
+  expect(ring.period).toBe(ring.resets_at);
+  expect(ring.left_eur).toBe(null);
+  expect(b.householdBudget(true).left_eur).toBeCloseTo(4, 5);
+
+  b.recordSpend(turn(4.5), ANNA);
+  for (const who of [ANNA, BEN]) {
+    const v = b.verdict("anthropic", "claude-sonnet-5", 0, who);
+    expect(v.ok).toBe(false);
+    expect(v.reason).toContain("budget");
+    expect(v.reason).not.toMatch(/[€$]|\d/);
+  }
+  expect(b.householdBudget().left).toBe(0);
 });
 
-test("a member's share trips for them, names no amount, and leaves the others alone", async () => {
+test("a prepaid balance: full at first sight, refilled by a top-up, counted from what was left", async () => {
   const b = await budget();
-  await onlyAnnaAndBen();
-  b.setHouseholdMonthlyBudget(10);
-  b.setMemberBudgetShare(ANNA, 30);
-  b.setMemberBudgetShare(BEN, 70);
-
+  process.env.MAURICE_SPEND_CAP_USD = "3";
   b.recordSpend(turn(1.5), ANNA);
-  expect(b.budgetFor(ANNA).left).toBeCloseTo(0.5, 5);
-  expect(b.verdict("anthropic", "claude-sonnet-5", 0, ANNA).ok).toBe(true);
+  let ring = b.householdBudget(true);
+  expect(ring.kind).toBe("balance");
+  expect(ring.resets_at).toBe(null);
+  expect(ring.left).toBeCloseTo(0.5, 5);      // first sight: from the whole allowance
+  expect(ring.left_eur).toBeCloseTo(1.5, 5);
+  const before = ring.period;
 
-  b.recordSpend(turn(1.6), ANNA);
-  const v = b.verdict("anthropic", "claude-sonnet-5", 0, ANNA);
-  expect(v.ok).toBe(false);
-  expect(v.reason).toContain("share");
-  expect(v.reason).not.toMatch(/[€$]|\d/);
-  expect(b.budgetFor(ANNA).left).toBe(0);
+  process.env.MAURICE_SPEND_CAP_USD = "9.89";  // a 10 € top-up, net
+  ring = b.householdBudget(true);
+  expect(ring.left).toBe(1);                   // the ring is full again
+  expect(ring.left_eur).toBeCloseTo(8.39, 5);
+  expect(ring.period).not.toBe(before);        // the alerts start over
 
-  expect(b.verdict("anthropic", "claude-sonnet-5", 0, BEN).ok).toBe(true);
-  expect(b.budgetFor(BEN).left).toBe(1);
-  // The night spends on nobody's share.
-  expect(b.verdict("anthropic", "claude-sonnet-5", 0, b.SYSTEM_SPENDER).ok).toBe(true);
+  b.recordSpend(turn(4.195), BEN);
+  expect(b.householdBudget().left).toBeCloseTo(0.5, 5);
 });
 
-test("shares over 100 are refused by the console and scaled down if stored anyway", async () => {
+test("both set: the ring shows the emptier", async () => {
   const b = await budget();
-  await onlyAnnaAndBen();
-  expect(b.sharesFit([60, 40, null])).toBe(true);
-  expect(b.sharesFit([60, 50])).toBe(false);
-  const db = (await import("../src/db")).default;
+  process.env.MAURICE_SPEND_CAP_USD = "100";
   b.setHouseholdMonthlyBudget(10);
-  db.run("UPDATE users SET budget_share_pct = 100 WHERE id IN (?, ?)", [ANNA, BEN]);
-  expect(b.monthlyAllowance(ANNA)).toBeCloseTo(5, 5);
-  expect(b.monthlyAllowance(BEN)).toBeCloseTo(5, 5);
+  b.recordSpend(turn(8), ANNA);
+  const ring = b.householdBudget();
+  expect(ring.kind).toBe("monthly");
+  expect(ring.left).toBeCloseTo(0.2, 5);
 });
 
 test("the month starts afresh on the first, UTC", async () => {

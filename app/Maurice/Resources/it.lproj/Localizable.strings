@@ -962,7 +962,9 @@
 "budget.value.unlimited" = "Senza limiti";
 "budget.value.left" = "%d %% rimasto";
 "budget.pane.unlimited" = "Questa casa non ha fissato alcun budget: niente ti limita.";
-"budget.pane.left" = "Ti resta il %d %% della tua quota del budget del mese.";
+"budget.pane.left" = "Resta il %d %% del budget della casa.";
 "budget.pane.resets" = "Riparte da zero il %@.";
-"budget.caption" = "La tua quota del budget della casa è fissata da chi la amministra. L’anello accanto al tuo nome mostra quanto resta; vieni avvisato al 20, 10 e 5 %.";
-"budget.toast.title" = "Resta il %d %% del tuo budget";
+"budget.pane.admin_left" = "Resta: %@";
+"budget.pane.balance" = "Non si rinnova da solo: lo ricarica chi amministra la casa.";
+"budget.caption" = "È il budget di tutta la casa, lo stesso per ognuno dei suoi membri. L’anello accanto al tuo nome mostra quanto ne resta; vieni avvisato al 20, 10 e 5 %.";
+"budget.toast.title" = "Resta solo il %d %% del budget della casa";

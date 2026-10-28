@@ -1,7 +1,6 @@
 /**
- * The console's budget section: the household's monthly budget and each
- * member's share, posted as one form from the main screen. Nothing is written
- * unless the whole form holds.
+ * The console's budget section: the household's monthly budget, one amount
+ * for the whole household, posted from the main screen.
  */
 
 import { afterAll, beforeAll, beforeEach, expect, test } from "bun:test";
@@ -9,7 +8,7 @@ import { afterAll, beforeAll, beforeEach, expect, test } from "bun:test";
 const db = (await import("../src/db")).default;
 const web = (await import("../src/routes/web-admin")).default;
 const { createSession } = await import("../src/services/auth");
-const { householdMonthlyBudget, budgetShares } = await import("../src/services/budget");
+const { householdMonthlyBudget } = await import("../src/services/budget");
 
 let adminCookie = "";
 const ADMIN = "budget-admin";
@@ -31,7 +30,6 @@ afterAll(() => {
 
 beforeEach(() => {
   db.run(`UPDATE households SET budget_monthly_eur = NULL WHERE id = 'default'`);
-  db.run(`UPDATE users SET budget_share_pct = NULL`);
 });
 
 async function post(fields: Record<string, string>): Promise<string> {
@@ -45,36 +43,18 @@ async function post(fields: Record<string, string>): Promise<string> {
   return res.headers.get("location") ?? "";
 }
 
-const share = (id: string) => budgetShares().find((s) => s.userId === id)?.setPct;
-
-test("the main screen carries the budget form, a share field per member", async () => {
+test("the main screen carries the budget form: one amount for the household", async () => {
   const res = await web.request("/dashboard", { headers: { Host: "localhost", Cookie: adminCookie } });
   const html = await res.text();
   expect(html).toContain(`action="/admin/budget"`);
   expect(html).toContain(`name="budget_monthly_eur"`);
-  expect(html).toContain(`name="share:${MEMBER}"`);
+  expect(html).not.toContain(`name="share:`);
 });
 
-test("a budget and a share are saved together", async () => {
-  const to = await post({ budget_monthly_eur: "40", [`share:${MEMBER}`]: "25" });
-  expect(to).toContain("msg=budget_saved");
+test("a budget is saved; a nonsense one saves nothing; an empty one clears it", async () => {
+  expect(await post({ budget_monthly_eur: "40" })).toContain("msg=budget_saved");
   expect(householdMonthlyBudget()).toBe(40);
-  expect(share(MEMBER)).toBe(25);
-  expect(share(ADMIN)).toBe(null);
-});
-
-test("shares over 100 save nothing", async () => {
-  const others = Object.fromEntries(budgetShares().map((s) => [`share:${s.userId}`, "0"]));
-  const to = await post({ ...others, budget_monthly_eur: "40", [`share:${MEMBER}`]: "60", [`share:${ADMIN}`]: "50" });
-  expect(to).toContain("msg=budget_over");
-  expect(householdMonthlyBudget()).toBe(null);
-  expect(share(MEMBER)).toBe(null);
-});
-
-test("a share out of range saves nothing; an empty budget clears it", async () => {
-  expect(await post({ budget_monthly_eur: "40", [`share:${MEMBER}`]: "120" })).toContain("msg=budget_invalid");
-  expect(householdMonthlyBudget()).toBe(null);
-  await post({ budget_monthly_eur: "40" });
+  expect(await post({ budget_monthly_eur: "-3" })).toContain("msg=budget_invalid");
   expect(householdMonthlyBudget()).toBe(40);
   await post({ budget_monthly_eur: "" });
   expect(householdMonthlyBudget()).toBe(null);

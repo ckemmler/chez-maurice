@@ -949,7 +949,9 @@
 "budget.value.unlimited" = "Sem limite";
 "budget.value.left" = "Resta %d %%";
 "budget.pane.unlimited" = "Esta casa não definiu nenhum orçamento: nada o limita.";
-"budget.pane.left" = "Resta-lhe %d %% da sua parte do orçamento do mês.";
+"budget.pane.left" = "Resta %d %% do orçamento da casa.";
 "budget.pane.resets" = "Recomeça do zero a %@.";
-"budget.caption" = "A sua parte do orçamento da casa é definida por quem a administra. O anel ao lado do seu nome mostra o que resta; recebe um aviso aos 20, 10 e 5 %.";
-"budget.toast.title" = "Resta só %d %% do seu orçamento";
+"budget.pane.admin_left" = "Resta: %@";
+"budget.pane.balance" = "Não se renova sozinho: quem administra a casa volta a enchê-lo.";
+"budget.caption" = "É o orçamento de toda a casa, o mesmo para cada um dos seus membros. O anel ao lado do seu nome mostra o que resta; recebe um aviso aos 20, 10 e 5 %.";
+"budget.toast.title" = "Resta só %d %% do orçamento da casa";

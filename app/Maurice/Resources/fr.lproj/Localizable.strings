@@ -962,7 +962,9 @@
 "budget.value.unlimited" = "Sans limite";
 "budget.value.left" = "%d %% restant";
 "budget.pane.unlimited" = "Ce foyer n’a fixé aucun budget : rien ne vous limite.";
-"budget.pane.left" = "Il vous reste %d %% de votre part du budget du mois.";
-"budget.pane.resets" = "Elle repart à neuf le %@.";
-"budget.caption" = "Votre part du budget du foyer est fixée par la personne qui l’administre. L’anneau à côté de votre nom montre ce qui reste ; une alerte arrive à 20, 10 et 5 %.";
-"budget.toast.title" = "Plus que %d %% de votre budget";
+"budget.pane.left" = "Il reste %d %% du budget du foyer.";
+"budget.pane.resets" = "Il repart à neuf le %@.";
+"budget.pane.admin_left" = "Reste : %@";
+"budget.pane.balance" = "Il ne se renouvelle pas tout seul : c’est la personne qui administre le foyer qui le remplit.";
+"budget.caption" = "C’est le budget de tout le foyer, le même pour chacun de ses membres. L’anneau à côté de votre nom montre ce qui en reste ; une alerte arrive à 20, 10 et 5 %.";
+"budget.toast.title" = "Plus que %d %% du budget du foyer";

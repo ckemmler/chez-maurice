@@ -962,7 +962,9 @@
 "budget.value.unlimited" = "Sin límite";
 "budget.value.left" = "Queda un %d %%";
 "budget.pane.unlimited" = "Este hogar no ha fijado ningún presupuesto: nada te limita.";
-"budget.pane.left" = "Te queda un %d %% de tu parte del presupuesto del mes.";
+"budget.pane.left" = "Queda un %d %% del presupuesto del hogar.";
 "budget.pane.resets" = "Vuelve a empezar el %@.";
-"budget.caption" = "Tu parte del presupuesto del hogar la fija quien lo administra. El anillo junto a tu nombre muestra lo que queda; se te avisa al 20, 10 y 5 %.";
-"budget.toast.title" = "Solo queda un %d %% de tu presupuesto";
+"budget.pane.admin_left" = "Queda: %@";
+"budget.pane.balance" = "No se renueva solo: lo recarga quien administra el hogar.";
+"budget.caption" = "Es el presupuesto de todo el hogar, el mismo para cada uno de sus miembros. El anillo junto a tu nombre muestra lo que queda; se te avisa al 20, 10 y 5 %.";
+"budget.toast.title" = "Solo queda un %d %% del presupuesto del hogar";
