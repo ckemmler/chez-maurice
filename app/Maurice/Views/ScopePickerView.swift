@@ -314,7 +314,7 @@ struct SidebarView: View {
                     searchField
                 } else {
                     userChip
-                    budgetButton
+                    if budget.isLimited { budgetButton }
                     Spacer(minLength: 8)
                     searchButton
                 }
@@ -422,8 +422,8 @@ struct SidebarView: View {
         .help(session.localized("settings.title"))
     }
 
-    /// What is left of the household's budget — full with ∞
-    /// when the household holds none. A tap opens Settings → Budget.
+    /// What is left of the household's budget, shown only when it holds one.
+    /// A tap opens Settings → Budget.
     private var budgetButton: some View {
         Button { budget.openSettings() } label: {
             BudgetRing(left: budget.left, accent: accent, size: searchControlSize * 0.5)

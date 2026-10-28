@@ -232,7 +232,9 @@ behind it (`householdBudget()`, `services/budget.ts`):
   It is also a layer of the verdict, whose refusal names **no amount** ("This
   household's budget for this month is used up…").
 
-Both set, the ring shows the emptier; neither, it is full with ∞ in it.
+Both set, the ring shows the emptier. Neither — a household at home paying
+its own provider, with no monthly budget — and the apps show no ring and no
+*Budget* row at all: an ∞ that never moves says nothing.
 `GET /api/me/budget` answers `{limited, kind ("balance" | "monthly"), left
 (0…1), resets_at (a monthly budget's next first of the month), period,
 left_eur, can_top_up}`. **A member never reads euros**: `left_eur` is given

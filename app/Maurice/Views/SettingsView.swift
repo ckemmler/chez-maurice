@@ -217,13 +217,15 @@ struct SettingsView: View {
                     }
 
                     // What is left of the household's budget — never an
-                    // amount here; ∞ when there is none.
-                    SetGroup(session.localized("budget.group")) {
-                        SetCard {
-                            IndexRow(icon: "chart.pie", label: session.localized("budget.title"),
-                                     value: budgetValue, accent: accent,
-                                     trailing: AnyView(BudgetRing(left: budget.left, accent: accent, size: 18))) {
-                                pane = .budget
+                    // amount here; not shown when there is none.
+                    if budget.isLimited {
+                        SetGroup(session.localized("budget.group")) {
+                            SetCard {
+                                IndexRow(icon: "chart.pie", label: session.localized("budget.title"),
+                                         value: budgetValue, accent: accent,
+                                         trailing: AnyView(BudgetRing(left: budget.left, accent: accent, size: 18))) {
+                                    pane = .budget
+                                }
                             }
                         }
                     }

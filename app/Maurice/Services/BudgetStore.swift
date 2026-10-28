@@ -46,6 +46,11 @@ final class BudgetStore {
     /// What the ring draws: the fraction left, or nil for "no budget" (full, ∞).
     var left: Double? { budget?.limited == true ? budget?.left : nil }
 
+    /// Whether the household holds a budget at all. Without one (a household
+    /// at home paying its own provider, with no monthly budget set) the ring
+    /// and the Budget row are not shown: an ∞ that never moves says nothing.
+    var isLimited: Bool { budget?.limited == true }
+
     func refresh(_ session: SessionStore) async {
         guard let server = session.serverURL, let token = session.tokenForActiveUser,
               let userId = session.activeUserId else {
