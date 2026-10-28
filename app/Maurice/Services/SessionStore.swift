@@ -424,9 +424,27 @@ final class SessionStore {
             if prefs.device_locale != device {
                 let _: ServerPreferences? = try? await api.patch("/api/users/me/preferences", body: DeviceLocaleBody(device_locale: device), token: token)
             }
+            await reportDevice(api: api, token: token)
         } catch {
             loadLocalPrefs()
         }
+    }
+
+    /// Tells the household's server what this app runs on — kind, model,
+    /// system and app versions — when one of them changed, or a week after it
+    /// last said so. The id is one this install made up, kept per member.
+    private func reportDevice(api: APIClient, token: String) async {
+        guard let uid = activeUserId else { return }
+        let report = DeviceReport.current()
+        let sigKey = "maurice.device.\(uid).sent", atKey = "maurice.device.\(uid).sentAt"
+        let sig = "\(report.platform)|\(report.model ?? "")|\(report.os_version ?? "")|\(report.app_version ?? "")"
+        let last = UserDefaults.standard.double(forKey: atKey)
+        if UserDefaults.standard.string(forKey: sigKey) == sig, Date().timeIntervalSince1970 - last < 7 * 86_400 { return }
+        do {
+            let _: OkResponse = try await api.post("/api/users/me/device", body: report, token: token)
+            UserDefaults.standard.set(sig, forKey: sigKey)
+            UserDefaults.standard.set(Date().timeIntervalSince1970, forKey: atKey)
+        } catch {}
     }
 
     func savePreferences() async {

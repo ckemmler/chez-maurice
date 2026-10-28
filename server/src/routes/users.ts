@@ -19,6 +19,7 @@ import { blockMember, unblockMember } from "../services/safety";
 import { createInviteCode, getInviteForUser, revokeInvite } from "../services/auth";
 import { createOpenInvite, listOpenInvites, revokeOpenInvite } from "../services/invites";
 import { EraseError, eraseMember } from "../services/memberErase";
+import { parseDeviceReport, recordDevice } from "../services/memberDevices";
 
 const users = new Hono();
 
@@ -150,6 +151,18 @@ users.patch("/me/preferences", async (c) => {
   const body = await c.req.json();
   const prefs = updateUserPreferences(c.get("userId"), body);
   return c.json(prefs);
+});
+
+// ── POST /api/users/me/device ─────────────────────────────────
+// The app says what it runs on: kind, model, system and app versions. Sent
+// when one of them changes, and about weekly so the household knows the device
+// is still in use.
+
+users.post("/me/device", async (c) => {
+  const report = parseDeviceReport(await c.req.json().catch(() => null));
+  if (!report) return c.json({ error: "invalid_device" }, 400);
+  recordDevice(c.get("userId"), report);
+  return c.json({ ok: true });
 });
 
 // ── POST /api/users/me/mcp-token ────────────────────────────────

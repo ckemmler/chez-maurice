@@ -1,6 +1,6 @@
 ---
 title: Maurice — the digest
-date: '2026-10-23'
+date: '2026-10-28'
 flags: []
 locale: en
 description: 'The system documentation condensed to what a user needs: everything
@@ -28,7 +28,7 @@ covers:
   maurice-knowledge: '2026-10-20'
   maurice-life: '2026-10-20'
   maurice-personas-hats: '2026-09-19'
-  maurice-server: '2026-10-27'
+  maurice-server: '2026-10-28'
   maurice-shared-gardens: '2026-10-20'
   maurice-tools: '2026-10-20'
   maurice-web-garden: '2026-10-20'
@@ -115,7 +115,7 @@ There is also a **browser clipper** that saves the page being read into the memb
 | Mail | headers only, in a per-member store; subjects and readings **sealed** with the household key; message bodies stay in the mailbox |
 | Books | a genuine Calibre library; extracted chapters and summaries beside it, keyed by the book's Calibre uuid |
 
-- **No telemetry**: no analytics, no cloud account, no mail from the system.
+- **No telemetry**: no analytics, no cloud account, no mail from the system. The apps tell their own household's server which language, kind of device, model and system they run on, and nothing else; on a Maurice we host, the operator's counters read how many of each, never whose.
 - **Model providers** receive the prompt and context of each turn, nothing more.
 - **Dictation audio** stays on the device with Apple's on-device recognisers. Sent to the household's server, it is transcribed there by whisper.cpp when the server has it (it then never leaves the house) or, on a hosted household, by the provider's Whisper — the default, which a member turns off in Settings → Dictation to keep the audio on the device; the server keeps neither the clip nor the words. Apple's servers hear it only for a language with no local model, after the member allowed it — the mic shows a cloud.
 - **Members are separated**: every tool call carries the member's id; one member's notes, search, mail and briefs are not reachable by another. In a room, Maurice cannot use anyone's memory, mail or briefs.

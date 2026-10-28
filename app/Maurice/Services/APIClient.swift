@@ -1008,6 +1008,60 @@ struct ServerPreferences: Codable {
     }
 }
 
+/// What this app runs on, as POST /api/users/me/device takes it.
+struct DeviceReport: Encodable {
+    let install_id: String
+    let platform: String
+    let model: String?
+    let os_version: String?
+    let app: String
+    let app_version: String?
+
+    static func current() -> DeviceReport {
+        let key = "maurice.installId"
+        let id = UserDefaults.standard.string(forKey: key) ?? {
+            let new = UUID().uuidString.lowercased()
+            UserDefaults.standard.set(new, forKey: key)
+            return new
+        }()
+        let v = ProcessInfo.processInfo.operatingSystemVersion
+        let os = v.patchVersion > 0 ? "\(v.majorVersion).\(v.minorVersion).\(v.patchVersion)" : "\(v.majorVersion).\(v.minorVersion)"
+        let info = Bundle.main.infoDictionary
+        let version = (info?["CFBundleShortVersionString"] as? String).map { short in
+            (info?["CFBundleVersion"] as? String).map { "\(short) (\($0))" } ?? short
+        }
+        return DeviceReport(install_id: id, platform: platformName(), model: modelCode(), os_version: os, app: "maurice", app_version: version)
+    }
+
+    private static func platformName() -> String {
+        #if os(macOS)
+        return "macOS"
+        #else
+        return UIDevice.current.userInterfaceIdiom == .pad ? "iPadOS" : "iOS"
+        #endif
+    }
+
+    /// The maker's code ("iPhone17,1", "Mac14,3"), never the name the member gave the device.
+    private static func modelCode() -> String? {
+        #if targetEnvironment(simulator)
+        return ProcessInfo.processInfo.environment["SIMULATOR_MODEL_IDENTIFIER"]
+        #elseif os(macOS)
+        var size = 0
+        sysctlbyname("hw.model", nil, &size, nil, 0)
+        guard size > 0 else { return nil }
+        var buf = [CChar](repeating: 0, count: size)
+        sysctlbyname("hw.model", &buf, &size, nil, 0)
+        return String(cString: buf)
+        #else
+        var u = utsname()
+        uname(&u)
+        return withUnsafeBytes(of: &u.machine) { raw in
+            String(decoding: raw.prefix(while: { $0 != 0 }), as: UTF8.self)
+        }
+        #endif
+    }
+}
+
 /// Tells the server the device's language, alone: no other preference moves.
 struct DeviceLocaleBody: Encodable {
     let device_locale: String

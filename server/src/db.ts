@@ -217,6 +217,25 @@ try { db.run(`ALTER TABLE user_preferences ADD COLUMN export_conversations INTEG
 // interface speaks when `locale` is null (the member follows the device).
 // Read by the hosted fleet's counters (a tally of languages, never who).
 try { db.run(`ALTER TABLE user_preferences ADD COLUMN device_locale TEXT`); } catch {}
+// The devices a member uses the apps on, as each app reports itself: the kind
+// (iOS, iPadOS, macOS, Android), the model, the system and app versions. One
+// row per app install and member, its id a random one the app keeps. Read by
+// the hosted fleet's counters as a tally (what kinds, which systems), never
+// who has what.
+db.run(`
+  CREATE TABLE IF NOT EXISTS member_devices (
+    install_id   TEXT NOT NULL,
+    user_id      TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    platform     TEXT NOT NULL,
+    model        TEXT,
+    os_version   TEXT,
+    app          TEXT,
+    app_version  TEXT,
+    first_seen_at TEXT NOT NULL DEFAULT (datetime('now')),
+    last_seen_at  TEXT NOT NULL DEFAULT (datetime('now')),
+    PRIMARY KEY (install_id, user_id)
+  )
+`);
 // A conversation may be bound to a specialized Maurice (persona). Null = the
 // everyday, unspecialized Maurice. Kept as a plain id (no FK) so this migration
 // doesn't depend on table-creation order; deleting a Maurice nulls it explicitly

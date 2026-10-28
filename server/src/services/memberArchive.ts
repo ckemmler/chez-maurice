@@ -102,6 +102,7 @@ const TABLES: [table: string, column: string, secret?: string[]][] = [
   ["blocks", "member_id"],
   ["reports", "reporter_member_id"],
   ["spend_ledger", "user_id"],
+  ["member_devices", "user_id"],
 ];
 
 /** Of those, what an import writes back. The rest is for reading: accounts
