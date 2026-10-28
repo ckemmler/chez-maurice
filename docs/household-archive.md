@@ -38,6 +38,14 @@ admin's to carry; a member's password is not. A member's Cloudflare token
 each member reconnects their mailbox and address book in the app. The live
 database is untouched.
 
+**The admin's archive** (`scripts/export-household.ts`, `forAdmin`) leaves out
+`secret.key` and the mail stores (`mail/`) as well, since 28 October 2026:
+with the key, whoever holds the file could open every member's sealed subjects
+and readings offline. After a move by that archive each member, the admin
+included, reconnects their mailbox, and the mail is scanned and read again —
+at the household's cost. The console's archive (`/admin/export`) and the CLI's
+keep both: they are the machine owner's, made to move the household as it is.
+
 The archive an **admin** takes away (`scripts/export-household.ts`, below)
 leaves more behind, so that nothing in it opens anything on the live
 household or elsewhere: every session (`sessions.id` is the bearer token

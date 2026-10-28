@@ -225,7 +225,22 @@ describe("household archive", () => {
   test("export for the admin: nothing in it opens anything", async () => {
     const { exportHousehold } = await import("../src/services/archive");
     const outDir = path.join(TMP, "admin-out");
-    const { path: out } = await exportHousehold({ appDir: HOME, dataDir: DATA, gardensDir: GARDENS, outDir, forAdmin: true });
+    fs.writeFileSync(path.join(HOME, "secret.key"), "HOUSEHOLD-KEY");
+    fs.mkdirSync(path.join(HOME, "mail"), { recursive: true });
+    new Database(path.join(HOME, "mail", "u2.db")).close();
+    const { path: out, manifest } = await exportHousehold({ appDir: HOME, dataDir: DATA, gardensDir: GARDENS, outDir, forAdmin: true });
+    // The household key stays home, and with it the mail it seals.
+    const listing = new TextDecoder().decode(Bun.spawnSync(["tar", "-tzf", out]).stdout);
+    expect(listing).not.toContain("secret.key");
+    expect(listing).not.toMatch(/(^|\/)mail\//m);
+    expect(manifest.contents).not.toContain("secret.key");
+    expect(manifest.contents).not.toContain("mail/");
+    // The machine owner's archive keeps both.
+    const owner = await exportHousehold({ appDir: HOME, dataDir: DATA, gardensDir: GARDENS, outDir: path.join(TMP, "owner-out") });
+    expect(owner.manifest.contents).toContain("secret.key");
+    expect(owner.manifest.contents).toContain("mail/");
+    fs.rmSync(path.join(HOME, "secret.key"));
+    fs.rmSync(path.join(HOME, "mail"), { recursive: true });
     const x = path.join(TMP, "admin-x");
     fs.mkdirSync(x, { recursive: true });
     Bun.spawnSync(["tar", "-xzf", out, "-C", x, "maurice.db"]);

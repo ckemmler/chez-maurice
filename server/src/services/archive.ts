@@ -64,16 +64,19 @@ export type ExportOptions = {
   /** Where the staging dir and the tarball go. A temp dir by default. */
   outDir?: string;
   /** The archive an admin takes away: no session, token, PIN hash or
-   *  provider key in it (withoutCredentials). */
+   *  provider key in it (withoutCredentials), and neither secret.key nor the
+   *  mail stores it seals. */
   forAdmin?: boolean;
 };
 
 export class ArchiveError extends Error {}
 
 /** The app-dir entries that travel as they are, when they exist. `secret.key`
- *  still travels: it opens the mail stores' sealed subjects and readings,
- *  which a moved household would otherwise lose (and pay for again). The
- *  passwords it used to open no longer travel — see withoutPasswords. */
+ *  opens the mail stores' sealed subjects and readings: it travels in the
+ *  machine owner's archive (console, CLI), so a move made by them loses
+ *  nothing, and never in the admin's (forAdmin) — the mail stores stay out of
+ *  that one too, and each member reconnects their mail, which is read again.
+ *  The passwords it used to open travel in neither — see withoutPasswords. */
 const LIVE_ENTRIES = ["images", "files", "uploads", "avatars", "config.toml", "secret.key"];
 
 /** Patterns tar leaves out of every directory it reads. WAL sidecars belong
@@ -295,14 +298,16 @@ function prepare(opts: ExportOptions): Prepared {
     // The mail stores, one database per member (tools/email/store.py): live
     // WAL databases like the others, so they are snapshotted, not read by tar.
     const mailDir = join(appDir, "mail");
-    const mailDbs = existsSync(mailDir) ? readdirSync(mailDir).filter((f) => f.endsWith(".db")).sort() : [];
+    // Not in the admin's archive: without secret.key (below) what they seal
+    // cannot be opened, and each member's mail is rebuilt when they reconnect.
+    const mailDbs = !opts.forAdmin && existsSync(mailDir) ? readdirSync(mailDir).filter((f) => f.endsWith(".db")).sort() : [];
     if (mailDbs.length) mkdirSync(join(staging, "mail"));
     for (const f of mailDbs) {
       snapshotDb(join(mailDir, f), join(staging, "mail", f));
       checkDb(join(staging, "mail", f));
     }
 
-    const live = LIVE_ENTRIES.filter((e) => existsSync(join(appDir, e)));
+    const live = LIVE_ENTRIES.filter((e) => existsSync(join(appDir, e)) && !(opts.forAdmin && e === "secret.key"));
     const hasGardens = existsSync(gardensDir) && statSync(gardensDir).isDirectory();
 
     const contents = [

@@ -24,7 +24,7 @@ covers:
   maurice-docs: '2026-10-20'
   maurice-domains: '2026-10-20'
   maurice-files: '2026-06-19'
-  maurice-households-rooms: '2026-10-27'
+  maurice-households-rooms: '2026-10-28'
   maurice-knowledge: '2026-10-20'
   maurice-life: '2026-10-20'
   maurice-personas-hats: '2026-09-19'
@@ -124,7 +124,7 @@ There is also a **browser clipper** that saves the page being read into the memb
 - **The operator** (whoever runs the server) can see the admin console from the machine itself — provider keys, member settings, per-member spend, reports filed in shared rooms, health counters, logs of model rounds and tool calls. They cannot see mail passwords, reports on private one-to-one conversations (those cannot be reported), or names and content through the health probe. This is policy and plumbing, not encryption against the operator: whoever runs the server runs its storage.
 - **Your data, your copy:** *My data* in the app exports a member archive (conversations, rows, notes with their history, files, mail store — no credentials), imports one, and **erases** — the member's data, or the whole account — everywhere the server reaches, including nightly local snapshots. The answer lists what it cannot reach: a copy of the notes on a remote elsewhere, a published site, archives an admin already exported, and a hosted household's off-site backups (kept up to 12 months; restoring one would bring the member back). Carnet offers the same *Delete my account*.
 - **Your notes as a git clone:** each member can clone their own notes (Settings → *My data* → *Clone my notes*), read-only, with a key that opens nothing else. The clone holds the notes, fiches and their history, and every night Maurice writes into it, under `_maurice/`, the member's highlights, reading positions, archived entries and domains (brief, instructions, context, what is filed in each), and their conversations if they turn that on. It is **not encrypted**: notes marked encrypted are in clear text in it, as they are on the server's disk.
-- **Household archive:** the whole household as one file (databases, every member's notes with their history, files, configuration, the household key) to move it elsewhere. No password is in it: each member reconnects their mailbox after a move. At home it comes from the admin console on the machine. A hosted household's admin asks for it on their Chez Maurice account, with their password, and gets a link by mail that works once, for a few hours. That copy holds no session, PIN or provider key either: in the new home everyone joins again with a code.
+- **Household archive:** the whole household as one file (databases, every member's notes with their history, files, configuration, the household key) to move it elsewhere. No password is in it: each member reconnects their mailbox after a move. At home it comes from the admin console on the machine. A hosted household's admin asks for it on their Chez Maurice account, with their password, and gets a link by mail that works once, for a few hours. That copy holds no session, PIN or provider key either, nor the household key and the mail it seals: in the new home everyone joins again with a code and reconnects their mailbox, which Maurice reads again.
 
 *Detail:* `data-model`, `server`, `architecture`.
 
