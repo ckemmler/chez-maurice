@@ -86,6 +86,7 @@ import { scheduleGardenExport } from "./src/services/gardenExport";
 import { scheduleConversationSummaries } from "./data-api/services/entryConversations";
 import { mergeDuplicateDomains } from "./src/services/domainMerge";
 import { fullHealth, hookConsoleErrors, publicHealth, recordError } from "./src/services/health";
+import { isLoopbackRequest } from "./src/middleware/loopback";
 import { validateSession, normalizeInviteCode, formatInviteCode } from "./src/services/auth";
 import { t, langOf } from "./src/services/i18n";
 import { isParticipant } from "./src/services/conversations";
@@ -838,12 +839,14 @@ app.get("/api/health", (c) => {
 });
 
 // Public face: enough for an uptime probe and for the apps' version check.
-// With a `health`- or `full`-scoped maur_* token: the operator's full picture.
-// No member data on either face — see src/services/health.ts.
+// With a `health`- or `full`-scoped maur_* token, or from the machine itself:
+// the operator's full picture. From the machine is how a hosted household's
+// tower reads it, by a probe run inside the container (docker exec), which
+// holds no token. No member data on either face — see src/services/health.ts.
 app.get("/healthz", async (c) => {
   const auth = c.req.header("Authorization");
   const raw = auth?.startsWith("Bearer ") ? auth.slice(7) : null;
-  if (raw && (await validateHealthToken(raw))) {
+  if (isLoopbackRequest(c) || (raw && (await validateHealthToken(raw)))) {
     const h = fullHealth();
     return c.json(h, h.status === "ok" ? 200 : 503);
   }

@@ -327,7 +327,7 @@ Each member has folders and files (5 GB each), in **Settings**: text, images, PD
 
 - **Night jobs** run inside the server, at home and hosted alike, each catching up if the server was down and each switchable off: 03:00 search reconcile and the mail header walk; 03:30 the export into the notes (highlights, reading, domains, and conversations if asked, written into each member's notes that have been cloned and committed only when something changed); 04:00 domain briefs; 05:00 domain mapping and filing. The night spends from its own allowance.
 - **Admin console** (`/admin`, only from the machine itself; the operator of a hosted household reaches it through an ssh tunnel): members, PINs and invitations, models and their windows, the access grid, provider keys, the Calibre library, caps and budget shares, the night's allowance, background model pins, which children may publish, cards for the night's jobs with *run now*, the household export.
-- **Health:** `/healthz` answers status and version publicly, and build, database, disk and error counts (never names or content) to a health token.
+- **Health:** `/healthz` answers status and version publicly, and build, database, disk and error counts (never names or content) to a health token or to a caller on the machine itself.
 - **Documentation refresh:** each server fetches the latest documentation from the public repository once a day.
 - **Fleet:** a hand-kept inventory and terminal tools to check, deploy and restart households; no central registry, by design.
 
