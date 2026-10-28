@@ -992,7 +992,25 @@ struct ServerParticipant: Decodable, Identifiable {
 struct ServerPreferences: Codable {
     var theme: String?
     var palette: String?
+    /// The member's chosen language; nil means "follow the device".
     var locale: String?
+    /// The device's language, as the server last heard it.
+    var device_locale: String?
+
+    /// `locale` is always sent, as null when the member follows the device:
+    /// an omitted key leaves the server's previous choice in place, which is
+    /// how going back to the device's language used to be lost.
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encodeIfPresent(theme, forKey: .theme)
+        try c.encodeIfPresent(palette, forKey: .palette)
+        try c.encode(locale, forKey: .locale)
+    }
+}
+
+/// Tells the server the device's language, alone: no other preference moves.
+struct DeviceLocaleBody: Encodable {
+    let device_locale: String
 }
 
 struct HealthResponse: Decodable {

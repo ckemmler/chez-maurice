@@ -418,6 +418,12 @@ final class SessionStore {
             let prefs: ServerPreferences = try await api.get("/api/users/me/preferences", token: token)
             palette = prefs.palette ?? "auto"
             localeIdentifier = prefs.locale
+            // What the interface speaks when the member follows the device:
+            // the server keeps it so the household knows (a tally, never who).
+            let device = (Locale.preferredLanguages.first ?? "en").components(separatedBy: "-").first?.lowercased() ?? "en"
+            if prefs.device_locale != device {
+                let _: ServerPreferences? = try? await api.patch("/api/users/me/preferences", body: DeviceLocaleBody(device_locale: device), token: token)
+            }
         } catch {
             loadLocalPrefs()
         }

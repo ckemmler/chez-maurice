@@ -177,12 +177,21 @@ export interface UserPreferences {
   theme: string;
   palette: string;
   locale: string | null;
+  /** The device's language, as the app reports it; what applies while `locale` is null. */
+  device_locale: string | null;
+}
+
+/** A language as the app may report it: its base code, lowercased ("fr-BE" → "fr"); null when it is not one. */
+function baseLanguage(v: unknown): string | null {
+  if (typeof v !== "string") return null;
+  const base = v.trim().split(/[-_]/)[0]!.toLowerCase();
+  return /^[a-z]{2,3}$/.test(base) ? base : null;
 }
 
 export function getUserPreferences(userId: string): UserPreferences {
   const row = db
     .query(
-      `SELECT theme, palette, locale FROM user_preferences WHERE user_id = ?`
+      `SELECT theme, palette, locale, device_locale FROM user_preferences WHERE user_id = ?`
     )
     .get(userId) as any;
 
@@ -190,6 +199,7 @@ export function getUserPreferences(userId: string): UserPreferences {
     theme: row?.theme ?? "auto",
     palette: row?.palette ?? "auto",
     locale: row?.locale ?? null,
+    device_locale: row?.device_locale ?? null,
   };
 }
 
@@ -212,6 +222,11 @@ export function updateUserPreferences(
       sets.push(`${key} = ?`);
       params.push((updates as any)[key]);
     }
+  }
+
+  if ((updates as any).device_locale !== undefined) {
+    const lang = baseLanguage((updates as any).device_locale);
+    if (lang) { sets.push("device_locale = ?"); params.push(lang); }
   }
 
   if (sets.length > 0) {

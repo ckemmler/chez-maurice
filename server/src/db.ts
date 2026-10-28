@@ -213,6 +213,10 @@ try { db.run(`ALTER TABLE user_preferences ADD COLUMN locale TEXT`); } catch {}
 // Whether the night's export writes the member's conversations into their
 // garden (services/gardenExport.ts). Off unless the member turns it on.
 try { db.run(`ALTER TABLE user_preferences ADD COLUMN export_conversations INTEGER NOT NULL DEFAULT 0`); } catch {}
+// The language of the member's device, as the app last reported it: what the
+// interface speaks when `locale` is null (the member follows the device).
+// Read by the hosted fleet's counters (a tally of languages, never who).
+try { db.run(`ALTER TABLE user_preferences ADD COLUMN device_locale TEXT`); } catch {}
 // A conversation may be bound to a specialized Maurice (persona). Null = the
 // everyday, unspecialized Maurice. Kept as a plain id (no FK) so this migration
 // doesn't depend on table-creation order; deleting a Maurice nulls it explicitly
