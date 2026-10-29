@@ -25,7 +25,7 @@ import {
 import { dictationEngine } from "../services/dictation";
 import { getHouseholdConfig } from "../services/claude";
 import { hasWebSearch } from "../services/webSearch";
-import { getModel, householdDefaultModel } from "../services/models";
+import { configuredProviders, getModel, householdDefaultModel } from "../services/models";
 import { availableModelsForUser } from "../services/modelAccess";
 
 
@@ -199,9 +199,17 @@ me.get("/budget", (c) => c.json(householdBudget(getUser(c.get("userId"))?.role =
 export function providersInUse(userId: string): string[] {
   const ids = new Set<string>();
   for (const m of availableModelsForUser(userId)) if (m.tier !== "local") ids.add(m.provider);
+  // The default and background models count only on a provider that has a
+  // key: a fresh household's default names Anthropic without being able to
+  // reach it, and naming it would be asking about nothing.
+  const keyed = configuredProviders();
   const fallback = householdDefaultModel();
-  if (fallback) ids.add(getModel(fallback)?.provider ?? "");
-  for (const row of ancillaryTable()) ids.add(getModel(row.effective)?.provider ?? "");
+  const viaModel = (id: string | null | undefined) => {
+    const p = id ? getModel(id)?.provider : undefined;
+    if (p && keyed.has(p)) ids.add(p);
+  };
+  viaModel(fallback);
+  for (const row of ancillaryTable()) viaModel(row.effective);
   if (dictationEngine() === "scaleway") ids.add("scaleway");
   const embed = embeddingProvider();
   if (embed) ids.add(embed);
