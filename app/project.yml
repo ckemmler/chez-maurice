@@ -56,7 +56,9 @@ targetTemplates:
         # Asked for at the moment the feature is used, so the wording has to say
         # what Maurice does with the permission, not just that it wants it.
         INFOPLIST_KEY_NSCameraUsageDescription: "Maurice uses the camera to take a profile photo or scan a household invitation."
-        INFOPLIST_KEY_NSMicrophoneUsageDescription: "Maurice uses the microphone so you can dictate a message instead of typing it."
+        # Exactly what Dictation.chooseEngine does with the audio: the device,
+        # the household's own machine, and an outside service only on a yes.
+        INFOPLIST_KEY_NSMicrophoneUsageDescription: "Maurice uses the microphone so you can dictate a message. Your voice is turned into text on this device, or on your household's server when it transcribes on its own machine. It goes to an outside service only if you allow it: Apple's speech recognition after asking you, or your household's AI provider if you turn that on in Settings."
         INFOPLIST_KEY_NSSpeechRecognitionUsageDescription: "Maurice turns your dictation into text on this device whenever your language has an offline model. If it doesn't, Maurice asks you first before sending any audio to Apple."
         MARKETING_VERSION: "0.1"
         CURRENT_PROJECT_VERSION: "1"

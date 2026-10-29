@@ -1530,13 +1530,15 @@ enum ServerDictationPref {
 }
 
 /// Whether dictation goes to the household's server (Whisper) even where the
-/// device has a recogniser of its own (SpeechAnalyzer, OS 26). On by default
-/// since 16 October 2026: the device's recogniser previews the words as they
-/// are spoken either way, and Whisper's text, heard over the whole recording,
-/// was clearly the better of the two in use. Off keeps dictation on the device.
+/// device has a recogniser of its own (SpeechAnalyzer, OS 26). Whisper's text,
+/// heard over the whole recording, is the better of the two — but on a hosted
+/// household the clip goes on to the household's AI provider, so the member
+/// turns it on themselves (off by default since 29 October 2026; App Review
+/// 5.1.2(i)). Off, audio reaches the server only when it transcribes on its
+/// own machine and the device has nothing better (Dictation.chooseEngine).
 enum HouseholdDictationPref {
     static let key = "maurice.preferHouseholdDictation"
-    static let defaultValue = true
+    static let defaultValue = false
 }
 
 /// What a turn cost, in the action row under the reply. Hidden unless the user

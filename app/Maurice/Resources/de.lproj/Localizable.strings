@@ -357,7 +357,7 @@
 "settings.dictation.allow_server" = "Transkription durch Apple erlauben";
 "settings.dictation.caption" = "Das Diktat nutzt die Spracherkennung dieses Geräts oder den Server deines Haushalts. Kann keines von beiden es und hat die Sprache hier kein Offline-Modell, lässt diese Option Apple transkribieren – der Ton verlässt dann dein Gerät. Das Mikrofon zeigt währenddessen eine Wolke.";
 "settings.dictation.prefer_household" = "Auf dem Haushaltsserver transkribieren";
-"settings.dictation.household_caption" = "Der Server deines Haushalts hört die ganze Aufnahme auf einmal (Whisper) und trifft Satzzeichen und Namen weit öfter als das Gerät. Das Gerät schreibt die Wörter trotzdem mit, während du sprichst; der Text des Servers ersetzt sie, wenn du aufhörst. Auf einem Server zu Hause bleibt der Ton im Haus. Schalte dies aus, um das Diktat auf diesem Gerät zu behalten.";
+"settings.dictation.household_caption" = "Standardmäßig aus: Das Diktat bleibt auf diesem Gerät. Eingeschaltet hört der Server deines Haushalts die ganze Aufnahme (Whisper), und Satzzeichen und Namen stimmen viel öfter. Auf einem Server zu Hause verlässt der Ton das Haus nie; bei einem gehosteten Maurice transkribiert ihn der KI-Anbieter deines Haushalts (Scaleway, Paris), und nur, wenn du diesem Anbieter zugestimmt hast. Das Gerät schreibt die Wörter trotzdem mit, während du sprichst; der Text des Servers ersetzt sie, wenn du aufhörst.";
 
 /* App Shortcut (Action Button / Shortcuts list) */
 "Dictate to Maurice" = "Maurice diktieren";

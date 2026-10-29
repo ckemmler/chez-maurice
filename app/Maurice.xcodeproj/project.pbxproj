@@ -685,7 +685,7 @@
 				INFOPLIST_KEY_CFBundleDisplayName = "Chez Maurice";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.education";
 				INFOPLIST_KEY_NSCameraUsageDescription = "Maurice uses the camera to take a profile photo or scan a household invitation.";
-				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Maurice uses the microphone so you can dictate a message instead of typing it.";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Maurice uses the microphone so you can dictate a message. Your voice is turned into text on this device, or on your household's server when it transcribes on its own machine. It goes to an outside service only if you allow it: Apple's speech recognition after asking you, or your household's AI provider if you turn that on in Settings.";
 				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Maurice turns your dictation into text on this device whenever your language has an offline model. If it doesn't, Maurice asks you first before sending any audio to Apple.";
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
@@ -873,7 +873,7 @@
 				INFOPLIST_KEY_CFBundleDisplayName = "Chez Maurice";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.education";
 				INFOPLIST_KEY_NSCameraUsageDescription = "Maurice uses the camera to take a profile photo or scan a household invitation.";
-				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Maurice uses the microphone so you can dictate a message instead of typing it.";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Maurice uses the microphone so you can dictate a message. Your voice is turned into text on this device, or on your household's server when it transcribes on its own machine. It goes to an outside service only if you allow it: Apple's speech recognition after asking you, or your household's AI provider if you turn that on in Settings.";
 				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Maurice turns your dictation into text on this device whenever your language has an offline model. If it doesn't, Maurice asks you first before sending any audio to Apple.";
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
@@ -911,7 +911,7 @@
 				INFOPLIST_KEY_CFBundleDisplayName = "Chez Maurice";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.education";
 				INFOPLIST_KEY_NSCameraUsageDescription = "Maurice uses the camera to take a profile photo or scan a household invitation.";
-				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Maurice uses the microphone so you can dictate a message instead of typing it.";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Maurice uses the microphone so you can dictate a message. Your voice is turned into text on this device, or on your household's server when it transcribes on its own machine. It goes to an outside service only if you allow it: Apple's speech recognition after asking you, or your household's AI provider if you turn that on in Settings.";
 				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Maurice turns your dictation into text on this device whenever your language has an offline model. If it doesn't, Maurice asks you first before sending any audio to Apple.";
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
@@ -942,7 +942,7 @@
 				INFOPLIST_KEY_CFBundleDisplayName = "Chez Maurice";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.education";
 				INFOPLIST_KEY_NSCameraUsageDescription = "Maurice uses the camera to take a profile photo or scan a household invitation.";
-				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Maurice uses the microphone so you can dictate a message instead of typing it.";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Maurice uses the microphone so you can dictate a message. Your voice is turned into text on this device, or on your household's server when it transcribes on its own machine. It goes to an outside service only if you allow it: Apple's speech recognition after asking you, or your household's AI provider if you turn that on in Settings.";
 				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Maurice turns your dictation into text on this device whenever your language has an offline model. If it doesn't, Maurice asks you first before sending any audio to Apple.";
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";

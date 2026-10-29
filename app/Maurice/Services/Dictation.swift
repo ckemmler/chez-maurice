@@ -15,9 +15,10 @@ import Accelerate
 ///    none can does a start wait on the download, saying so.
 /// 2. **The household's server** — the clip is recorded here and sent whole to
 ///    `/api/dictation`, where Whisper transcribes it (whisper.cpp on the home
-///    server, or the household's provider). The default since 16 October 2026,
-///    unless the member turns it off in Settings: the best text of the three,
-///    with the household's names spelled right. While it records, an on-device
+///    server, or the household's provider). Chosen first only when the member
+///    turns it on in Settings (off by default since 29 October 2026: on a
+///    hosted household the clip reaches its AI provider): the best text of the
+///    three, with the household's names spelled right. While it records, an on-device
 ///    recogniser previews the words; Whisper's text replaces them at the stop.
 /// 3. **SFSpeechRecognizer** — the recogniser this file used to be, kept as the
 ///    last resort: no new API and no server reachable. Its on-device models are
