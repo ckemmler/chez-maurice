@@ -8,7 +8,7 @@
 "pairing.error.unreachable" = "der Server hat nicht geantwortet";
 "pairing.error.https_hint" = "Maurice-Server verwenden https — versuche https:// statt http://.";
 "picker.title" = "Wer ist da?";
-"picker.empty" = "Noch keine Nutzer geladen.";
+"picker.empty" = "Um diesem Haushalt auf diesem Gerät beizutreten, gib den Einladungscode ein, den du bekommen hast.";
 "picker.admin_signin" = "Als Admin anmelden";
 "picker.disconnect" = "Dieses Gerät trennen";
 "picker.pin.title" = "Gib deine PIN ein";

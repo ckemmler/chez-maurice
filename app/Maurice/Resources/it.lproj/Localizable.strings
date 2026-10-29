@@ -8,7 +8,7 @@
 "pairing.error.unreachable" = "il server non ha risposto";
 "pairing.error.https_hint" = "I server Maurice usano https — prova https:// invece di http://.";
 "picker.title" = "Chi c'è?";
-"picker.empty" = "Nessun utente caricato per ora.";
+"picker.empty" = "Per unirti a questa casa su questo dispositivo, inserisci il codice d’invito che hai ricevuto.";
 "picker.admin_signin" = "Accedi come amministratore";
 "picker.disconnect" = "Scollega questo dispositivo";
 "picker.pin.title" = "Inserisci il tuo PIN";

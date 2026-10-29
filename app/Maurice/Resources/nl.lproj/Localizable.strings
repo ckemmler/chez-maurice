@@ -8,7 +8,7 @@
 "pairing.error.unreachable" = "de server reageerde niet";
 "pairing.error.https_hint" = "Maurice-servers gebruiken https — probeer https:// in plaats van http://.";
 "picker.title" = "Wie is er?";
-"picker.empty" = "Nog geen gebruikers geladen.";
+"picker.empty" = "Om je op dit apparaat bij dit huishouden aan te sluiten, voer je de uitnodigingscode in die je hebt gekregen.";
 "picker.admin_signin" = "Aanmelden als beheerder";
 "picker.disconnect" = "Dit apparaat ontkoppelen";
 "picker.pin.title" = "Voer je pincode in";
