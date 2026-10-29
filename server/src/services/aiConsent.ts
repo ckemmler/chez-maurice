@@ -47,6 +47,7 @@ const KNOWN: Record<string, Omit<ProviderInfo, "id">> = {
   zai: { name: "Z.ai (Zhipu AI)", region: "CN", city: null },
   "claude-code": { name: "Anthropic (Claude Code)", region: "US", city: null },
   fal: { name: "fal.ai (image generation)", region: "US", city: null },
+  tavily: { name: "Tavily (web search)", region: "US", city: null },
 };
 
 export function isLocalProvider(provider: string | null | undefined): boolean {

@@ -177,6 +177,8 @@ final class AIConsentStore {
         case "openai": return AIProvider(id: id, name: "OpenAI", region: "US", city: nil)
         case "gemini": return AIProvider(id: id, name: "Google Gemini", region: "US", city: nil)
         case "zai": return AIProvider(id: id, name: "Z.ai (Zhipu AI)", region: "CN", city: nil)
+        case "fal": return AIProvider(id: id, name: "fal.ai (image generation)", region: "US", city: nil)
+        case "tavily": return AIProvider(id: id, name: "Tavily (web search)", region: "US", city: nil)
         default: return AIProvider(id: id, name: id, region: nil, city: nil)
         }
     }

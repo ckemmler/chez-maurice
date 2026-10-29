@@ -1702,7 +1702,9 @@ function trackedBooks(
     : memberId
       ? resolveFamilies(conversationId, isLocal, memberId)
       : isLocal ? [] : "all";
-  const wantsWeb = families === "all" || families.includes("web");
+  // Web search sends the query to Tavily, which writes an answer of its own:
+  // offered only to a member whose yes covers it (services/aiConsent.ts).
+  const wantsWeb = (families === "all" || families.includes("web")) && aiAllowed(memberId, "tavily");
 
   let mcp: McpSession | null = null;
   let mcpTools: McpTool[] = [];

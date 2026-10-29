@@ -1036,3 +1036,5 @@
 "settings.import.confirm.title" = "Diese Gespräche an das KI-Modell senden?";
 "settings.import.confirm.text" = "Deine %@-Gespräche werden auf dem Server deines Haushalts gespeichert und an %@ gesendet, um indexiert und nachts gelesen zu werden.";
 "settings.import.confirm.ok" = "Export auswählen";
+
+"mydata.privacy" = "Datenschutzerklärung";

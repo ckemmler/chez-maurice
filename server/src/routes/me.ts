@@ -24,6 +24,7 @@ import {
 } from "../services/aiConsent";
 import { dictationEngine } from "../services/dictation";
 import { getHouseholdConfig } from "../services/claude";
+import { hasWebSearch } from "../services/webSearch";
 import { getModel, householdDefaultModel } from "../services/models";
 import { availableModelsForUser } from "../services/modelAccess";
 
@@ -205,6 +206,7 @@ export function providersInUse(userId: string): string[] {
   const embed = embeddingProvider();
   if (embed) ids.add(embed);
   if (getHouseholdConfig().falApiKey) ids.add("fal");
+  if (hasWebSearch()) ids.add("tavily");
   return [...ids].filter((p) => p && !isLocalProvider(p)).sort();
 }
 

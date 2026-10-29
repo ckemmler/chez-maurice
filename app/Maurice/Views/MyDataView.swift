@@ -158,6 +158,14 @@ struct MyDataView: View {
             Text(session.localized("mydata.caption"))
                 .font(.system(size: 12.5)).foregroundStyle(theme.inkSoft).lineSpacing(2)
 
+            // What the publisher does with the data, one tap away where the
+            // member manages it (App Review 5.1.1(i)).
+            Link(destination: SafetyLinks.privacy) {
+                Label(session.localized("mydata.privacy"), systemImage: "hand.raised.square")
+                    .font(.system(size: 12.5, weight: .medium))
+            }
+            .tint(accent.legible(onDark: theme.isDark))
+
             // The member's answer about AI providers (AIConsentStore), which
             // they can give or take back here at any time.
             card(title: session.localized("mydata.ai.title"), text: session.localized("mydata.ai.text")) {

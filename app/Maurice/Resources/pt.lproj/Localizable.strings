@@ -1023,3 +1023,5 @@
 "settings.import.confirm.title" = "Enviar estas conversas para o modelo de IA?";
 "settings.import.confirm.text" = "As suas conversas do %@ serão guardadas no servidor da sua casa e enviadas para %@ para serem indexadas e lidas à noite.";
 "settings.import.confirm.ok" = "Escolher a exportação";
+
+"mydata.privacy" = "Política de privacidade";

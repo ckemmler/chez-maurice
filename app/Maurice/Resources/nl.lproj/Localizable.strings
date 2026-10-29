@@ -1023,3 +1023,5 @@
 "settings.import.confirm.title" = "Deze gesprekken naar het AI-model sturen?";
 "settings.import.confirm.text" = "Je %@-gesprekken worden op de server van je huishouden bewaard en naar %@ gestuurd om te worden geïndexeerd en ’s nachts gelezen.";
 "settings.import.confirm.ok" = "Export kiezen";
+
+"mydata.privacy" = "Privacybeleid";

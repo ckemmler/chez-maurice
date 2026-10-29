@@ -1036,3 +1036,5 @@
 "settings.import.confirm.title" = "Send these conversations to the AI model?";
 "settings.import.confirm.text" = "Your %@ conversations will be stored on your household’s server and sent to %@ to be indexed and read at night.";
 "settings.import.confirm.ok" = "Choose the export";
+
+"mydata.privacy" = "Privacy Policy";
