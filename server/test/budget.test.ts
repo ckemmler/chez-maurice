@@ -75,7 +75,7 @@ test("a total cap blows once the ledger passes it", async () => {
   b.recordSpend(turn(0.5));
   const v = b.verdict("anthropic", "claude-sonnet-5");
   expect(v.ok).toBe(false);
-  expect(v.reason).toContain("allowance");
+  expect(v.reason).toContain("used up");
 });
 
 test("the turn in progress counts before it is persisted", async () => {
@@ -213,7 +213,10 @@ test("the operator may say what a spent allowance means, in their own words", as
   const b = await budget();
   process.env.MAURICE_SPEND_CAP_USD = "1.00";
   b.recordSpend(turn(1.2), ANNA);
-  expect(b.verdict("anthropic", "claude-sonnet-5", 0, ANNA).reason).toContain("spent its allowance of €1.00");
+  // Without their words: no amount, no way to pay — the apps show it (App Review 3.1.1).
+  const plain = b.verdict("anthropic", "claude-sonnet-5", 0, ANNA).reason ?? "";
+  expect(plain).toContain("talk to the person who runs it");
+  expect(plain).not.toContain("€");
   process.env.MAURICE_SPEND_CAP_MESSAGE = "Le crédit d'essai ({cap}) est épuisé. Rien n'est perdu.";
   const v = b.verdict("anthropic", "claude-sonnet-5", 0, ANNA);
   expect(v.ok).toBe(false);

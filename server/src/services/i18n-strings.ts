@@ -4,6 +4,7 @@
 
 export const STRINGS: Record<string, Record<string, string>> = {
   "en": {
+    "budget.total_spent": "This household's thinking is used up; talk to the person who runs it. Nothing is lost: the conversation and all your notes are still here.",
     "chat.ai_consent_required": "Nothing was sent: you have not agreed to send your messages to %@. You can review this choice in Settings → My data → AI providers.",
     "join.title": "An invitation to %@",
     "join.body": "Open this link on the iPhone, iPad or Mac where Chez Maurice is installed. Not installed yet? Install it, then scan the code again.",
@@ -371,6 +372,7 @@ export const STRINGS: Record<string, Record<string, string>> = {
     "flash.corpus_reconcile_running": "A reconciliation is already running"
   },
   "fr": {
+    "budget.total_spent": "La réflexion de ce foyer est épuisée ; parlez-en à la personne qui l'administre. Rien n'est perdu : la conversation et toutes vos notes sont toujours là.",
     "chat.ai_consent_required": "Rien n'a été envoyé : vous n'avez pas accepté d'envoyer vos messages à %@. Vous pouvez revoir ce choix dans Réglages → Mes données → Fournisseurs d'IA.",
     "join.title": "Une invitation chez %@",
     "join.body": "Ouvrez ce lien sur l’iPhone, l’iPad ou le Mac où Chez Maurice est installé. Pas encore installé ? Installez-le, puis scannez à nouveau le code.",
@@ -713,6 +715,7 @@ export const STRINGS: Record<string, Record<string, string>> = {
     "flash.corpus_reconcile_running": "Un rattrapage est déjà en cours"
   },
   "it": {
+    "budget.total_spent": "Il pensiero di questa casa è esaurito; parlane con la persona che la gestisce. Non si perde nulla: la conversazione e tutte le tue note sono ancora qui.",
     "chat.ai_consent_required": "Non è stato inviato nulla: non hai accettato di inviare i tuoi messaggi a %@. Puoi rivedere questa scelta in Impostazioni → I miei dati → Fornitori di IA.",
     "join.title": "Un invito da %@",
     "join.body": "Apri questo link sull’iPhone, iPad o Mac dove è installato Chez Maurice. Non ancora installato? Installalo, poi scansiona di nuovo il codice.",
@@ -986,6 +989,7 @@ export const STRINGS: Record<string, Record<string, string>> = {
     "flash.docs_refresh_off": "L'aggiornamento automatico della documentazione è disattivato"
   },
   "de": {
+    "budget.total_spent": "Das Denkguthaben dieses Haushalts ist aufgebraucht; sprich mit der Person, die ihn verwaltet. Nichts geht verloren: Das Gespräch und alle deine Notizen sind noch da.",
     "chat.ai_consent_required": "Es wurde nichts gesendet: Du hast nicht zugestimmt, deine Nachrichten an %@ zu senden. Du kannst diese Entscheidung unter Einstellungen → Meine Daten → KI-Anbieter ändern.",
     "join.title": "Eine Einladung zu %@",
     "join.body": "Öffne diesen Link auf dem iPhone, iPad oder Mac, auf dem Chez Maurice installiert ist. Noch nicht installiert? Installiere es und scanne den Code dann erneut.",
@@ -1259,6 +1263,7 @@ export const STRINGS: Record<string, Record<string, string>> = {
     "flash.docs_refresh_off": "Automatische Aktualisierung der Dokumentation ist aus"
   },
   "es": {
+    "budget.total_spent": "El pensamiento de este hogar se ha agotado; habla con la persona que lo administra. No se pierde nada: la conversación y todas tus notas siguen aquí.",
     "chat.ai_consent_required": "No se ha enviado nada: no has aceptado enviar tus mensajes a %@. Puedes revisar esta elección en Ajustes → Mis datos → Proveedores de IA.",
     "join.title": "Una invitación de %@",
     "join.body": "Abre este enlace en el iPhone, iPad o Mac donde está instalado Chez Maurice. ¿Aún no lo tienes? Instálalo y vuelve a escanear el código.",
@@ -1532,6 +1537,7 @@ export const STRINGS: Record<string, Record<string, string>> = {
     "flash.docs_refresh_off": "La actualización automática de la documentación está desactivada"
   },
   "pt": {
+    "budget.total_spent": "O pensamento desta casa esgotou-se; fale com a pessoa que a administra. Nada se perde: a conversa e todas as suas notas continuam aqui.",
     "chat.ai_consent_required": "Nada foi enviado: não aceitou enviar as suas mensagens para %@. Pode rever esta escolha em Definições → Os meus dados → Fornecedores de IA.",
     "join.title": "Um convite de %@",
     "join.body": "Abra esta ligação no iPhone, iPad ou Mac onde o Chez Maurice está instalado. Ainda não está instalado? Instale-o e volte a digitalizar o código.",
@@ -1805,6 +1811,7 @@ export const STRINGS: Record<string, Record<string, string>> = {
     "flash.docs_refresh_off": "A atualização automática da documentação está desligada"
   },
   "nl": {
+    "budget.total_spent": "Het denkwerk van dit huishouden is op; praat erover met de persoon die het beheert. Er gaat niets verloren: het gesprek en al je notities zijn er nog.",
     "chat.ai_consent_required": "Er is niets verstuurd: je hebt niet ingestemd met het versturen van je berichten naar %@. Je kunt deze keuze herzien in Instellingen → Mijn gegevens → AI-aanbieders.",
     "join.title": "Een uitnodiging van %@",
     "join.body": "Open deze link op de iPhone, iPad of Mac waarop Chez Maurice is geïnstalleerd. Nog niet geïnstalleerd? Installeer het en scan de code opnieuw.",

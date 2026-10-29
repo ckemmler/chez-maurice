@@ -53,6 +53,7 @@
 import db from "../db";
 import { priceFor, type TurnUsage } from "./pricing";
 import { isUnmetered } from "./providerPlugins";
+import { t, userLocale } from "./i18n";
 
 // ── Caps ────────────────────────────────────────────────────────────────────
 
@@ -385,7 +386,10 @@ interface Layer {
   reason: string;
 }
 
-/** The operator's own sentence for a spent total allowance, if they wrote one. */
+/** The operator's own sentence for a spent total allowance, if they wrote one.
+ *  It is shown in the chat of the iOS and macOS apps: it must name no
+ *  purchase, no account page and no link (App Review 3.1.1) — the tower's
+ *  creditSpentMessage sends the member to whoever runs the household. */
 function totalCapMessage(cap: string): string | null {
   const raw = process.env.MAURICE_SPEND_CAP_MESSAGE?.trim();
   return raw ? raw.replaceAll("{cap}", cap) : null;
@@ -447,9 +451,8 @@ function layers(userId?: string | null): Layer[] {
     out.push({
       capUsd: c.totalUsd,
       spentUsd: spentTotalUsd(),
-      reason: totalCapMessage(usd(c.totalUsd)) ??
-        `This instance has spent its allowance of ${usd(c.totalUsd)}. ` +
-        `Nothing is lost — the conversation and all your notes are still here.`,
+      // No amount and no way to pay: a member reads it in the app.
+      reason: totalCapMessage(usd(c.totalUsd)) ?? t(userLocale(userId), "budget.total_spent"),
     });
   }
   return out;
