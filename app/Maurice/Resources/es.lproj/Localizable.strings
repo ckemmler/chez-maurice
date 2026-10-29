@@ -683,7 +683,7 @@
 "mail.password.plain" = "Contraseña";
 "mail.connect" = "Conectar";
 "mail.checking" = "Comprobando con tu buzón…";
-"mail.added" = "Conectado. Maurice ya puede leerlo.";
+"mail.added" = "Conectado. Maurice puede leerlo cuando se lo pidas; lo que lee va al modelo de IA de tu hogar.";
 "mail.refused" = "Tu buzón ha rechazado esta contraseña.";
 "mail.failed" = "No ha funcionado.";
 "mail.unreachable" = "Maurice no ha podido conectar con este buzón. Revisa el nombre del servidor y el puerto.";
@@ -726,7 +726,7 @@
 "mail.reading.done" = "Lectura: terminada";
 "mail.reading.approve" = "Dejar leer a Maurice";
 "mail.reading.withdraw" = "Retirar la aprobación";
-"mail.reading.help" = "Maurice lee los intercambios reales de los últimos años, por la noche, y te dice quién cuenta para ti y qué está en marcha. No se envía nada ni se cambia nada en tu buzón.";
+"mail.reading.help" = "Maurice lee los intercambios reales de los últimos años, de noche, y te dice quién te importa y qué está en marcha. El texto de los mensajes que lee va al modelo de IA de tu hogar; no se envía nada desde tu buzón ni se cambia nada en él.";
 "mail.reading.caption" = "La lectura es un sí que das tú, aquí. Puedes retirarlo en cualquier momento. Lo que Maurice escribe a partir de ella está en tus notas, bajo «Mi correo».";
 "mail.box.messages" = "%d mensajes registrados";
 "mail.box.reading" = "Lectura: %1$d clasificados · %2$d por leer · %3$d leídos";
@@ -1026,3 +1026,13 @@
 "report.ai.queue.private" = "Conversación privada";
 "report.ai.queue.handled" = "Marcar como atendida";
 "report.ai.queue.open" = "Denuncias pendientes";
+
+/* Mail reading and imports: the AI model named (MailPane, ImportProviderCard) */
+"mail.reading.by" = "Leído por el modelo de IA de tu hogar: %@.";
+"mail.reading.by_local" = "Leído por un modelo en la máquina de tu hogar: nada sale de ella.";
+"ai.consent.needed" = "Acepta primero el envío a los proveedores de IA, en Ajustes → Mis datos → Proveedores de IA.";
+"settings.import.ai" = "Las conversaciones importadas van al modelo de IA de tu hogar para indexarse y leerse de noche: %@.";
+"settings.import.ai_local" = "Las conversaciones importadas las indexan y leen modelos en la máquina de tu hogar: nada sale de ella.";
+"settings.import.confirm.title" = "¿Enviar estas conversaciones al modelo de IA?";
+"settings.import.confirm.text" = "Tus conversaciones de %@ se guardarán en el servidor de tu hogar y se enviarán a %@ para indexarse y leerse de noche.";
+"settings.import.confirm.ok" = "Elegir la exportación";

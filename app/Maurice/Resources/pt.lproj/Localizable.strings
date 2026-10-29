@@ -683,7 +683,7 @@
 "mail.password.plain" = "Palavra-passe";
 "mail.connect" = "Ligar";
 "mail.checking" = "A verificar com a tua caixa…";
-"mail.added" = "Ligada. O Maurice já a pode ler.";
+"mail.added" = "Ligada. O Maurice pode lê-la quando lhe pedir; o que ele lê vai para o modelo de IA da sua casa.";
 "mail.refused" = "A tua caixa recusou esta palavra-passe.";
 "mail.failed" = "Não funcionou.";
 "mail.unreachable" = "O Maurice não conseguiu chegar a esta caixa. Verifica o nome do servidor e a porta.";
@@ -726,7 +726,7 @@
 "mail.reading.done" = "Leitura: concluída";
 "mail.reading.approve" = "Deixar o Maurice ler";
 "mail.reading.withdraw" = "Retirar a aprovação";
-"mail.reading.help" = "O Maurice lê as trocas reais dos últimos anos, de noite, e diz-te quem conta para ti e o que está em curso. Nada é enviado, nada muda na tua caixa.";
+"mail.reading.help" = "O Maurice lê as trocas reais dos últimos anos, à noite, e diz-lhe quem conta para si e o que está em curso. O texto das mensagens que lê vai para o modelo de IA da sua casa; nada é enviado da sua caixa e nada nela é alterado.";
 "mail.reading.caption" = "A leitura é um sim que tu dás, aqui. Podes retirá-lo a qualquer momento. O que o Maurice escreve a partir dela está nas tuas notas, em «O meu correio».";
 "mail.box.messages" = "%d mensagens registadas";
 "mail.box.reading" = "Leitura: %1$d triadas · %2$d por ler · %3$d lidas";
@@ -1013,3 +1013,13 @@
 "report.ai.queue.private" = "Conversa privada";
 "report.ai.queue.handled" = "Marcar como tratada";
 "report.ai.queue.open" = "Denúncias pendentes";
+
+/* Mail reading and imports: the AI model named (MailPane, ImportProviderCard) */
+"mail.reading.by" = "Lido pelo modelo de IA da sua casa: %@.";
+"mail.reading.by_local" = "Lido por um modelo na máquina da sua casa: nada sai dela.";
+"ai.consent.needed" = "Aceite primeiro o envio aos fornecedores de IA, em Definições → Os meus dados → Fornecedores de IA.";
+"settings.import.ai" = "As conversas importadas vão para o modelo de IA da sua casa para serem indexadas e lidas à noite: %@.";
+"settings.import.ai_local" = "As conversas importadas são indexadas e lidas por modelos na máquina da sua casa: nada sai dela.";
+"settings.import.confirm.title" = "Enviar estas conversas para o modelo de IA?";
+"settings.import.confirm.text" = "As suas conversas do %@ serão guardadas no servidor da sua casa e enviadas para %@ para serem indexadas e lidas à noite.";
+"settings.import.confirm.ok" = "Escolher a exportação";

@@ -100,6 +100,7 @@ extension ImportSummary {
 
 private struct ImportProviderCard: View {
     @Environment(SessionStore.self) private var session
+    @Environment(AIConsentStore.self) private var aiConsent
     @Environment(\.mauriceTheme) private var theme
     let provider: ImportProvider
     let accent: Color
@@ -109,6 +110,9 @@ private struct ImportProviderCard: View {
     private enum Phase: Equatable { case idle, uploading, parsing, indexing(Int, Int), done(Int, Int), failed(String) }
     @State private var phase: Phase = .idle
     @State private var showPicker = false
+    /// The explicit yes asked at the moment of importing: the conversations go
+    /// to the household's AI provider, to be indexed and read at night.
+    @State private var confirmSend = false
 
     private var api: APIClient? { session.serverURL.map { APIClient(baseURL: $0) } }
     private var token: String? { session.tokenForActiveUser }
@@ -143,7 +147,20 @@ private struct ImportProviderCard: View {
 
             progress
 
-            Button { showPicker = true } label: {
+            // What happens to an import, with the provider named — and no
+            // import without a yes to it (AIConsentStore).
+            Text(aiConsent.providers.isEmpty
+                 ? session.localized("settings.import.ai_local")
+                 : session.localized("settings.import.ai", aiConsent.providerNames))
+                .font(.system(size: 11.5)).foregroundStyle(theme.inkSoft).lineSpacing(1)
+                .fixedSize(horizontal: false, vertical: true)
+            if !aiConsent.mayUseAI {
+                Text(session.localized("ai.consent.needed"))
+                    .font(.system(size: 11.5, weight: .medium)).foregroundStyle(theme.ink)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            Button { if aiConsent.providers.isEmpty { showPicker = true } else { confirmSend = true } } label: {
                 HStack(spacing: 6) {
                     if busy { ProgressView().controlSize(.small) }
                     Image(systemName: "square.and.arrow.down").font(.system(size: 12))
@@ -155,7 +172,13 @@ private struct ImportProviderCard: View {
                 .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(accent.opacity(0.8), lineWidth: 0.5))
             }
             .buttonStyle(.plain)
-            .disabled(busy)
+            .disabled(busy || !aiConsent.mayUseAI)
+            .confirmationDialog(session.localized("settings.import.confirm.title"), isPresented: $confirmSend, titleVisibility: .visible) {
+                Button(session.localized("settings.import.confirm.ok")) { showPicker = true }
+                Button(session.localized("ai.consent.ask.cancel"), role: .cancel) {}
+            } message: {
+                Text(session.localized("settings.import.confirm.text", provider.label, aiConsent.providerNames))
+            }
             .fileImporter(isPresented: $showPicker, allowedContentTypes: [.zip], allowsMultipleSelection: false) { result in
                 guard case .success(let urls) = result, let url = urls.first else { return }
                 Task { await upload(url) }

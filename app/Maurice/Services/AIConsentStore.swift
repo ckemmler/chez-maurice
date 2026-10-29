@@ -75,6 +75,13 @@ final class AIConsentStore {
         return record?.status == "accepted" && !state.needs_answer
     }
 
+    /// The providers in one phrase — "Scaleway Generative APIs (Paris,
+    /// France)" — for the screens that send a kind of data (mail, imports).
+    var providerNames: String {
+        let names = providers.map { p in p.place.map { "\(p.name) (\($0))" } ?? p.name }
+        return ListFormatter.localizedString(byJoining: names)
+    }
+
     func covers(_ provider: String) -> Bool {
         provider == "ollama" || (record?.status == "accepted" && record?.providers.contains(provider) == true)
     }

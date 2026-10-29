@@ -683,7 +683,7 @@
 "mail.password.plain" = "Passwort";
 "mail.connect" = "Verbinden";
 "mail.checking" = "Wird bei deinem Postfach geprüft …";
-"mail.added" = "Verbunden. Maurice kann es jetzt lesen.";
+"mail.added" = "Verbunden. Maurice kann es lesen, wenn du ihn darum bittest; was er liest, geht an das KI-Modell deines Haushalts.";
 "mail.refused" = "Dein Postfach hat dieses Passwort abgelehnt.";
 "mail.failed" = "Das hat nicht geklappt.";
 "mail.unreachable" = "Maurice konnte dieses Postfach nicht erreichen. Prüfe den Servernamen und den Port.";
@@ -726,7 +726,7 @@
 "mail.reading.done" = "Lesen: abgeschlossen";
 "mail.reading.approve" = "Maurice lesen lassen";
 "mail.reading.withdraw" = "Freigabe zurückziehen";
-"mail.reading.help" = "Maurice liest nachts die echten Wechsel der letzten Jahre und sagt dir, wer für dich zählt und was gerade läuft. Nichts wird gesendet, nichts in deinem Postfach verändert.";
+"mail.reading.help" = "Maurice liest nachts die echten Wechsel der letzten Jahre und sagt dir, wer dir wichtig ist und was gerade läuft. Der Text der Nachrichten, die er liest, geht an das KI-Modell deines Haushalts; aus deinem Postfach wird nichts gesendet und darin nichts verändert.";
 "mail.reading.caption" = "Das Lesen ist ein Ja, das du gibst, hier. Du kannst es jederzeit zurückziehen. Was Maurice daraus schreibt, steht in deinen Notizen unter „Meine Post“.";
 "mail.box.messages" = "%d Nachrichten erfasst";
 "mail.box.reading" = "Lesen: %1$d sortiert · %2$d zu lesen · %3$d gelesen";
@@ -1026,3 +1026,13 @@
 "report.ai.queue.private" = "Privates Gespräch";
 "report.ai.queue.handled" = "Als erledigt markieren";
 "report.ai.queue.open" = "Offene Meldungen";
+
+/* Mail reading and imports: the AI model named (MailPane, ImportProviderCard) */
+"mail.reading.by" = "Gelesen vom KI-Modell deines Haushalts: %@.";
+"mail.reading.by_local" = "Gelesen von einem Modell auf dem Rechner deines Haushalts: Nichts verlässt ihn.";
+"ai.consent.needed" = "Stimme zuerst dem Senden an die KI-Anbieter zu, unter Einstellungen → Meine Daten → KI-Anbieter.";
+"settings.import.ai" = "Importierte Gespräche gehen an das KI-Modell deines Haushalts, um indexiert und nachts gelesen zu werden: %@.";
+"settings.import.ai_local" = "Importierte Gespräche werden von Modellen auf dem Rechner deines Haushalts indexiert und gelesen: Nichts verlässt ihn.";
+"settings.import.confirm.title" = "Diese Gespräche an das KI-Modell senden?";
+"settings.import.confirm.text" = "Deine %@-Gespräche werden auf dem Server deines Haushalts gespeichert und an %@ gesendet, um indexiert und nachts gelesen zu werden.";
+"settings.import.confirm.ok" = "Export auswählen";

@@ -683,7 +683,7 @@
 "mail.password.plain" = "Password";
 "mail.connect" = "Connect";
 "mail.checking" = "Checking with your mailbox…";
-"mail.added" = "Connected. Maurice can read it now.";
+"mail.added" = "Connected. Maurice can read it when you ask him; what he reads goes to your household’s AI model.";
 "mail.refused" = "Your mailbox refused this password.";
 "mail.failed" = "That didn't work.";
 "mail.unreachable" = "Maurice couldn't reach this mailbox. Check the server's name and port.";
@@ -726,7 +726,7 @@
 "mail.reading.done" = "Reading: done";
 "mail.reading.approve" = "Let Maurice read";
 "mail.reading.withdraw" = "Withdraw the approval";
-"mail.reading.help" = "Maurice reads the real exchanges of the last years, at night, and tells you who matters to you and what is going on. Nothing is sent, nothing is changed in your mailbox.";
+"mail.reading.help" = "Maurice reads the real exchanges of the last years, at night, and tells you who matters to you and what is going on. The text of the messages he reads goes to your household’s AI model; nothing is sent from your mailbox and nothing in it is changed.";
 "mail.reading.caption" = "Reading is a yes you give, here. You can withdraw it at any time. What Maurice writes from it is in your notes, under “My mail”.";
 "mail.box.messages" = "%d messages collected";
 "mail.box.reading" = "Reading: %1$d sorted · %2$d to read · %3$d read";
@@ -1026,3 +1026,13 @@
 "report.ai.queue.private" = "Private conversation";
 "report.ai.queue.handled" = "Mark as handled";
 "report.ai.queue.open" = "Open reports";
+
+/* Mail reading and imports: the AI model named (MailPane, ImportProviderCard) */
+"mail.reading.by" = "Read by your household’s AI model: %@.";
+"mail.reading.by_local" = "Read by a model on your household’s own machine: nothing leaves it.";
+"ai.consent.needed" = "First accept sending to the AI providers, in Settings → My data → AI providers.";
+"settings.import.ai" = "Imported conversations go to your household’s AI model to be indexed and read at night: %@.";
+"settings.import.ai_local" = "Imported conversations are indexed and read by models on your household’s own machine: nothing leaves it.";
+"settings.import.confirm.title" = "Send these conversations to the AI model?";
+"settings.import.confirm.text" = "Your %@ conversations will be stored on your household’s server and sent to %@ to be indexed and read at night.";
+"settings.import.confirm.ok" = "Choose the export";

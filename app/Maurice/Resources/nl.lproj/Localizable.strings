@@ -683,7 +683,7 @@
 "mail.password.plain" = "Wachtwoord";
 "mail.connect" = "Verbinden";
 "mail.checking" = "Controleren bij je mailbox…";
-"mail.added" = "Verbonden. Maurice kan hem nu lezen.";
+"mail.added" = "Verbonden. Maurice kan hem lezen wanneer je dat vraagt; wat hij leest gaat naar het AI-model van je huishouden.";
 "mail.refused" = "Je mailbox weigerde dit wachtwoord.";
 "mail.failed" = "Dat lukte niet.";
 "mail.unreachable" = "Maurice kon deze mailbox niet bereiken. Controleer de servernaam en de poort.";
@@ -726,7 +726,7 @@
 "mail.reading.done" = "Lezen: klaar";
 "mail.reading.approve" = "Maurice laten lezen";
 "mail.reading.withdraw" = "Goedkeuring intrekken";
-"mail.reading.help" = "Maurice leest 's nachts de echte uitwisselingen van de laatste jaren en zegt je wie voor jou telt en wat er speelt. Er wordt niets verzonden, niets in je mailbox veranderd.";
+"mail.reading.help" = "Maurice leest ’s nachts de echte uitwisselingen van de afgelopen jaren en vertelt je wie belangrijk voor je is en wat er speelt. De tekst van de berichten die hij leest gaat naar het AI-model van je huishouden; vanuit je mailbox wordt niets verstuurd en er wordt niets in veranderd.";
 "mail.reading.caption" = "Het lezen is een ja dat jij geeft, hier. Je kunt het altijd intrekken. Wat Maurice eruit schrijft staat in je notities, onder “Mijn mail”.";
 "mail.box.messages" = "%d berichten verzameld";
 "mail.box.reading" = "Lezen: %1$d gesorteerd · %2$d te lezen · %3$d gelezen";
@@ -1013,3 +1013,13 @@
 "report.ai.queue.private" = "Privégesprek";
 "report.ai.queue.handled" = "Als afgehandeld markeren";
 "report.ai.queue.open" = "Openstaande meldingen";
+
+/* Mail reading and imports: the AI model named (MailPane, ImportProviderCard) */
+"mail.reading.by" = "Gelezen door het AI-model van je huishouden: %@.";
+"mail.reading.by_local" = "Gelezen door een model op de computer van je huishouden: er gaat niets naar buiten.";
+"ai.consent.needed" = "Accepteer eerst het versturen naar de AI-aanbieders, in Instellingen → Mijn gegevens → AI-aanbieders.";
+"settings.import.ai" = "Geïmporteerde gesprekken gaan naar het AI-model van je huishouden om te worden geïndexeerd en ’s nachts gelezen: %@.";
+"settings.import.ai_local" = "Geïmporteerde gesprekken worden geïndexeerd en gelezen door modellen op de computer van je huishouden: er gaat niets naar buiten.";
+"settings.import.confirm.title" = "Deze gesprekken naar het AI-model sturen?";
+"settings.import.confirm.text" = "Je %@-gesprekken worden op de server van je huishouden bewaard en naar %@ gestuurd om te worden geïndexeerd en ’s nachts gelezen.";
+"settings.import.confirm.ok" = "Export kiezen";

@@ -1183,6 +1183,7 @@ private struct BudgetPane: View {
 
 private struct MailPane: View {
     @Environment(SessionStore.self) private var session
+    @Environment(AIConsentStore.self) private var aiConsent
     @Environment(\.mauriceTheme) private var theme
     let accent: Color
     @Binding var accounts: [MailAccountRow]?
@@ -1770,6 +1771,18 @@ private struct MailPane: View {
                     VStack(alignment: .leading, spacing: 2) {
                         Text(readingLine).font(.system(size: 13.5)).foregroundStyle(theme.ink)
                         Text(session.localized("mail.scope.reading", accounts?.count ?? 0)).font(.system(size: 11.5)).foregroundStyle(theme.inkMute)
+                        // Who reads it: the household's AI provider, named — the
+                        // reading is part of the member's yes to it (AIConsentStore).
+                        Text(aiConsent.providers.isEmpty
+                             ? session.localized("mail.reading.by_local")
+                             : session.localized("mail.reading.by", aiConsent.providerNames))
+                            .font(.system(size: 11.5)).foregroundStyle(theme.inkSoft)
+                            .fixedSize(horizontal: false, vertical: true)
+                        if !aiConsent.mayUseAI, !readingApproved {
+                            Text(session.localized("ai.consent.needed"))
+                                .font(.system(size: 11.5, weight: .medium)).foregroundStyle(theme.ink)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
                         if let d = scan?.documents { documentsProgress(d).padding(.top, 6) }
                         if let readingError {
                             Text(readingError).font(.system(size: 11, design: .monospaced)).foregroundStyle(theme.inkMute)
@@ -1791,7 +1804,9 @@ private struct MailPane: View {
                     }
                     .glassProminentButton()
                     .tint(session.activeDeviceUser?.color ?? .blue)
-                    .disabled(readingBusy || scan == nil || readingRunning)
+                    // A yes to the reading needs a yes to the provider first;
+                    // taking it back never does.
+                    .disabled(readingBusy || scan == nil || readingRunning || (!readingApproved && !aiConsent.mayUseAI))
                     .help(session.localized("mail.reading.help"))
                     if readingBusy { ProgressView().controlSize(.small) }
                     Spacer(minLength: 0)
