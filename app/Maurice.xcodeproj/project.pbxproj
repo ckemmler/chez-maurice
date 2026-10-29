@@ -46,6 +46,7 @@
 		72B46D7608456B22303FB423 /* MauriceStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8C96937F0554878BAF247D3F /* MauriceStore.swift */; };
 		7303D09FAC7F9EC16F45847B /* ShareInbox.swift in Sources */ = {isa = PBXBuildFile; fileRef = F6819EDCDB3EE127E1D35CAB /* ShareInbox.swift */; };
 		7416ECF23A6705C449F95A51 /* MauriceApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A0683126686701347E9871B /* MauriceApp.swift */; };
+		743D510D945AC1FC4DC6FE27 /* InfoPlist.strings in Resources */ = {isa = PBXBuildFile; fileRef = 5446703628FC571B4F966A57 /* InfoPlist.strings */; };
 		76F5A3E479E78CF38F358EE3 /* SharedPageLoader.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2E6BA859F6B8FDD533D6143 /* SharedPageLoader.swift */; };
 		773B899803CBAAF839CDE0C1 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E0D0DF979284275260F31D2 /* SettingsView.swift */; };
 		775815BED73706273BEE92F3 /* MauriceTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1ABC13222ECFAD2CFC3180B /* MauriceTheme.swift */; };
@@ -84,6 +85,7 @@
 		CB71AD2912D05739932A2EB1 /* ChatView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E01BB325D88F4E74B3571BC /* ChatView.swift */; };
 		CC9F77433FFC0CCC7F8668EA /* UserPickerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB58402567AEED97404D604C /* UserPickerView.swift */; };
 		CCEF2532174820F615C4C61F /* ChatService.swift in Sources */ = {isa = PBXBuildFile; fileRef = EDFA39C22354B093CDDBB691 /* ChatService.swift */; };
+		CE90734410E4B676F48703A0 /* InfoPlist.strings in Resources */ = {isa = PBXBuildFile; fileRef = C492F1816D8C83E70D98A908 /* InfoPlist.strings */; };
 		D050F6CF74E2684FAF9E78A2 /* ChatService.swift in Sources */ = {isa = PBXBuildFile; fileRef = EDFA39C22354B093CDDBB691 /* ChatService.swift */; };
 		D0B48FA211BB0DB5BB28B7EA /* ChatSnippets.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0093E2B2C16E646EA2A8E856 /* ChatSnippets.swift */; };
 		D8646EEFDB175A13C908F420 /* SwiftMath in Frameworks */ = {isa = PBXBuildFile; productRef = D1B845FF866B55501A5D0C68 /* SwiftMath */; };
@@ -140,16 +142,20 @@
 		128CD9E8B27DD3AD93E49524 /* CarnetSuggestions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CarnetSuggestions.swift; sourceTree = "<group>"; };
 		1471437CC5C770C8DECCD439 /* ShareExtensionPreprocessor.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = ShareExtensionPreprocessor.js; sourceTree = "<group>"; };
 		1A0683126686701347E9871B /* MauriceApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MauriceApp.swift; sourceTree = "<group>"; };
+		1B714D65C6B798775F554CB7 /* it */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = it; path = it.lproj/InfoPlist.strings; sourceTree = "<group>"; };
 		1E096709042498D4C525711C /* Maurice-iOS-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = "Maurice-iOS-Info.plist"; sourceTree = "<group>"; };
 		20D9492CD169800719A16C6D /* MyDataView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MyDataView.swift; sourceTree = "<group>"; };
 		2CAFCB68E681C9F8D796C959 /* it */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = it; path = it.lproj/Localizable.strings; sourceTree = "<group>"; };
 		2E85AEEB530CF3C1C5C3E79F /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		2F85B4FE86B5EFB938BF6E72 /* fr */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = fr; path = fr.lproj/Localizable.strings; sourceTree = "<group>"; };
 		2FF2F9C47247C82E89055A04 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		37041BD17EA900D3E728A616 /* en */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = en; path = en.lproj/InfoPlist.strings; sourceTree = "<group>"; };
+		37FEBF4DD802FA8BE1117B58 /* es */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = es; path = es.lproj/InfoPlist.strings; sourceTree = "<group>"; };
 		3B5F6F2E3C5F7D8FFDE02630 /* ImportConversationsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImportConversationsView.swift; sourceTree = "<group>"; };
 		3D819685EF797FBCDD411BFC /* pt */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = pt; path = pt.lproj/Localizable.strings; sourceTree = "<group>"; };
 		405F9AA69C83E58A86FDD625 /* SessionStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionStore.swift; sourceTree = "<group>"; };
 		40C3C59BAE8DC75C09105B63 /* it */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = it; path = it.lproj/Localizable.strings; sourceTree = "<group>"; };
+		4267E26304B54B9D763D2C6E /* de */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = de; path = de.lproj/InfoPlist.strings; sourceTree = "<group>"; };
 		437B5ED8350A54E9167D4BF5 /* SearchKeyboard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SearchKeyboard.swift; sourceTree = "<group>"; };
 		462A7ECD4C83B5ADC43A81CB /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		475D8D96ACDB87A322874BFA /* BudgetViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BudgetViews.swift; sourceTree = "<group>"; };
@@ -157,6 +163,7 @@
 		4E0D0DF979284275260F31D2 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		51780E1D57A085038F7AB3A4 /* OFL.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = OFL.txt; sourceTree = "<group>"; };
 		5380BCF670116D20669BCFF4 /* de */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = de; path = de.lproj/Localizable.strings; sourceTree = "<group>"; };
+		56CD6022BEDE0DB192BA53D6 /* fr */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = fr; path = fr.lproj/InfoPlist.strings; sourceTree = "<group>"; };
 		598F07F376B493DAA0EB8EB8 /* en */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = en; path = en.lproj/Localizable.strings; sourceTree = "<group>"; };
 		5C3DB8955BF008783D2F7399 /* DomainBriefView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DomainBriefView.swift; sourceTree = "<group>"; };
 		60C505B6E7E7122F0D8C38C4 /* ThinkingPulse.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThinkingPulse.swift; sourceTree = "<group>"; };
@@ -166,17 +173,23 @@
 		70240FCC64F152DDCEC0F0E2 /* ComposerStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerStore.swift; sourceTree = "<group>"; };
 		70ED879F4FDF2E7978D56133 /* nl */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = nl; path = nl.lproj/Localizable.strings; sourceTree = "<group>"; };
 		723F14E6AB7B2EAB08CC94EF /* YoungSerif-Regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "YoungSerif-Regular.ttf"; sourceTree = "<group>"; };
+		792647171AC67A7F3BFAC9DD /* nl */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = nl; path = nl.lproj/InfoPlist.strings; sourceTree = "<group>"; };
 		7A157516CA9C98CE6FB4E293 /* ComposerViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerViews.swift; sourceTree = "<group>"; };
 		80DE6D850DDF965E6A5241FF /* ReplyGallery.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReplyGallery.swift; sourceTree = "<group>"; };
 		815355ED837E18AB9BEFDC83 /* APIClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIClient.swift; sourceTree = "<group>"; };
 		8C96937F0554878BAF247D3F /* MauriceStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MauriceStore.swift; sourceTree = "<group>"; };
 		8DD6FC0052BD394074159538 /* Dictation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Dictation.swift; sourceTree = "<group>"; };
+		966211EA2B009160293D6582 /* es */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = es; path = es.lproj/InfoPlist.strings; sourceTree = "<group>"; };
 		988F2B4726342A3066B8B593 /* SourcesCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SourcesCard.swift; sourceTree = "<group>"; };
 		9BF26FE82F8A718D32D2FDBA /* en */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = en; path = en.lproj/Localizable.strings; sourceTree = "<group>"; };
 		9EAE5B7CF41BA9515CFEE3EE /* AIConsentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIConsentView.swift; sourceTree = "<group>"; };
 		A3DD0A7E56E944D68EF56A0E /* Maurice_macOS.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Maurice_macOS.entitlements; sourceTree = "<group>"; };
 		AB58402567AEED97404D604C /* UserPickerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserPickerView.swift; sourceTree = "<group>"; };
 		ABE5F5AA1F13BF97D9A67BDD /* ShareViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareViewController.swift; sourceTree = "<group>"; };
+		AFA7E9799FE3E5C439E897C7 /* de */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = de; path = de.lproj/InfoPlist.strings; sourceTree = "<group>"; };
+		B09D411FBD79B4FFBDEEDE1A /* pt */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = pt; path = pt.lproj/InfoPlist.strings; sourceTree = "<group>"; };
+		B517957E421137DA12DB7993 /* en */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = en; path = en.lproj/InfoPlist.strings; sourceTree = "<group>"; };
+		BEC79E9163CB14FC05BB9076 /* pt */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = pt; path = pt.lproj/InfoPlist.strings; sourceTree = "<group>"; };
 		BFCE6C747A2189EC6AA13782 /* pt */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = pt; path = pt.lproj/Localizable.strings; sourceTree = "<group>"; };
 		C1ABC13222ECFAD2CFC3180B /* MauriceTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MauriceTheme.swift; sourceTree = "<group>"; };
 		C2828A04796C4FC1EBB89784 /* es */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = es; path = es.lproj/Localizable.strings; sourceTree = "<group>"; };
@@ -194,11 +207,14 @@
 		E426EF47C1F4A6CE4105AA44 /* BudgetStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BudgetStore.swift; sourceTree = "<group>"; };
 		E76EA458EBA05810D312BA7F /* SharedArticles.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedArticles.swift; sourceTree = "<group>"; };
 		E787764ABF2A58E353CC45C2 /* PersonReviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PersonReviewView.swift; sourceTree = "<group>"; };
+		EC11013AABCDEFB7A0329FD9 /* nl */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = nl; path = nl.lproj/InfoPlist.strings; sourceTree = "<group>"; };
 		EC8F39C1E181257A07AA5B05 /* Info-Generated.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = "Info-Generated.plist"; sourceTree = "<group>"; };
 		EDFA39C22354B093CDDBB691 /* ChatService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatService.swift; sourceTree = "<group>"; };
 		EE3170FDE5751A81E295CF2E /* BoaterHat.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BoaterHat.swift; sourceTree = "<group>"; };
+		F1B74CB99A5B066DA90E6385 /* it */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = it; path = it.lproj/InfoPlist.strings; sourceTree = "<group>"; };
 		F2BCD320C3B31E341073ED84 /* DomainsViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DomainsViews.swift; sourceTree = "<group>"; };
 		F6819EDCDB3EE127E1D35CAB /* ShareInbox.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareInbox.swift; sourceTree = "<group>"; };
+		FB572CC0CB51943373B23349 /* fr */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = fr; path = fr.lproj/InfoPlist.strings; sourceTree = "<group>"; };
 		FD148722F24F06001FE66540 /* LifeFactCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LifeFactCard.swift; sourceTree = "<group>"; };
 		FFEC5DA17CABDEC1BF693557 /* MauriceShareExtension.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = MauriceShareExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
@@ -294,6 +310,15 @@
 			path = Resources;
 			sourceTree = "<group>";
 		};
+		720C19BEB3A68EF3DEC3A5D4 /* macOS */ = {
+			isa = PBXGroup;
+			children = (
+				C492F1816D8C83E70D98A908 /* InfoPlist.strings */,
+			);
+			name = macOS;
+			path = InfoPlist/macOS;
+			sourceTree = "<group>";
+		};
 		90F6EFCCFA29163F22F77F5E /* Views */ = {
 			isa = PBXGroup;
 			children = (
@@ -353,12 +378,23 @@
 			path = Services;
 			sourceTree = "<group>";
 		};
+		E9BC79CDED9AF0BD4EEAEF1E /* iOS */ = {
+			isa = PBXGroup;
+			children = (
+				5446703628FC571B4F966A57 /* InfoPlist.strings */,
+			);
+			name = iOS;
+			path = InfoPlist/iOS;
+			sourceTree = "<group>";
+		};
 		F81067684A1EE16B2E0FC7F1 = {
 			isa = PBXGroup;
 			children = (
 				0CD335EB3BF542EDF13DA17D /* Maurice_iOS.entitlements */,
 				A3DD0A7E56E944D68EF56A0E /* Maurice_macOS.entitlements */,
 				1E096709042498D4C525711C /* Maurice-iOS-Info.plist */,
+				E9BC79CDED9AF0BD4EEAEF1E /* iOS */,
+				720C19BEB3A68EF3DEC3A5D4 /* macOS */,
 				1494F6FE9E62E4610A005B68 /* Maurice */,
 				05D3B4FD63AA39F6811A4102 /* MauriceShareExtension */,
 				62DBEB69F0C83895AB9B0920 /* Shared */,
@@ -498,6 +534,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				5421D4350871A4F9836C8B60 /* Assets.xcassets in Resources */,
+				CE90734410E4B676F48703A0 /* InfoPlist.strings in Resources */,
 				DE41C437D70BFE6F0A82015E /* Localizable.strings in Resources */,
 				AE476FD86F5124FDD239F5AB /* OFL.txt in Resources */,
 				A8A26FAE2A930D83368AA035 /* PrivacyInfo.xcprivacy in Resources */,
@@ -510,6 +547,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				8354A2864D971667617A4546 /* Assets.xcassets in Resources */,
+				743D510D945AC1FC4DC6FE27 /* InfoPlist.strings in Resources */,
 				2B268BBE8FAF1C5EE355B1D4 /* Localizable.strings in Resources */,
 				91817BB3A32C4F1FE886B982 /* OFL.txt in Resources */,
 				F96C2B2D974F15AC97AFC477 /* PrivacyInfo.xcprivacy in Resources */,
@@ -634,6 +672,20 @@
 /* End PBXTargetDependency section */
 
 /* Begin PBXVariantGroup section */
+		5446703628FC571B4F966A57 /* InfoPlist.strings */ = {
+			isa = PBXVariantGroup;
+			children = (
+				4267E26304B54B9D763D2C6E /* de */,
+				B517957E421137DA12DB7993 /* en */,
+				966211EA2B009160293D6582 /* es */,
+				56CD6022BEDE0DB192BA53D6 /* fr */,
+				F1B74CB99A5B066DA90E6385 /* it */,
+				792647171AC67A7F3BFAC9DD /* nl */,
+				B09D411FBD79B4FFBDEEDE1A /* pt */,
+			);
+			name = InfoPlist.strings;
+			sourceTree = "<group>";
+		};
 		64254BB6519693E70459014E /* Localizable.strings */ = {
 			isa = PBXVariantGroup;
 			children = (
@@ -646,6 +698,20 @@
 				BFCE6C747A2189EC6AA13782 /* pt */,
 			);
 			name = Localizable.strings;
+			sourceTree = "<group>";
+		};
+		C492F1816D8C83E70D98A908 /* InfoPlist.strings */ = {
+			isa = PBXVariantGroup;
+			children = (
+				AFA7E9799FE3E5C439E897C7 /* de */,
+				37041BD17EA900D3E728A616 /* en */,
+				37FEBF4DD802FA8BE1117B58 /* es */,
+				FB572CC0CB51943373B23349 /* fr */,
+				1B714D65C6B798775F554CB7 /* it */,
+				EC11013AABCDEFB7A0329FD9 /* nl */,
+				BEC79E9163CB14FC05BB9076 /* pt */,
+			);
+			name = InfoPlist.strings;
 			sourceTree = "<group>";
 		};
 		EF5A62D451E946B594365B33 /* Localizable.strings */ = {
@@ -684,7 +750,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = "Chez Maurice";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.education";
-				INFOPLIST_KEY_NSCameraUsageDescription = "Maurice uses the camera to take a profile photo or scan a household invitation.";
+				INFOPLIST_KEY_NSCameraUsageDescription = "Maurice uses the camera to take your profile photo.";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Maurice uses the microphone so you can dictate a message. Your voice is turned into text on this device, or on your household's server when it transcribes on its own machine. It goes to an outside service only if you allow it: Apple's speech recognition after asking you, or your household's AI provider if you turn that on in Settings.";
 				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Maurice turns your dictation into text on this device whenever your language has an offline model. If it doesn't, Maurice asks you first before sending any audio to Apple.";
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -872,7 +938,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = "Chez Maurice";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.education";
-				INFOPLIST_KEY_NSCameraUsageDescription = "Maurice uses the camera to take a profile photo or scan a household invitation.";
+				INFOPLIST_KEY_NSCameraUsageDescription = "Maurice uses the camera to take your profile photo.";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Maurice uses the microphone so you can dictate a message. Your voice is turned into text on this device, or on your household's server when it transcribes on its own machine. It goes to an outside service only if you allow it: Apple's speech recognition after asking you, or your household's AI provider if you turn that on in Settings.";
 				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Maurice turns your dictation into text on this device whenever your language has an offline model. If it doesn't, Maurice asks you first before sending any audio to Apple.";
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;

@@ -1,0 +1,6 @@
+
+/* Purpose strings, iOS (the Info.plist keys, localized) */
+"NSCameraUsageDescription" = "Maurice utilise l’appareil photo pour prendre une photo de profil ou scanner l’invitation d’un foyer.";
+
+"NSMicrophoneUsageDescription" = "Maurice utilise le micro pour que vous puissiez dicter un message. Votre voix est transformée en texte sur cet appareil, ou sur le serveur de votre foyer quand il transcrit sur sa propre machine. Elle ne part vers un service extérieur que si vous l’autorisez : la reconnaissance vocale d’Apple après vous l’avoir demandé, ou le fournisseur d’IA de votre foyer si vous l’activez dans les Réglages.";
+"NSSpeechRecognitionUsageDescription" = "Maurice transforme votre dictée en texte sur cet appareil dès que votre langue a un modèle hors ligne. Sinon, Maurice vous demande d’abord avant d’envoyer le moindre son à Apple.";

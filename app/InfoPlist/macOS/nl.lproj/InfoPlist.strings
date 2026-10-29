@@ -1,0 +1,6 @@
+
+/* Purpose strings, macOS: no invitation scanner on the Mac */
+"NSCameraUsageDescription" = "Maurice gebruikt de camera om je profielfoto te maken.";
+
+"NSMicrophoneUsageDescription" = "Maurice gebruikt de microfoon zodat je een bericht kunt dicteren. Je stem wordt op dit apparaat omgezet in tekst, of op de server van je huishouden als die op zijn eigen computer uitschrijft. Hij gaat alleen naar een externe dienst als je dat toestaat: de spraakherkenning van Apple nadat je erom is gevraagd, of de AI-aanbieder van je huishouden als je dat in Instellingen aanzet.";
+"NSSpeechRecognitionUsageDescription" = "Maurice zet je dictaat op dit apparaat om in tekst zodra je taal een offline model heeft. Zo niet, dan vraagt Maurice het je eerst voordat er geluid naar Apple gaat.";

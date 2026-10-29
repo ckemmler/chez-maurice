@@ -1,0 +1,6 @@
+
+/* Purpose strings, macOS: no invitation scanner on the Mac */
+"NSCameraUsageDescription" = "Maurice usa la fotocamera per scattare la tua foto del profilo.";
+
+"NSMicrophoneUsageDescription" = "Maurice usa il microfono perché tu possa dettare un messaggio. La tua voce viene trasformata in testo su questo dispositivo, o sul server della tua casa quando trascrive sulla propria macchina. Va a un servizio esterno solo se lo autorizzi: il riconoscimento vocale di Apple dopo avertelo chiesto, o il fornitore di IA della tua casa se lo attivi nelle Impostazioni.";
+"NSSpeechRecognitionUsageDescription" = "Maurice trasforma la tua dettatura in testo su questo dispositivo quando la tua lingua ha un modello offline. Altrimenti, Maurice ti chiede prima di inviare qualsiasi audio ad Apple.";

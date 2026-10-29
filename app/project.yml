@@ -79,6 +79,8 @@ targets:
         buildPhase: none
       # What the share extension and the app both read (ShareInbox).
       - path: Shared
+      # The purpose strings in the app's seven languages (iOS wording).
+      - path: InfoPlist/iOS
     dependencies:
       - target: MauriceShareExtension
     settings:
@@ -95,8 +97,12 @@ targets:
     sources:
       - path: Maurice_macOS.entitlements
         buildPhase: none
+      # The purpose strings in seven languages — the Mac's own camera line:
+      # there is no invitation scanner on the Mac (PairingView is iOS-only).
+      - path: InfoPlist/macOS
     settings:
       base:
+        INFOPLIST_KEY_NSCameraUsageDescription: "Maurice uses the camera to take your profile photo."
         # The bundle is "Chez Maurice.app"; the Swift module stays Maurice, so
         # the source compiles unchanged on both platforms.
         PRODUCT_NAME: Chez Maurice
