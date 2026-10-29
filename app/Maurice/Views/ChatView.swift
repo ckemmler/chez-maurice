@@ -1132,6 +1132,9 @@ private struct MessageRow: View {
     var isLast: Bool = false
     @State private var didCopy = false
     @State private var showReport = false
+    /// "Report this reply" — any reply of Maurice's, private conversations
+    /// included (App Review 1.2).
+    @State private var showAIReport = false
     /// Per-message cost meter — off unless the user asks for it in Settings.
     @AppStorage(TurnCostPref.key) private var showTurnCost = false
 
@@ -1217,7 +1220,12 @@ private struct MessageRow: View {
     private var messageContent: some View {
         messageContentCore
             .sheet(isPresented: $showReport) {
-                ReportSheet(targetType: "message", targetId: message.id)
+                // A reply of Maurice's in a room is reported as one: the
+                // operator gets the copy with the question before it.
+                ReportSheet(targetType: message.role == "assistant" ? "ai_reply" : "message", targetId: message.id)
+            }
+            .sheet(isPresented: $showAIReport) {
+                ReportSheet(targetType: "ai_reply", targetId: message.id)
             }
     }
 
@@ -1344,6 +1352,16 @@ private struct MessageRow: View {
                 .disabled(chat.isStreaming)
                 .help(session.localized("chat.regenerate"))
             }
+
+            Button {
+                showAIReport = true
+            } label: {
+                Image(systemName: "flag")
+                    .font(.system(size: 12))
+            }
+            .buttonStyle(.plain)
+            .help(L("report.ai.title"))
+            .accessibilityLabel(L("report.ai.title"))
 
             if showTurnCost, let usage = message.usage {
                 TurnUsageFooter(usage: usage)
@@ -3754,19 +3772,91 @@ enum SafetyLinks {
     static let privacy = URL(string: "https://www.chezmaurice.eu/privacy.html")!
 }
 
-/// Report a message (or member) in a shared room. For child_safety, shows an
-/// authority-reporting notice on the confirmation screen.
+/// Report a message (or member) in a shared room, or a reply of Maurice's in
+/// any conversation (`ai_reply`). For child_safety, shows an authority-reporting
+/// notice on the confirmation screen.
 struct ReportSheet: View {
     let targetType: String
     let targetId: String
     @Environment(ChatService.self) private var chat
     @Environment(\.dismiss) private var dismiss
     @State private var reason: ReportReason = .spam
+    @State private var aiReason: AIReplyReason = .harmful_or_misleading
     @State private var note = ""
     @State private var submitting = false
     @State private var done = false
 
+    private var isAIReply: Bool { targetType == "ai_reply" }
+
     var body: some View {
+        if isAIReply { aiReplyBody } else { roomBody }
+    }
+
+    /// A reply of Maurice's: what is shared and with whom is said before the
+    /// member sends, and the publisher's address is given after.
+    private var aiReplyBody: some View {
+        NavigationStack {
+            Form {
+                if done {
+                    Section {
+                        Text(L("report.ai.sent"))
+                        Text(L("report.ai.publisher", SafetyLinks.publisherContact))
+                            .font(.footnote).foregroundStyle(.secondary)
+                            .textSelection(.enabled)
+                    }
+                    if aiReason == .child_safety {
+                        Section(L("report.ai.authority.header")) {
+                            Text(L("report.ai.authority"))
+                            Link("NCMEC CyberTipline (US)", destination: SafetyLinks.ncmecUS)
+                            Link("Child Focus (BE)", destination: SafetyLinks.childSafetyBE)
+                        }
+                    }
+                } else {
+                    Section {
+                        Text(L("report.ai.disclosure"))
+                            .font(.callout).foregroundStyle(.secondary)
+                    }
+                    Section(L("report.ai.reason")) {
+                        Picker(L("report.ai.reason"), selection: $aiReason) {
+                            ForEach(AIReplyReason.allCases) { Text($0.label).tag($0) }
+                        }
+                        .labelsHidden()
+                        .pickerStyle(.inline)
+                    }
+                    Section(L("report.ai.note")) {
+                        TextField(L("report.ai.note.placeholder"), text: $note, axis: .vertical).lineLimit(1...4)
+                    }
+                }
+            }
+            .navigationTitle(L("report.ai.title"))
+            #if os(iOS)
+            .navigationBarTitleDisplayMode(.inline)
+            #endif
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button(done ? L("report.ai.done") : L("report.ai.cancel")) { dismiss() }
+                }
+                if !done {
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button(L("report.ai.send")) { submitAIReply() }.disabled(submitting)
+                    }
+                }
+            }
+        }
+    }
+
+    private func submitAIReply() {
+        submitting = true
+        Task {
+            let ok = await chat.report(
+                targetType: targetType, targetId: targetId,
+                reason: aiReason.rawValue, note: note.isEmpty ? nil : note)
+            submitting = false
+            if ok { done = true }
+        }
+    }
+
+    private var roomBody: some View {
         NavigationStack {
             Form {
                 if done {
@@ -3846,7 +3936,14 @@ struct ReportsReviewView: View {
                                 Text("PRIORITY").font(.caption2).bold().foregroundStyle(.red)
                             }
                             Spacer()
-                            Text(r.room_title ?? "Room").font(.caption).foregroundStyle(.secondary)
+                            Text(r.room_title ?? (r.target_type == "ai_reply" ? L("report.ai.queue.private") : "Room"))
+                                .font(.caption).foregroundStyle(.secondary)
+                        }
+                        if r.target_type == "ai_reply" {
+                            Text(L("report.ai.queue.kind")).font(.caption).foregroundStyle(.secondary)
+                            if let q = r.reported_question, !q.isEmpty {
+                                Text("“\(q)”").font(.footnote).foregroundStyle(.secondary).lineLimit(3)
+                            }
                         }
                         if let m = r.reported_message { Text(m.content).font(.callout).lineLimit(4) }
                         if let mem = r.reported_member { Text("Member: \(mem.display_name)").font(.callout) }
@@ -3855,10 +3952,14 @@ struct ReportsReviewView: View {
                             Text("reported by \(by)").font(.caption2).foregroundStyle(.secondary)
                         }
                         HStack(spacing: 12) {
-                            if r.target_type == "message" {
-                                Button("Remove message") { act(r, remove: true, eject: false) }
+                            if r.target_type == "ai_reply" {
+                                Button(L("report.ai.queue.handled")) { act(r, remove: false, eject: false) }
+                            } else {
+                                if r.target_type == "message" {
+                                    Button("Remove message") { act(r, remove: true, eject: false) }
+                                }
+                                Button("Eject member", role: .destructive) { act(r, remove: false, eject: true) }
                             }
-                            Button("Eject member", role: .destructive) { act(r, remove: false, eject: true) }
                             Spacer()
                             Button("Dismiss") { Task { await chat.dismissReport(r.id); await load() } }
                         }
@@ -3878,7 +3979,9 @@ struct ReportsReviewView: View {
     private func act(_ r: ReportView, remove: Bool, eject: Bool) {
         Task { await chat.actionReport(r.id, removeMessage: remove, ejectMember: eject); await load() }
     }
-    private func reasonLabel(_ raw: String) -> String { ReportReason(rawValue: raw)?.label ?? raw }
+    private func reasonLabel(_ raw: String) -> String {
+        ReportReason(rawValue: raw)?.label ?? AIReplyReason(rawValue: raw)?.label ?? raw
+    }
 }
 
 /// The garden entry a new conversation is held from, in the composer's bubble

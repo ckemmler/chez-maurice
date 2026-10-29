@@ -22,7 +22,7 @@ import {
   setConversationMaurice,
 } from "../services/conversations";
 import { getUser, getUserByUsername, guestCanReach } from "../services/users";
-import { blockedIdsFor, createReport, isReason, hasBlocked } from "../services/safety";
+import { blockedIdsFor, createAiReplyReport, createReport, isAiReplyReason, isReason, hasBlocked } from "../services/safety";
 import { streamResponse, getHouseholdConfig } from "../services/claude";
 import type { TurnUsage } from "../services/pricing";
 import { getConversationMaurice, canUseMaurice } from "../services/maurices";
@@ -271,9 +271,12 @@ conversations.post("/:id/leave", (c) => {
   return c.json({ ok: true });
 });
 
-// ── POST /api/conversations/:id/reports — report room content ────
-// Member↔member moderation for the household operator. Only valid in a shared
-// room (>1 participant); private 1:1 can never be reported.
+// ── POST /api/conversations/:id/reports — report content ─────────
+// Member↔member moderation for the household operator: a message or a member,
+// only in a shared room (>1 participant); a private 1:1 can never be reported
+// that way. And a reply of Maurice's (`ai_reply`), in any conversation the
+// member is in, private included: the operator receives a copy of the reply
+// and of the question before it, not the conversation (services/safety.ts).
 
 conversations.post("/:id/reports", async (c) => {
   const convo = getConversation(c.req.param("id"), c.get("userId"));
@@ -285,11 +288,23 @@ conversations.post("/:id/reports", async (c) => {
     reason?: string;
     note?: string;
   };
-  if (body.target_type !== "message" && body.target_type !== "member") {
-    return c.json({ error: "target_type must be 'message' or 'member'" }, 400);
+  if (body.target_type !== "message" && body.target_type !== "member" && body.target_type !== "ai_reply") {
+    return c.json({ error: "target_type must be 'message', 'member' or 'ai_reply'" }, 400);
   }
   if (!body.target_id || typeof body.target_id !== "string") {
     return c.json({ error: "target_id required" }, 400);
+  }
+  if (body.target_type === "ai_reply") {
+    if (!isAiReplyReason(body.reason)) return c.json({ error: "invalid reason" }, 400);
+    const report = createAiReplyReport({
+      reporterId: c.get("userId"),
+      conversationId: convo.id,
+      messageId: body.target_id,
+      reason: body.reason,
+      note: typeof body.note === "string" ? body.note.slice(0, 2000) : null,
+    });
+    if (!report) return c.json({ error: "Cannot report this content" }, 400);
+    return c.json({ ok: true, report_id: report.id }, 201);
   }
   if (!isReason(body.reason)) {
     return c.json({ error: "invalid reason" }, 400);

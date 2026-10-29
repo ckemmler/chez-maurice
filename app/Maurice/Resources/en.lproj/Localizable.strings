@@ -1003,3 +1003,26 @@
 "mydata.ai.withdraw" = "Withdraw my consent";
 "mydata.ai.accept" = "Accept";
 "mydata.ai.withdraw_note" = "Withdrawing stops everything from being sent: Maurice no longer answers you and the night’s work stops for you. What was already sent is not recalled.";
+
+/* Reporting a reply of Maurice's (ReportSheet ai_reply, operator queue) */
+"report.ai.title" = "Report this reply";
+"report.ai.disclosure" = "This reply of Maurice’s, and your message just before it, will be sent to the person who runs your household so they can look into it. The rest of the conversation stays private.";
+"report.ai.reason" = "Reason";
+"report.ai.reason.harmful_or_misleading" = "Wrong or misleading in a way that can hurt";
+"report.ai.reason.sexual_content" = "Sexual content";
+"report.ai.reason.harassment_or_bullying" = "Hateful, insulting or threatening";
+"report.ai.reason.child_safety" = "Child safety / content involving a minor";
+"report.ai.reason.other" = "Something else";
+"report.ai.note" = "Note (optional)";
+"report.ai.note.placeholder" = "What is wrong with it?";
+"report.ai.send" = "Send";
+"report.ai.cancel" = "Cancel";
+"report.ai.done" = "Done";
+"report.ai.sent" = "Thank you: your report was sent to the person who runs your household.";
+"report.ai.publisher" = "About the app itself, you can also write to its publisher: %@";
+"report.ai.authority.header" = "Also report to an authority";
+"report.ai.authority" = "If this involves a minor, please also report it to the proper authority: they can act in ways the household cannot.";
+"report.ai.queue.kind" = "A reply of Maurice’s, with the question before it";
+"report.ai.queue.private" = "Private conversation";
+"report.ai.queue.handled" = "Mark as handled";
+"report.ai.queue.open" = "Open reports";

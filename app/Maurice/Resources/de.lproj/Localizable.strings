@@ -1003,3 +1003,26 @@
 "mydata.ai.withdraw" = "Zustimmung widerrufen";
 "mydata.ai.accept" = "Zustimmen";
 "mydata.ai.withdraw_note" = "Ein Widerruf stoppt jedes Senden: Maurice antwortet dir nicht mehr und die nächtliche Arbeit hört für dich auf. Bereits Gesendetes wird nicht zurückgeholt.";
+
+/* Reporting a reply of Maurice's (ReportSheet ai_reply, operator queue) */
+"report.ai.title" = "Diese Antwort melden";
+"report.ai.disclosure" = "Diese Antwort von Maurice und deine Nachricht direkt davor werden an die Person geschickt, die deinen Haushalt verwaltet, damit sie sie prüft. Der Rest des Gesprächs bleibt privat.";
+"report.ai.reason" = "Grund";
+"report.ai.reason.harmful_or_misleading" = "Falsch oder irreführend, so dass es schaden kann";
+"report.ai.reason.sexual_content" = "Sexuelle Inhalte";
+"report.ai.reason.harassment_or_bullying" = "Hasserfüllt, beleidigend oder bedrohlich";
+"report.ai.reason.child_safety" = "Kinderschutz / Inhalte mit Minderjährigen";
+"report.ai.reason.other" = "Etwas anderes";
+"report.ai.note" = "Anmerkung (optional)";
+"report.ai.note.placeholder" = "Was stimmt daran nicht?";
+"report.ai.send" = "Senden";
+"report.ai.cancel" = "Abbrechen";
+"report.ai.done" = "Fertig";
+"report.ai.sent" = "Danke: Deine Meldung wurde an die Person geschickt, die deinen Haushalt verwaltet.";
+"report.ai.publisher" = "Zur App selbst kannst du auch ihrem Herausgeber schreiben: %@";
+"report.ai.authority.header" = "Melde es auch einer Behörde";
+"report.ai.authority" = "Wenn es um Minderjährige geht, melde es bitte auch der zuständigen Behörde: Sie kann handeln, wo der Haushalt es nicht kann.";
+"report.ai.queue.kind" = "Eine Antwort von Maurice, mit der Frage davor";
+"report.ai.queue.private" = "Privates Gespräch";
+"report.ai.queue.handled" = "Als erledigt markieren";
+"report.ai.queue.open" = "Offene Meldungen";

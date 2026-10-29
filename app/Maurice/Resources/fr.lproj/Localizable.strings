@@ -1003,3 +1003,26 @@
 "mydata.ai.withdraw" = "Retirer mon accord";
 "mydata.ai.accept" = "Accepter";
 "mydata.ai.withdraw_note" = "Retirer votre accord arrête tout envoi : Maurice ne vous répond plus et le travail de nuit s’arrête pour vous. Ce qui a déjà été envoyé n’est pas rappelé.";
+
+/* Reporting a reply of Maurice's (ReportSheet ai_reply, operator queue) */
+"report.ai.title" = "Signaler cette réponse";
+"report.ai.disclosure" = "Cette réponse de Maurice, et votre message juste avant, seront envoyés à la personne qui administre votre foyer pour qu’elle les examine. Le reste de la conversation reste privé.";
+"report.ai.reason" = "Motif";
+"report.ai.reason.harmful_or_misleading" = "Faux ou trompeur, au point de nuire";
+"report.ai.reason.sexual_content" = "Contenu sexuel";
+"report.ai.reason.harassment_or_bullying" = "Haineux, insultant ou menaçant";
+"report.ai.reason.child_safety" = "Sécurité des enfants / contenu impliquant un mineur";
+"report.ai.reason.other" = "Autre chose";
+"report.ai.note" = "Remarque (facultatif)";
+"report.ai.note.placeholder" = "Qu’est-ce qui ne va pas ?";
+"report.ai.send" = "Envoyer";
+"report.ai.cancel" = "Annuler";
+"report.ai.done" = "OK";
+"report.ai.sent" = "Merci : votre signalement a été envoyé à la personne qui administre votre foyer.";
+"report.ai.publisher" = "Au sujet de l’app elle-même, vous pouvez aussi écrire à son éditeur : %@";
+"report.ai.authority.header" = "Signalez-le aussi à une autorité";
+"report.ai.authority" = "Si cela concerne un mineur, signalez-le aussi à l’autorité compétente : elle peut agir là où le foyer ne le peut pas.";
+"report.ai.queue.kind" = "Une réponse de Maurice, avec la question qui la précède";
+"report.ai.queue.private" = "Conversation privée";
+"report.ai.queue.handled" = "Marquer comme traité";
+"report.ai.queue.open" = "Signalements en attente";

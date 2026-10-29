@@ -193,6 +193,25 @@ db.run(`
   )
 `);
 
+// A reply of Maurice's that a member reported (App Review 1.2), in any
+// conversation, a private one included. What the operator reads is the copy
+// kept here — the reply and the question before it, which the member was told
+// would be shared — never the conversation itself (services/safety.ts).
+db.run(`
+  CREATE TABLE IF NOT EXISTS ai_reply_reports (
+    id                 TEXT PRIMARY KEY,
+    reporter_member_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    conversation_id    TEXT NOT NULL,
+    message_id         TEXT NOT NULL,
+    reason             TEXT NOT NULL,
+    note               TEXT,
+    reply_text         TEXT NOT NULL,
+    question_text      TEXT,
+    status             TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open', 'actioned', 'dismissed')),
+    created_at         TEXT NOT NULL DEFAULT (datetime('now'))
+  )
+`);
+
 // A member's answer to "may what you send Maurice go to these AI providers?"
 // (services/aiConsent.ts). `providers` is the JSON list they were shown and
 // accepted; a provider that appears later is not covered until they say yes.

@@ -990,3 +990,26 @@
 "mydata.ai.withdraw" = "Mijn toestemming intrekken";
 "mydata.ai.accept" = "Accepteren";
 "mydata.ai.withdraw_note" = "Intrekken stopt elke verzending: Maurice antwoordt je niet meer en het nachtwerk stopt voor jou. Wat al is verstuurd, wordt niet teruggehaald.";
+
+/* Reporting a reply of Maurice's (ReportSheet ai_reply, operator queue) */
+"report.ai.title" = "Dit antwoord melden";
+"report.ai.disclosure" = "Dit antwoord van Maurice, en je bericht vlak ervoor, worden gestuurd naar de persoon die je huishouden beheert, zodat die ernaar kan kijken. De rest van het gesprek blijft privé.";
+"report.ai.reason" = "Reden";
+"report.ai.reason.harmful_or_misleading" = "Onjuist of misleidend, zodat het schade kan doen";
+"report.ai.reason.sexual_content" = "Seksuele inhoud";
+"report.ai.reason.harassment_or_bullying" = "Hatelijk, beledigend of bedreigend";
+"report.ai.reason.child_safety" = "Kinderveiligheid / inhoud met een minderjarige";
+"report.ai.reason.other" = "Iets anders";
+"report.ai.note" = "Opmerking (optioneel)";
+"report.ai.note.placeholder" = "Wat klopt er niet?";
+"report.ai.send" = "Versturen";
+"report.ai.cancel" = "Annuleren";
+"report.ai.done" = "Klaar";
+"report.ai.sent" = "Bedankt: je melding is gestuurd naar de persoon die je huishouden beheert.";
+"report.ai.publisher" = "Over de app zelf kun je ook de uitgever schrijven: %@";
+"report.ai.authority.header" = "Meld het ook bij een instantie";
+"report.ai.authority" = "Gaat het om een minderjarige, meld het dan ook bij de bevoegde instantie: die kan optreden waar het huishouden dat niet kan.";
+"report.ai.queue.kind" = "Een antwoord van Maurice, met de vraag ervoor";
+"report.ai.queue.private" = "Privégesprek";
+"report.ai.queue.handled" = "Als afgehandeld markeren";
+"report.ai.queue.open" = "Openstaande meldingen";

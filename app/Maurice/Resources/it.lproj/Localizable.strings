@@ -1003,3 +1003,26 @@
 "mydata.ai.withdraw" = "Ritira il mio consenso";
 "mydata.ai.accept" = "Accetta";
 "mydata.ai.withdraw_note" = "Ritirare il consenso ferma ogni invio: Maurice non ti risponde più e il lavoro notturno si ferma per te. Ciò che è già stato inviato non viene richiamato.";
+
+/* Reporting a reply of Maurice's (ReportSheet ai_reply, operator queue) */
+"report.ai.title" = "Segnala questa risposta";
+"report.ai.disclosure" = "Questa risposta di Maurice, e il tuo messaggio subito prima, saranno inviati alla persona che gestisce la tua casa perché li esamini. Il resto della conversazione resta privato.";
+"report.ai.reason" = "Motivo";
+"report.ai.reason.harmful_or_misleading" = "Sbagliata o fuorviante al punto da nuocere";
+"report.ai.reason.sexual_content" = "Contenuto sessuale";
+"report.ai.reason.harassment_or_bullying" = "Offensivo, ingiurioso o minaccioso";
+"report.ai.reason.child_safety" = "Sicurezza dei minori / contenuto che coinvolge un minore";
+"report.ai.reason.other" = "Altro";
+"report.ai.note" = "Nota (facoltativa)";
+"report.ai.note.placeholder" = "Che cosa non va?";
+"report.ai.send" = "Invia";
+"report.ai.cancel" = "Annulla";
+"report.ai.done" = "Fine";
+"report.ai.sent" = "Grazie: la tua segnalazione è stata inviata alla persona che gestisce la tua casa.";
+"report.ai.publisher" = "Sull’app stessa puoi anche scrivere al suo editore: %@";
+"report.ai.authority.header" = "Segnalalo anche a un’autorità";
+"report.ai.authority" = "Se riguarda un minore, segnalalo anche all’autorità competente: può agire dove la casa non può.";
+"report.ai.queue.kind" = "Una risposta di Maurice, con la domanda che la precede";
+"report.ai.queue.private" = "Conversazione privata";
+"report.ai.queue.handled" = "Segna come gestita";
+"report.ai.queue.open" = "Segnalazioni aperte";

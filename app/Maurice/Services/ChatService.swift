@@ -1916,8 +1916,20 @@ enum ReportReason: String, CaseIterable, Identifiable {
     }
 }
 
-/// Operator view of a report (from GET /api/reports). Reported content is always
-/// shared-room content — never a private 1:1.
+/// Why a reply of Maurice's is reported (ReportSheet, `ai_reply`).
+enum AIReplyReason: String, CaseIterable, Identifiable {
+    case harmful_or_misleading
+    case sexual_content
+    case harassment_or_bullying
+    case child_safety
+    case other
+    var id: String { rawValue }
+    var label: String { L("report.ai.reason.\(rawValue)") }
+}
+
+/// Operator view of a report (from GET /api/reports): shared-room content, or
+/// the copy of a reported reply of Maurice's (`ai_reply`) with the question
+/// before it — never a private 1:1 itself.
 struct ReportView: Decodable, Identifiable {
     let id: String
     let room_id: String
@@ -1931,6 +1943,7 @@ struct ReportView: Decodable, Identifiable {
     let room_title: String?
     let reported_message: ReportedMessage?
     let reported_member: ReportedMember?
+    let reported_question: String?
 }
 
 struct ReportedMessage: Decodable {

@@ -37,6 +37,7 @@ struct SettingsView: View {
     @State private var showCrop = false
     @State private var showSourceDialog = false
     @State private var showSafety = false
+    @State private var showReportQueue = false
     /// Per-message cost meter in the chat — see TurnUsageFooter.
     @AppStorage(TurnCostPref.key) private var showTurnCost = false
     /// Dictation may use Apple's servers for languages with no local model.
@@ -113,6 +114,7 @@ struct SettingsView: View {
             }
         }
         .sheet(isPresented: $showSafety) { SafetySettingsView() }
+        .sheet(isPresented: $showReportQueue) { ReportsReviewView() }
         .sheet(isPresented: $showAddHousehold) {
             PairingView(onPaired: { showAddHousehold = false })
                 .environment(session)
@@ -288,6 +290,13 @@ struct SettingsView: View {
                             IndexRow(icon: "exclamationmark.shield",
                                      label: "Report a concern / Safety",
                                      accent: accent) { showSafety = true }
+                            // The operator's queue, where replies of Maurice's
+                            // reported from private conversations land too.
+                            if session.activeDeviceUser?.role == "admin" {
+                                IndexRow(icon: "flag",
+                                         label: session.localized("report.ai.queue.open"),
+                                         accent: accent) { showReportQueue = true }
+                            }
                         }
                         SetCaption("Report room content to the operator from a message's menu. To report this server, or for child-safety, use the options here.")
                     }

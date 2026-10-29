@@ -2,9 +2,10 @@ import { Hono } from "hono";
 import { requireAuth, requireAdmin } from "../middleware/auth";
 import { listReports, actionReport, dismissReport } from "../services/safety";
 
-// Operator-only moderation of shared-room reports. Exposes reported room content
-// + metadata only — reports never exist for private 1:1, so this path can't
-// reach a member's private conversation (per-member isolation invariant).
+// Operator-only moderation of reports. Exposes reported room content, the copy
+// kept of a reported reply of Maurice's, and metadata — never a private 1:1
+// itself: what a member reports of one is the copy they were told would be
+// shared (services/safety.ts).
 const reports = new Hono();
 
 reports.use("/*", requireAuth, requireAdmin);

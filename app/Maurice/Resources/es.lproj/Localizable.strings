@@ -1003,3 +1003,26 @@
 "mydata.ai.withdraw" = "Retirar mi consentimiento";
 "mydata.ai.accept" = "Aceptar";
 "mydata.ai.withdraw_note" = "Retirar el consentimiento detiene todo envío: Maurice deja de responderte y el trabajo nocturno se detiene para ti. Lo ya enviado no se recupera.";
+
+/* Reporting a reply of Maurice's (ReportSheet ai_reply, operator queue) */
+"report.ai.title" = "Denunciar esta respuesta";
+"report.ai.disclosure" = "Esta respuesta de Maurice, y tu mensaje justo antes, se enviarán a la persona que administra tu hogar para que los revise. El resto de la conversación sigue siendo privado.";
+"report.ai.reason" = "Motivo";
+"report.ai.reason.harmful_or_misleading" = "Falsa o engañosa hasta el punto de hacer daño";
+"report.ai.reason.sexual_content" = "Contenido sexual";
+"report.ai.reason.harassment_or_bullying" = "Odioso, insultante o amenazante";
+"report.ai.reason.child_safety" = "Seguridad infantil / contenido con un menor";
+"report.ai.reason.other" = "Otra cosa";
+"report.ai.note" = "Nota (opcional)";
+"report.ai.note.placeholder" = "¿Qué falla?";
+"report.ai.send" = "Enviar";
+"report.ai.cancel" = "Cancelar";
+"report.ai.done" = "Listo";
+"report.ai.sent" = "Gracias: tu denuncia se ha enviado a la persona que administra tu hogar.";
+"report.ai.publisher" = "Sobre la app en sí, también puedes escribir a su editor: %@";
+"report.ai.authority.header" = "Denúncialo también a una autoridad";
+"report.ai.authority" = "Si afecta a un menor, denúncialo también a la autoridad competente: puede actuar donde el hogar no puede.";
+"report.ai.queue.kind" = "Una respuesta de Maurice, con la pregunta anterior";
+"report.ai.queue.private" = "Conversación privada";
+"report.ai.queue.handled" = "Marcar como atendida";
+"report.ai.queue.open" = "Denuncias pendientes";
