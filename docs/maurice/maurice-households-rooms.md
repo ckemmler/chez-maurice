@@ -1,6 +1,6 @@
 ---
 title: Households, rooms & devices
-date: '2026-10-28'
+date: '2026-10-29'
 flags: []
 locale: en
 description: Members and roles, guests, multi-person rooms, device pairing and PINs,
@@ -61,7 +61,7 @@ The household guards how often Maurice may open one: "Days between two conversat
 
 ## Moderation
 
-In a shared room, the long-press menu on a message offers **Report** and **Block**. A report carries the message and its metadata to the operator (`/api/reports`, child-safety reports first, then newest); blocking removes the participant's reach. Reports never exist for a private 1:1, so this path can't reach a member's private conversation — the per-member isolation invariant holds.
+In a shared room, the long-press menu on a message offers **Report** and **Block**. A report carries the message and its metadata to the operator (`/api/reports`, child-safety reports first, then newest); blocking removes the participant's reach. Reports of a member or of a member's message never exist for a private 1:1, so this path can't reach a member's private conversation — the per-member isolation invariant holds. A **reply of Maurice's** can be reported anywhere (29 October 2026, App Review 1.2): the report keeps a copy of that reply and of the message before it, which the member is told before sending, and the operator reads only the copy, not the conversation or its title (`ai_reply_reports`, [[maurice-chat]]). The operator's queue is also in the app's Settings → Safety → *Open reports*, for admins.
 
 ## Push
 

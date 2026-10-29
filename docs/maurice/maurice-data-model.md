@@ -1,6 +1,6 @@
 ---
 title: The data model
-date: '2026-10-28'
+date: '2026-10-29'
 flags: []
 locale: en
 description: 'The SQLite schema behind the chat engine: identity, conversations, files,
@@ -59,6 +59,8 @@ Anthropic's key stays in `households.api_key`; the other providers got their own
 | `conversation_summaries` | `conversation_id` (PK, cascades), the summary, `transcript_hash`, model, timestamps | One row per thread; keyed on a hash of the transcript it was made from, so a continued thread reads as stale and a fresh summary replaces the old one. See [[maurice-composer]]. |
 | `conversation_participants` | `conversation_id` + `member_id` (PK), `role ∈ {owner,member}`, `last_read_at` | Membership for rooms; `last_read_at` drives the per-foyer unread roll-up. A 1:1 chat is just a room with one human. |
 | `reports` | a report filed on a shared-room message: target, reporter, status, category | Operator-only moderation; never on a private 1:1. |
+| `ai_reply_reports` | a reply of Maurice's reported from any conversation (29 October 2026): reporter, conversation and message ids, reason, note, and a **copy** of the reply and of the question before it | What the operator reads instead of the conversation; handling it removes nothing. |
+| `ai_consent` | one row per member (29 October 2026): `accepted` or `declined`, the providers a yes covers (JSON), when | The member's answer about AI providers; read by the server and the Python tools before sending their data out (`services/aiConsent.ts`). No row = not asked yet, let through. |
 
 Index: `messages(conversation_id, created_at)` and `conversations(user_id, updated_at DESC)`.
 
