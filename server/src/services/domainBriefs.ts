@@ -706,6 +706,7 @@ async function doRefresh(domain: Maurice, memberId: string): Promise<RefreshResu
   let result: AncillaryResult;
   try {
     result = await deps.write({
+      memberId,
       invocation: "domain_brief",
       system: systemPrompt(name, language, words),
       prompt,
@@ -775,6 +776,7 @@ const SUMMARY_CHARS = 180;
 export async function writeSummary(domain: Maurice, memberId: string, brief: string, language: string): Promise<void> {
   try {
     const result = await deps.write({
+      memberId,
       invocation: "domain_brief",
       system:
         `You write the one-line index entry for a domain of someone's life. ` +
@@ -821,6 +823,7 @@ export async function ensureDomainIcon(domain: Maurice, memberId: string): Promi
     const modelId = ancillaryModel("domain_brief");
     if (verdict(getModel(modelId)?.provider ?? null, modelId, 0, SYSTEM_SPENDER).ok) {
       const result = await deps.write({
+        memberId,
         invocation: "domain_brief",
         system:
           `You choose the icon that stands for a domain of someone's life. ` +

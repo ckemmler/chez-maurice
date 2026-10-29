@@ -108,6 +108,7 @@ ancillary.post("/", async (c) => {
   try {
     const result = await ancillaryComplete({
       invocation,
+      memberId,
       prompt,
       system: body?.system,
       maxTokens,

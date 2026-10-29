@@ -4,6 +4,7 @@
 
 export const STRINGS: Record<string, Record<string, string>> = {
   "en": {
+    "chat.ai_consent_required": "Nothing was sent: you have not agreed to send your messages to %@. You can review this choice in Settings → My data → AI providers.",
     "join.title": "An invitation to %@",
     "join.body": "Open this link on the iPhone, iPad or Mac where Chez Maurice is installed. Not installed yet? Install it, then scan the code again.",
     "join.open": "Open in Chez Maurice",
@@ -370,6 +371,7 @@ export const STRINGS: Record<string, Record<string, string>> = {
     "flash.corpus_reconcile_running": "A reconciliation is already running"
   },
   "fr": {
+    "chat.ai_consent_required": "Rien n'a été envoyé : vous n'avez pas accepté d'envoyer vos messages à %@. Vous pouvez revoir ce choix dans Réglages → Mes données → Fournisseurs d'IA.",
     "join.title": "Une invitation chez %@",
     "join.body": "Ouvrez ce lien sur l’iPhone, l’iPad ou le Mac où Chez Maurice est installé. Pas encore installé ? Installez-le, puis scannez à nouveau le code.",
     "join.open": "Ouvrir dans Chez Maurice",
@@ -711,6 +713,7 @@ export const STRINGS: Record<string, Record<string, string>> = {
     "flash.corpus_reconcile_running": "Un rattrapage est déjà en cours"
   },
   "it": {
+    "chat.ai_consent_required": "Non è stato inviato nulla: non hai accettato di inviare i tuoi messaggi a %@. Puoi rivedere questa scelta in Impostazioni → I miei dati → Fornitori di IA.",
     "join.title": "Un invito da %@",
     "join.body": "Apri questo link sull’iPhone, iPad o Mac dove è installato Chez Maurice. Non ancora installato? Installalo, poi scansiona di nuovo il codice.",
     "join.open": "Apri in Chez Maurice",
@@ -983,6 +986,7 @@ export const STRINGS: Record<string, Record<string, string>> = {
     "flash.docs_refresh_off": "L'aggiornamento automatico della documentazione è disattivato"
   },
   "de": {
+    "chat.ai_consent_required": "Es wurde nichts gesendet: Du hast nicht zugestimmt, deine Nachrichten an %@ zu senden. Du kannst diese Entscheidung unter Einstellungen → Meine Daten → KI-Anbieter ändern.",
     "join.title": "Eine Einladung zu %@",
     "join.body": "Öffne diesen Link auf dem iPhone, iPad oder Mac, auf dem Chez Maurice installiert ist. Noch nicht installiert? Installiere es und scanne den Code dann erneut.",
     "join.open": "In Chez Maurice öffnen",
@@ -1255,6 +1259,7 @@ export const STRINGS: Record<string, Record<string, string>> = {
     "flash.docs_refresh_off": "Automatische Aktualisierung der Dokumentation ist aus"
   },
   "es": {
+    "chat.ai_consent_required": "No se ha enviado nada: no has aceptado enviar tus mensajes a %@. Puedes revisar esta elección en Ajustes → Mis datos → Proveedores de IA.",
     "join.title": "Una invitación de %@",
     "join.body": "Abre este enlace en el iPhone, iPad o Mac donde está instalado Chez Maurice. ¿Aún no lo tienes? Instálalo y vuelve a escanear el código.",
     "join.open": "Abrir en Chez Maurice",
@@ -1527,6 +1532,7 @@ export const STRINGS: Record<string, Record<string, string>> = {
     "flash.docs_refresh_off": "La actualización automática de la documentación está desactivada"
   },
   "pt": {
+    "chat.ai_consent_required": "Nada foi enviado: não aceitou enviar as suas mensagens para %@. Pode rever esta escolha em Definições → Os meus dados → Fornecedores de IA.",
     "join.title": "Um convite de %@",
     "join.body": "Abra esta ligação no iPhone, iPad ou Mac onde o Chez Maurice está instalado. Ainda não está instalado? Instale-o e volte a digitalizar o código.",
     "join.open": "Abrir no Chez Maurice",
@@ -1799,6 +1805,7 @@ export const STRINGS: Record<string, Record<string, string>> = {
     "flash.docs_refresh_off": "A atualização automática da documentação está desligada"
   },
   "nl": {
+    "chat.ai_consent_required": "Er is niets verstuurd: je hebt niet ingestemd met het versturen van je berichten naar %@. Je kunt deze keuze herzien in Instellingen → Mijn gegevens → AI-aanbieders.",
     "join.title": "Een uitnodiging van %@",
     "join.body": "Open deze link op de iPhone, iPad of Mac waarop Chez Maurice is geïnstalleerd. Nog niet geïnstalleerd? Installeer het en scan de code opnieuw.",
     "join.open": "Openen in Chez Maurice",

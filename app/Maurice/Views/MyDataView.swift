@@ -138,10 +138,48 @@ struct MyDataView: View {
     private var api: APIClient? { session.serverURL.map { APIClient(baseURL: $0) } }
     private var token: String? { session.tokenForActiveUser }
 
+    @Environment(AIConsentStore.self) private var aiConsent
+    @State private var aiConsentBusy = false
+
+    private var aiConsentLine: String {
+        guard let record = aiConsent.record else { return session.localized("mydata.ai.none") }
+        let when = record.decidedAt.map { $0.formatted(date: .long, time: .omitted) } ?? record.decided_at
+        return session.localized(record.status == "accepted" ? "mydata.ai.accepted" : "mydata.ai.declined", when)
+    }
+
+    private func decideAI(_ accept: Bool) async {
+        aiConsentBusy = true
+        await aiConsent.decide(accept: accept, session: session)
+        aiConsentBusy = false
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
             Text(session.localized("mydata.caption"))
                 .font(.system(size: 12.5)).foregroundStyle(theme.inkSoft).lineSpacing(2)
+
+            // The member's answer about AI providers (AIConsentStore), which
+            // they can give or take back here at any time.
+            card(title: session.localized("mydata.ai.title"), text: session.localized("mydata.ai.text")) {
+                AIProviderList(providers: aiConsent.providers, highlighted: Set(aiConsent.newProviders.map(\.id)))
+                AIDataList()
+                line(aiConsentLine, ok: aiConsent.record?.status == "accepted" && !aiConsent.needsAnswer)
+                if aiConsent.record?.status == "accepted" {
+                    if !aiConsent.newProviders.isEmpty {
+                        action(icon: "checkmark", label: session.localized("mydata.ai.accept"), busy: aiConsentBusy) {
+                            Task { await decideAI(true) }
+                        }
+                    }
+                    action(icon: "hand.raised", label: session.localized("mydata.ai.withdraw"), busy: aiConsentBusy) {
+                        Task { await decideAI(false) }
+                    }
+                    line(session.localized("mydata.ai.withdraw_note"))
+                } else {
+                    action(icon: "checkmark", label: session.localized("mydata.ai.accept"), busy: aiConsentBusy) {
+                        Task { await decideAI(true) }
+                    }
+                }
+            }
 
             card(title: session.localized("mydata.export.title"), text: session.localized("mydata.export.text")) {
                 action(icon: "square.and.arrow.up", label: session.localized("mydata.export.button"),
@@ -217,6 +255,7 @@ struct MyDataView: View {
                 }
             }
             .task { await loadAccountEvents() }
+            .task { await aiConsent.refresh(session) }
 
             card(title: session.localized("mydata.erase.title"), text: session.localized("mydata.erase.text")) {
                 action(icon: "eraser", label: session.localized("mydata.erase.button"), destructive: true) { erasing = .data }

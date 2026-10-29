@@ -7,9 +7,11 @@ import asyncio
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from tools.shared.ai_consent import allowed as ai_allowed
+
 from .chunker import Chunk, paragraph_chunks, fixed_chunks, heading_chunks, semantic_chunks
 from .config import SourceConfig
-from .embedder import Embedder
+from .embedder import Embedder, remote_provider
 from .store import VectorStore
 from .utils import (
     apply_path_extractors,
@@ -56,6 +58,10 @@ async def process_file(
 ) -> int:
     if not file_path.exists() or not file_path.is_file():
         raise FileNotFoundError(file_path)
+    # The member said no to the embedding provider: their file is left
+    # unindexed (and unhashed, so a later yes indexes it).
+    if not ai_allowed(member_id, remote_provider(getattr(embedder, "config", None))):
+        return 0
 
     metadata_cfg = source_config.metadata
     file_hash = _hash_file(file_path)

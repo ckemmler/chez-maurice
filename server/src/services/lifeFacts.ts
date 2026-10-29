@@ -187,6 +187,7 @@ const JUDGE_SYSTEM =
 export async function judgeFact(text: string, memberId: string | null): Promise<FactJudgement> {
   try {
     const result = await judgeWith({
+      memberId,
       invocation: "life_fact",
       system: JUDGE_SYSTEM,
       prompt: text,

@@ -27,10 +27,29 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 from typing import Iterable, List, Literal, Optional
+from urllib.parse import urlparse
 
 from openai import AsyncOpenAI
 
 from .config import EmbeddingConfig
+
+
+def remote_provider(config: Optional[EmbeddingConfig]) -> Optional[str]:
+    """The provider outside the house the vectors are made by, named as the
+    server names it (services/aiConsent.ts); None when they are made here."""
+    if config is None or getattr(config, "provider", None) != "openai":
+        return None
+    base_url = getattr(config, "base_url", None)
+    host = (urlparse(base_url).hostname or "") if base_url else "api.openai.com"
+    if host in ("localhost", "127.0.0.1") or host.endswith(".local"):
+        return None
+    if host.endswith(("scaleway.ai", "scaleway.com", "scw.cloud")):
+        return "scaleway"
+    if host.endswith("openai.com"):
+        return "openai"
+    if host.endswith("mistral.ai"):
+        return "mistral"
+    return host
 
 Kind = Literal["document", "query"]
 

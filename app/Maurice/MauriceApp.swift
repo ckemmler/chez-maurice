@@ -22,6 +22,7 @@ struct MauriceApp: App {
     @State private var gardens: GardensStore?
     @State private var domains = DomainsState()
     @State private var budget = BudgetStore()
+    @State private var aiConsent = AIConsentStore()
 
     var body: some Scene {
         WindowGroup {
@@ -42,6 +43,7 @@ struct MauriceApp: App {
                 .environment(resolvedGardens)
                 .environment(domains)
                 .environment(budget)
+                .environment(aiConsent)
                 .environment(\.locale, session.resolvedLocale)
                 // maurice://join?server=…&code=… — from an invitation page's
                 // "Open" button, or the camera app reading one.

@@ -91,6 +91,7 @@ export interface DocsAnswer {
 /** The one door for a test to stand in for the provider. */
 export type DocsCompleter = (req: {
   invocation: string;
+  memberId?: string | null;
   system: string;
   prompt: string;
   maxTokens: number;
@@ -138,6 +139,7 @@ export async function askMauriceDocs(
 
   try {
     const r = await complete({
+      memberId: memberId ?? null,
       invocation: MAURICE_DOCS_INVOCATION,
       system: docsSystemPrompt(docs),
       prompt: `Question: ${question}`,

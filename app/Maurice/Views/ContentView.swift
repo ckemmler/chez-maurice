@@ -20,6 +20,7 @@ struct ContentView: View {
     @Environment(DomainsState.self) private var domains
     @Environment(GardensStore.self) private var gardens
     @Environment(BudgetStore.self) private var budget
+    @Environment(AIConsentStore.self) private var aiConsent
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.scenePhase) private var scenePhase
     #if os(iOS)
@@ -66,10 +67,14 @@ struct ContentView: View {
                     // The member's own row: a sign-in by avatar or PIN
                     // only had the household list, which has no username.
                     async let me: () = session.refreshActiveUser()
+                    // The AI-provider question is answered before the chat
+                    // shows, so nothing can be sent ahead of it.
+                    async let consent: () = aiConsent.refresh(session)
                     await chat.onUserSwitch()
                     await prefs
                     await personas
                     await me
+                    await consent
                     try? await minHold
                     isLoading = false
                     // Foyer badges are non-critical — refresh them in the
@@ -115,6 +120,17 @@ struct ContentView: View {
         .preferredColorScheme(MauriceTheme.colorSchemeOverride(for: session.palette))
         // What the admin did in this account, told once (MyDataView.swift).
         .modifier(AccountEventsNotice())
+        // The AI-provider question (AIConsentView): after sign-in, for every
+        // role, until answered — and again when a provider appears that the
+        // member's yes does not cover. Under the connect disclosure, which
+        // comes first on a server someone else runs.
+        .overlay {
+            if session.hasActiveSession, !isLoading, aiConsent.showsQuestion {
+                AIConsentView()
+                    .environment(\.mauriceTheme, theme)
+                    .transition(.opacity)
+            }
+        }
         // Blocking connect disclosure (once per non-owned server host). Sits over
         // everything; "Cancel" disconnects.
         .overlay {
@@ -155,7 +171,11 @@ struct ContentView: View {
         .onChange(of: scenePhase) {
             chat.appActive = (scenePhase == .active)
             if scenePhase == .active { showChatForSharedPage() }
-            if scenePhase == .active, session.hasActiveSession { Task { await budget.refresh(session) } }
+            if scenePhase == .active, session.hasActiveSession {
+                Task { await budget.refresh(session) }
+                // A provider added while the app was away is asked about.
+                Task { await aiConsent.refresh(session) }
+            }
         }
         #if os(iOS)
         .onChange(of: ShareArrivals.shared.token) { showChatForSharedPage() }
@@ -169,7 +189,10 @@ struct ContentView: View {
         // The budget ring: read for whoever is signed in, and again after every
         // turn, which is what spends it — crossing 20, 10 or 5 % raises a toast.
         .task(id: session.hasActiveSession ? session.activeUserId : nil) {
-            if session.hasActiveSession { await budget.refresh(session) }
+            if session.hasActiveSession {
+                await budget.refresh(session)
+                await aiConsent.refresh(session)
+            }
         }
         .onChange(of: chat.isStreaming) { was, now in
             if was && !now { Task { await budget.refresh(session) } }

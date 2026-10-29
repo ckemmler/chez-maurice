@@ -388,6 +388,7 @@ export async function seedDomain(domain: Maurice, memberId: string): Promise<See
   let r: AncillaryResult;
   try {
     r = await deps.write({
+      memberId,
       invocation: SEED_INVOCATION,
       system: seedSystemPrompt(name, language),
       prompt: seedPrompt(domain, name, sources, brief),

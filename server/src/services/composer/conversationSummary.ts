@@ -87,7 +87,7 @@ function storeSummary(row: Omit<SummaryRow, "created_at">): void {
 
 // ── Generation ───────────────────────────────────────────────────────────────
 
-export type SummaryGenerator = (input: { title: string; transcript: string }) => Promise<string>;
+export type SummaryGenerator = (input: { title: string; transcript: string; memberId?: string | null }) => Promise<string>;
 
 function buildPrompt(title: string, transcript: string): string {
   return [
@@ -110,9 +110,10 @@ function buildPrompt(title: string, transcript: string): string {
 
 /** Through the ancillary door: the admin's model for `conversation_summary`,
  *  on whichever provider it belongs to. */
-const modelGenerator: SummaryGenerator = async ({ title, transcript }) => {
+const modelGenerator: SummaryGenerator = async ({ title, transcript, memberId }) => {
   const r = await ancillaryComplete({
     invocation: "conversation_summary",
+    memberId: memberId ?? null,
     prompt: buildPrompt(title, transcript),
     maxTokens: 6000,
     effort: "low",
@@ -151,10 +152,14 @@ export function ensureSummary(conversationId: string): Promise<SummaryRow | null
       if (text.length > MAX_TRANSCRIPT_CHARS) {
         throw new Error(`transcript is ${text.length} characters, above the ${MAX_TRANSCRIPT_CHARS} guard`);
       }
-      const convo = db.query(`SELECT title FROM conversations WHERE id = ?`).get(conversationId) as
-        | { title: string | null }
+      const convo = db.query(`SELECT title, user_id FROM conversations WHERE id = ?`).get(conversationId) as
+        | { title: string | null; user_id: string }
         | null;
-      const summary = await generator({ title: convo?.title || "Untitled conversation", transcript: text });
+      const summary = await generator({
+        title: convo?.title || "Untitled conversation",
+        transcript: text,
+        memberId: convo?.user_id ?? null,
+      });
       storeSummary({
         conversation_id: conversationId,
         content_hash: hash,

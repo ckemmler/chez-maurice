@@ -251,6 +251,7 @@ async function nameSubjects(
     // exchange about Totoro got a French note).
     `\n\nWrite each "note" in the language of THE PERSON's message above.`;
   const result = await completeWith({
+    memberId,
     invocation: "entry_suggest",
     system: SYSTEM,
     prompt,
@@ -1106,6 +1107,7 @@ async function pickEpisode(memberId: string, s: EntrySuggestion, episodes: Episo
   const prompt = `What was said of it: ${s.note}\n\nTHE PERSON SAID:\n${questionOf(s).slice(0, 2000)}\n\nEPISODES:\n${list}`;
   try {
     const result = await completeWith({
+      memberId,
       invocation: "entry_suggest_episode", system: PICK_EPISODE, prompt, maxTokens: 100, temperature: 0, reasoning: "none",
     });
     recordSpend(result.usage, memberId, null, "suggestions");
@@ -1200,6 +1202,7 @@ async function refineQuery(memberId: string, s: EntrySuggestion): Promise<string
     `What was said of it: ${s.note}\n\nTHE PERSON SAID:\n${questionOf(s).slice(0, 2000)}`;
   try {
     const result = await completeWith({
+      memberId,
       invocation: "entry_suggest_refine", system: REFINE, prompt, maxTokens: 200, temperature: 0, reasoning: "none",
     });
     recordSpend(result.usage, memberId, null, "suggestions");

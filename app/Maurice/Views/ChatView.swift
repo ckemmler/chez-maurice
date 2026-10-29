@@ -7,6 +7,7 @@ import SwiftMath
 struct ChatView: View {
     @Environment(ChatService.self) private var chat
     @Environment(SessionStore.self) private var session
+    @Environment(AIConsentStore.self) private var aiConsent
     @Environment(ComposerStore.self) private var composer
     @Environment(MauriceStore.self) private var maurices
     @Environment(\.mauriceTheme) private var theme
@@ -399,6 +400,9 @@ struct ChatView: View {
                             onDone: { trayOpen = false },
                             onAddMore: { showAddContext = true })
             }
+            if aiConsent.loaded, !aiConsent.mayUseAI {
+                AIDeclinedBanner(accent: accent) { aiConsent.reviewing = true }
+            }
             ComposerBar(inputText: $inputText, pendingImages: $pendingImages, pendingPastes: $pendingPastes,
                         isFocused: _isInputFocused,
                         onAddContext: { trayOpen = true; showAddContext = true },
@@ -423,6 +427,9 @@ struct ChatView: View {
                             onDone: { trayOpen = false },
                             onAddMore: { showAddContext = true })
             }
+            if aiConsent.loaded, !aiConsent.mayUseAI {
+                AIDeclinedBanner(accent: accent) { aiConsent.reviewing = true }
+            }
             ComposerBar(inputText: $inputText, pendingImages: $pendingImages, pendingPastes: $pendingPastes,
                         isFocused: _isInputFocused,
                         onAddContext: { trayOpen = true; showAddContext = true },
@@ -439,6 +446,9 @@ struct ChatView: View {
     }
 
     private func sendMessage() {
+        // No yes to the AI providers (AIConsentStore): nothing is sent; the
+        // banner above the composer says why.
+        guard aiConsent.mayUseAI else { return }
         let text = PastedText.compose(inputText.trimmingCharacters(in: .whitespacesAndNewlines),
                                       pastes: pendingPastes)
         let images = pendingImages
@@ -2557,6 +2567,7 @@ struct SelectableTextView: UIViewRepresentable {
 private struct ComposerBar: View {
     @Environment(ChatService.self) private var chat
     @Environment(SessionStore.self) private var session
+    @Environment(AIConsentStore.self) private var aiConsent
     @Environment(ComposerStore.self) private var composer
     @Environment(MauriceStore.self) private var maurices
     @Environment(\.mauriceTheme) private var theme
@@ -2695,6 +2706,8 @@ private struct ComposerBar: View {
             && !chat.isStreaming
             // The question is about the article: it must not leave without it.
             && readingArticle == nil
+            // Nothing goes to Maurice without a yes to the AI providers.
+            && aiConsent.mayUseAI
     }
 
     /// Dictation whose words reach the field only after it stops — a recording

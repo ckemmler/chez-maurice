@@ -17,6 +17,7 @@ import AppKit
 
 struct DomainEditor: View {
     @Environment(MauriceStore.self) private var store
+    @Environment(AIConsentStore.self) private var aiConsent
     @Environment(DomainsState.self) private var domains
     @Environment(ChatService.self) private var chat
     @Environment(SessionStore.self) private var session
@@ -34,6 +35,9 @@ struct DomainEditor: View {
     /// Why the last save did not go through, shown under the name.
     @State private var saveProblem: String?
     @State private var confirmDelete = false
+    /// A model whose provider the member has not accepted yet, waiting on
+    /// their answer (AIProviderAskSheet) before it becomes the persona's.
+    @State private var pendingModel: PendingModel?
 
     /// Tracks which text field holds the keyboard, so the keyboard accessory
     /// "hide" button can resign it (the system keyboard can't host a custom key).
@@ -326,13 +330,30 @@ struct DomainEditor: View {
                         }
                         ForEach(models) { m in
                             ModelCard(model: m, selected: m.id == selectedId, accent: accent) {
-                                draft.model = m.id
+                                choose(m)
                             }
                         }
                     }
                 }
             }
+            .sheet(item: $pendingModel) { pending in
+                AIProviderAskSheet(provider: pending.provider) { accepted in
+                    if accepted { draft.model = pending.id }
+                }
+                .environment(\.mauriceTheme, theme)
+            }
         }
+    }
+
+    /// A model on a provider the member has not accepted is asked about first:
+    /// the persona's conversations would go there (App Review 5.1.2(i)).
+    private func choose(_ m: MauriceModel) {
+        if m.isLocal || aiConsent.covers(m.provider) {
+            draft.model = m.id
+            return
+        }
+        let provider = aiConsent.providers.first { $0.id == m.provider } ?? AIConsentStore.knownProvider(m.provider)
+        pendingModel = PendingModel(id: m.id, provider: provider)
     }
 
     // MARK: 3 · Instructions
@@ -798,4 +819,10 @@ struct DomainPreview: View {
             Spacer(minLength: 0)
         }
     }
+}
+
+/// A persona's model choice waiting on the member's yes to its provider.
+private struct PendingModel: Identifiable {
+    let id: String
+    let provider: AIProvider
 }

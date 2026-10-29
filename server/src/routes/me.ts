@@ -18,6 +18,14 @@ import { uploadsDir } from "../services/chatImport";
 import { importMember, memberExportResponse } from "../services/memberArchive";
 import { EraseError, eraseMember, type EraseScope } from "../services/memberErase";
 import { getUserById, getUser } from "../services/users";
+import { ancillaryTable } from "../services/ancillary";
+import {
+  embeddingProvider, getConsent, isLocalProvider, providerInfo, setConsent, uncovered,
+} from "../services/aiConsent";
+import { dictationEngine } from "../services/dictation";
+import { getHouseholdConfig } from "../services/claude";
+import { getModel, householdDefaultModel } from "../services/models";
+import { availableModelsForUser } from "../services/modelAccess";
 
 
 const me = new Hono();
@@ -178,5 +186,57 @@ me.put("/git/export", async (c) => {
 // {limited:false, left:null, …} when nothing limits the household.
 
 me.get("/budget", (c) => c.json(householdBudget(getUser(c.get("userId"))?.role === "admin")));
+
+// ── /api/me/ai-consent ──────────────────────────────────────────
+// The providers outside the house that this member's data can reach — the
+// models they may chat with, the household's models for background work, the
+// one that transcribes dictation, the one the search index embeds with — and
+// the member's answer about them (services/aiConsent.ts). `needs_answer` is
+// what the apps show the consent screen on: no answer yet, or a yes that does
+// not cover a provider in use. A no stands until the member changes it.
+
+export function providersInUse(userId: string): string[] {
+  const ids = new Set<string>();
+  for (const m of availableModelsForUser(userId)) if (m.tier !== "local") ids.add(m.provider);
+  const fallback = householdDefaultModel();
+  if (fallback) ids.add(getModel(fallback)?.provider ?? "");
+  for (const row of ancillaryTable()) ids.add(getModel(row.effective)?.provider ?? "");
+  if (dictationEngine() === "scaleway") ids.add("scaleway");
+  const embed = embeddingProvider();
+  if (embed) ids.add(embed);
+  if (getHouseholdConfig().falApiKey) ids.add("fal");
+  return [...ids].filter((p) => p && !isLocalProvider(p)).sort();
+}
+
+function consentView(userId: string) {
+  const inUse = providersInUse(userId);
+  const record = getConsent(userId);
+  const missing = uncovered(userId, inUse);
+  return {
+    record,
+    providers: inUse.map(providerInfo),
+    needs_answer: !record || (record.status === "accepted" && missing.length > 0),
+    uncovered: record?.status === "accepted" ? missing : [],
+  };
+}
+
+me.get("/ai-consent", (c) => c.json(consentView(c.get("userId"))));
+
+// PUT { status: "accepted" | "declined", providers?: string[] } — `providers`
+// is the list the member was shown; only providers this household uses are
+// kept. Withdrawing is a PUT with "declined".
+me.put("/ai-consent", async (c) => {
+  const body = (await c.req.json().catch(() => ({}))) as { status?: string; providers?: unknown };
+  if (body.status !== "accepted" && body.status !== "declined") {
+    return c.json({ error: "status must be 'accepted' or 'declined'" }, 400);
+  }
+  const userId = c.get("userId");
+  const inUse = new Set(providersInUse(userId));
+  const shown = Array.isArray(body.providers)
+    ? body.providers.filter((p): p is string => typeof p === "string")
+    : [...inUse];
+  setConsent(userId, body.status, shown.filter((p) => inUse.has(p)));
+  return c.json(consentView(userId));
+});
 
 export default me;

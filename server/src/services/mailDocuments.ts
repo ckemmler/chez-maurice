@@ -672,7 +672,7 @@ async function documentsPass(memberId: string, d: MailDocumentsDeps): Promise<Do
   const ask = async (system: string, prompt: string): Promise<AncillaryResult> => {
     const v = budgetVerdict(getModel(model)?.provider ?? null, model, 0, memberId);
     if (!v.ok) throw new Capped(v.reason);
-    const r = await d.write({ invocation: WRITE_INVOCATION, system, prompt, maxTokens: MAX_TOKENS, temperature: 0.3 });
+    const r = await d.write({ invocation: WRITE_INVOCATION, memberId, system, prompt, maxTokens: MAX_TOKENS, temperature: 0.3 });
     // On the ledger as the member, under the reading job's id: the
     // documents are the reading's last step, and the operator sees them
     // with it.

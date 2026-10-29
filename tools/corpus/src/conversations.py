@@ -25,8 +25,10 @@ from typing import Any, Dict, List, Optional
 
 import sqlite3
 
+from tools.shared.ai_consent import allowed as ai_allowed
+
 from .chunker import paragraph_chunks
-from .embedder import Embedder
+from .embedder import Embedder, remote_provider
 from .store import VectorStore
 
 _LOG = logging.getLogger(__name__)
@@ -119,6 +121,10 @@ class MauriceConversations:
         """Reconcile one conversation across all its participants. Returns chunks written."""
         with self._connect() as conn:
             participants = self._participants(conn, conversation_id)
+            # A member who said no to the embedding provider gets no vectors
+            # made of their conversations (tools/shared/ai_consent.py).
+            provider = remote_provider(getattr(embedder, "config", None))
+            participants = [m for m in participants if ai_allowed(m, provider)]
             if not participants:
                 return 0
             title = self._title(conn, conversation_id)

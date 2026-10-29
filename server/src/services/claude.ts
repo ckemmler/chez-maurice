@@ -35,6 +35,7 @@ import { resolveFamilies, toolInFamilies, canUseExperimental, isExperimentalTool
 import { t, userLocale } from "./i18n";
 import { newUsage, priceUsage, hasUsage, type TurnUsage } from "./pricing";
 import { verdict as budgetVerdict } from "./budget";
+import { aiAllowed, providerInfo } from "./aiConsent";
 import { providerPlugin, type ProviderPlugin, type ProviderTool } from "./providerPlugins";
 import { anthropicTakesTemperature, anthropicThinking } from "./anthropicParams";
 
@@ -1675,6 +1676,12 @@ function trackedBooks(
   const provider = rec?.provider ?? (isLocal ? "ollama" : "anthropic");
   trace.provider = provider;
   trace.model = resolved;
+  // The member said no to this provider, or has not been asked about it yet
+  // (services/aiConsent.ts): nothing is sent, and the reply says why.
+  if (!isLocal && !aiAllowed(memberId, provider)) {
+    yield { type: "error", message: t(userLang, "chat.ai_consent_required", providerInfo(provider).name) };
+    return;
+  }
   const temperature = maurice ? maurice.temp : undefined;
   // The reasoning choice — the persona's, or the household's factory setting
   // for the everyday Maurice — honoured only where the roster says the model

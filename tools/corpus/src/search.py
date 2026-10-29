@@ -5,7 +5,9 @@ from __future__ import annotations
 import asyncio
 from typing import List, Dict, Any, Optional
 
-from .embedder import Embedder
+from tools.shared.ai_consent import allowed as ai_allowed
+
+from .embedder import Embedder, remote_provider
 from .store import VectorStore
 
 
@@ -18,6 +20,9 @@ async def semantic_search(
     filters: Dict[str, Any] | None = None,
     member_id: Optional[str] = None,
 ) -> List[Dict[str, Any]]:
+    # A member who said no to the embedding provider: their query is not sent.
+    if not ai_allowed(member_id, remote_provider(getattr(embedder, "config", None))):
+        return []
     # As a query, not a document: retrieval models are asymmetric, and the
     # embedder knows which prefix this model wants on each side.
     vector = await embedder.embed_query(query)

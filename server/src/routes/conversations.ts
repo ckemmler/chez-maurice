@@ -40,6 +40,7 @@ import { linkOnFicheInBackground } from "../../data-api/services/entryConversati
 import { saveSpec } from "../services/composer/specs";
 import { memberLocale } from "../services/domainBriefs";
 import { t } from "../services/i18n";
+import { aiAllowed } from "../services/aiConsent";
 import {
   beginTurn,
   recordEvent,
@@ -661,7 +662,7 @@ conversations.post("/:id/messages", async (c) => {
           if (imageMatch) {
             const imagePrompt = imageMatch[1]!.trim();
             const config = getHouseholdConfig();
-            if (config.falApiKey) {
+            if (config.falApiKey && aiAllowed(userId, "fal")) {
               try {
                 // Tell client we're generating an image
                 await send({ type: "image_loading", text: imagePrompt });
@@ -701,7 +702,7 @@ conversations.post("/:id/messages", async (c) => {
           if (editMatch) {
             const editPrompt = editMatch[1]!.trim();
             const config = getHouseholdConfig();
-            if (config.falApiKey) {
+            if (config.falApiKey && aiAllowed(userId, "fal")) {
               try {
                 // Find the most recent user message with an uploaded photo
                 const messages = getMessages(convoId);

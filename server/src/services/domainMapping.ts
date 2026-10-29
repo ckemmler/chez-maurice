@@ -23,6 +23,7 @@ import { isMailNightlyDue, mailNightlyOn, mailNightlyStatus } from "./mailScan";
 import { corpusCall } from "./mcpClient";
 import { getModel } from "./models";
 import { listUsers } from "./users";
+import { aiAllowed } from "./aiConsent";
 
 // The nightly mapping — discovering a member's domains in their conversations
 // (design of 19 September 2026, section 4a; the step-0 script made a service).
@@ -784,6 +785,12 @@ export async function mapMember(memberId: string, opts: { dryRun?: boolean } = {
   };
   const who = mappable(memberId);
   if (!who.ok) return { ...res, outcome: "guarded", reason: who.reason };
+  // The night's calls are charged to the household, but what they read is the
+  // member's: their answer about the provider decides (services/aiConsent.ts).
+  const mappingModel = getModel(ancillaryModel("domain_mapping"));
+  if (mappingModel?.tier !== "local" && !aiAllowed(memberId, mappingModel?.provider)) {
+    return { ...res, outcome: "guarded", reason: "the member has not agreed to send their data to this model's provider" };
+  }
   const member = deps.members().find((m) => m.id === memberId);
   const name = member?.display_name || "the member";
   const language = memberLanguage(memberId);

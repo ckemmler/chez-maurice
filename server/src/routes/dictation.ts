@@ -5,6 +5,7 @@ import { requireAuth } from "../middleware/auth";
 import {
   DictationError, MAX_BYTES, MAX_SECONDS, dictationEngine, transcribe,
 } from "../services/dictation";
+import { aiAllowed } from "../services/aiConsent";
 
 const dictation = new Hono();
 
@@ -13,10 +14,13 @@ dictation.use("/*", requireAuth);
 // ── GET /api/dictation ──────────────────────────────────────────
 // Whether a clip sent now would be transcribed, and by what. The apps ask once
 // per session to decide between recording for the server and their own
-// recogniser. `local` means the audio stays in the house.
+// recogniser. `local` means the audio stays in the house; `scaleway` that it
+// goes to Scaleway's Whisper, which only a member who agreed to that provider
+// may use (`allowed`, services/aiConsent.ts).
 dictation.get("/", (c) => {
   const engine = dictationEngine();
-  return c.json({ available: engine != null, engine, max_seconds: MAX_SECONDS });
+  const allowed = engine === "scaleway" ? aiAllowed(c.get("userId"), "scaleway") : engine != null;
+  return c.json({ available: engine != null && allowed, engine, allowed, max_seconds: MAX_SECONDS });
 });
 
 // ── POST /api/dictation?duration=12.4 ───────────────────────────
@@ -25,6 +29,9 @@ dictation.get("/", (c) => {
 // 18 October 2026 also send `language`, their interface's; it is ignored, and
 // Whisper hears the language for itself.
 dictation.post("/", async (c) => {
+  if (dictationEngine() === "scaleway" && !aiAllowed(c.get("userId"), "scaleway")) {
+    return c.json({ error: "ai_consent_required" }, 403);
+  }
   const declared = Number(c.req.header("Content-Length") ?? 0);
   if (declared > MAX_BYTES) return c.json({ error: "too_long" }, 413);
   const audio = await readCapped(c.req.raw.body, MAX_BYTES);

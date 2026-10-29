@@ -193,6 +193,18 @@ db.run(`
   )
 `);
 
+// A member's answer to "may what you send Maurice go to these AI providers?"
+// (services/aiConsent.ts). `providers` is the JSON list they were shown and
+// accepted; a provider that appears later is not covered until they say yes.
+db.run(`
+  CREATE TABLE IF NOT EXISTS ai_consent (
+    user_id    TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+    status     TEXT NOT NULL CHECK (status IN ('accepted', 'declined')),
+    providers  TEXT NOT NULL DEFAULT '[]',
+    decided_at TEXT NOT NULL DEFAULT (datetime('now'))
+  )
+`);
+
 // Operator's published contact (Guideline 1.2 reachable contact info). Surfaced
 // in the client as the *app/publisher* contact, not an abuse desk.
 try { db.run(`ALTER TABLE households ADD COLUMN operator_published_contact TEXT`); } catch {}

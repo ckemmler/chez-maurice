@@ -33,6 +33,7 @@ import { ollamaTurn } from "./ollama";
 import { newUsage, priceUsage, type TurnUsage } from "./pricing";
 import { docsModel } from "./mauriceDocs";
 import { anthropicTakesTemperature, anthropicThinking } from "./anthropicParams";
+import { aiAllowed } from "./aiConsent";
 
 // ── The invocations ──────────────────────────────────────────────────────────
 
@@ -521,6 +522,13 @@ export function reasoningBody(provider: string, modelId: string, reasoning: Anci
 
 export interface AncillaryRequest {
   invocation: string;
+  /**
+   * The member whose data the prompt carries. Their answer about AI providers
+   * (services/aiConsent.ts) is checked before anything is sent: a member who
+   * said no, or was never asked about this provider, gets nothing done on it.
+   * Null for the household's own work.
+   */
+  memberId?: string | null;
   prompt: string;
   system?: string;
   maxTokens: number;
@@ -640,6 +648,9 @@ export async function ancillaryComplete(req: AncillaryRequest): Promise<Ancillar
   const modelId = requestedModel(req);
   const model = getModel(modelId);
   const provider = model?.provider ?? "anthropic";
+  if (model?.tier !== "local" && !aiAllowed(req.memberId, provider)) {
+    throw new AncillaryError(`the member has not agreed to send their data to ${provider}`, 403);
+  }
   const config = getHouseholdConfig();
   const images = req.images ?? [];
   if (images.length && !model?.vision) {
