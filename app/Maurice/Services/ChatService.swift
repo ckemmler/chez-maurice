@@ -633,6 +633,10 @@ final class ChatService {
             messages = []
             knownIds = []
             pendingSummon = false
+            // Held from no entry: the one the previous thread was held from
+            // (a song shared from Apple Music, an article) otherwise sat above
+            // every new conversation's composer.
+            activeEntry = nil
             // A new room starts with just the creator; the socket and full
             // roster arrive as messages/participants change.
             if let u = session.activeDeviceUser {
@@ -695,6 +699,7 @@ final class ChatService {
             messages = []
             participants = []
             knownIds = []
+            activeEntry = nil
             messagesLoadedFor = nil
         }
     }
