@@ -93,9 +93,11 @@ export interface AncillaryInvocation {
 
 /** The night model P0 bis chose, and its fallback — see `prefer` above.
  *  Scaleway's models only: no Mistral (30 September 2026: the owner found them
- *  too poor; 19 October 2026: dropped as a fallback too). */
+ *  too poor; 19 October 2026: dropped as a fallback too). DeepSeek V4.1 Flash
+ *  since 29 October 2026, the household default everywhere (it replaced V4
+ *  Flash, which Scaleway still serves). */
 const NIGHT_MODELS = [
-  "deepseek-v4-flash-0731",              // scaleway — the brief that reads like one
+  "deepseek-v4.1-flash",                 // scaleway — the brief that reads like one
   "qwen3.6-35b-a3b",                     // scaleway — the small Qwen
 ];
 
@@ -276,8 +278,9 @@ export const PREFERRED: Record<AncillaryTier, string[]> = {
   // output price until 19 October 2026, which put GPT-OSS first; but an
   // article's summary is now read in place of the article, and DeepSeek is
   // the one whose prose reads well — for a tenth of a cent more an article.
+  // V4.1 Flash since 29 October 2026, the chat default too.
   standard: [
-    "deepseek-v4-flash-0731",              // scaleway — the household's chat default
+    "deepseek-v4.1-flash",                 // scaleway — the household's chat default
     "gpt-oss-120b",                        // scaleway — OpenAI's weights, Paris
   ],
   // The few that genuinely reason — flashcards today, and nothing else.

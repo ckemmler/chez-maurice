@@ -953,7 +953,7 @@ try {
       ["gemma-4-26b-a4b-it",                  "Gemma 4 26B",        "Google",   256, 1, "Google's small frontier model: agentic, multilingual, reads images.",  41],
       ["qwen3.6-35b-a3b",                     "Qwen 3.6 35B",       "Qwen",     256, 1, "Small, fast reasoning model with tool use and vision.",               42],
       ["gpt-oss-120b",                        "GPT-OSS 120B",       "OpenAI",   128, 0, "OpenAI's open-weight reasoning model. Text only.",                    43],
-      ["deepseek-v4-flash-0731",              "DeepSeek V4 Flash",  "DeepSeek", 256, 0, "The everyday default: fast reasoning, a cached-input price. Text only.", 44],
+      ["deepseek-v4-flash-0731",              "DeepSeek V4 Flash",  "DeepSeek", 256, 0, "The previous Flash: fast reasoning, a cached-input price. Text only.", 44],
       ["qwen3.5-397b-a17b",                   "Qwen 3.5 397B",      "Qwen",     250, 1, "Qwen's frontier reasoning model; reads images.",                      45],
       ["qwen3-235b-a22b-instruct-2507",       "Qwen 3 235B",        "Qwen",     250, 0, "Large instruct model, no reasoning phase. Text only.",                46],
       ["llama-3.3-70b-instruct",              "Llama 3.3 70B",      "Meta",     100, 0, "Meta's dependable generalist. Text only.",                            47],
@@ -1592,7 +1592,14 @@ try {
 // A model row is keyed by its bare id, so one id travels under one provider:
 // the row is repointed rather than duplicated, and every choice that named it
 // follows. GLM 5.3 Flash stays on Z.ai — Scaleway does not serve it.
-const SCALEWAY_ROSTER_GENERATION = 2;
+// Generation 3 (29 October 2026): DeepSeek V4.1 Flash becomes the default
+// everywhere, as the owner decided. The household's chat default and its
+// side-task model move off V4 Flash; a member who could use V4 Flash may use
+// V4.1 too, so the new default is never one they are refused. The side tasks'
+// advice moves in services/ancillary.ts, and the pins it wrote follow at start
+// (refreshAutoPins); a pin, a domain or an everyday model a person chose stays.
+// V4 Flash keeps its row: Scaleway still serves it.
+const SCALEWAY_ROSTER_GENERATION = 3;
 try {
   const gen =
     (db.query(`SELECT scaleway_roster_gen FROM households WHERE id = 'default'`).get() as
@@ -1602,7 +1609,7 @@ try {
   if (gen < SCALEWAY_ROSTER_GENERATION) {
     // id, name, vendor, ctx (k), vision, descr, sort
     const SCW: Array<[string, string, string, number, number, string, number]> = [
-      ["deepseek-v4.1-flash", "DeepSeek V4.1 Flash", "DeepSeek", 256, 1, "The next Flash: fast reasoning, reads images, a cached-input price.", 50],
+      ["deepseek-v4.1-flash", "DeepSeek V4.1 Flash", "DeepSeek", 256, 1, "The everyday default: fast reasoning, reads images, a cached-input price.", 50],
       ["qwen3.8-27b",         "Qwen 3.8 27B",        "Qwen",     256, 1, "Mid-size reasoning model with tool use and vision.",                  51],
     ];
     db.transaction(() => {
@@ -1619,6 +1626,26 @@ try {
              thinking = 'optional', descr = 'Z.ai''s flagship, served from Paris. Text only.', sort = 52
            WHERE id = 'glm-5.3'`,
         );
+      }
+      if (gen < 3) {
+        const OLD = "deepseek-v4-flash-0731", NEW = "deepseek-v4.1-flash";
+        // Only the seed's wording is touched, so a description the admin
+        // rewrote stays.
+        db.run(
+          `UPDATE models SET descr = 'The previous Flash: fast reasoning, a cached-input price. Text only.'
+           WHERE id = ? AND descr = 'The everyday default: fast reasoning, a cached-input price. Text only.'`,
+          [OLD],
+        );
+        db.run(
+          `UPDATE models SET descr = 'The everyday default: fast reasoning, reads images, a cached-input price.'
+           WHERE id = ? AND descr = 'The next Flash: fast reasoning, reads images, a cached-input price.'`,
+          [NEW],
+        );
+        if (db.query(`SELECT 1 FROM models WHERE id = ?`).get(NEW)) {
+          db.run(`INSERT OR IGNORE INTO user_model_access (user_id, model_id) SELECT user_id, ? FROM user_model_access WHERE model_id = ?`, [NEW, OLD]);
+          db.run(`UPDATE households SET default_model = ? WHERE default_model = ?`, [NEW, OLD]);
+          db.run(`UPDATE households SET ancillary_model = ? WHERE ancillary_model = ?`, [NEW, OLD]);
+        }
       }
       db.run(`UPDATE households SET scaleway_roster_gen = ? WHERE id = 'default'`, [SCALEWAY_ROSTER_GENERATION]);
     })();

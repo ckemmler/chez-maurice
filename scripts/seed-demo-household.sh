@@ -21,7 +21,7 @@
 # and Théo finds a conversation opened by Maurice in the morning, proposing
 # three domains. `--morning` runs those two steps now. It needs Ollama with
 # `qwen3-embedding:0.6b` for the corpus, and a key for the night's model
-# (DeepSeek V4 Flash on Scaleway): MAURICE_DEMO_SCALEWAY_KEY and, for a
+# (DeepSeek V4.1 Flash on Scaleway): MAURICE_DEMO_SCALEWAY_KEY and, for a
 # project-scoped key, MAURICE_DEMO_SCALEWAY_PROJECT. One mapping costs about
 # a cent, charged to the household's "system" spender.
 set -euo pipefail
@@ -89,7 +89,7 @@ fi
 
 if [[ "$MODE" == "--morning" ]]; then
   # The night's model needs a key on the household before the server starts:
-  # the ancillary pins (DeepSeek V4 Flash for domain_mapping) are chosen at
+  # the ancillary pins (DeepSeek V4.1 Flash for domain_mapping) are chosen at
   # start from the providers that have one.
   if [[ -n "${MAURICE_DEMO_SCALEWAY_KEY:-}" ]]; then
     sqlite3 "$DATA/maurice.db" "UPDATE households SET scaleway_api_key = '${MAURICE_DEMO_SCALEWAY_KEY}', scaleway_project_id = $( [[ -n "${MAURICE_DEMO_SCALEWAY_PROJECT:-}" ]] && printf "'%s'" "$MAURICE_DEMO_SCALEWAY_PROJECT" || printf NULL ) WHERE id = 'default'"

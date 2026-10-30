@@ -49,10 +49,10 @@ beforeEach(() => {
 
 test("the night's functions and the standard tier prefer DeepSeek; a Mistral-only household is advised nothing", () => {
   household("glm-5.3-flash", { scaleway_api_key: "k-scw" });
-  expect(recommendedModel("domain_brief")).toBe("deepseek-v4-flash-0731");
-  expect(recommendedModel("domain_mapping")).toBe("deepseek-v4-flash-0731");
-  expect(recommendedModel("conversation_summary")).toBe("deepseek-v4-flash-0731");
-  expect(recommendedModel("article_summary")).toBe("deepseek-v4-flash-0731");
+  expect(recommendedModel("domain_brief")).toBe("deepseek-v4.1-flash");
+  expect(recommendedModel("domain_mapping")).toBe("deepseek-v4.1-flash");
+  expect(recommendedModel("conversation_summary")).toBe("deepseek-v4.1-flash");
+  expect(recommendedModel("article_summary")).toBe("deepseek-v4.1-flash");
   household("mistral-small-latest", { mistral_api_key: "k-mis" });
   expect(recommendedModel("domain_brief")).toBeNull();
   expect(recommendedModel("article_summary")).toBeNull();
@@ -62,7 +62,7 @@ test("a function added after the household was seeded gets its pin at the next s
   household("glm-5.3-flash", { scaleway_api_key: "k-scw" });
   db.run(`DELETE FROM ancillary_advised`);
   seedAncillaryPinsOnce();
-  expect(pinnedOf("domain_brief")).toBe("deepseek-v4-flash-0731");
+  expect(pinnedOf("domain_brief")).toBe("deepseek-v4.1-flash");
   // Pretend the seed ran before the night's functions existed.
   setPinnedModel("domain_brief", null);
   setPinnedModel("domain_mapping", null);
@@ -70,7 +70,7 @@ test("a function added after the household was seeded gets its pin at the next s
   // The refresh revises pins that exist; these have none.
   expect(refreshAutoPins()).toEqual([]);
   expect(pinNewInvocations().sort()).toEqual(["domain_brief", "domain_mapping"]);
-  expect(pinnedOf("domain_brief")).toBe("deepseek-v4-flash-0731");
+  expect(pinnedOf("domain_brief")).toBe("deepseek-v4.1-flash");
   expect(pinSource("domain_brief")).toBe("auto");
   // Deleted by the admin: stays deleted.
   setPinnedModel("domain_brief", null);
@@ -148,7 +148,7 @@ test("Aline's shape: a GLM chat with a Scaleway key advises Scaleway", () => {
   household("glm-5.3-flash", { zai_api_key: "k-zai", scaleway_api_key: "k-scw" });
   expect(hasRecommendations()).toBe(true);
   expect(recommendedModel(firstOfTier("light"))).toBe("qwen3.6-35b-a3b");
-  expect(recommendedModel("conversation_summary")).toBe("deepseek-v4-flash-0731");
+  expect(recommendedModel("conversation_summary")).toBe("deepseek-v4.1-flash");
   expect(recommendedModel("flashcards")).toBe("qwen3.5-397b-a17b");
   // The garden tool asks the server for its turn, so it is advised too.
   expect(recommendedModel("moc_evocations")).toBe("qwen3.6-35b-a3b");
@@ -157,7 +157,7 @@ test("Aline's shape: a GLM chat with a Scaleway key advises Scaleway", () => {
   // The documentation tool has a computed default instead of advice (P3-A).
   const advisable = presentInvocations().filter((i) => !i.ownDispatch && !i.defaultModel).map((i) => i.id);
   expect(seeded.sort()).toEqual(advisable.sort());
-  expect(ancillaryModel("conversation_summary")).toBe("deepseek-v4-flash-0731");
+  expect(ancillaryModel("conversation_summary")).toBe("deepseek-v4.1-flash");
 });
 
 test("a household with only Z.ai is advised nothing and keeps its own model", () => {
@@ -191,7 +191,7 @@ test("a pin this file chose follows the advice; a pin a person chose does not", 
   // A start on this code moves the one nobody chose, and only that one.
   expect(seedAncillaryPinsOnce()).toEqual([]);
   expect(refreshAutoPins()).toEqual(["conversation_summary"]);
-  expect(ancillaryModel("conversation_summary")).toBe("deepseek-v4-flash-0731");
+  expect(ancillaryModel("conversation_summary")).toBe("deepseek-v4.1-flash");
   expect(ancillaryModel("flashcards")).toBe("glm-5.3");
   expect(pinSource("flashcards")).toBe("admin");
 
@@ -208,7 +208,7 @@ test("seeding is a one-off; the button is not", () => {
   expect(seedAncillaryPinsOnce()).toEqual([]);
   expect(ancillaryModel("conversation_summary")).toBe("glm-5.3");
   expect(applyRecommendedPins()).toEqual(["conversation_summary"]);
-  expect(ancillaryModel("conversation_summary")).toBe("deepseek-v4-flash-0731");
+  expect(ancillaryModel("conversation_summary")).toBe("deepseek-v4.1-flash");
 });
 
 test("the first seed leaves a pin a person already set", () => {
@@ -222,7 +222,7 @@ test("the first seed leaves a pin a person already set", () => {
   expect(pinSource("flashcards")).toBe("admin");
   // …and everything around it is seeded as usual.
   expect(seeded).toContain("conversation_summary");
-  expect(ancillaryModel("conversation_summary")).toBe("deepseek-v4-flash-0731");
+  expect(ancillaryModel("conversation_summary")).toBe("deepseek-v4.1-flash");
 });
 
 test("rows that predate the source column are a person's when no seed ever ran here", () => {
@@ -243,5 +243,5 @@ test("rows that predate the source column are a person's when no seed ever ran h
   migrateAncillaryPinSource();
   expect(pinSource("conversation_summary")).toBe("auto");
   expect(refreshAutoPins()).toEqual(["conversation_summary"]);
-  expect(ancillaryModel("conversation_summary")).toBe("deepseek-v4-flash-0731");
+  expect(ancillaryModel("conversation_summary")).toBe("deepseek-v4.1-flash");
 });
