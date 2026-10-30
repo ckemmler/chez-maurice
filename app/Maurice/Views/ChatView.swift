@@ -2471,6 +2471,27 @@ private enum ImagePasteTextView {
         class_addMethod(subclass, paste, imp_implementationWithBlock(pasteBlock),
                         method_getTypeEncoding(class_getInstanceMethod(base, paste)!))
 
+        // A hardware keyboard's Return (or the keypad's Enter) reaches the text
+        // view as a press SwiftUI turns into a submit, which ends editing: on
+        // an iPad the field lost focus. Without ⌘ it types a line break at
+        // the caret instead; ⌘Return goes on to the ➤ button's shortcut.
+        for selector in [#selector(UIResponder.pressesBegan(_:with:)), #selector(UIResponder.pressesEnded(_:with:))] {
+            typealias Presses = @convention(c) (AnyObject, Selector, Set<UIPress>, UIPressesEvent?) -> Void
+            let superPresses = unsafeBitCast(class_getMethodImplementation(base, selector), to: Presses.self)
+            let began = selector == #selector(UIResponder.pressesBegan(_:with:))
+            let pressesBlock: @convention(block) (AnyObject, Set<UIPress>, UIPressesEvent?) -> Void = { this, presses, event in
+                let returns = presses.filter { press in
+                    guard let key = press.key, !key.modifierFlags.contains(.command) else { return false }
+                    return key.keyCode == .keyboardReturnOrEnter || key.keyCode == .keypadEnter
+                }
+                if began, !returns.isEmpty { (this as? UITextView)?.insertText("\n") }
+                let rest = presses.subtracting(returns)
+                if !rest.isEmpty { superPresses(this, selector, rest, event) }
+            }
+            class_addMethod(subclass, selector, imp_implementationWithBlock(pressesBlock),
+                            method_getTypeEncoding(class_getInstanceMethod(base, selector)!))
+        }
+
         objc_registerClassPair(subclass)
         return subclass
     }
@@ -3022,13 +3043,19 @@ private struct ComposerBar: View {
             .opacity(sending ? 1 : 0.35)
     }
 
-    /// What the Return key does. A room is a conversation between people first,
-    /// so Return posts to them — the gesture every chat app has taught — and
-    /// Maurice is summoned deliberately, with ⌘Return or the ➤ button. A 1:1 has
-    /// no-one else in it, so Return goes to Maurice as it always did.
-    private var returnAction: () -> Void {
-        chat.isRoom ? onPostBubble : onSend
+    #if os(macOS)
+    /// Type a line break at the caret, through the field editor that backs the
+    /// focused field, so it lands where the person is writing (the binding does
+    /// not carry the caret). Appended at the end if no field editor has focus,
+    /// which should not happen while the field has the key.
+    private func breakLine() {
+        if let editor = NSApp.keyWindow?.firstResponder as? NSTextView {
+            editor.insertNewlineIgnoringFieldEditor(nil)
+            return
+        }
+        inputText.append("\n")
     }
+    #endif
 
     /// 💬 — the room's default button. Filled with the member's accent and
     /// haloed the way a default button is, so the eye lands on it before ➤;
@@ -3119,14 +3146,13 @@ private struct ComposerBar: View {
                 .font(.system(size: kBodyFont + 2))
                 .lineLimit(2...10)
                 .focused($isFocused)
-                // iPhone and iPad: the keyboard's Return breaks the line, and
-                // wears the plain return arrow to say so; sending is the ➤ / 💬
-                // buttons (⌘Return on a hardware keyboard). The blue "send" key
-                // promised a send the field could not keep in a multi-line draft.
+                // Return breaks the line, everywhere: the on-screen keyboard's
+                // (which wears the plain return arrow to say so) and a hardware
+                // keyboard's on iPad and the Mac, with or without Shift. Sending
+                // is the ➤ / 💬 buttons, and ⌘Return for ➤. A Return that sent
+                // made a formatted, multi-line message impossible to type.
                 #if os(iOS)
                 .submitLabel(.return)
-                #else
-                .onSubmit { submit(returnAction) }
                 #endif
                 // ⌘V with an image on the clipboard attaches it, the way a
                 // photo from the picker would. The text field handles string
@@ -3149,25 +3175,20 @@ private struct ComposerBar: View {
                 // image too, as a pending photo.
                 .background(ImagePasteEnabler { pasteImageFromClipboard() })
                 #endif
-                // macOS: Return sends, Shift-Return breaks the line. SwiftUI's
-                // vertical TextField gives Return to onSubmit and lets
-                // Shift-Return submit too, so both keys had the same effect and
-                // a multi-line message could not be typed. We take the key
-                // ourselves; the newline lands at the end of the field because
-                // the caret is not readable from a TextField binding (see
-                // anchorAtSelection).
+                // macOS: a Return (and the keypad's Enter) reaches SwiftUI's
+                // vertical TextField as a submit, not a newline. We take the key
+                // and type the line break into the field editor, at the caret.
+                // (iPad: the field's text view does it, see ImagePasteTextView.)
                 #if os(macOS)
                 .onKeyPress(phases: .down) { press in
-                    guard press.key == .return else { return .ignored }
-                    if press.modifiers.contains(.shift) {
-                        inputText.append("\n")
+                    guard press.key == .return || press.characters == "\u{3}" else { return .ignored }
+                    // ⌘Return summons Maurice, as the ➤ button's shortcut;
+                    // taken here because the field would otherwise eat it.
+                    if press.modifiers.contains(.command) {
+                        submit(onSend)
                         return .handled
                     }
-                    // ⌘Return always summons Maurice: in a room it is the second
-                    // gesture, in a 1:1 it is what Return already does. Taking it
-                    // here rather than leaving it to the ➤ button's shortcut keeps
-                    // both keys decided in one place, while the field has focus.
-                    submit(press.modifiers.contains(.command) ? onSend : returnAction)
+                    breakLine()
                     return .handled
                 }
                 #endif
@@ -3326,8 +3347,8 @@ private struct ComposerBar: View {
                     // The send row reads as a sentence:
                     // ➤ ask Maurice · 💬 just say it to the room.
                     // In a room 💬 is the default: it sits last, under the thumb
-                    // and at the end of the line, wears the accent, and is what
-                    // Return posts — ➤ keeps ⌘Return.
+                    // and at the end of the line and wears the accent; ➤ keeps
+                    // ⌘Return. Return itself only ever breaks the line.
                     HStack(spacing: 8) {
                         if chat.isStreaming {
                             // ➤ has run into a square ⏹ — cancel the generation.
