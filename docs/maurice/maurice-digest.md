@@ -24,7 +24,7 @@ covers:
   maurice-docs: '2026-10-20'
   maurice-domains: '2026-10-20'
   maurice-files: '2026-06-19'
-  maurice-households-rooms: '2026-10-29'
+  maurice-households-rooms: '2026-10-30'
   maurice-knowledge: '2026-10-20'
   maurice-life: '2026-10-20'
   maurice-personas-hats: '2026-09-19'
@@ -133,9 +133,9 @@ There is also a **browser clipper** that saves the page being read into the memb
 - **Providers:** Anthropic (Claude Opus 5.5, Sonnet 5.5 and Haiku 4.5); OpenAI, Mistral, Z.ai and **Scaleway** (Generative APIs, Paris) through an OpenAI-style path; **Ollama** for local models (free, unmetered); an echo mode when no key is set.
 - **A key is what makes a model exist**: the apps, the access grid and the admin console only list models whose provider has a key. The admin's **access grid** says which models each standard member may use; an admin may use all.
 - **Which model answers:** the conversation's domain (if it names one), else the member's everyday choice, else the household default. The model pill in the composer switches model, grouped by provider. There is **no automatic failover** between providers.
-- **The household default is a setting.** The policy for hosted households is Scaleway only: **DeepSeek V4.1 Flash** as the everyday model (since 29 October 2026; V4 Flash before it) and the small **Qwen 3.6** for light work.
-- **Background work** (summaries, briefs, mail reading, the documentation tool…) runs through named *ancillary invocations*. Each resolves to an admin's pin, else its own default, else the household's ancillary model, else the chat default. Chapter summaries and the full mail reading use the household's default model; summaries and other prose, and the night's domain work, prefer DeepSeek V4.1 Flash; light sorting jobs prefer the small Qwen. No Mistral model is ever advised.
-- **Reasoning:** a household setting for the everyday Maurice ("answer directly" by default) and a per-domain choice; some models always reason, DeepSeek V4.1 Flash (like V4 Flash) can be told not to, and on Claude Opus 5.5 "answer directly" means the least reasoning it allows. A domain's creativity setting is ignored by the current Claude models, which accept none.
+- **The household default is a setting.** The policy for hosted households is Scaleway only: **DeepSeek V4 Flash** as the everyday model and the small **Qwen 3.6** for light work.
+- **Background work** (summaries, briefs, mail reading, the documentation tool…) runs through named *ancillary invocations*. Each resolves to an admin's pin, else its own default, else the household's ancillary model, else the chat default. Chapter summaries and the full mail reading use the household's default model; summaries and other prose, and the night's domain work, prefer DeepSeek V4 Flash; light sorting jobs prefer the small Qwen. No Mistral model is ever advised.
+- **Reasoning:** a household setting for the everyday Maurice ("answer directly" by default) and a per-domain choice; some models always reason, DeepSeek V4 Flash can be told not to, and on Claude Opus 5.5 "answer directly" means the least reasoning it allows. A domain's creativity setting is ignored by the current Claude models, which accept none.
 - **Prompt caching** lowers the cost of repeated prefixes: explicitly on Anthropic, automatically on Z.ai and, among Scaleway's models, reported only by DeepSeek V4 Flash. The cost meter shows what it saved.
 - **Context window:** when a conversation outgrows the model's window, the oldest turns are dropped, the cut is remembered so later turns stay consistent, and the model is told the beginning is missing.
 - **Provider plugins** can add a provider from outside the repository; none ships.
@@ -186,7 +186,7 @@ There is also a **browser clipper** that saves the page being read into the memb
 
 ## 11. Rooms and safety
 
-- A **room** is a conversation with more than one person. Humans talk freely; **Maurice answers only when summoned** (`@maurice`, or the ➤ button; on the Mac, Return posts to humans only). Everyone in a room shares the loaded context; no one's briefs, memory search, mail or suggestions are used there.
+- A **room** is a conversation with more than one person. Humans talk freely; **Maurice answers only when summoned** (`@maurice`, or the ➤ button; 💬 posts to humans only). Everyone in a room shares the loaded context; no one's briefs, memory search, mail or suggestions are used there.
 - Live updates over WebSocket, push when no socket is connected.
 - **Moderation:** in shared rooms, long-press a message to **Report** (child safety first) or **Block** a participant; reports reach the household's operator. **Any reply of Maurice's**, private conversations included, has a flag to report it: the operator receives a copy of that reply and of the message before it — the member is told so before sending — never the conversation, and the sheet gives the publisher's address. Before connecting to a household as a non-admin, the app shows a notice about who runs the server; the settings link to Apple and to child-protection authorities, and the terms of use forbid objectionable content.
 
