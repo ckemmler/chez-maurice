@@ -659,27 +659,14 @@ export async function suggestForTurn(
   // loaded as its context — gets no note from here: its result is the
   // conversation's summary on that fiche.
   const about = aboutRefs(memberId, conversationId, bound);
-  // The article shared in the conversation is already offered as itself: the
-  // pass naming it again under another kind filed it there (31 October 2026:
-  // a New York Times essay with a "Listen" button kept as a podcast).
-  const shared = sharedArticleTitles(conversationId);
   let changed = 0;
   for (const n of named) {
-    if (shared.has(normalise(n.title))) continue;
     const r = await resolve(memberId, garden, n, locale, bound);
     if (r.existing && about.has(r.existing)) continue;
     if (record(memberId, conversationId, messageId, n, r)) changed++;
   }
   if (changed) announce(memberId, conversationId);
   return changed;
-}
-
-/** The titles, normalised, of the articles shared in a conversation. */
-function sharedArticleTitles(conversationId: string): Set<string> {
-  const rows = db
-    .query(`SELECT title FROM entry_suggestions WHERE conversation_id = ? AND kind = 'articles'`)
-    .all(conversationId) as Array<{ title: string }>;
-  return new Set(rows.map((r) => normalise(r.title)));
 }
 
 /** The entries a conversation is about: the one it is held from, and those

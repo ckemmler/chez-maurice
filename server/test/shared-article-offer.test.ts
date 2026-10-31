@@ -90,24 +90,6 @@ describe("an article shared in the conversation", () => {
     expect(sug.suggestionsFor(ZOE, id)[0]!.existing).toMatch(/^articles\/fr\//);
   });
 
-  test("the pass does not name it again under another kind", async () => {
-    const id = createConversation(ZOE, null).id;
-    const content = block("https://example.org/sols-4");
-    const msg = addMessage(id, "user", content, { authorId: ZOE });
-    const reply = addMessage(id, "assistant", "Les vers, surtout.", {});
-    await sug.offerSharedArticle(ZOE, id, msg.id, content);
-    sug.setSuggestionModel(async () => ({
-      text: JSON.stringify({ subjects: [{ kind: "podcasts", title: "Sols vivants", creator: "Marc Dupont", note: "Tu as lu ce texte sur les sols." }] }),
-      model: "test", provider: "test", stop: "end", usage: null,
-    }) as any);
-    try {
-      expect(await sug.suggestForTurn(ZOE, id, reply.id, content, "Les vers, surtout.")).toBe(0);
-    } finally {
-      sug.setSuggestionModel(null);
-    }
-    expect(sug.suggestionsFor(ZOE, id).map((r) => r.kind)).toEqual(["articles"]);
-  });
-
   test("a message without an article offers nothing", async () => {
     const id = createConversation(ZOE, null).id;
     const msg = addMessage(id, "user", "Bonjour", { authorId: ZOE });
