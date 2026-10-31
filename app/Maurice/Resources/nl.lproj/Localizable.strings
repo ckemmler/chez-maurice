@@ -654,6 +654,8 @@
 "members.new_device.for" = "Een nieuw apparaat voor %@";
 "devices.add" = "Een van mijn apparaten toevoegen";
 "devices.add.sheet_title" = "Scan deze code met je andere apparaat, of stuur het de link";
+"devices.add.done" = "Je apparaat is verbonden.";
+"devices.add.expired" = "Deze code is verlopen. Sluit en vraag een nieuwe aan.";
 "members.share" = "Link versturen";
 "members.revoke" = "Intrekken";
 "members.valid_until" = "Geldig tot %@";

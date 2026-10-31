@@ -121,7 +121,8 @@ struct SettingsView: View {
         .sheet(item: $ownDeviceCode) { code in
             InviteQRSheet(invitation: Invitation(server: session.serverURL ?? "", code: code.code),
                           title: session.localized("devices.add.sheet_title"),
-                          expiresAt: code.expires_at, onRevoke: nil)
+                          expiresAt: code.expires_at, onRevoke: nil,
+                          watch: { await ownDeviceCodeState(code.code) })
                 .environment(session)
         }
         .sheet(isPresented: $showAddHousehold) {
@@ -731,6 +732,14 @@ struct SettingsView: View {
         }
     }
 
+    /// pending | used | expired, nil when the server cannot be reached.
+    private func ownDeviceCodeState(_ code: String) async -> String? {
+        guard let serverURL = session.serverURL, let token = session.tokenForActiveUser else { return nil }
+        let res: DeviceCodeState? = try? await APIClient(baseURL: serverURL)
+            .get("/api/me/device-code/\(code)", token: token)
+        return res?.state
+    }
+
     // Cropped JPEG → instant local preview + PUT to the server, then reflect the
     // returned avatar_url on the active device user.
     private func uploadAvatar(_ jpeg: Data) async {
@@ -953,34 +962,49 @@ private struct InviteQRSheet: View {
     let expiresAt: String
     /// nil for a code that cannot be withdrawn (a member's own, minutes long).
     let onRevoke: (() -> Void)?
+    /// Asked every two seconds for the code's state (a member's own code):
+    /// the sheet closes once the new device is in, and says so when it lapses.
+    var watch: (() async -> String?)? = nil
+    @State private var state = "pending"
 
     var body: some View {
         VStack(spacing: 18) {
             Text(title)
                 .font(.system(size: 20, design: .serif)).foregroundStyle(theme.ink)
                 .multilineTextAlignment(.center)
-            // Dark modules on white, whatever the theme: a scanner wants contrast.
-            QRCodeImage(text: invitation.link)
-                .padding(14)
-                .background(Color.white, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-                .frame(maxWidth: 260)
-            Text(Self.formatted(invitation.code))
-                .font(.system(size: 22, weight: .medium, design: .monospaced))
-                .tracking(3)
-                .foregroundStyle(theme.ink)
-                .textSelection(.enabled)
-            Text(Self.expiry(expiresAt, session: session) ?? "")
-                .font(.system(size: 12)).foregroundStyle(theme.inkMute)
-            HStack(spacing: 12) {
-                if let url = URL(string: invitation.link) {
-                    ShareLink(item: url) {
-                        Label(session.localized("members.share"), systemImage: "square.and.arrow.up")
-                    }
-                    .glassBorderedButton()
-                }
-                if let onRevoke {
-                    Button(session.localized("members.revoke"), role: .destructive) { onRevoke() }
+            if state == "used" {
+                Label(session.localized("devices.add.done"), systemImage: "checkmark.circle.fill")
+                    .font(.system(size: 17, weight: .medium)).foregroundStyle(theme.ink)
+                    .frame(minHeight: 200)
+            } else if state == "expired" {
+                Text(session.localized("devices.add.expired"))
+                    .font(.system(size: 15)).foregroundStyle(theme.inkMute)
+                    .multilineTextAlignment(.center)
+                    .frame(minHeight: 200)
+            } else {
+                // Dark modules on white, whatever the theme: a scanner wants contrast.
+                QRCodeImage(text: invitation.link)
+                    .padding(14)
+                    .background(Color.white, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    .frame(maxWidth: 260)
+                Text(Self.formatted(invitation.code))
+                    .font(.system(size: 22, weight: .medium, design: .monospaced))
+                    .tracking(3)
+                    .foregroundStyle(theme.ink)
+                    .textSelection(.enabled)
+                Text(Self.expiry(expiresAt, session: session) ?? "")
+                    .font(.system(size: 12)).foregroundStyle(theme.inkMute)
+                HStack(spacing: 12) {
+                    if let url = URL(string: invitation.link) {
+                        ShareLink(item: url) {
+                            Label(session.localized("members.share"), systemImage: "square.and.arrow.up")
+                        }
                         .glassBorderedButton()
+                    }
+                    if let onRevoke {
+                        Button(session.localized("members.revoke"), role: .destructive) { onRevoke() }
+                            .glassBorderedButton()
+                    }
                 }
             }
             Button(L("common.done")) { dismiss() }
@@ -990,6 +1014,17 @@ private struct InviteQRSheet: View {
         .frame(minWidth: 320)
         .background(theme.surface)
         .presentationBackground(theme.surface)
+        .task {
+            guard let watch else { return }
+            while !Task.isCancelled && state == "pending" {
+                try? await Task.sleep(for: .seconds(2))
+                if let next = await watch(), next != "pending" { withAnimation { state = next } }
+            }
+            if state == "used" {
+                try? await Task.sleep(for: .seconds(1.5))
+                if !Task.isCancelled { dismiss() }
+            }
+        }
     }
 
     static func formatted(_ code: String) -> String {

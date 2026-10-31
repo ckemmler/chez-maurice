@@ -143,6 +143,19 @@ export function redeemDeviceLinkCode(raw: string): { userId: string } | null {
   return row ? { userId: row.user_id } : null;
 }
 
+/** Where a member's own device code is, for the sheet that shows it:
+ *  "used" once the new device got in, "expired" past its ten minutes or once
+ *  a newer code replaced it, else "pending". Another member's code reads as
+ *  expired. */
+export function deviceLinkCodeState(userId: string, raw: string): "pending" | "used" | "expired" {
+  const row = db
+    .query(`SELECT expires_at, used_at FROM device_link_codes WHERE code = ? AND user_id = ?`)
+    .get(normalizeInviteCode(raw), userId) as { expires_at: string; used_at: string | null } | null;
+  if (!row) return "expired";
+  if (row.used_at) return "used";
+  return row.expires_at > new Date().toISOString() ? "pending" : "expired";
+}
+
 // ── Session tokens ──────────────────────────────────────────────
 
 function generateToken(): string {

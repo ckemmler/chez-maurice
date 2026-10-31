@@ -9,7 +9,7 @@ import { createApiToken, getRawApiToken, listApiTokens, requireAuth, revokeApiTo
 import { ArchiveError } from "../services/archive";
 import { listAccountEvents, markAccountEventsSeen } from "../services/accountEvents";
 import db from "../db";
-import { createDeviceLinkCode, verifyPassword, verifyPin } from "../services/auth";
+import { createDeviceLinkCode, deviceLinkCodeState, verifyPassword, verifyPin } from "../services/auth";
 import { householdBudget, usageFor } from "../services/budget";
 import { gardensRoot } from "../services/gardensRoot";
 import { isGardenDir } from "../services/gitHttp";
@@ -70,6 +70,10 @@ me.post("/device-code", (c) => {
   const { code, expiresAt } = createDeviceLinkCode(user.id);
   return c.json({ code, expires_at: expiresAt }, 201);
 });
+
+// GET /api/me/device-code/:code — { state: pending | used | expired }, polled
+// by the sheet showing the code so it can close once the new device is in.
+me.get("/device-code/:code", (c) => c.json({ state: deviceLinkCodeState(c.get("userId"), c.req.param("code")) }));
 
 // GET /api/me/export — the member archive (`maurice-member-archive` v1), a
 // gzipped tar streamed as it is produced.

@@ -654,6 +654,8 @@
 "members.new_device.for" = "Un nouvel appareil pour %@";
 "devices.add" = "Ajouter un de mes appareils";
 "devices.add.sheet_title" = "Scannez ce code avec votre autre appareil, ou envoyez-lui le lien";
+"devices.add.done" = "Votre appareil est connecté.";
+"devices.add.expired" = "Ce code a expiré. Fermez et demandez-en un nouveau.";
 "members.share" = "Envoyer le lien";
 "members.revoke" = "Retirer";
 "members.valid_until" = "Valable jusqu’au %@";

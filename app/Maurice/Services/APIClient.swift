@@ -713,6 +713,11 @@ struct MemberInviteCode: Decodable, Identifiable {
     var id: String { code }
 }
 
+/// `/api/me/device-code/:code`: pending, used or expired.
+struct DeviceCodeState: Decodable {
+    let state: String
+}
+
 struct OkResponse: Decodable {
     let ok: Bool
 }

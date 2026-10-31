@@ -654,6 +654,8 @@
 "members.new_device.for" = "Ein neues Gerät für %@";
 "devices.add" = "Eines meiner Geräte hinzufügen";
 "devices.add.sheet_title" = "Scanne diesen Code mit deinem anderen Gerät oder schick ihm den Link";
+"devices.add.done" = "Dein Gerät ist verbunden.";
+"devices.add.expired" = "Dieser Code ist abgelaufen. Schließe und fordere einen neuen an.";
 "members.share" = "Link senden";
 "members.revoke" = "Zurückziehen";
 "members.valid_until" = "Gültig bis %@";

@@ -654,6 +654,8 @@
 "members.new_device.for" = "Um novo dispositivo para %@";
 "devices.add" = "Adicionar um dos meus dispositivos";
 "devices.add.sheet_title" = "Digitalize este código com o seu outro dispositivo ou envie-lhe a ligação";
+"devices.add.done" = "O seu dispositivo está ligado.";
+"devices.add.expired" = "Este código expirou. Feche e peça um novo.";
 "members.share" = "Enviar a ligação";
 "members.revoke" = "Retirar";
 "members.valid_until" = "Válido até %@";

@@ -8,7 +8,7 @@ import { beforeEach, expect, test } from "bun:test";
 import { MEMBER } from "./_member";
 
 const { default: db } = await import("../src/db");
-const { createSession, createDeviceLinkCode, freshInviteCode } = await import("../src/services/auth");
+const { createSession, createDeviceLinkCode, deviceLinkCodeState, freshInviteCode } = await import("../src/services/auth");
 const { createApiToken } = await import("../src/middleware/auth");
 const auth = (await import("../src/routes/auth")).default;
 const me = (await import("../src/routes/me")).default;
@@ -73,4 +73,16 @@ test("not for a guest, nor with an API token", async () => {
 test("a fresh code is free in every invitation table", () => {
   const { code } = createDeviceLinkCode(STANDARD);
   expect(freshInviteCode()).not.toBe(code);
+});
+
+test("the sheet showing the code learns when it has been used", async () => {
+  const token = createSession(STANDARD).token;
+  const state = async (code: string) =>
+    (await (await me.request(`/device-code/${code}`, { headers: { Authorization: `Bearer ${token}` } })).json()).state;
+  const { code } = createDeviceLinkCode(STANDARD);
+  expect(await state(code)).toBe("pending");
+  expect((await enroll(code, "10.1.0.4")).status).toBe(200);
+  expect(await state(code.toLowerCase())).toBe("used");
+  expect(deviceLinkCodeState(STANDARD, createDeviceLinkCode(STANDARD, -1).code)).toBe("expired");
+  expect(deviceLinkCodeState(GUEST, createDeviceLinkCode(STANDARD).code)).toBe("expired");
 });
