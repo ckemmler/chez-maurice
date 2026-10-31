@@ -13,7 +13,7 @@ struct SettingsView: View {
     @Environment(\.mauriceTheme) private var theme
     @Environment(\.dismiss) private var dismiss
 
-    enum Pane: Hashable { case appearance, language, household, members, garden, token, files, importChats, mail, contacts, myData, budget }
+    enum Pane: Hashable { case appearance, language, household, members, adminPassword, garden, token, files, importChats, mail, contacts, myData, budget }
     @State private var pane: Pane? = nil
     @Environment(BudgetStore.self) private var budget
 
@@ -145,6 +145,9 @@ struct SettingsView: View {
                                     SetDivider()
                                     IndexRow(icon: "person.2", label: session.localized("members.title"),
                                              accent: accent) { pane = .members }
+                                    SetDivider()
+                                    IndexRow(icon: "lock", label: session.localized("password.title"),
+                                             accent: accent) { pane = .adminPassword }
                                 }
                             }
                         }
@@ -375,6 +378,7 @@ struct SettingsView: View {
                     case .language:   languagePane
                     case .household:  householdPane
                     case .members:    MembersPane(accent: accent)
+                    case .adminPassword: AdminPasswordPane(accent: accent)
                     case .garden:     gardenPane
                     case .token:      tokenPane
                     case .files:      FilesLibraryView(accent: accent, library: $filesLibrary)
@@ -429,6 +433,7 @@ struct SettingsView: View {
         case .language:   return session.localized("settings.locale.title")
         case .household:  return session.localized("foyer.switch_title")
         case .members:    return session.localized("members.title")
+        case .adminPassword: return session.localized("password.title")
         case .garden:    return session.localized("settings.garden.title")
         case .token:      return session.localized("settings.mcp.title")
         case .files:      return session.localized("settings.files.title")
@@ -1124,6 +1129,76 @@ enum MailProvider: Equatable {
 /// the household. The same for every member and never an amount — except to
 /// the admin, who pays and reads what is left in euros. No way to pay here:
 /// topping up is on the web, never in the app.
+/// The administrator changes their own password (POST /api/auth/password):
+/// the current one, then the new one twice. The server holds the rules
+/// (services/credentials.ts); the length and the username are checked here
+/// first so that what is said is in the member's language.
+private struct AdminPasswordPane: View {
+    @Environment(SessionStore.self) private var session
+    @Environment(\.mauriceTheme) private var theme
+    let accent: Color
+
+    @State private var current = ""
+    @State private var fresh = ""
+    @State private var again = ""
+    @State private var busy = false
+    @State private var error: String?
+    @State private var done = false
+
+    private static let minimum = 12
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            SetCard {
+                VStack(alignment: .leading, spacing: 10) {
+                    SecureField(session.localized("password.current"), text: $current)
+                    Divider()
+                    SecureField(session.localized("password.new"), text: $fresh)
+                    SecureField(session.localized("password.again"), text: $again)
+                }
+                .textFieldStyle(.roundedBorder)
+                .padding(.horizontal, 16).padding(.vertical, 14)
+            }
+            SetCaption(session.localized("password.rule"))
+            if let error {
+                Text(error).font(.system(size: 13)).foregroundStyle(.red)
+            }
+            if done {
+                Label(session.localized("password.done"), systemImage: "checkmark.circle")
+                    .font(.system(size: 13.5)).foregroundStyle(theme.ink)
+            }
+            Button(session.localized("password.save")) { Task { await save() } }
+                .glassProminentButton()
+                .disabled(busy || current.isEmpty || fresh.isEmpty || again.isEmpty)
+        }
+    }
+
+    private func save() async {
+        error = nil; done = false
+        guard fresh == again else { error = session.localized("password.mismatch"); return }
+        guard fresh.count >= Self.minimum else { error = session.localized("password.short"); return }
+        if let name = session.activeDeviceUser?.username, name.count >= 3, fresh.lowercased().contains(name.lowercased()) {
+            error = session.localized("password.name"); return
+        }
+        guard let url = session.serverURL, let token = session.tokenForActiveUser else { return }
+        busy = true
+        defer { busy = false }
+        do {
+            let _: OkResponse = try await APIClient(baseURL: url).post(
+                "/api/auth/password", body: ["current_password": current, "new_password": fresh], token: token)
+            current = ""; fresh = ""; again = ""
+            done = true
+        } catch APIError.server(let status, let message) {
+            error = status == 401 ? session.localized("password.wrong")
+                : status == 400 ? session.localized("password.weak")
+                : status == 429 ? session.localized("password.too_many")
+                : message
+        } catch {
+            self.error = error.localizedDescription
+        }
+    }
+}
+
 private struct BudgetPane: View {
     @Environment(SessionStore.self) private var session
     @Environment(BudgetStore.self) private var budget

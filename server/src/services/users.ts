@@ -326,3 +326,8 @@ export function setUserMayPublish(id: string, may: boolean): void {
 export async function setUserPin(id: string, pin: string): Promise<void> {
   db.run(`UPDATE users SET pin_hash = ? WHERE id = ?`, [await hashPin(pin), id]);
 }
+
+/** The administrator's new password (routes/auth.ts, POST /password checks it first). */
+export async function setUserPassword(id: string, password: string): Promise<void> {
+  db.run(`UPDATE users SET password_hash = ? WHERE id = ?`, [await hashPassword(password), id]);
+}

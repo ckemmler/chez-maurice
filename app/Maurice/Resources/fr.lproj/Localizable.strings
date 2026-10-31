@@ -965,7 +965,7 @@
 "budget.pane.left" = "Il reste %d %% du budget du foyer.";
 "budget.pane.resets" = "Il repart à neuf le %@.";
 "budget.pane.admin_left" = "Reste : %@";
-"budget.pane.balance" = "Il ne se renouvelle pas tout seul : c’est la personne qui administre le foyer qui le remplit.";
+"budget.pane.balance" = "C’est la personne qui administre le foyer qui s’en occupe.";
 "budget.caption" = "C’est le budget de tout le foyer, le même pour chacun de ses membres. L’anneau à côté de votre nom montre ce qui en reste ; une alerte arrive à 20, 10 et 5 %.";
 "budget.toast.title" = "Plus que %d %% du budget du foyer";
 
@@ -1038,3 +1038,19 @@
 "settings.import.confirm.ok" = "Choisir l’export";
 
 "mydata.privacy" = "Politique de confidentialité";
+
+/* Administrator password (Settings) and PIN rules */
+"password.title" = "Mot de passe administrateur";
+"password.current" = "Mot de passe actuel";
+"password.new" = "Nouveau mot de passe";
+"password.again" = "Le nouveau, encore une fois";
+"password.save" = "Changer le mot de passe";
+"password.rule" = "Au moins 12 caractères, et pas votre identifiant. Quelques mots font un bon mot de passe. Les autres appareils connectés en administrateur devront se reconnecter.";
+"password.done" = "C’est fait : le mot de passe est changé.";
+"password.mismatch" = "Les deux nouveaux mots de passe ne sont pas les mêmes.";
+"password.short" = "Le nouveau mot de passe doit faire au moins 12 caractères.";
+"password.name" = "Le nouveau mot de passe ne doit pas contenir votre identifiant.";
+"password.wrong" = "Ce n’est pas le mot de passe actuel.";
+"password.weak" = "Ce mot de passe est trop facile à deviner : choisissez-en un autre.";
+"password.too_many" = "Trop d’essais. Réessayez dans un quart d’heure.";
+"pinsetup.weak" = "Ce PIN est trop facile à deviner (un chiffre répété, une suite, un PIN courant) : choisissez-en un autre.";

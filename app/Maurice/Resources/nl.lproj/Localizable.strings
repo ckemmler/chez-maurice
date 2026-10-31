@@ -952,7 +952,7 @@
 "budget.pane.left" = "Er is nog %d %% van het budget van het huishouden over.";
 "budget.pane.resets" = "Het begint opnieuw op %@.";
 "budget.pane.admin_left" = "Over: %@";
-"budget.pane.balance" = "Het vult zich niet vanzelf aan: wie het huishouden beheert, vult het aan.";
+"budget.pane.balance" = "Wie het huishouden beheert, zorgt ervoor.";
 "budget.caption" = "Dit is het budget van het hele huishouden, voor elk lid hetzelfde. De ring naast je naam toont wat er nog over is; je krijgt een melding bij 20, 10 en 5 %.";
 "budget.toast.title" = "Nog maar %d %% van het budget van het huishouden";
 
@@ -1025,3 +1025,19 @@
 "settings.import.confirm.ok" = "Export kiezen";
 
 "mydata.privacy" = "Privacybeleid";
+
+/* Administrator password (Settings) and PIN rules */
+"password.title" = "Beheerderswachtwoord";
+"password.current" = "Huidig wachtwoord";
+"password.new" = "Nieuw wachtwoord";
+"password.again" = "Nieuw wachtwoord, nog eens";
+"password.save" = "Wachtwoord wijzigen";
+"password.rule" = "Minstens 12 tekens, en niet je gebruikersnaam. Een paar woorden maken een goed wachtwoord. Andere apparaten die als beheerder zijn aangemeld, moeten opnieuw inloggen.";
+"password.done" = "Klaar: het wachtwoord is gewijzigd.";
+"password.mismatch" = "De twee nieuwe wachtwoorden zijn niet hetzelfde.";
+"password.short" = "Het nieuwe wachtwoord heeft minstens 12 tekens nodig.";
+"password.name" = "Het nieuwe wachtwoord mag je gebruikersnaam niet bevatten.";
+"password.wrong" = "Dat is niet het huidige wachtwoord.";
+"password.weak" = "Dit wachtwoord is te makkelijk te raden: kies een ander.";
+"password.too_many" = "Te veel pogingen. Probeer het over een kwartier opnieuw.";
+"pinsetup.weak" = "Deze pincode is te makkelijk te raden (een herhaald cijfer, een reeks, een veelgebruikte pincode): kies een andere.";

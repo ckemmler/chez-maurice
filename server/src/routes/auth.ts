@@ -14,8 +14,11 @@ import {
   adminExists,
   createUser,
   setUserPin,
+  setUserPassword,
+  getUser,
   householdInfo,
 } from "../services/users";
+import { PASSWORD_MIN, passwordProblem, pinProblem } from "../services/credentials";
 import { isOpenInvite, redeemOpenInvite } from "../services/invites";
 import { requireAuth } from "../middleware/auth";
 import { accountInUse, recordAccountEvent } from "../services/accountEvents";
@@ -226,8 +229,42 @@ auth.post("/enroll", async (c) => {
 auth.post("/set-pin", requireAuth, async (c) => {
   const { pin } = await c.req.json().catch(() => ({}));
   const p = String(pin ?? "").trim();
-  if (!/^\d{4,6}$/.test(p)) return c.json({ error: "PIN must be 4–6 digits" }, 400);
+  const problem = pinProblem(p);
+  if (problem === "format") return c.json({ error: "PIN must be 4–6 digits", code: "pin_format" }, 400);
+  if (problem) return c.json({ error: "This PIN is too easy to guess", code: "pin_weak" }, 400);
   await setUserPin(c.get("userId"), p);
+  return c.json({ ok: true });
+});
+
+// ── POST /api/auth/password ─────────────────────────────────────
+// The administrator changes their own password: the current one first, under
+// the login brake (a stolen session must not be enough to lock the owner
+// out), then a new one that passes passwordProblem. Every other session of
+// the admin is closed: a device that knew the old password is out.
+
+auth.post("/password", requireAuth, async (c) => {
+  const ip = clientIp(c);
+  const retry = loginLimiter.retryAfter(ip);
+  if (retry !== null) {
+    c.header("Retry-After", String(retry));
+    return c.json({ error: "Too many attempts. Try again later." }, 429);
+  }
+  const { current_password, new_password } = await c.req.json().catch(() => ({}));
+  const me = getUserById(c.get("userId"));
+  if (!me || me.role !== "admin" || !me.password_hash) return c.json({ error: "Only the administrator has a password" }, 403);
+  if (!current_password || !(await verifyPassword(String(current_password), me.password_hash))) {
+    loginLimiter.recordFailure(ip);
+    return c.json({ error: "The current password is not right", code: "password_wrong" }, 401);
+  }
+  const user = getUser(me.id);
+  const problem = passwordProblem(new_password, user?.username);
+  if (problem) {
+    const why = { short: `at least ${PASSWORD_MIN} characters`, name: "not your username", weak: "too easy to guess" }[problem];
+    return c.json({ error: `The new password must be ${why}`, code: `password_${problem}`, min: PASSWORD_MIN }, 400);
+  }
+  await setUserPassword(me.id, String(new_password));
+  const current = c.req.header("Authorization")!.slice(7);
+  db.run(`DELETE FROM sessions WHERE user_id = ? AND id != ?`, [me.id, current]);
   return c.json({ ok: true });
 });
 

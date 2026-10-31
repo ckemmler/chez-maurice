@@ -952,7 +952,7 @@
 "budget.pane.left" = "Resta %d %% do orçamento da casa.";
 "budget.pane.resets" = "Recomeça do zero a %@.";
 "budget.pane.admin_left" = "Resta: %@";
-"budget.pane.balance" = "Não se renova sozinho: quem administra a casa volta a enchê-lo.";
+"budget.pane.balance" = "Quem administra a casa trata dele.";
 "budget.caption" = "É o orçamento de toda a casa, o mesmo para cada um dos seus membros. O anel ao lado do seu nome mostra o que resta; recebe um aviso aos 20, 10 e 5 %.";
 "budget.toast.title" = "Resta só %d %% do orçamento da casa";
 
@@ -1025,3 +1025,19 @@
 "settings.import.confirm.ok" = "Escolher a exportação";
 
 "mydata.privacy" = "Política de privacidade";
+
+/* Administrator password (Settings) and PIN rules */
+"password.title" = "Palavra-passe de administrador";
+"password.current" = "Palavra-passe atual";
+"password.new" = "Nova palavra-passe";
+"password.again" = "Nova palavra-passe, outra vez";
+"password.save" = "Mudar a palavra-passe";
+"password.rule" = "Pelo menos 12 caracteres, e não o seu nome de utilizador. Algumas palavras fazem uma boa palavra-passe. Os outros dispositivos ligados como administrador terão de voltar a entrar.";
+"password.done" = "Feito: a palavra-passe foi mudada.";
+"password.mismatch" = "As duas novas palavras-passe não são iguais.";
+"password.short" = "A nova palavra-passe precisa de pelo menos 12 caracteres.";
+"password.name" = "A nova palavra-passe não pode conter o seu nome de utilizador.";
+"password.wrong" = "Não é a palavra-passe atual.";
+"password.weak" = "Esta palavra-passe é demasiado fácil de adivinhar: escolha outra.";
+"password.too_many" = "Demasiadas tentativas. Tente de novo dentro de um quarto de hora.";
+"pinsetup.weak" = "Este PIN é demasiado fácil de adivinhar (um dígito repetido, uma sequência, um PIN comum): escolha outro.";

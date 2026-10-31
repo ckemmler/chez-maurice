@@ -56,6 +56,15 @@ export function createExportLink(
 
 /** The archive a token opens, taken out of the table: a second request with
  *  the same token finds nothing. Null for an unknown or expired token. */
+/** Is the link still good? Read only: a mail scanner opening it must not use it up. */
+export function peekExport(db: Database, token: string): WaitingExport | null {
+  if (!token || token.length > 128) return null;
+  const row = db.query(`SELECT path, filename, bytes, expires_at FROM household_exports WHERE token_hash = ?`)
+    .get(hash(token)) as WaitingExport | null;
+  if (!row || new Date(row.expires_at).getTime() < Date.now() || !existsSync(row.path)) return null;
+  return row;
+}
+
 export function takeExport(db: Database, token: string): WaitingExport | null {
   if (!token || token.length > 128) return null;
   const h = hash(token);

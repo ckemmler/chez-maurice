@@ -965,7 +965,7 @@
 "budget.pane.left" = "%d %% of the household's budget is left.";
 "budget.pane.resets" = "It starts afresh on %@.";
 "budget.pane.admin_left" = "Left: %@";
-"budget.pane.balance" = "It does not renew on its own: whoever runs the household fills it.";
+"budget.pane.balance" = "Whoever runs the household looks after it.";
 "budget.caption" = "This is the whole household's budget, the same for each of its members. The ring beside your name shows what is left of it; you are told at 20, 10 and 5 %.";
 "budget.toast.title" = "Only %d %% of the household's budget left";
 
@@ -1038,3 +1038,19 @@
 "settings.import.confirm.ok" = "Choose the export";
 
 "mydata.privacy" = "Privacy Policy";
+
+/* Administrator password (Settings) and PIN rules */
+"password.title" = "Administrator password";
+"password.current" = "Current password";
+"password.new" = "New password";
+"password.again" = "New password, again";
+"password.save" = "Change the password";
+"password.rule" = "At least 12 characters, and not your username. A few words make a good one. Every other device signed in as administrator will have to sign in again.";
+"password.done" = "Done: the password is changed.";
+"password.mismatch" = "The two new passwords are not the same.";
+"password.short" = "The new password needs at least 12 characters.";
+"password.name" = "The new password must not contain your username.";
+"password.wrong" = "The current password is not right.";
+"password.weak" = "This password is too easy to guess: choose another.";
+"password.too_many" = "Too many tries. Try again in a quarter of an hour.";
+"pinsetup.weak" = "This PIN is too easy to guess (a repeated digit, a run, a common PIN): choose another.";

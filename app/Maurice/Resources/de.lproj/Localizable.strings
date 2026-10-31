@@ -965,7 +965,7 @@
 "budget.pane.left" = "Vom Budget des Haushalts sind noch %d %% übrig.";
 "budget.pane.resets" = "Es beginnt am %@ neu.";
 "budget.pane.admin_left" = "Übrig: %@";
-"budget.pane.balance" = "Es erneuert sich nicht von selbst: Wer den Haushalt verwaltet, füllt es auf.";
+"budget.pane.balance" = "Darum kümmert sich, wer den Haushalt verwaltet.";
 "budget.caption" = "Das ist das Budget des ganzen Haushalts, für alle Mitglieder dasselbe. Der Ring neben deinem Namen zeigt, was davon übrig ist; du wirst bei 20, 10 und 5 % benachrichtigt.";
 "budget.toast.title" = "Nur noch %d %% des Haushaltsbudgets";
 
@@ -1038,3 +1038,19 @@
 "settings.import.confirm.ok" = "Export auswählen";
 
 "mydata.privacy" = "Datenschutzerklärung";
+
+/* Administrator password (Settings) and PIN rules */
+"password.title" = "Administratorpasswort";
+"password.current" = "Aktuelles Passwort";
+"password.new" = "Neues Passwort";
+"password.again" = "Neues Passwort wiederholen";
+"password.save" = "Passwort ändern";
+"password.rule" = "Mindestens 12 Zeichen, und nicht Ihr Benutzername. Ein paar Wörter ergeben ein gutes Passwort. Andere als Administrator angemeldete Geräte müssen sich neu anmelden.";
+"password.done" = "Erledigt: Das Passwort ist geändert.";
+"password.mismatch" = "Die beiden neuen Passwörter stimmen nicht überein.";
+"password.short" = "Das neue Passwort braucht mindestens 12 Zeichen.";
+"password.name" = "Das neue Passwort darf Ihren Benutzernamen nicht enthalten.";
+"password.wrong" = "Das ist nicht das aktuelle Passwort.";
+"password.weak" = "Dieses Passwort ist zu leicht zu erraten: Wählen Sie ein anderes.";
+"password.too_many" = "Zu viele Versuche. Versuchen Sie es in einer Viertelstunde erneut.";
+"pinsetup.weak" = "Diese PIN ist zu leicht zu erraten (eine wiederholte Ziffer, eine Folge, eine häufige PIN): Wählen Sie eine andere.";

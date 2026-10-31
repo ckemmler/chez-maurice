@@ -1,5 +1,26 @@
 import SwiftUI
 
+/// The PINs everybody tries first — the server refuses them too
+/// (server/src/services/credentials.ts, pinProblem); said here first, in the
+/// member's language.
+enum PinRules {
+    private static let common: Set<String> = [
+        "1004", "2000", "6969", "1122", "1313", "2001", "1010", "4321", "1984", "1999", "2580", "0852",
+        "121212", "112233", "123321", "159753", "696969", "000000", "123123", "654321", "111222",
+    ]
+
+    static func tooEasy(_ pin: String) -> Bool {
+        let d = pin.compactMap(\.wholeNumberValue)
+        guard d.count == pin.count, d.count >= 4 else { return false }
+        if Set(d).count == 1 { return true }                                         // 1111
+        let step = d[1] - d[0]
+        if abs(step) == 1, zip(d, d.dropFirst()).allSatisfy({ $1 - $0 == step }) { return true } // 1234, 9876
+        if pin.count % 2 == 0, String(repeating: String(pin.prefix(2)), count: pin.count / 2) == pin { return true } // 1212
+        if pin.count == 6, pin.prefix(3) == pin.suffix(3) { return true }            // 123123
+        return common.contains(pin)
+    }
+}
+
 /// User picker: tap an avatar, enter PIN if needed, start chatting.
 struct UserPickerView: View {
     @Environment(SessionStore.self) private var session
@@ -277,6 +298,9 @@ struct UserPickerView: View {
         }
         guard pin == pinSetupConfirm.trimmingCharacters(in: .whitespacesAndNewlines) else {
             pinSetupError = session.localized("pinsetup.mismatch"); return
+        }
+        guard !PinRules.tooEasy(pin) else {
+            pinSetupError = session.localized("pinsetup.weak"); return
         }
         let api = APIClient(baseURL: url)
         do {

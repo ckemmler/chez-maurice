@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import { PASSWORD_MIN, passwordProblem, pinProblem } from "../services/credentials";
 import { getCookie, setCookie, deleteCookie } from "hono/cookie";
 import { eraseMember } from "../services/memberErase";
 import {
@@ -496,7 +497,8 @@ web.get("/setup", (c) => {
         <div class="field"><label class="label" for="display_name">${escape(t(lang, "common.display_name"))}</label>
           <input type="text" id="display_name" name="display_name" required /></div>
         <div class="field"><label class="label" for="password">${escape(t(lang, "setup.password"))}</label>
-          <input type="password" id="password" name="password" required minlength="4" autocomplete="new-password" /></div>
+          <input type="password" id="password" name="password" required minlength="${PASSWORD_MIN}" autocomplete="new-password" />
+          <p class="${c.req.query("weak") ? "err" : "sec-desc"}" style="margin:6px 0 0">${escape(t(lang, "setup.password_rule"))}</p></div>
         <div class="grid-actions"><button type="submit" class="btn primary">${escape(t(lang, "setup.submit"))}</button></div>
       </form>
     </div>`, false, "", lang));
@@ -508,6 +510,7 @@ web.post("/setup", async (c) => {
   const display_name = (form.display_name as string)?.trim();
   const password = form.password as string;
   if (!username || !password || !display_name) return c.redirect("/admin/setup");
+  if (passwordProblem(password, username)) return c.redirect("/admin/setup?weak=1");
   const user = await createUser({ username, display_name, role: "admin", password, avatar_color: "#2a2622" });
   const { token } = createSession(user.id);
   setCookie(c, "maurice_admin", token, { path: "/admin", httpOnly: true, sameSite: "Lax", maxAge: 60 * 60 * 24 * 30 });
@@ -1602,7 +1605,8 @@ web.post("/users/:id/edit", async (c) => {
   updates.profile_text = String(fd.get("profile_text") || "").trim() || null;
   const pinVal = String(fd.get("pin") || "").trim();
   if (pinVal === "clear") updates.pin = null;
-  else if (/^\d{4,6}$/.test(pinVal)) updates.pin = pinVal;
+  // A PIN too easy to guess is not set: the console keeps the old one.
+  else if (!pinProblem(pinVal)) updates.pin = pinVal;
   await updateUser(id, updates);
   // Every member, admins included: a cap is a choice about money, not access.
   if (fd.has("spend_cap_daily_usd")) {

@@ -20,6 +20,7 @@ import { createInviteCode, getInviteForUser, revokeInvite } from "../services/au
 import { createOpenInvite, listOpenInvites, revokeOpenInvite } from "../services/invites";
 import { EraseError, eraseMember } from "../services/memberErase";
 import { parseDeviceReport, recordDevice } from "../services/memberDevices";
+import { pinProblem } from "../services/credentials";
 
 const users = new Hono();
 
@@ -212,6 +213,9 @@ users.post("/", requireAdmin, async (c) => {
   if (!body.username || !body.display_name) {
     return c.json({ error: "username and display_name required" }, 400);
   }
+  if (body.pin != null && body.pin !== "" && pinProblem(body.pin)) {
+    return c.json({ error: pinProblem(body.pin) === "format" ? "PIN must be 4–6 digits" : "This PIN is too easy to guess", code: `pin_${pinProblem(body.pin)}` }, 400);
+  }
 
   try {
     const user = await createUser(body);
@@ -265,6 +269,9 @@ users.delete("/:id/invite", requireAdmin, (c) => {
 users.patch("/:id", requireAdmin, async (c) => {
   const id = c.req.param("id");
   const body = await c.req.json();
+  if (typeof body.pin === "string" && pinProblem(body.pin)) {
+    return c.json({ error: pinProblem(body.pin) === "format" ? "PIN must be 4–6 digits" : "This PIN is too easy to guess", code: `pin_${pinProblem(body.pin)}` }, 400);
+  }
   const user = await updateUser(id, body);
   if (!user) return c.json({ error: "User not found" }, 404);
   return c.json(user);

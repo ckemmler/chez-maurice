@@ -75,7 +75,7 @@ import { pinNewInvocations, refreshAutoPins, seedAncillaryPinsOnce } from "./src
 import ancillaryRoute from "./src/routes/ancillary";
 import db, { dataDir } from "./src/db";
 import { getAppDir } from "./lib/appDir";
-import { EXPORTS_DIRNAME, sweepExports, takeExport } from "./src/services/householdExportLinks";
+import { EXPORTS_DIRNAME, peekExport, sweepExports, takeExport } from "./src/services/householdExportLinks";
 import { pushPendingAccountEvents } from "./src/services/accountEventsPush";
 import { imagesDir } from "./src/services/images";
 import { avatarsDir } from "./src/services/avatars";
@@ -178,8 +178,24 @@ app.use(
 // proxyAuth: the token is the credential, and a stale cookie in the browser
 // that follows the link must not answer 401 first. The row is taken when the
 // request arrives; the file goes once the response has been sent, or the
-// client hung up.
+// client hung up. A GET only shows a button: mail scanners (Outlook's Safe
+// Links, a corporate gateway) open every link in a mail, and a GET that
+// downloaded would spend the single use before the owner ever clicked.
 app.get("/export/:token", (c) => {
+  const found = peekExport(db, c.req.param("token"));
+  if (!found) return c.text("This link has expired or was already used.", 404);
+  const mb = (found.bytes / 1e6).toFixed(found.bytes < 1e7 ? 1 : 0);
+  return c.html(`<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex"><title>Maurice</title></head>
+<body style="margin:0;background:#faf8f5;font-family:-apple-system,BlinkMacSystemFont,'Helvetica Neue',Helvetica,sans-serif;color:#1c1b1a">
+<div style="max-width:520px;margin:0 auto;padding:48px 20px;font-size:16px;line-height:1.55">
+<p style="font-family:Georgia,serif;font-size:22px">Maurice</p>
+<p>${found.filename.replace(/[<>&"]/g, "")} · ${mb} MB</p>
+<form method="post"><button type="submit" style="background:#003399;color:#fff;border:0;font-weight:600;font-size:16px;padding:13px 22px;border-radius:12px">Télécharger · Download</button></form>
+<p style="color:#6b655e;font-size:14px">Le lien sert une fois. · The link works once.</p>
+</div></body></html>`, 200, { "Cache-Control": "no-store", "Referrer-Policy": "no-referrer" });
+});
+
+app.post("/export/:token", (c) => {
   const found = takeExport(db, c.req.param("token"));
   if (!found) return c.text("This link has expired or was already used.", 404);
   const drop = () => { try { rmSync(found.path, { force: true }); } catch {} };

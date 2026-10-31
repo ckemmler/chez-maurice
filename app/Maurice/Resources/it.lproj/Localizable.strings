@@ -965,7 +965,7 @@
 "budget.pane.left" = "Resta il %d %% del budget della casa.";
 "budget.pane.resets" = "Riparte da zero il %@.";
 "budget.pane.admin_left" = "Resta: %@";
-"budget.pane.balance" = "Non si rinnova da solo: lo ricarica chi amministra la casa.";
+"budget.pane.balance" = "Se ne occupa chi amministra la casa.";
 "budget.caption" = "È il budget di tutta la casa, lo stesso per ognuno dei suoi membri. L’anello accanto al tuo nome mostra quanto ne resta; vieni avvisato al 20, 10 e 5 %.";
 "budget.toast.title" = "Resta solo il %d %% del budget della casa";
 
@@ -1038,3 +1038,19 @@
 "settings.import.confirm.ok" = "Scegli l’esportazione";
 
 "mydata.privacy" = "Informativa sulla privacy";
+
+/* Administrator password (Settings) and PIN rules */
+"password.title" = "Password dell’amministratore";
+"password.current" = "Password attuale";
+"password.new" = "Nuova password";
+"password.again" = "Nuova password, di nuovo";
+"password.save" = "Cambia la password";
+"password.rule" = "Almeno 12 caratteri, e non il tuo nome utente. Qualche parola fa una buona password. Gli altri dispositivi connessi come amministratore dovranno accedere di nuovo.";
+"password.done" = "Fatto: la password è cambiata.";
+"password.mismatch" = "Le due nuove password non coincidono.";
+"password.short" = "La nuova password deve avere almeno 12 caratteri.";
+"password.name" = "La nuova password non deve contenere il tuo nome utente.";
+"password.wrong" = "Non è la password attuale.";
+"password.weak" = "Questa password è troppo facile da indovinare: scegline un’altra.";
+"password.too_many" = "Troppi tentativi. Riprova tra un quarto d’ora.";
+"pinsetup.weak" = "Questo PIN è troppo facile da indovinare (una cifra ripetuta, una sequenza, un PIN comune): scegline un altro.";

@@ -105,8 +105,12 @@ test("a link opens once, and not after its time", () => {
   expect((db.query(`SELECT token_hash FROM household_exports`).get() as any).token_hash).not.toBe(token);
 
   expect(links.takeExport(db, "wrong")).toBeNull();
+  // Looking at it (a mail scanner's GET) does not use it up.
+  expect(links.peekExport(db, token)?.path).toBe(file);
+  expect(links.peekExport(db, token)?.path).toBe(file);
   expect(links.takeExport(db, token)?.path).toBe(file);
   expect(links.takeExport(db, token)).toBeNull();
+  expect(links.peekExport(db, token)).toBeNull();
 
   const late = path.join(dir, "b.maurice.tar.gz");
   fs.writeFileSync(late, "tar");
