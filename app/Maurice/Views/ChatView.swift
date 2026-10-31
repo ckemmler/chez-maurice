@@ -400,7 +400,9 @@ struct ChatView: View {
                             onDone: { trayOpen = false },
                             onAddMore: { showAddContext = true })
             }
-            if aiConsent.loaded, !aiConsent.mayUseAI {
+            // Only after a no: while the question is open its screen is up, and
+            // the banner would tell someone who never answered that they declined.
+            if aiConsent.loaded, !aiConsent.mayUseAI, !aiConsent.needsAnswer {
                 AIDeclinedBanner(accent: accent) { aiConsent.reviewing = true }
             }
             ComposerBar(inputText: $inputText, pendingImages: $pendingImages, pendingPastes: $pendingPastes,
@@ -427,7 +429,9 @@ struct ChatView: View {
                             onDone: { trayOpen = false },
                             onAddMore: { showAddContext = true })
             }
-            if aiConsent.loaded, !aiConsent.mayUseAI {
+            // Only after a no: while the question is open its screen is up, and
+            // the banner would tell someone who never answered that they declined.
+            if aiConsent.loaded, !aiConsent.mayUseAI, !aiConsent.needsAnswer {
                 AIDeclinedBanner(accent: accent) { aiConsent.reviewing = true }
             }
             ComposerBar(inputText: $inputText, pendingImages: $pendingImages, pendingPastes: $pendingPastes,

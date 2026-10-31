@@ -238,7 +238,12 @@ struct UserPickerView: View {
             enrollError = nil
             enrollNeedsProfile = false
             showEnroll = true
-            await enrollWithCode()
+            // Not awaited here: clearing pendingInvitation above changes this
+            // task's id, and SwiftUI would cancel it mid-request — the server
+            // opening a session the app never received, the member asked for
+            // the code again, and their second try told as a device let in by
+            // the admin (31 October 2026).
+            Task { await enrollWithCode() }
         }
         .sheet(isPresented: $showAddHousehold) {
             PairingView(onPaired: { showAddHousehold = false })
