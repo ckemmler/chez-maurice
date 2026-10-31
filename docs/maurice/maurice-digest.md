@@ -1,6 +1,6 @@
 ---
 title: Maurice — the digest
-date: '2026-10-29'
+date: '2026-10-31'
 flags: []
 locale: en
 description: 'The system documentation condensed to what a user needs: everything
@@ -24,11 +24,11 @@ covers:
   maurice-docs: '2026-10-20'
   maurice-domains: '2026-10-20'
   maurice-files: '2026-06-19'
-  maurice-households-rooms: '2026-10-30'
+  maurice-households-rooms: '2026-10-31'
   maurice-knowledge: '2026-10-20'
   maurice-life: '2026-10-20'
   maurice-personas-hats: '2026-09-19'
-  maurice-server: '2026-10-29'
+  maurice-server: '2026-10-31'
   maurice-shared-gardens: '2026-10-20'
   maurice-tools: '2026-10-20'
   maurice-web-garden: '2026-10-20'
@@ -36,7 +36,7 @@ covers:
 
 # Maurice — the digest
 
-This is the whole documentation condensed for someone who uses Maurice and will never read its code: what it can do, how it behaves, what its architecture guarantees, what is finished and what is not. It describes the system as it stands on 29 October 2026. Each section names the note that holds the detail (*Detail:* `server`, `carnet`…); any of them can be asked for in full.
+This is the whole documentation condensed for someone who uses Maurice and will never read its code: what it can do, how it behaves, what its architecture guarantees, what is finished and what is not. It describes the system as it stands on 31 October 2026. Each section names the note that holds the detail (*Detail:* `server`, `carnet`…); any of them can be asked for in full.
 
 Two distinctions run through everything. **Ships vs. exists**: what every install and every hosted household gets, against what runs only at the developer's home in a private overlay and is experimental. **Built vs. planned**: a planned feature is never described here as working; the gaps are listed at the end of each section and gathered at the end.
 
@@ -79,7 +79,7 @@ There is also a **browser clipper** that saves the page being read into the memb
 
 - **A container, and only a container.** One image runs on a rented Linux machine, a client's server, or a Mac through OrbStack (Ubuntu 26.04 base, about 2 GB, behind Caddy with Let's Encrypt). The old notarized `.pkg` installer is retired; self-hosting needs Docker. One container per household runs the server, the tool gateway, the web engine and Calibre-Web.
 - **Footprint:** about **260 MB idle per household**, so an 8 GB machine carries about twenty households. A member costs a directory, not a process.
-- **Hosted households** run on a rented Scaleway machine in Paris, several per machine, each with its own volume behind one Caddy. Scaleway supplies both the machine and the models under one restricted key, so a hosted household needs no API key of the member's, and its data and inference stay in the EU. A hosted household can be paused from outside (its container stays stopped and is skipped by backups).
+- **Hosted households** run on a rented Scaleway machine in Paris, several per machine, each with its own volume behind one Caddy. Scaleway supplies both the machine and the models under one restricted key, so a hosted household needs no API key of the member's, and its data and inference stay in the EU. A hosted household can be paused from outside (its container stays stopped and is skipped by backups). Its owner has an **account page** on account.chezmaurice.eu, reached by the link in the mails it sends: the address, a QR code to scan with the phone's camera to come in as administrator, the administrator password until noted, the trial or subscription, the thinking left, the invoices, the whole archive — and **erasing the whole Maurice**, confirmed by a mailed link: the household, its backups, the subscription and the owner's name and address go; only the invoices stay, as the law requires.
 - **Self-hosting at home:** TLS and remote access are the operator's (Tailscale or Cloudflare Tunnel); Maurice only needs to be reachable. Behind a tunnel on the same machine, `MAURICE_BIND_HOST=127.0.0.1` keeps the server off the network entirely, in plain HTTP with no certificate to renew — how the developer's own Mac runs it, still as launchd agents.
 - **Backups:** hosted households are backed up nightly, encrypted, to Scaleway Object Storage (14 daily, 8 weekly, 12 monthly snapshots; a restore has been rehearsed). At home the databases are snapshotted nightly and the members' notes rely on git.
 - **The apps** — the Maurice app (iPhone, iPad, Mac) and Carnet — are distributed through **TestFlight**, as a public beta anyone can join from the links on chezmaurice.eu; the App Store versions (iPhone and iPad, and the Mac app) are in Apple's review. The apps contain **no payment, price or "pay elsewhere"** prompt; subscriptions to a hosted household are handled on the web.
@@ -89,7 +89,7 @@ There is also a **browser clipper** that saves the page being read into the memb
 ## 5. Households, members, devices
 
 - **One server is one household**; a device can hold several households, each with its own session, switched from a pill with an unread badge.
-- **Joining:** enter the server's address; the app shows the household's name, icon and colour. A **fresh device joins with an invite code** given by an admin (8 characters, about 7 days, reusable within that window, rate-limited), then the member sets a PIN. An admin can also issue an **open invitation** — QR code, typed code or link, single use, 7 days — with which a newcomer gives a first name and colour and becomes a standard member. Once a member is signed in on a device, the device shows the household's members, and switching is a tap plus a PIN; a member without a PIN comes back on a device only with an invite code. The admin signs in with a username and password. A code the admin makes for someone who already uses their account is **told to that member** (an alert in the app, a line under *My data*, a push).
+- **Joining:** enter the server's address; the app shows the household's name, icon and colour. A **fresh device joins with an invite code** given by an admin (8 characters, about 7 days, reusable within that window, rate-limited), then the member sets a PIN. An admin can also issue an **open invitation** — QR code, typed code or link, single use, 7 days — with which a newcomer gives a first name and colour and becomes a standard member. Once a member is signed in on a device, the device shows the household's members, and switching is a tap plus a PIN; a member without a PIN comes back on a device only with an invite code. The admin signs in with a username and password (at least 12 characters, not containing the username), and changes it in Settings → *Administrator password*, which signs out the admin's other devices. A PIN that everybody tries first (1111, 1234, 2580, 1212…) is refused. A code the admin makes for someone who already uses their account is **told to that member** (an alert in the app, a line under *My data*, a push).
 - **Roles:**
   - **admin** — manages members, keys, models, budgets and the household's identity;
   - **standard** — a full member with a mandatory PIN;
@@ -336,6 +336,8 @@ Each member has folders and files (5 GB each), in **Settings**: text, images, PD
 ## 23. How do I…
 
 - **…join my household on a new phone?** Install the app (the TestFlight beta, linked from chezmaurice.eu), enter the server's address, and type the invite code an admin gave you (Settings → Members → New device); then choose your PIN. Carnet joins the same way.
+- **…come into a hosted Maurice the first time?** On your account page (the link in the *Your Maurice is ready* mail), scan the QR code with the iPhone's camera once the app is installed; on a Mac, type the address and the device code shown under it.
+- **…change the administrator password?** Settings → *Administrator password*: the current one, then the new one twice. Your other devices signed in as administrator must sign in again.
 - **…invite someone who is not a member yet?** As an admin: Settings → Members → invitation (QR code, code or link, single use, 7 days). The person picks a first name and colour and becomes a standard member. A guest is set up in the admin console instead.
 - **…choose which model answers?** The model pill above the message field; the choice becomes your everyday model, or the model of the domain the conversation is bound to. Only models your household has a key for, and that the admin allowed you, are listed.
 - **…add a provider key or change the household's default model?** In the admin console, on the server's machine (the operator does it for a hosted household).
@@ -354,14 +356,14 @@ Each member has folders and files (5 GB each), in **Settings**: text, images, PD
 - **…stop my data going to an AI provider?** Settings → *My data* → *AI providers* → *Withdraw my consent*. Maurice then answers nothing and the night's work stops for you; a model on your household's own machine still may.
 - **…have my dictation transcribed by Whisper?** It stays on the device by default. Turn on Settings → Dictation → *Transcribe on the household server* (on a hosted household, after accepting its provider).
 - **…open my notes in Obsidian?** Settings → *My data* → *Clone my notes*: copy the address, username and key. In Obsidian, install the community plugin *Git* and run *Clone an existing remote repo*; on an iPad, Working Copy clones it too; on a computer, `git clone` the address and open the folder as a vault. It stays read-only: edit in Maurice, the clone follows.
-- **…take my data with me, or leave?** Settings → *My data*: export an archive, erase your data, or delete your account (Carnet: member sheet → Privacy → *Delete my account*).
+- **…take my data with me, or leave?** Settings → *My data*: export an archive, erase your data, or delete your account (Carnet: member sheet → Privacy → *Delete my account*). The owner of a hosted Maurice can also take the whole household as one archive, or erase it entirely, from the account page.
 - **…run Maurice myself?** Run the container on a machine of yours (Docker), make it reachable (Tailscale or Cloudflare Tunnel), and set the provider keys in the admin console. Or be hosted: a household on Maurice's own Scaleway machines, with models included.
 
 ## 24. Not built, and known gaps
 
 - **Not built:** payment and top-ups; writing back to the notes from an Obsidian clone (push); a web chat client; OAuth for mail (Outlook.com, Google contacts); mail in the corpus; flashcard review in Carnet; demo servers for trying the apps without a household (designed, deferred); a hosted member's own domain; on-device inference.
 - **Not intended:** Maurice proposing notes from patterns he notices; automatic periodic reviews.
-- **Rough edges:** sessions never expire (only revoked); a reply in progress is lost on a server restart; no provider failover; external MCP clients see every mounted tool; some member-triggered background calls are not on the ledger; erasure cannot reach off-site backups or exported archives; the databases are snapshot, not versioned (the notes are); after a household import the search index and git remotes are fixed by hand; the Android app and the web do not ask the AI-provider question yet (a member who never answered is let through), and in a room a member who declined still has their messages read when someone else summons Maurice; the experimental tools are partly documented and absent from hosted households.
+- **Rough edges:** sessions never expire (only revoked); a reply in progress is lost on a server restart; no provider failover; external MCP clients see every mounted tool; some member-triggered background calls are not on the ledger; a member's erasure cannot reach off-site backups or exported archives (erasing a whole hosted Maurice does forget its backups); the databases are snapshot, not versioned (the notes are); after a household import the search index and git remotes are fixed by hand; the Android app and the web do not ask the AI-provider question yet (a member who never answered is let through), and in a room a member who declined still has their messages read when someone else summons Maurice; the experimental tools are partly documented and absent from hosted households.
 
 ## 25. Where to look
 
