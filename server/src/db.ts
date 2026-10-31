@@ -444,6 +444,19 @@ db.run(`
   )
 `);
 
+// A member adding a device of their own: a code shown on a device they are
+// signed in on, scanned by the new one. Single use and short-lived (minutes):
+// it opens the member's own account, and nobody but them should need it.
+db.run(`
+  CREATE TABLE IF NOT EXISTS device_link_codes (
+    code       TEXT PRIMARY KEY,
+    user_id    TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    expires_at TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    used_at    TEXT
+  )
+`);
+
 // Open invitations: an admin invites *someone* — no member exists yet. Whoever
 // redeems the code names themselves and becomes a member. Single use: a QR code
 // is easily photographed and passed on, and one invitation lets one person in.

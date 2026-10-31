@@ -9,7 +9,7 @@ import { createApiToken, getRawApiToken, listApiTokens, requireAuth, revokeApiTo
 import { ArchiveError } from "../services/archive";
 import { listAccountEvents, markAccountEventsSeen } from "../services/accountEvents";
 import db from "../db";
-import { verifyPassword, verifyPin } from "../services/auth";
+import { createDeviceLinkCode, verifyPassword, verifyPin } from "../services/auth";
 import { householdBudget, usageFor } from "../services/budget";
 import { gardensRoot } from "../services/gardensRoot";
 import { isGardenDir } from "../services/gitHttp";
@@ -56,6 +56,19 @@ me.get("/events", (c) => c.json({ events: listAccountEvents(db, c.get("userId"))
 me.post("/events/seen", (c) => {
   markAccountEventsSeen(db, c.get("userId"));
   return c.json({ ok: true });
+});
+
+// POST /api/me/device-code — a code for another device of the member's own,
+// shown as a QR on this one: { code, expires_at }. Single use, ten minutes
+// (services/auth.ts); redeemed by /api/auth/enroll like any device code. Not
+// for a guest, nor for a connected tool: an API token does not get to open a
+// signed-in session somewhere else.
+me.post("/device-code", (c) => {
+  if (viaApiToken(c)) return c.json({ error: "not with an API token" }, 403);
+  const user = getUserById(c.get("userId"));
+  if (!user || user.role === "guest") return c.json({ error: "not for a guest" }, 403);
+  const { code, expiresAt } = createDeviceLinkCode(user.id);
+  return c.json({ code, expires_at: expiresAt }, 201);
 });
 
 // GET /api/me/export — the member archive (`maurice-member-archive` v1), a

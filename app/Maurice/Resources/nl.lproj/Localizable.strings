@@ -652,6 +652,8 @@
 "members.new_device" = "Nieuw apparaat";
 "members.new_device.hint" = "Tik op iemand om een code te tonen die de app op een ander apparaat van die persoon installeert.";
 "members.new_device.for" = "Een nieuw apparaat voor %@";
+"devices.add" = "Een van mijn apparaten toevoegen";
+"devices.add.sheet_title" = "Scan deze code met je andere apparaat, of stuur het de link";
 "members.share" = "Link versturen";
 "members.revoke" = "Intrekken";
 "members.valid_until" = "Geldig tot %@";

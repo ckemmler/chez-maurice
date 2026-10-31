@@ -652,6 +652,8 @@
 "members.new_device" = "New device";
 "members.new_device.hint" = "Tap someone to show a code that sets up the app on another of their devices.";
 "members.new_device.for" = "A new device for %@";
+"devices.add" = "Add one of my devices";
+"devices.add.sheet_title" = "Scan this code with your other device, or send it the link";
 "members.share" = "Send the link";
 "members.revoke" = "Withdraw";
 "members.valid_until" = "Valid until %@";

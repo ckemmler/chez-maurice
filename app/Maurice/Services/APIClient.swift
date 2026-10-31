@@ -705,10 +705,12 @@ struct OpenInvitesResponse: Decodable {
     let invites: [OpenInvite]
 }
 
-/// A member's device code (`/api/users/:id/invite`).
-struct MemberInviteCode: Decodable {
+/// A member's device code (`/api/users/:id/invite`, or their own,
+/// `/api/me/device-code`).
+struct MemberInviteCode: Decodable, Identifiable {
     let code: String
     let expires_at: String
+    var id: String { code }
 }
 
 struct OkResponse: Decodable {

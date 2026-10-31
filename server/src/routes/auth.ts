@@ -6,6 +6,7 @@ import {
   verifyPin,
   redeemPairingToken,
   redeemInviteCode,
+  redeemDeviceLinkCode,
 } from "../services/auth";
 import {
   getUserByUsername,
@@ -203,6 +204,16 @@ auth.post("/enroll", async (c) => {
     }
     const { token } = createSession(joined.userId, device_id);
     return c.json({ user_id: joined.userId, token, role: "standard", needs_pin: true });
+  }
+
+  // A code the member made on a device of theirs (POST /api/me/device-code):
+  // they know, so no account event; their PIN is already set.
+  const own = redeemDeviceLinkCode(String(code));
+  if (own) {
+    const user = getUserById(own.userId);
+    if (!user) return c.json({ error: "User not found" }, 404);
+    const { token } = createSession(user.id, device_id);
+    return c.json({ user_id: user.id, token, role: user.role, needs_pin: !user.pin_hash });
   }
 
   const redeemed = redeemInviteCode(code);

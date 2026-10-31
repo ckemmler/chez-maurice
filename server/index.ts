@@ -814,12 +814,20 @@ app.all("/calibre/*", async (c) => {
 // (maurice://join); without, the page says what to install and shows the code
 // to type. The code is not checked here — a page that answered "valid" would be
 // an unthrottled oracle beside the rate-limited /api/auth/enroll.
+//
+// It is read by someone who often has no app yet — a link received by message,
+// a QR scanned with the camera — so it is two steps: install, then come back
+// and open (31 October 2026). Where the app installs from is
+// MAURICE_INSTALL_URL; until it is on the App Store, the public TestFlight link.
+
+const INSTALL_URL = process.env.MAURICE_INSTALL_URL || "https://testflight.apple.com/join/CS3ufwEd";
 
 app.get("/join", (c) => {
   const lang = langOf(c);
   const code = normalizeInviteCode(c.req.query("code") ?? "");
   const server = requestOrigin(c.req);
   const open = `maurice://join?server=${encodeURIComponent(server)}&code=${encodeURIComponent(code)}`;
+  const testflight = /testflight\.apple\.com/.test(INSTALL_URL);
   const esc = (s: string) =>
     s.replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[ch]!);
   return c.html(`<!DOCTYPE html><html lang="${lang}"><head><meta charset="utf-8">
@@ -829,14 +837,27 @@ app.get("/join", (c) => {
   body { font-family: ui-serif, Georgia, serif; max-width: 30rem; margin: 14vh auto; padding: 0 1.5rem; color: #2a2622; background: #f5efe6; text-align: center; }
   h1 { font-size: 1.6rem; font-weight: 400; margin: 0 0 .75rem; }
   p { color: #6b6358; line-height: 1.6; font-size: .98rem; }
-  a.open { display: inline-block; margin: 1.25rem 0; padding: .8rem 1.6rem; border-radius: 999px; background: #2a2622; color: #f5efe6; text-decoration: none; font-family: ui-sans-serif, system-ui, sans-serif; }
+  a.btn { display: inline-block; margin: .5rem 0 .25rem; padding: .8rem 1.6rem; border-radius: 999px; text-decoration: none; font-family: ui-sans-serif, system-ui, sans-serif; }
+  a.open { background: #2a2622; color: #f5efe6; }
+  a.install { border: 1px solid #2a2622; color: #2a2622; }
+  .step { margin: 2rem 0 0; }
+  .step h2 { font-size: 1.05rem; font-weight: 600; margin: 0 0 .25rem; font-family: ui-sans-serif, system-ui, sans-serif; color: #2a2622; }
+  .note { font-size: .85rem; margin: .5rem 0 0; }
   .code { font-family: ui-monospace, monospace; font-size: 1.6rem; letter-spacing: .2rem; background: #ece3d6; padding: .5rem 1rem; border-radius: 8px; display: inline-block; }
 </style></head><body>
   <h1>${esc(t(lang, "join.title", householdName()))}</h1>
-  <p>${esc(t(lang, "join.body"))}</p>
-  ${code ? `<a class="open" href="${esc(open)}">${esc(t(lang, "join.open"))}</a>
-  <p>${esc(t(lang, "join.code"))}</p>
-  <div class="code">${esc(formatInviteCode(code))}</div>` : ""}
+  <p>${esc(t(lang, "join.lead"))}</p>
+  <div class="step">
+    <h2>${esc(t(lang, "join.step_install"))}</h2>
+    <a class="btn install" href="${esc(INSTALL_URL)}">${esc(t(lang, "join.install"))}</a>
+    ${testflight ? `<p class="note">${esc(t(lang, "join.testflight_note"))}</p>` : ""}
+  </div>
+  ${code ? `<div class="step">
+    <h2>${esc(t(lang, "join.step_open"))}</h2>
+    <a class="btn open" href="${esc(open)}">${esc(t(lang, "join.open"))}</a>
+    <p>${esc(t(lang, "join.code"))}</p>
+    <div class="code">${esc(formatInviteCode(code))}</div>
+  </div>` : ""}
 </body></html>`);
 });
 

@@ -652,6 +652,8 @@
 "members.new_device" = "Nuevo dispositivo";
 "members.new_device.hint" = "Toca a alguien para mostrar un código que instala la app en otro de sus dispositivos.";
 "members.new_device.for" = "Un nuevo dispositivo para %@";
+"devices.add" = "Añadir uno de mis dispositivos";
+"devices.add.sheet_title" = "Escanea este código con tu otro dispositivo o envíale el enlace";
 "members.share" = "Enviar el enlace";
 "members.revoke" = "Retirar";
 "members.valid_until" = "Válido hasta el %@";

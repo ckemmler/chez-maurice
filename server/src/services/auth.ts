@@ -67,11 +67,12 @@ function generateInviteCode(): string {
   return Array.from(bytes, (b) => INVITE_ALPHABET[b % INVITE_ALPHABET.length]).join("");
 }
 
-/** A code free in both invitation tables — a code means one thing. */
+/** A code free in every invitation table — a code means one thing. */
 export function freshInviteCode(): string {
   const taken = (c: string) =>
     db.query(`SELECT 1 FROM invite_codes WHERE code = ?`).get(c) ||
-    db.query(`SELECT 1 FROM household_invites WHERE code = ?`).get(c);
+    db.query(`SELECT 1 FROM household_invites WHERE code = ?`).get(c) ||
+    db.query(`SELECT 1 FROM device_link_codes WHERE code = ?`).get(c);
   let code = generateInviteCode();
   while (taken(code)) code = generateInviteCode();
   return code;
@@ -117,6 +118,29 @@ export function getInviteForUser(userId: string): { code: string; expires_at: st
 
 export function revokeInvite(userId: string): void {
   db.run(`DELETE FROM invite_codes WHERE user_id = ?`, [userId]);
+}
+
+/** A code for a member's own new device: single use, a few minutes. Making
+ *  one withdraws the member's earlier unused ones. */
+export function createDeviceLinkCode(userId: string, minutes = 10): { code: string; expiresAt: string } {
+  db.run(`DELETE FROM device_link_codes WHERE user_id = ? AND used_at IS NULL`, [userId]);
+  const code = freshInviteCode();
+  const expiresAt = new Date(Date.now() + minutes * 60000).toISOString();
+  db.run(`INSERT INTO device_link_codes (code, user_id, expires_at) VALUES (?, ?, ?)`, [code, userId, expiresAt]);
+  return { code, expiresAt };
+}
+
+/** Use a member's own device code → the member id, or null if unknown,
+ *  expired or already used. Taken in one statement: of two devices scanning
+ *  the same code, one gets in. */
+export function redeemDeviceLinkCode(raw: string): { userId: string } | null {
+  const row = db
+    .query(
+      `UPDATE device_link_codes SET used_at = datetime('now')
+       WHERE code = ? AND used_at IS NULL AND expires_at > ? RETURNING user_id`,
+    )
+    .get(normalizeInviteCode(raw), new Date().toISOString()) as { user_id: string } | null;
+  return row ? { userId: row.user_id } : null;
 }
 
 // ── Session tokens ──────────────────────────────────────────────

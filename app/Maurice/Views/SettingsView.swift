@@ -38,6 +38,9 @@ struct SettingsView: View {
     @State private var showSourceDialog = false
     @State private var showSafety = false
     @State private var showReportQueue = false
+    /// The code this member made for another device of theirs, shown as a QR.
+    @State private var ownDeviceCode: MemberInviteCode?
+    @State private var ownDeviceError: String?
     /// Per-message cost meter in the chat — see TurnUsageFooter.
     @AppStorage(TurnCostPref.key) private var showTurnCost = false
     /// Dictation may use Apple's servers for languages with no local model.
@@ -115,6 +118,12 @@ struct SettingsView: View {
         }
         .sheet(isPresented: $showSafety) { SafetySettingsView() }
         .sheet(isPresented: $showReportQueue) { ReportsReviewView() }
+        .sheet(item: $ownDeviceCode) { code in
+            InviteQRSheet(invitation: Invitation(server: session.serverURL ?? "", code: code.code),
+                          title: session.localized("devices.add.sheet_title"),
+                          expiresAt: code.expires_at, onRevoke: nil)
+                .environment(session)
+        }
         .sheet(isPresented: $showAddHousehold) {
             PairingView(onPaired: { showAddHousehold = false })
                 .environment(session)
@@ -139,6 +148,14 @@ struct SettingsView: View {
                                          label: session.localized("foyer.switch_title"),
                                          value: session.currentHousehold?.name,
                                          accent: accent) { pane = .household }
+                                // Another device of their own, without the
+                                // admin: a short-lived code shown here.
+                                if !session.activeIsGuest {
+                                    SetDivider()
+                                    IndexRow(icon: "plus.rectangle.on.rectangle",
+                                             label: session.localized("devices.add"),
+                                             accent: accent) { Task { await addOwnDevice() } }
+                                }
                                 // Who is in this foyer, and letting someone in —
                                 // the admin's, from the app rather than the web.
                                 if session.activeDeviceUser?.role == "admin" {
@@ -149,6 +166,9 @@ struct SettingsView: View {
                                     IndexRow(icon: "lock", label: session.localized("password.title"),
                                              accent: accent) { pane = .adminPassword }
                                 }
+                            }
+                            if let ownDeviceError {
+                                Text(ownDeviceError).font(.caption).foregroundStyle(.red)
                             }
                         }
                     }
@@ -699,6 +719,18 @@ struct SettingsView: View {
         return "\(s.count) · \(formatBytes(s.size_bytes))"
     }
 
+    /// A fresh code for another device of this member's, shown as a QR.
+    private func addOwnDevice() async {
+        guard let serverURL = session.serverURL, let token = session.tokenForActiveUser else { return }
+        ownDeviceError = nil
+        do {
+            ownDeviceCode = try await APIClient(baseURL: serverURL)
+                .post("/api/me/device-code", body: [String: String](), token: token)
+        } catch {
+            ownDeviceError = error.localizedDescription
+        }
+    }
+
     // Cropped JPEG → instant local preview + PUT to the server, then reflect the
     // returned avatar_url on the active device user.
     private func uploadAvatar(_ jpeg: Data) async {
@@ -919,7 +951,8 @@ private struct InviteQRSheet: View {
     let invitation: Invitation
     let title: String
     let expiresAt: String
-    let onRevoke: () -> Void
+    /// nil for a code that cannot be withdrawn (a member's own, minutes long).
+    let onRevoke: (() -> Void)?
 
     var body: some View {
         VStack(spacing: 18) {
@@ -945,8 +978,10 @@ private struct InviteQRSheet: View {
                     }
                     .glassBorderedButton()
                 }
-                Button(session.localized("members.revoke"), role: .destructive) { onRevoke() }
-                    .glassBorderedButton()
+                if let onRevoke {
+                    Button(session.localized("members.revoke"), role: .destructive) { onRevoke() }
+                        .glassBorderedButton()
+                }
             }
             Button(L("common.done")) { dismiss() }
                 .glassProminentButton()
@@ -961,12 +996,15 @@ private struct InviteQRSheet: View {
         code.count == 8 ? "\(code.prefix(4))-\(code.suffix(4))" : code
     }
 
-    /// "Valid until 2 Oct", in the member's language.
+    /// "Valid until 2 Oct", in the member's language — "until 14:32" for a
+    /// code that lasts minutes.
     static func expiry(_ iso: String, session: SessionStore) -> String? {
         let parser = ISO8601DateFormatter()
         parser.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
         guard let date = parser.date(from: iso) ?? ISO8601DateFormatter().date(from: iso) else { return nil }
-        let text = date.formatted(Date.FormatStyle(date: .abbreviated, time: .omitted).locale(session.resolvedLocale))
+        let soon = date.timeIntervalSinceNow < 86_400
+        let style = Date.FormatStyle(date: soon ? .omitted : .abbreviated, time: soon ? .shortened : .omitted)
+        let text = date.formatted(style.locale(session.resolvedLocale))
         return session.localized("members.valid_until", text)
     }
 }

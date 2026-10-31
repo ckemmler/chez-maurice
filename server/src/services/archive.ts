@@ -230,6 +230,7 @@ export function withoutCredentials(snapshot: string): void {
     if (has("api_tokens") && hasColumn(db, "api_tokens", "token_plain")) db.run(`UPDATE api_tokens SET token_plain = NULL`);
     if (has("devices") && hasColumn(db, "devices", "pairing_token")) db.run(`UPDATE devices SET pairing_token = NULL`);
     if (has("invite_codes")) db.run(`DELETE FROM invite_codes`);
+    if (has("device_link_codes")) db.run(`DELETE FROM device_link_codes`);
     if (has("users") && hasColumn(db, "users", "pin_hash")) db.run(`UPDATE users SET pin_hash = NULL`);
     if (has("households")) {
       const cols = PROVIDER_KEY_COLUMNS.filter((c) => hasColumn(db, "households", c));
