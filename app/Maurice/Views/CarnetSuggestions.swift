@@ -364,9 +364,28 @@ private struct SuggestionCover: View {
     }
 }
 
-/// One line of identity under a title: kind, year, who made it.
-private func identityLine(kind: String, year: Int?, subtitle: String?) -> String {
-    var parts = [SuggestionKind.label(kind)]
+/// The kind of entry, written out: two offers can share a title (a shared
+/// article, and the same piece named again as a podcast).
+private struct KindPill: View {
+    @Environment(\.mauriceTheme) private var theme
+    let kind: String
+    var compact = false
+
+    var body: some View {
+        Label(SuggestionKind.label(kind), systemImage: SuggestionKind.symbol(kind))
+            .labelStyle(.titleAndIcon)
+            .font(.system(size: compact ? 10 : 11, weight: .semibold))
+            .foregroundStyle(theme.inkSoft)
+            .padding(.horizontal, compact ? 6 : 8)
+            .padding(.vertical, compact ? 2 : 3)
+            .background(Capsule().fill(theme.inkMute.opacity(0.12)))
+            .fixedSize()
+    }
+}
+
+/// One line of identity under a title: year, who made it.
+private func identityLine(year: Int?, subtitle: String?) -> String {
+    var parts: [String] = []
     if let year { parts.append(String(year)) }
     if let subtitle, !subtitle.isEmpty { parts.append(subtitle) }
     return parts.joined(separator: " · ")
@@ -403,12 +422,17 @@ private struct SuggestionRow: View {
             HStack(alignment: .top, spacing: 12) {
                 SuggestionCover(image: row.image, kind: row.kind)
                 VStack(alignment: .leading, spacing: 3) {
+                    KindPill(kind: row.kind)
+                        .padding(.bottom, 2)
                     Text(row.title)
                         .font(.system(size: 16, weight: .semibold))
                         .foregroundStyle(theme.ink)
-                    Text(identityLine(kind: row.kind, year: row.year, subtitle: row.subtitle))
-                        .font(.system(size: 12))
-                        .foregroundStyle(theme.inkSoft)
+                    let identity = identityLine(year: row.year, subtitle: row.subtitle)
+                    if !identity.isEmpty {
+                        Text(identity)
+                            .font(.system(size: 12))
+                            .foregroundStyle(theme.inkSoft)
+                    }
                     Text(row.existing ? L("suggest.state_existing") : needsPick ? L("suggest.state_pick", row.candidates.count) : L("suggest.state_new"))
                         .font(.system(size: 11, weight: .medium, design: .monospaced))
                         .foregroundStyle(theme.inkMute)
@@ -767,9 +791,12 @@ private struct KeptRow: View {
                 SuggestionCover(image: row.image, kind: row.kind, width: 32)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(row.title).font(.system(size: 14, weight: .medium)).foregroundStyle(theme.ink)
-                    Text(identityLine(kind: row.kind, year: row.year, subtitle: nil))
-                        .font(.system(size: 11))
-                        .foregroundStyle(theme.inkSoft)
+                    HStack(spacing: 6) {
+                        KindPill(kind: row.kind, compact: true)
+                        if let year = row.year {
+                            Text(String(year)).font(.system(size: 11)).foregroundStyle(theme.inkSoft)
+                        }
+                    }
                 }
                 Spacer(minLength: 4)
                 Image(systemName: "checkmark.circle.fill").font(.system(size: 13)).foregroundStyle(theme.inkMute)
